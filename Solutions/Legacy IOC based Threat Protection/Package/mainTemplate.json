@@ -34,7 +34,7 @@
     "_solutionId": "[variables('solutionId')]",
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
-    "analyticRuleVersion1": "1.1.1",
+    "analyticRuleVersion1": "1.1.2",
     "analyticRulecontentId1": "825991eb-ea39-4590-9de2-ee97ef42eb93",
     "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
     "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
@@ -70,7 +70,7 @@
     "_analyticRulecontentId7": "[variables('analyticRulecontentId7')]",
     "analyticRuleId7": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId7'))]",
     "analyticRuleTemplateSpecName7": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId7')))]",
-    "analyticRuleVersion8": "1.0.2",
+    "analyticRuleVersion8": "1.0.3",
     "analyticRulecontentId8": "961b6a81-5c53-40b6-9800-4f661a8faea7",
     "_analyticRulecontentId8": "[variables('analyticRulecontentId8')]",
     "analyticRuleId8": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId8'))]",
@@ -289,7 +289,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "ActiniumFeb2022_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "ActiniumFeb2022_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion1')]",
@@ -306,7 +306,7 @@
                 "description": "Identifies a match across various data feeds for domains, hashes and commands related to an actor tracked by Microsoft as Actinium.",
                 "displayName": "ACTINIUM Actor IOCs - Feb 2022",
                 "enabled": false,
-                "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ActiniumIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet domains = (iocs | where Type =~ \"domainname\"| project IoC);\nlet sha256Hashes = (iocs | where Type =~ \"sha256\" | project IoC);\n(union isfuzzy=true\n(DeviceProcessEvents\n| where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or  (ProcessCommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ProcessCommandLine has ('/tr \"wscript.exe') and ProcessCommandLine has ('\"%PUBLIC%\\\\Pictures\\\\') and ProcessCommandLine has ('//e:VBScript //b\" /F')) or (ProcessCommandLine has ('wscript.exe C:\\\\Users\\\\') and ProcessCommandLine has ('.wav') and  ProcessCommandLine has ('//e:VBScript //b') \nor (ProcessCommandLine has_all (\"schtasks.exe\", \"create\", \"wscript\", \"e:vbscript\", \".wav\")))\n| project TimeGenerated, ActionType, DeviceId, DeviceName, ProcessCommandLine, InitiatingProcessAccountName, InitiatingProcessCommandLine, FolderPath, InitiatingProcessFolderPath, ProcessId, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256, FileName\n| extend Account = AccountName, Computer = DeviceName,  FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), \"InitiatingProcessSHA256\", SHA256 in (sha256Hashes), \"SHA256\", \"No Match\")\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = FileName, FileHashCustomEntity = case(FileHash == \"InitiatingProcessSHA256\", InitiatingProcessSHA256, FileHash == \"SHA256\", SHA256, \"No Match\")\n),\n( SecurityEvent\n| where EventID == 4688\n| where (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr \"wscript.exe') and CommandLine has ('\"%PUBLIC%\\\\Pictures\\\\') and CommandLine has ('//e:VBScript //b\" /F')) or (CommandLine has ('wscript.exe C:\\\\Users\\\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b'))\n| project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName\n),\n( CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated, Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID\n),\n( imFileEvent\n| where Hash in~ (sha256Hashes) or  (ActingProcessCommandLine  has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ActingProcessCommandLine  has ('/tr \"wscript.exe') and ActingProcessCommandLine  has ('\"%PUBLIC%\\\\Pictures\\\\') and ActingProcessCommandLine  has ('//e:VBScript //b\" /F')) or (ActingProcessCommandLine  has ('wscript.exe C:\\\\Users\\\\') and ActingProcessCommandLine  has ('.wav') and  ActingProcessCommandLine  has ('//e:VBScript //b') \n or (ActingProcessCommandLine has_all (\"schtasks.exe\", \"create\", \"wscript\", \"e:vbscript\", \".wav\")))\n| extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = Hash\n| project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Image = EventDetail.[4].[\"#text\"],  CommandLine = EventDetail.[10].[\"#text\"], Hashes = tostring(EventDetail.[17].[\"#text\"])\n| extend Hashes = extract_all(@\"(?P<key>\\w+)=(?P<value>[a-zA-Z0-9]+)\", dynamic([\"key\",\"value\"]), Hashes)\n| extend Hashes = column_ifexists(\"Hashes\", \"\"), CommandLine = column_ifexists(\"CommandLine\", \"\")\n| where (Hashes has_any (sha256Hashes) ) or (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr \"wscript.exe') and CommandLine has ('\"%PUBLIC%\\\\Pictures\\\\') and CommandLine has ('//e:VBScript //b\" /F')) or (CommandLine has ('wscript.exe C:\\\\Users\\\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b') or (CommandLine has_all (\"schtasks.exe\", \"create\", \"wscript\", \"e:vbscript\", \".wav\")))\n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image\n| extend Type = strcat(Type, \": \", Source)\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\\\', -1)[-1]), FileHashCustomEntity = Hashes\n),\n(DnsEvents\n| where Name in~ (domains)  \n| project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type\n| extend DestinationIPAddress = IPAddresses, DNSName = Name, Computer \n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress\n),\n(VMConnection\n| where RemoteDnsCanonicalNames has_any (domains)\n| parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n| project TimeGenerated, Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, RemoteDnsQuestions, DNSName,BytesSent, BytesReceived, RemoteCountry, Type\n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIp, File = ProcessName\n),\n(AzureDiagnostics \n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallApplicationRule\"\n| project TimeGenerated,Resource, msg_s, Type\n| parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n| where isnotempty(DestinationHost)\n| where DestinationHost has_any (domains)  \n| extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost\n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallDnsProxy\"\n| project TimeGenerated,Resource, msg_s, Type\n| parse msg_s with \"DNS Request: \" ClientIP \":\" ClientPort \" - \" QueryID \" \" Request_Type \" \" Request_Class \" \" Request_Name \". \" Request_Protocol \" \" Request_Size \" \" EDNSO_DO \" \" EDNS0_Buffersize \" \" Responce_Code \" \" Responce_Flags \" \" Responce_Size \" \" Response_Duration\n| where  Request_Name  has_any (domains)\n| extend timestamp = TimeGenerated, DNSName = Request_Name, IPCustomEntity = ClientIP\n),\n(AZFWApplicationRule\n| where isnotempty(Fqdn)\n| where Fqdn has_any (domains)  \n| extend timestamp = TimeGenerated, DNSName = Fqdn, IPCustomEntity = SourceIp\n),\n(AZFWDnsQuery\n| where isnotempty(QueryName)\n| where QueryName has_any (domains)\n| extend timestamp = TimeGenerated, DNSName = QueryName, IPCustomEntity = SourceIp\n),\n(DeviceNetworkEvents \n| where isnotempty(RemoteUrl) \n| where RemoteUrl  in~ (domains)  \n| project Type, TimeGenerated, DeviceName, RemoteIP, RemoteUrl, InitiatingProcessAccountName\n| extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, DNSName = RemoteUrl, IPCustomEntity = RemoteIP\n)\n)\n",
+                "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ActiniumIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet domains = (iocs | where Type =~ \"domainname\"| project IoC);\nlet sha256Hashes = (iocs | where Type =~ \"sha256\" | project IoC);\n(union isfuzzy=true\n(DeviceProcessEvents\n| where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or  (ProcessCommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ProcessCommandLine has ('/tr \"wscript.exe') and ProcessCommandLine has ('\"%PUBLIC%\\\\Pictures\\\\') and ProcessCommandLine has ('//e:VBScript //b\" /F')) or (ProcessCommandLine has ('wscript.exe C:\\\\Users\\\\') and ProcessCommandLine has ('.wav') and  ProcessCommandLine has ('//e:VBScript //b') \nor (ProcessCommandLine has_all (\"schtasks.exe\", \"create\", \"wscript\", \"e:vbscript\", \".wav\")))\n| project TimeGenerated, ActionType, DeviceId, DeviceName, ProcessCommandLine, InitiatingProcessAccountName, InitiatingProcessCommandLine, FolderPath, InitiatingProcessFolderPath, ProcessId, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256, FileName\n| extend Account = AccountName, Computer = DeviceName,  FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), \"InitiatingProcessSHA256\", SHA256 in (sha256Hashes), \"SHA256\", \"No Match\")\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = FileName, FileHashCustomEntity = case(FileHash == \"InitiatingProcessSHA256\", InitiatingProcessSHA256, FileHash == \"SHA256\", SHA256, \"No Match\"), AlgorithmCustomEntity = \"SHA256\"\n),\n( SecurityEvent\n| where EventID == 4688\n| where (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr \"wscript.exe') and CommandLine has ('\"%PUBLIC%\\\\Pictures\\\\') and CommandLine has ('//e:VBScript //b\" /F')) or (CommandLine has ('wscript.exe C:\\\\Users\\\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b'))\n| project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName\n),\n( CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated, Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID, AlgorithmCustomEntity = \"SHA256\"\n),\n( imFileEvent\n| where Hash in~ (sha256Hashes) or  (ActingProcessCommandLine  has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ActingProcessCommandLine  has ('/tr \"wscript.exe') and ActingProcessCommandLine  has ('\"%PUBLIC%\\\\Pictures\\\\') and ActingProcessCommandLine  has ('//e:VBScript //b\" /F')) or (ActingProcessCommandLine  has ('wscript.exe C:\\\\Users\\\\') and ActingProcessCommandLine  has ('.wav') and  ActingProcessCommandLine  has ('//e:VBScript //b') \n or (ActingProcessCommandLine has_all (\"schtasks.exe\", \"create\", \"wscript\", \"e:vbscript\", \".wav\")))\n| extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = Hash\n| project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash, AlgorithmCustomEntity = \"SHA256\"\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Image = EventDetail.[4].[\"#text\"],  CommandLine = EventDetail.[10].[\"#text\"], Hashes = tostring(EventDetail.[17].[\"#text\"])\n| extend Hashes = extract_all(@\"(?P<key>\\w+)=(?P<value>[a-zA-Z0-9]+)\", dynamic([\"key\",\"value\"]), Hashes)\n| extend Hashes = column_ifexists(\"Hashes\", \"\"), CommandLine = column_ifexists(\"CommandLine\", \"\")\n| where (Hashes has_any (sha256Hashes) ) or (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr \"wscript.exe') and CommandLine has ('\"%PUBLIC%\\\\Pictures\\\\') and CommandLine has ('//e:VBScript //b\" /F')) or (CommandLine has ('wscript.exe C:\\\\Users\\\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b') or (CommandLine has_all (\"schtasks.exe\", \"create\", \"wscript\", \"e:vbscript\", \".wav\")))\n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, tostring(Hashes), CommandLine, Image\n| extend Type = strcat(Type, \": \", Source)\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\\\', -1)[-1]), FileHashCustomEntity = Hashes, AlgorithmCustomEntity = \"SHA256\"\n),\n(DnsEvents\n| where Name in~ (domains)  \n| project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type\n| extend DestinationIPAddress = IPAddresses, DNSName = Name, Computer \n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress\n),\n(VMConnection\n| where RemoteDnsCanonicalNames has_any (domains)\n| parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n| project TimeGenerated, Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, RemoteDnsQuestions, DNSName,BytesSent, BytesReceived, RemoteCountry, Type\n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIp, File = ProcessName\n),\n(AzureDiagnostics \n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallApplicationRule\"\n| project TimeGenerated,Resource, msg_s, Type\n| parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n| where isnotempty(DestinationHost)\n| where DestinationHost has_any (domains)  \n| extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost\n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallDnsProxy\"\n| project TimeGenerated,Resource, msg_s, Type\n| parse msg_s with \"DNS Request: \" ClientIP \":\" ClientPort \" - \" QueryID \" \" Request_Type \" \" Request_Class \" \" Request_Name \". \" Request_Protocol \" \" Request_Size \" \" EDNSO_DO \" \" EDNS0_Buffersize \" \" Responce_Code \" \" Responce_Flags \" \" Responce_Size \" \" Response_Duration\n| where  Request_Name  has_any (domains)\n| extend timestamp = TimeGenerated, DNSName = Request_Name, IPCustomEntity = ClientIP\n),\n(AZFWApplicationRule\n| where isnotempty(Fqdn)\n| where Fqdn has_any (domains)  \n| extend timestamp = TimeGenerated, DNSName = Fqdn, IPCustomEntity = SourceIp\n),\n(AZFWDnsQuery\n| where isnotempty(QueryName)\n| where QueryName has_any (domains)\n| extend timestamp = TimeGenerated, DNSName = QueryName, IPCustomEntity = SourceIp\n),\n(DeviceNetworkEvents \n| where isnotempty(RemoteUrl) \n| where RemoteUrl  in~ (domains)  \n| project Type, TimeGenerated, DeviceName, RemoteIP, RemoteUrl, InitiatingProcessAccountName\n| extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, DNSName = RemoteUrl, IPCustomEntity = RemoteIP\n)\n)\n",
                 "queryFrequency": "PT6H",
                 "queryPeriod": "PT6H",
                 "severity": "High",
@@ -317,73 +317,73 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "F5",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "F5"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "CheckPoint",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CheckPoint"
+                    ]
                   },
                   {
+                    "connectorId": "CEF",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CEF"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents",
                       "DeviceProcessEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -425,7 +425,7 @@
                     "fieldMappings": [
                       {
                         "identifier": "Algorithm",
-                        "columnName": "FileHashType"
+                        "columnName": "AlgorithmCustomEntity"
                       },
                       {
                         "identifier": "Value",
@@ -503,7 +503,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "BariumDomainIOC112020_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "BariumDomainIOC112020_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion2')]",
@@ -531,84 +531,84 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "SquidProxy",
                     "dataTypes": [
                       "SquidProxy_CL"
-                    ],
-                    "connectorId": "SquidProxy"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -703,7 +703,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName3'))]"
       ],
       "properties": {
-        "description": "BariumIPIOC112020_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "BariumIPIOC112020_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion3')]",
@@ -731,144 +731,144 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AWSS3",
                     "datatypes": [
                       "AWSVPCFlow"
-                    ],
-                    "connectorId": "AWSS3"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftSysmonForLinux",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "MicrosoftSysmonForLinux"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "SigninLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "AADNonInteractiveUserSignInLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(WireData)",
                     "dataTypes": [
                       "WireData"
-                    ],
-                    "connectorId": "AzureMonitor(WireData)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(IIS)",
                     "dataTypes": [
                       "W3CIISLog"
-                    ],
-                    "connectorId": "AzureMonitor(IIS)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActivity",
                     "dataTypes": [
                       "AzureActivity"
-                    ],
-                    "connectorId": "AzureActivity"
+                    ]
                   },
                   {
+                    "connectorId": "AWS",
                     "dataTypes": [
                       "AWSCloudTrail"
-                    ],
-                    "connectorId": "AWS"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -963,7 +963,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName4'))]"
       ],
       "properties": {
-        "description": "CERIUMOct292020IOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "CERIUMOct292020IOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion4')]",
@@ -991,78 +991,78 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "SquidProxy",
                     "dataTypes": [
                       "SquidProxy_CL"
-                    ],
-                    "connectorId": "SquidProxy"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1158,7 +1158,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName5'))]"
       ],
       "properties": {
-        "description": "ChiaCryptoMining_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "ChiaCryptoMining_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion5')]",
@@ -1186,86 +1186,86 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "F5",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "F5"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "CheckPoint",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CheckPoint"
+                    ]
                   },
                   {
+                    "connectorId": "CEF",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CEF"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents",
                       "DeviceFileEvents",
                       "DeviceEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsFirewall",
                     "dataTypes": [
                       "WindowsFirewall"
-                    ],
-                    "connectorId": "WindowsFirewall"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1389,7 +1389,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName6'))]"
       ],
       "properties": {
-        "description": "DEV-0322_SolarWinds_Serv-U_IOC_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "DEV-0322_SolarWinds_Serv-U_IOC_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion6')]",
@@ -1417,87 +1417,87 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "F5",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "F5"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "CheckPoint",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CheckPoint"
+                    ]
                   },
                   {
+                    "connectorId": "CEF",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CEF"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents",
                       "DeviceFileEvents",
                       "DeviceEvents",
                       "DeviceProcessEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsFirewall",
                     "dataTypes": [
                       "WindowsFirewall"
-                    ],
-                    "connectorId": "WindowsFirewall"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1617,7 +1617,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName7'))]"
       ],
       "properties": {
-        "description": "Dev-0530_July2022_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "Dev-0530_July2022_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion7')]",
@@ -1645,75 +1645,75 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceFileEvents",
                       "DeviceProcessEvents",
                       "DeviceNetworkEvents",
                       "EmailEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "SigninLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "AADNonInteractiveUserSignInLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(IIS)",
                     "dataTypes": [
                       "W3CIISLog"
-                    ],
-                    "connectorId": "AzureMonitor(IIS)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActivity",
                     "dataTypes": [
                       "AzureActivity"
-                    ],
-                    "connectorId": "AzureActivity"
+                    ]
                   },
                   {
+                    "connectorId": "AWS",
                     "dataTypes": [
                       "AWSCloudTrail"
-                    ],
-                    "connectorId": "AWS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1833,7 +1833,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName8'))]"
       ],
       "properties": {
-        "description": "Dev-0586_Jan2022_IOC_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "Dev-0586_Jan2022_IOC_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion8')]",
@@ -1850,7 +1850,7 @@
                 "description": "Identifies a match across IOC's related to an actor tracked by Microsoft as DEV-0586\n Reference: https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/",
                 "displayName": "DEV-0586 Actor IOC - January 2022",
                 "enabled": false,
-                "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/DEV-0586.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet sha256Hashes = (iocs | where Type =~ \"sha256\" | project IoC);\nlet Command_Line = (iocs | where Type =~ \"CommandLine\" | project IoC);\n(union isfuzzy=true\n(DeviceProcessEvents\n| where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or ( InitiatingProcessCommandLine has ('127.0.0.1\\\\ADMIN$') and InitiatingProcessCommandLine has_any (Command_Line))\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256\n| extend Account = AccountName, Computer = DeviceName,  CommandLine = InitiatingProcessCommandLine, FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), \"InitiatingProcessSHA256\", SHA256 in (sha256Hashes), \"SHA256\", \"No Match\")\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = case(FileHash == \"InitiatingProcessSHA256\", InitiatingProcessSHA256, FileHash == \"SHA256\", SHA256, \"No Match\")\n),\n( SecurityEvent\n| where EventID == 4688\n| where ( CommandLine has (@'127.0.0.1\\\\ADMIN$') and CommandLine has_any (Command_Line))\n| project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName\n),\n( CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated, Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID\n),\n( imFileEvent\n| where Hash in~ (sha256Hashes) or  ( ActingProcessCommandLine has ('127.0.0.1\\\\ADMIN$') and ActingProcessCommandLine has_any (Command_Line))\n| extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256\n| project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Image = EventDetail.[4].[\"#text\"],  CommandLine = EventDetail.[10].[\"#text\"], Hashes = tostring(EventDetail.[17].[\"#text\"])\n| extend Hashes = extract_all(@\"(?P<key>\\w+)=(?P<value>[a-zA-Z0-9]+)\", dynamic([\"key\",\"value\"]), Hashes)\n| extend Hashes = column_ifexists(\"Hashes\", \"\"), CommandLine = column_ifexists(\"CommandLine\", \"\")\n| where (Hashes has_any (sha256Hashes) ) or ( CommandLine has ('127.0.0.1\\\\ADMIN$') and CommandLine has_any (Command_Line)) \n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image\n| extend Type = strcat(Type, \": \", Source)\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\\\', -1)[-1]), FileHashCustomEntity = Hashes\n)\n)\n",
+                "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/DEV-0586.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet sha256Hashes = (iocs | where Type =~ \"sha256\" | project IoC);\nlet Command_Line = (iocs | where Type =~ \"CommandLine\" | project IoC);\n(union isfuzzy=true\n(DeviceProcessEvents\n| where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or ( InitiatingProcessCommandLine has ('127.0.0.1\\\\ADMIN$') and InitiatingProcessCommandLine has_any (Command_Line))\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256\n| extend Account = AccountName, Computer = DeviceName,  CommandLine = InitiatingProcessCommandLine, FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), \"InitiatingProcessSHA256\", SHA256 in (sha256Hashes), \"SHA256\", \"No Match\")\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = case(FileHash == \"InitiatingProcessSHA256\", InitiatingProcessSHA256, FileHash == \"SHA256\", SHA256, \"No Match\"), AlgorithmCustomEntity = \"SHA256\"\n),\n( SecurityEvent\n| where EventID == 4688\n| where ( CommandLine has (@'127.0.0.1\\\\ADMIN$') and CommandLine has_any (Command_Line))\n| project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName\n),\n( CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated, Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID, AlgorithmCustomEntity = \"SHA256\"\n),\n( imFileEvent\n| where Hash in~ (sha256Hashes) or  ( ActingProcessCommandLine has ('127.0.0.1\\\\ADMIN$') and ActingProcessCommandLine has_any (Command_Line))\n| extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256\n| project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash, AlgorithmCustomEntity = \"SHA256\"\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Image = EventDetail.[4].[\"#text\"],  CommandLine = EventDetail.[10].[\"#text\"], Hashes = tostring(EventDetail.[17].[\"#text\"])\n| extend Hashes = extract_all(@\"(?P<key>\\w+)=(?P<value>[a-zA-Z0-9]+)\", dynamic([\"key\",\"value\"]), Hashes)\n| extend FileHash = column_ifexists(\"Hashes\", \"\"), CommandLine = column_ifexists(\"CommandLine\", \"\")\n| where (FileHash has_any (sha256Hashes) ) or ( CommandLine has ('127.0.0.1\\\\ADMIN$') and CommandLine has_any (Command_Line)) \n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, tostring(FileHash), CommandLine, Image\n| extend Type = strcat(Type, \": \", Source)\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\\\', -1)[-1]), FileHashCustomEntity = FileHash, AlgorithmCustomEntity = \"SHA256\"\n)\n)\n",
                 "queryFrequency": "PT6H",
                 "queryPeriod": "PT6H",
                 "severity": "High",
@@ -1861,34 +1861,34 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceProcessEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsSecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "WindowsSecurityEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1930,7 +1930,7 @@
                     "fieldMappings": [
                       {
                         "identifier": "Algorithm",
-                        "columnName": "FileHashAlgo"
+                        "columnName": "AlgorithmCustomEntity"
                       },
                       {
                         "identifier": "Value",
@@ -1999,7 +1999,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName9'))]"
       ],
       "properties": {
-        "description": "ExchangeServerVulnerabilitiesMarch2021IoCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "ExchangeServerVulnerabilitiesMarch2021IoCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion9')]",
@@ -2027,130 +2027,130 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AWSS3",
                     "datatypes": [
                       "AWSVPCFlow"
-                    ],
-                    "connectorId": "AWSS3"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(IIS)",
                     "dataTypes": [
                       "W3CIISLog"
-                    ],
-                    "connectorId": "AzureMonitor(IIS)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(WireData)",
                     "dataTypes": [
                       "WireData"
-                    ],
-                    "connectorId": "AzureMonitor(WireData)"
+                    ]
                   },
                   {
+                    "connectorId": "CheckPoint",
                     "dataTypes": [
                       "CommonSecurityLog (CheckPoint)"
-                    ],
-                    "connectorId": "CheckPoint"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog (Cisco)"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "CEF",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CEF"
+                    ]
                   },
                   {
+                    "connectorId": "F5",
                     "dataTypes": [
                       "CommonSecurityLog (F5)"
-                    ],
-                    "connectorId": "F5"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog (Fortinet)"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog (PaloAlto)"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvents"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsFirewall",
                     "dataTypes": [
                       "WindowsFirewall"
-                    ],
-                    "connectorId": "WindowsFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftSysmonForLinux",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "MicrosoftSysmonForLinux"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2257,7 +2257,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName10'))]"
       ],
       "properties": {
-        "description": "GalliumIOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "GalliumIOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion10')]",
@@ -2285,78 +2285,78 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2452,7 +2452,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName11'))]"
       ],
       "properties": {
-        "description": "HAFNIUMUmServiceSuspiciousFile_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "HAFNIUMUmServiceSuspiciousFile_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion11')]",
@@ -2480,28 +2480,28 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceFileEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsSecurityEvents",
                     "dataTypes": [
                       "SecurityEvents"
-                    ],
-                    "connectorId": "WindowsSecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2617,7 +2617,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName12'))]"
       ],
       "properties": {
-        "description": "HiveRansomwareJuly2022_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "HiveRansomwareJuly2022_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion12')]",
@@ -2645,30 +2645,30 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceFileEvents",
                       "DeviceEvents",
                       "DeviceImageLoadEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2779,7 +2779,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName13'))]"
       ],
       "properties": {
-        "description": "IridiumIOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "IridiumIOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion13')]",
@@ -2807,150 +2807,150 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AWSS3",
                     "datatypes": [
                       "AWSVPCFlow"
-                    ],
-                    "connectorId": "AWSS3"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   },
                   {
+                    "connectorId": "SquidProxy",
                     "dataTypes": [
                       "SquidProxy_CL"
-                    ],
-                    "connectorId": "SquidProxy"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftSysmonForLinux",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "MicrosoftSysmonForLinux"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "SigninLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "AADNonInteractiveUserSignInLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(IIS)",
                     "dataTypes": [
                       "W3CIISLog"
-                    ],
-                    "connectorId": "AzureMonitor(IIS)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActivity",
                     "dataTypes": [
                       "AzureActivity"
-                    ],
-                    "connectorId": "AzureActivity"
+                    ]
                   },
                   {
+                    "connectorId": "AWS",
                     "dataTypes": [
                       "AWSCloudTrail"
-                    ],
-                    "connectorId": "AWS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3045,7 +3045,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName14'))]"
       ],
       "properties": {
-        "description": "KNOTWEEDAVDetection_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "KNOTWEEDAVDetection_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion14')]",
@@ -3073,16 +3073,16 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceInfo"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3162,7 +3162,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName15'))]"
       ],
       "properties": {
-        "description": "KNOTWEEDC2DomainsJuly2022_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "KNOTWEEDC2DomainsJuly2022_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion15')]",
@@ -3190,22 +3190,22 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3303,7 +3303,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName16'))]"
       ],
       "properties": {
-        "description": "KNOTWEEDFileHashesJuly2022_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "KNOTWEEDFileHashesJuly2022_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion16')]",
@@ -3331,24 +3331,24 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceEvents",
                       "DeviceFileEvents",
                       "DeviceImageLoadEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvents"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsFirewall",
                     "dataTypes": [
                       "WindowsFirewall"
-                    ],
-                    "connectorId": "WindowsFirewall"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3455,7 +3455,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName17'))]"
       ],
       "properties": {
-        "description": "KnownPHOSPHORUSDomainsIP-October2020_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "KnownPHOSPHORUSDomainsIP-October2020_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion17')]",
@@ -3483,54 +3483,54 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog (Cisco)"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog (PaloAlto)"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog (Zscaler)"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog (Fortinet)"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "OfficeATP",
                     "dataTypes": [
                       "SecurityAlert (OATP)"
-                    ],
-                    "connectorId": "OfficeATP"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics (Azure Firewall)",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3630,7 +3630,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName18'))]"
       ],
       "properties": {
-        "description": "Manganese_VPN-IOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "Manganese_VPN-IOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion18')]",
@@ -3658,10 +3658,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3752,7 +3752,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName19'))]"
       ],
       "properties": {
-        "description": "MSHTMLVuln_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "MSHTMLVuln_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion19')]",
@@ -3780,16 +3780,16 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceProcessEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3878,7 +3878,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName20'))]"
       ],
       "properties": {
-        "description": "NICKELIOCsNov2021_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "NICKELIOCsNov2021_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion20')]",
@@ -3906,94 +3906,94 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "SquidProxy",
                     "dataTypes": [
                       "SquidProxy_CL"
-                    ],
-                    "connectorId": "SquidProxy"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceFileEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -4091,7 +4091,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName21'))]"
       ],
       "properties": {
-        "description": "NOBELIUM_DomainIOCsMarch2021_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "NOBELIUM_DomainIOCsMarch2021_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion21')]",
@@ -4119,90 +4119,90 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "SquidProxy",
                     "dataTypes": [
                       "SquidProxy_CL"
-                    ],
-                    "connectorId": "SquidProxy"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -4309,7 +4309,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName22'))]"
       ],
       "properties": {
-        "description": "Nobelium_FoggyWeb_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "Nobelium_FoggyWeb_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion22')]",
@@ -4326,7 +4326,7 @@
                 "description": "Identifies a match across various data feeds for IOCs related to FoggyWeb backdoor by the threat actor NOBELIUM.\n FoggyWeb is a passive and highly targeted backdoor capable of remotely exfiltrating sensitive information from a compromised AD FS server.\n It can also receive additional malicious components from a command-and-control (C2) server and execute them on the compromised server.\n Reference: https://aka.ms/nobelium-foggy-web",
                 "displayName": "NOBELIUM IOCs related to FoggyWeb backdoor",
                 "enabled": false,
-                "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/FoggyWebIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet sha256Hashes = (iocs | where Type == \"sha256\" | project IoC);\nlet FilePaths = (iocs | where Type =~ \"FilePath\" | project IoC);\nlet POST_URI = (iocs | where Type =~ \"URI1\" | project IoC);\nlet GET_URI = (iocs | where Type =~ \"URI2\" | project IoC);\n//Include in the list below, the ADFS servers you know about in your environment.  In the next part of the query, we will try to identify them for you if you have the telemetry.\nlet ADFS_Servers1 = datatable(Computer:string)\n[ \"<ADFS01>.<DOMAIN>.<COM>\",\n\"<ADFS02>.<DOMAIN>.<COM>\"\n];\n// Automatically identify potential ADFS services in your environment by searching process event telemetry for \"Microsoft.IdentityServer.ServiceHost.exe\".\nlet ADFS_Servers2 = \n(union isfuzzy=true\n(SecurityEvent\n| where EventID == 4688 and SubjectLogonId != \"0x3e4\"\n| where ProcessName has \"Microsoft.IdentityServer.ServiceHost.exe\"\n| distinct Computer\n),\n( WindowsEvent\n| where EventID == 4688 and EventData has \"Microsoft.IdentityServer.ServiceHost.exe\" and EventData has \"0x3e4\"\n| extend ProcessName = tostring(EventData.ProcessName)\n| where ProcessName == \"Microsoft.IdentityServer.ServiceHost.exe\"\n| extend SubjectLogonId = tostring(EventData.SubjectLogonId)\n| where SubjectLogonId != \"0x3e4\"\n| distinct Computer\n),\n(DeviceProcessEvents\n| where InitiatingProcessFileName == 'Microsoft.IdentityServer.ServiceHost.exe'\n| extend Computer = DeviceName\n| distinct Computer\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| extend process = split(Image, '\\\\', -1)[-1]\n| where process =~ \"Microsoft.IdentityServer.ServiceHost.exe\"\n| distinct Computer\n)\n);\nlet ADFS_Servers =\nADFS_Servers1\n| union  (ADFS_Servers2 | distinct Computer);\n(union isfuzzy=true\n(DeviceNetworkEvents\n| where DeviceName in (ADFS_Servers)\n| where isnotempty(InitiatingProcessSHA256) or isnotempty(InitiatingProcessFolderPath)\n| where  InitiatingProcessSHA256 has_any (sha256Hashes) or InitiatingProcessFolderPath has_any (FilePaths)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId,  InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type\n| extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\" and EventID == '7'\n| where Computer in (ADFS_Servers)\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend ImageLoaded = EventDetail.[5].[\"#text\"], Hashes = EventDetail.[11].[\"#text\"]\n| parse Hashes with * 'SHA256=' SHA256 '\",' *\n| where ImageLoaded has_any (FilePaths) or SHA256 has_any (sha256Hashes) \n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256, ImageLoaded, EventID\n| extend Type = strcat(Type,\":\",EventID, \": \", Source), Account = UserName, FileHash = SHA256, Image = EventDetail.[4].[\"#text\"] \n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = tostring(split(Image, '\\\\', -1)[-1]), AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated,  Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(DeviceEvents\n| where DeviceName in (ADFS_Servers)\n| extend FilePath = strcat(FolderPath, '\\\\', FileName)\n| where InitiatingProcessSHA256 has_any (sha256Hashes) or FilePath has_any (FilePaths)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend Account = InitiatingProcessAccountName, Computer = DeviceName, CommandLine = InitiatingProcessCommandLine, FileHash = InitiatingProcessSHA256, Image = InitiatingProcessFolderPath\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(DeviceFileEvents\n| where DeviceName in (ADFS_Servers)\n| where FolderPath has_any (FilePaths) or SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend Account = InitiatingProcessAccountName, Computer = DeviceName, CommandLine = InitiatingProcessCommandLine, FileHash = InitiatingProcessSHA256, Image = InitiatingProcessFolderPath\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(DeviceImageLoadEvents\n| where DeviceName in (ADFS_Servers)\n| where FolderPath has_any (FilePaths) or SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend Account = InitiatingProcessAccountName, Computer = DeviceName, CommandLine = InitiatingProcessCommandLine, FileHash = InitiatingProcessSHA256, Image = InitiatingProcessFolderPath\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where Computer in (ADFS_Servers)\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| parse EventDetail with * 'SHA256=' SHA256 '\",' *\n| where EventDetail has_any (sha256Hashes) \n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256\n| extend Type = strcat(Type, \": \", Source), Account = UserName, FileHash = SHA256, Image = EventDetail.[4].[\"#text\"] \n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = tostring(split(Image, '\\\\', -1)[-1]), AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(W3CIISLog \n| where ( csMethod == 'GET' and csUriStem has_any (GET_URI)) or (csMethod == 'POST' and csUriStem has_any (POST_URI))\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), cIP_MethodCount = count() \nby cIP, cIP_MethodCountType = \"Count of repeated entries, this is to reduce rowsets returned\", csMethod, \ncsHost, scStatus, sIP, csUriStem, csUriQuery, csUserName, csUserAgent, csCookie, csReferer\n| extend timestamp = StartTime, IPCustomEntity = cIP, HostCustomEntity = csHost, AccountCustomEntity = csUserName\n),\n(imFileEvent\n| where DvcHostname in (ADFS_Servers)\n| where TargetFileSHA256 has_any (sha256Hashes) or FilePath has_any (FilePaths)\n| extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256\n| project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash\n)\n)\n",
+                "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/FoggyWebIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet sha256Hashes = (iocs | where Type == \"sha256\" | project IoC);\nlet FilePaths = (iocs | where Type =~ \"FilePath\" | project IoC);\nlet POST_URI = (iocs | where Type =~ \"URI1\" | project IoC);\nlet GET_URI = (iocs | where Type =~ \"URI2\" | project IoC);\n//Include in the list below, the ADFS servers you know about in your environment.  In the next part of the query, we will try to identify them for you if you have the telemetry.\nlet ADFS_Servers1 = datatable(Computer:string)\n[ \"<ADFS01>.<DOMAIN>.<COM>\",\n\"<ADFS02>.<DOMAIN>.<COM>\"\n];\n// Automatically identify potential ADFS services in your environment by searching process event telemetry for \"Microsoft.IdentityServer.ServiceHost.exe\".\nlet ADFS_Servers2 = \n(union isfuzzy=true\n(SecurityEvent\n| where EventID == 4688 and SubjectLogonId != \"0x3e4\"\n| where ProcessName has \"Microsoft.IdentityServer.ServiceHost.exe\"\n| distinct Computer\n),\n( WindowsEvent\n| where EventID == 4688 and EventData has \"Microsoft.IdentityServer.ServiceHost.exe\"// and not(EventData has \"0x3e4\")\n| extend ProcessName = tostring(EventData.ProcessName)\n| where ProcessName == \"Microsoft.IdentityServer.ServiceHost.exe\"\n| extend SubjectLogonId = tostring(EventData.SubjectLogonId)\n| where SubjectLogonId != \"0x3e4\"\n| distinct Computer\n),\n(DeviceProcessEvents\n| where InitiatingProcessFileName == 'Microsoft.IdentityServer.ServiceHost.exe'\n| extend Computer = DeviceName\n| distinct Computer\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| extend process = split(Image, '\\\\', -1)[-1]\n| where process =~ \"Microsoft.IdentityServer.ServiceHost.exe\"\n| distinct Computer\n)\n);\nlet ADFS_Servers =\nADFS_Servers1\n| union  (ADFS_Servers2 | distinct Computer);\n(union isfuzzy=true\n(DeviceNetworkEvents\n| where DeviceName in (ADFS_Servers)\n| where isnotempty(InitiatingProcessSHA256) or isnotempty(InitiatingProcessFolderPath)\n| where  InitiatingProcessSHA256 has_any (sha256Hashes) or InitiatingProcessFolderPath has_any (FilePaths)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId,  InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type\n| extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\" and EventID == '7'\n| where Computer in (ADFS_Servers)\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend ImageLoaded = EventDetail.[5].[\"#text\"], Hashes = EventDetail.[11].[\"#text\"]\n| parse Hashes with * 'SHA256=' SHA256 '\",' *\n| where ImageLoaded has_any (FilePaths) or SHA256 has_any (sha256Hashes) \n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256, ImageLoaded, EventID\n| extend Type = strcat(Type,\":\",EventID, \": \", Source), Account = UserName, FileHash = SHA256, Image = EventDetail.[4].[\"#text\"] \n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = tostring(split(Image, '\\\\', -1)[-1]), AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated,  Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(DeviceEvents\n| where DeviceName in (ADFS_Servers)\n| extend FilePath = strcat(FolderPath, '\\\\', FileName)\n| where InitiatingProcessSHA256 has_any (sha256Hashes) or FilePath has_any (FilePaths)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend Account = InitiatingProcessAccountName, Computer = DeviceName, CommandLine = InitiatingProcessCommandLine, FileHash = InitiatingProcessSHA256, Image = InitiatingProcessFolderPath\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(DeviceFileEvents\n| where DeviceName in (ADFS_Servers)\n| where FolderPath has_any (FilePaths) or SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend Account = InitiatingProcessAccountName, Computer = DeviceName, CommandLine = InitiatingProcessCommandLine, FileHash = InitiatingProcessSHA256, Image = InitiatingProcessFolderPath\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(DeviceImageLoadEvents\n| where DeviceName in (ADFS_Servers)\n| where FolderPath has_any (FilePaths) or SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend Account = InitiatingProcessAccountName, Computer = DeviceName, CommandLine = InitiatingProcessCommandLine, FileHash = InitiatingProcessSHA256, Image = InitiatingProcessFolderPath\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(Event\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where Computer in (ADFS_Servers)\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| parse EventDetail with * 'SHA256=' SHA256 '\",' *\n| where EventDetail has_any (sha256Hashes) \n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256\n| extend Type = strcat(Type, \": \", Source), Account = UserName, FileHash = SHA256, Image = EventDetail.[4].[\"#text\"] \n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = tostring(split(Image, '\\\\', -1)[-1]), AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = FileHash\n),\n(W3CIISLog \n| where ( csMethod == 'GET' and csUriStem has_any (GET_URI)) or (csMethod == 'POST' and csUriStem has_any (POST_URI))\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), cIP_MethodCount = count() \nby cIP, cIP_MethodCountType = \"Count of repeated entries, this is to reduce rowsets returned\", csMethod, \ncsHost, scStatus, sIP, csUriStem, csUriQuery, csUserName, csUserAgent, csCookie, csReferer\n| extend timestamp = StartTime, IPCustomEntity = cIP, HostCustomEntity = csHost, AccountCustomEntity = csUserName\n),\n(imFileEvent\n| where DvcHostname in (ADFS_Servers)\n| where TargetFileSHA256 has_any (sha256Hashes) or FilePath has_any (FilePaths)\n| extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256\n| project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash\n)\n)\n",
                 "queryFrequency": "PT6H",
                 "queryPeriod": "PT6H",
                 "severity": "High",
@@ -4337,79 +4337,79 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "F5",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "F5"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "CheckPoint",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CheckPoint"
+                    ]
                   },
                   {
+                    "connectorId": "CEF",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CEF"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents",
                       "DeviceFileEvents",
                       "DeviceEvents",
                       "DeviceImageLoadEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsSecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "WindowsSecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(IIS)",
                     "dataTypes": [
                       "W3CIISLog"
-                    ],
-                    "connectorId": "AzureMonitor(IIS)"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsSecurityEvents",
                     "dataTypes": [
                       "SecurityEvents"
-                    ],
-                    "connectorId": "WindowsSecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -4529,7 +4529,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName23'))]"
       ],
       "properties": {
-        "description": "NOBELIUM_IOCsMay2021_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "NOBELIUM_IOCsMay2021_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion23')]",
@@ -4557,145 +4557,145 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AWSS3",
                     "datatypes": [
                       "AWSVPCFlow"
-                    ],
-                    "connectorId": "AWSS3"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   },
                   {
+                    "connectorId": "SquidProxy",
                     "dataTypes": [
                       "SquidProxy_CL"
-                    ],
-                    "connectorId": "SquidProxy"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftSysmonForLinux",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "MicrosoftSysmonForLinux"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "F5",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "F5"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "CheckPoint",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CheckPoint"
+                    ]
                   },
                   {
+                    "connectorId": "CEF",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CEF"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents",
                       "DeviceFileEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsFirewall",
                     "dataTypes": [
                       "WindowsFirewall"
-                    ],
-                    "connectorId": "WindowsFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -4804,7 +4804,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName24'))]"
       ],
       "properties": {
-        "description": "PHOSPHORUSMarch2019IOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "PHOSPHORUSMarch2019IOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion24')]",
@@ -4832,84 +4832,84 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "SquidProxy",
                     "dataTypes": [
                       "SquidProxy_CL"
-                    ],
-                    "connectorId": "SquidProxy"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -5007,7 +5007,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName25'))]"
       ],
       "properties": {
-        "description": "POLONIUMIPIoC_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "POLONIUMIPIoC_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion25')]",
@@ -5035,144 +5035,144 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AWSS3",
                     "datatypes": [
                       "AWSVPCFlow"
-                    ],
-                    "connectorId": "AWSS3"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftSysmonForLinux",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "MicrosoftSysmonForLinux"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "SigninLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "AADNonInteractiveUserSignInLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(WireData)",
                     "dataTypes": [
                       "WireData"
-                    ],
-                    "connectorId": "AzureMonitor(WireData)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(IIS)",
                     "dataTypes": [
                       "W3CIISLog"
-                    ],
-                    "connectorId": "AzureMonitor(IIS)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActivity",
                     "dataTypes": [
                       "AzureActivity"
-                    ],
-                    "connectorId": "AzureActivity"
+                    ]
                   },
                   {
+                    "connectorId": "AWS",
                     "dataTypes": [
                       "AWSCloudTrail"
-                    ],
-                    "connectorId": "AWS"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -5267,7 +5267,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName26'))]"
       ],
       "properties": {
-        "description": "Solorigate-Network-Beacon_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "Solorigate-Network-Beacon_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion26')]",
@@ -5295,78 +5295,78 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -5473,7 +5473,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName27'))]"
       ],
       "properties": {
-        "description": "Solorigate-VM-Network_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "Solorigate-VM-Network_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion27')]",
@@ -5501,22 +5501,22 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMProcess"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMComputer"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -5640,7 +5640,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName28'))]"
       ],
       "properties": {
-        "description": "SOURGUM_IOC_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "SOURGUM_IOC_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion28')]",
@@ -5668,100 +5668,100 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "F5",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "F5"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "CheckPoint",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CheckPoint"
+                    ]
                   },
                   {
+                    "connectorId": "CEF",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CEF"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents",
                       "DeviceRegistryEvents",
                       "DeviceFileEvents",
                       "DeviceEvents",
                       "DeviceProcessEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsFirewall",
                     "dataTypes": [
                       "WindowsFirewall"
-                    ],
-                    "connectorId": "WindowsFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsSecurityEvents",
                     "dataTypes": [
                       "SecurityEvents"
-                    ],
-                    "connectorId": "WindowsSecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -5881,7 +5881,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName29'))]"
       ],
       "properties": {
-        "description": "STRONTIUMOct292020IOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "STRONTIUMOct292020IOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion29')]",
@@ -5909,10 +5909,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "Office365",
                     "dataTypes": [
                       "OfficeActivity"
-                    ],
-                    "connectorId": "Office365"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -5981,7 +5981,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName30'))]"
       ],
       "properties": {
-        "description": "SUNSPOTLogFile_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "SUNSPOTLogFile_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion30')]",
@@ -6009,28 +6009,28 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceFileEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsSecurityEvents",
                     "dataTypes": [
                       "SecurityEvents"
-                    ],
-                    "connectorId": "WindowsSecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -6110,7 +6110,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName31'))]"
       ],
       "properties": {
-        "description": "TarraskHashIoC_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "TarraskHashIoC_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion31')]",
@@ -6138,30 +6138,30 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceFileEvents",
                       "DeviceEvents",
                       "DeviceImageLoadEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -6272,7 +6272,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName32'))]"
       ],
       "properties": {
-        "description": "ThalliumIOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "ThalliumIOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion32')]",
@@ -6300,72 +6300,72 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -6461,7 +6461,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName33'))]"
       ],
       "properties": {
-        "description": "WSLMalwareCorrelation_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "WSLMalwareCorrelation_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion33')]",
@@ -6489,80 +6489,80 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "F5",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "F5"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "Fortinet",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Fortinet"
+                    ]
                   },
                   {
+                    "connectorId": "CheckPoint",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CheckPoint"
+                    ]
                   },
                   {
+                    "connectorId": "CEF",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CEF"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents",
                       "DeviceFileEvents",
                       "DeviceEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsFirewall",
                     "dataTypes": [
                       "WindowsFirewall"
-                    ],
-                    "connectorId": "WindowsFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsSecurityEvents",
                     "dataTypes": [
                       "SecurityEvents"
-                    ],
-                    "connectorId": "WindowsSecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -6682,7 +6682,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName34'))]"
       ],
       "properties": {
-        "description": "ZincJan272021IOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "ZincJan272021IOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion34')]",
@@ -6710,102 +6710,102 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "DNS",
                     "dataTypes": [
                       "DnsEvents"
-                    ],
-                    "connectorId": "DNS"
+                    ]
                   },
                   {
+                    "connectorId": "AzureMonitor(VMInsights)",
                     "dataTypes": [
                       "VMConnection"
-                    ],
-                    "connectorId": "AzureMonitor(VMInsights)"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceProcessEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceFileEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftThreatProtection",
                     "dataTypes": [
                       "DeviceNetworkEvents"
-                    ],
-                    "connectorId": "MicrosoftThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWDnsQuery"
-                    ],
-                    "connectorId": "AzureFirewall"
+                    ]
                   },
                   {
+                    "connectorId": "Zscaler",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "Zscaler"
+                    ]
                   },
                   {
+                    "connectorId": "InfobloxNIOS",
                     "dataTypes": [
                       "Syslog"
-                    ],
-                    "connectorId": "InfobloxNIOS"
+                    ]
                   },
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCP_DNS_CL"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "NXLogDnsLogs",
                     "dataTypes": [
                       "NXLog_DNS_Server_CL"
-                    ],
-                    "connectorId": "NXLogDnsLogs"
+                    ]
                   },
                   {
+                    "connectorId": "CiscoUmbrellaDataConnector",
                     "dataTypes": [
                       "Cisco_Umbrella_dns_CL"
-                    ],
-                    "connectorId": "CiscoUmbrellaDataConnector"
+                    ]
                   },
                   {
+                    "connectorId": "Corelight",
                     "dataTypes": [
                       "Corelight_CL"
-                    ],
-                    "connectorId": "Corelight"
+                    ]
                   },
                   {
+                    "connectorId": "WindowsForwardedEvents",
                     "dataTypes": [
                       "WindowsEvent"
-                    ],
-                    "connectorId": "WindowsForwardedEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -6905,7 +6905,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName35'))]"
       ],
       "properties": {
-        "description": "ZincOct292020IOCs_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "ZincOct292020IOCs_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion35')]",
@@ -6933,22 +6933,22 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CiscoASA",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "CiscoASA"
+                    ]
                   },
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   },
                   {
+                    "connectorId": "SecurityEvents",
                     "dataTypes": [
                       "SecurityEvent"
-                    ],
-                    "connectorId": "SecurityEvents"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -7044,7 +7044,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Dev-0056CommandLineActivityNovember2021_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "Dev-0056CommandLineActivityNovember2021_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion1')]",
@@ -7136,7 +7136,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "Dev-0322CommandLineActivityNovember2021(ASIMVersion)_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "Dev-0322CommandLineActivityNovember2021(ASIMVersion)_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion2')]",
@@ -7228,7 +7228,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName3'))]"
       ],
       "properties": {
-        "description": "Dev-0322CommandLineActivityNovember2021_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "Dev-0322CommandLineActivityNovember2021_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion3')]",
@@ -7320,7 +7320,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName4'))]"
       ],
       "properties": {
-        "description": "Dev-0322FileDropActivityNovember2021(ASIMVersion)_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "Dev-0322FileDropActivityNovember2021(ASIMVersion)_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion4')]",
@@ -7412,7 +7412,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName5'))]"
       ],
       "properties": {
-        "description": "Dev-0322FileDropActivityNovember2021_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "Dev-0322FileDropActivityNovember2021_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion5')]",
@@ -7504,7 +7504,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName6'))]"
       ],
       "properties": {
-        "description": "NetworkConnectiontoOMIPorts_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "NetworkConnectiontoOMIPorts_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion6')]",
@@ -7596,7 +7596,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName7'))]"
       ],
       "properties": {
-        "description": "NICKELCommandLineActivity-Nov2021_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "NICKELCommandLineActivity-Nov2021_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion7')]",
@@ -7688,7 +7688,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName8'))]"
       ],
       "properties": {
-        "description": "NickelRegIOCPatterns_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "NickelRegIOCPatterns_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion8')]",
@@ -7780,7 +7780,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName9'))]"
       ],
       "properties": {
-        "description": "SolarWindsInventory_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "SolarWindsInventory_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion9')]",
@@ -7872,7 +7872,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName10'))]"
       ],
       "properties": {
-        "description": "STRONTIUM_IOC_RetroHunt_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "STRONTIUM_IOC_RetroHunt_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion10')]",
@@ -7942,7 +7942,7 @@
       "apiVersion": "2022-01-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.1",
+        "version": "2.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
