@@ -114,6 +114,10 @@ while [[ $# -gt 0 ]]; do
 		UI_AGENT="-e UI_AGENT=True"
 		shift 1
 		;;
+	--agent-name)
+		AGENTNAME="$2"
+		shift 2
+		;;
 	--preview)
 		PREVIEW=1
 		shift 1
@@ -379,7 +383,7 @@ if [ ! $sdkok -eq 0 ]; then
 fi
 
 #Building the container
-containername="$containername-$GUID"
+containername="$containername-$AGENTNAME"
 cmdparams=""
 sudo docker inspect "$containername" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
