@@ -14,13 +14,9 @@ from azure.storage.fileshare import ShareFileClient
 from azure.core.exceptions import ResourceNotFoundError
 
 jwt_api_key = os.environ['LookoutClientId']
-logging.info(jwt_api_key)
 jwt_api_secret = os.environ['LookoutApiSecret']
-logging.info(jwt_api_secret)
 customer_id = os.environ['WorkspaceID']
-logging.info(customer_id)
 shared_key = os.environ['WorkspaceKey']
-logging.info(shared_key)
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 baseurl =  os.environ['Baseurl'] 
@@ -28,8 +24,18 @@ maxResults = os.environ['MaxResults']
 Authurl = baseurl+"/apigw/v1/authenticate"
 table_name = "LookoutCloudSecurity"
 Schedule = os.environ['Schedule']
+fetchDelay = os.environ['FetchDelay']
+pastDays = os.environ['PastDays']
 chunksize = 500
 token = ""
+if(fetchDelay is None):
+ fetchDelay = 5
+
+logging.info("the fetch delay taken as {}".format(fetchDelay))
+logging.info("The Past days were taken as {}".format(pastDays))
+
+if(pastDays is None):
+    pastDays = 7
 
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
@@ -85,15 +91,42 @@ class LookOut:
         tokens = json.loads(response.text)         
         return tokens['id_token']        
 	    
-    def generate_date(self):
+    def generate_eventdate(self):
         current_time_day = datetime.datetime.utcnow().replace(second=0, microsecond=0)
-        state = StateManager(connection_string)
+        current_time_day = (current_time_day- datetime.timedelta(minutes=fetchDelay)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
+        state = StateManager(connection_string,file_path="eventsfuncfile")        
         past_time = state.get()
         if past_time is not None:
             logging.info("The last time run happened at: {}".format(past_time))
         else:
             logging.info("There is no last run timestamp, trying to get events for last week.")
-            past_time = (current_time_day - datetime.timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
+            past_time = (current_time_day - datetime.timedelta(days=pastDays)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
+        state.post(current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
+        return (past_time, current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
+
+    def generate_anomoliesdate(self):
+        current_time_day = datetime.datetime.utcnow().replace(second=0, microsecond=0)
+        current_time_day = (current_time_day- datetime.timedelta(minutes=fetchDelay)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
+        state = StateManager(connection_string,file_path="anomoliesFuncfile")
+        past_time = state.get()
+        if past_time is not None:
+            logging.info("The last time run happened at: {}".format(past_time))
+        else:
+            logging.info("There is no last run timestamp, trying to get events for last week.")
+            past_time = (current_time_day - datetime.timedelta(days=pastDays)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
+        state.post(current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
+        return (past_time, current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
+    
+    def generate_violationsdate(self):
+        current_time_day = datetime.datetime.utcnow().replace(second=0, microsecond=0)
+        current_time_day = (current_time_day- datetime.timedelta(minutes=fetchDelay)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
+        state = StateManager(connection_string,file_path="violationFuncFile")
+        past_time = state.get()
+        if past_time is not None:
+            logging.info("The last time run happened at: {}".format(past_time))
+        else:
+            logging.info("There is no last run timestamp, trying to get events for last week.")
+            past_time = (current_time_day - datetime.timedelta(days=pastDays)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
         state.post(current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
         return (past_time, current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
 
@@ -207,10 +240,15 @@ def main(mytimer: func.TimerRequest) -> None:
         sentinel = Sentinel()
         sentinel.sharedkey = shared_key
         sentinel.table_name= table_name    
-        startTime,endTime = Lookout.generate_date()   
-        logging.info('Trying to get events for period: {} - {}'.format(startTime, endTime))
+        startTime,endTime = Lookout.generate_anomoliesdate()  
+        logging.info("The current run Start anomlies date time {}".format(startTime))
+        logging.info("The current run End anomlies date time {}".format(endTime))
+        logging.info('Trying to get anomolies for period: {} - {}'.format(startTime, endTime))
         logging.info('Start: to get Anomalies')
-        results_Anamolies = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
+        results_Anamolies = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)          
+        logging.info("The current run Start event time {}".format(startTime))
+        logging.info("The current run End event time {}".format(endTime))
+        logging.info('Trying to get events for period: {} - {}'.format(startTime, endTime))
         logging.info("Anamolies was processed {} ".format(len(results_Anamolies)))
         logging.info('End: to get Anomalies')
         logging.info('Start: to get Activity')
@@ -228,6 +266,18 @@ def main(mytimer: func.TimerRequest) -> None:
             finalresult += results_events
         if(results_Violations is not None):
             finalresult += results_Violations
+        print(finalresult)
+        
+        # Sort the json based on the "timestamp" key
+        sorted_data = sorted(finalresult, key=lambda x: x["timeStamp"])
+
+        # Fetch the latest timestamp
+        latest_timestamp = sorted_data[-1]["timestamp"]
+
+        logging.info("The latest timestamp {}".format(latest_timestamp))
+               
+        state = StateManager(connection_string)
+        state.post(latest_timestamp.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
         
         if(len(finalresult) > 0):
             body = json.dumps(finalresult)
