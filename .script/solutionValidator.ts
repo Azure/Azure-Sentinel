@@ -4,44 +4,20 @@ import { ExitCode } from "./utils/exitCode";
 import fs from "fs";
 import { MainTemplateValidationError } from "./utils/validationError";
 
-const validDomains = [
-    "Application",
-    "Cloud Provider",
-    "Compliance",
-    "DevOps",
-    "Identity",
-    "Internet of Things (IoT)",
-    "IT Operations",
-    "Migration",
-    "Networking",
-    "Platform",
-    "Security - Others",
-    "Security - Threat Intelligence",
-    "Security - Threat Protection",
-    "Security – 0-day Vulnerability",
-    "Security – Automation (SOAR)",
-    "Security – Cloud Security",
-    "Security – Information Protection",
-    "Security – Insider Threat",
-    "Security – Network",
-    "Security – Vulnerability Management",
-    "Storage",
-    "Training and Tutorials",
-    "User Behavior (UEBA)",
-];
+let validDomains: string[] = [];
+let validVerticals: string[] = [];
 
-const validVerticals = [
-    "Aeronautics",
-    "Education",
-    "Finance",
-    "Healthcare",
-    "Manufacturing",
-    "Retail",
-];
+try {
+    const validDomainsVerticals = JSON.parse(fs.readFileSync("ValidDomainsVerticals.json", "utf8"));
+    validDomains = validDomainsVerticals.validDomains;
+    validVerticals = validDomainsVerticals.validVerticals;
+} catch (error) {
+    logger.logError(`Error reading ValidDomainsVerticals.json file: ${error}`);
+}
 
 export async function IsValidSolution(filePath: string): Promise<ExitCode> {
-       
-    
+
+
     if (filePath.endsWith("mainTemplate.json")) {
         let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
@@ -82,20 +58,21 @@ export async function IsValidSolution(filePath: string): Promise<ExitCode> {
                 }
             });
         }
-       
-    }
-        else {
-            console.warn(`Could not identify json file as a Main Template. Skipping File path: ${filePath}`);
-        }
 
-        return ExitCode.SUCCESS;
     }
+    else {
+        console.warn(`Could not identify json file as a Main Template. Skipping File path: ${filePath}`);
+    }
+
+    return ExitCode.SUCCESS;
+}
+
 
 
 
 
 let fileTypeSuffixes = ["json"];
-let filePathFolderPrefixes = ["Solutions","Package"];
+let filePathFolderPrefixes = ["Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
     onCheckFile: (filePath: string) => {
