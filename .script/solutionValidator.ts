@@ -40,30 +40,49 @@ const validVerticals = [
 ];
 
 export async function IsValidSolution(filePath: string): Promise<ExitCode> {
-    let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+       
+    
+    if (filePath.endsWith("mainTemplate.json")) {
+        let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-    if (isPotentialMainTemplate(filePath) && jsonFile.hasOwnProperty("metadata")) {
-        if (jsonFile.metadata.hasOwnProperty("categories")) {
-            let categories = jsonFile.metadata.categories;
-
-            if (categories.hasOwnProperty("domains")) {
-                let domains = categories.domains;
-                for (const domain of domains) {
-                    if (!validDomains.includes(domain)) {
-                        throw new MainTemplateValidationError(`Invald Domain ${domain} provided`);
-                    }
-                }
-            }
-
-            if (categories.hasOwnProperty("verticals")) {
-                let verticals = categories.verticals;
-                for (const vertical of verticals) {
-                    if (!validVerticals.includes(vertical)) {
-                        throw new MainTemplateValidationError(`Invald Vertical ${vertical} provided`);
-                    }
-                }
-            }
+        if (!jsonFile.hasOwnProperty("resources")) {
+            console.warn(`No "resources" field found in the file. Skipping file path: ${filePath}`);
+            return ExitCode.SUCCESS;
         }
+
+        let resources = jsonFile.resources;
+
+        const filteredResource = resources.filter(function (resource: { type: string; }) {
+            return resource.type === "Microsoft.OperationalInsights/workspaces/providers/metadata";
+        });
+        if (filteredResource.length > 0) {
+            filteredResource.forEach((element: { hasOwnProperty: (arg0: string) => boolean; properties: { hasOwnProperty: (arg0: string) => boolean; categories: any; }; }) => {
+                if (element.hasOwnProperty("properties") === true) {
+                    if (element.properties.hasOwnProperty("categories") === true) {
+                        const categories = element.properties.categories;
+
+                        if (categories.hasOwnProperty("domains")) {
+                            let domains = categories.domains;
+                            for (const domain of domains) {
+                                if (!validDomains.includes(domain)) {
+                                    throw new MainTemplateValidationError(`Invald Domain ${domain} provided`);
+                                }
+                            }
+                        }
+
+                        if (categories.hasOwnProperty("verticals")) {
+                            let verticals = categories.verticals;
+                            for (const vertical of verticals) {
+                                if (!validVerticals.includes(vertical)) {
+                                    throw new MainTemplateValidationError(`Invald Vertical ${vertical} provided`);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+       
     }
         else {
             console.warn(`Could not identify json file as a Main Template. Skipping File path: ${filePath}`);
@@ -73,12 +92,7 @@ export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     }
 
 
-function isPotentialMainTemplate(filePath: string) {
-    if (filePath.endsWith("mainTemplate.json")) {
-        return true;
-    }
-    return false;
-}
+
 
 let fileTypeSuffixes = ["json"];
 let filePathFolderPrefixes = ["Solutions","Package"];
