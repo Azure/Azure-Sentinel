@@ -1,4 +1,4 @@
-# AS-Incident-Host-Exposure-Level
+# AS-Get-HostExposureLevel-From-MDE
 
 Author: Accelerynt
 
@@ -49,7 +49,7 @@ In the **Project Details** section:
 
 In the **Instance Details** section:   
 
-* **Playbook Name**: This can be left as "**AS-Incident-Host-Exposure-Level**" or you may change it.
+* **Playbook Name**: This can be left as "**AS-Get-HostExposureLevel-From-MDE**" or you may change it.
 
 Towards the bottom, click on “**Review + create**”. 
 
