@@ -70,129 +70,162 @@ ParserQuery: |
       let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
       let EventLookup=datatable(DeviceAction:string, DvcAction:string,EventResult:string,HttpStatusCode:string)
       [
-          "alert", "Allow", "Success","200"
-          , "allow", "Allow", "Success", "200"
-          , "continue", "Allow", "Success", "200"
-          , "override", "Allow", "Success", "200"
-          , "block-continue", "Allow", "Partial", "200"
-          , "block-url", "Deny", "Failure", "503"
-          , "block-override", "Deny", "Failure", "302"
-          , "override-lockout", "Deny", "Failure","503"
-          , "reset client", "Reset Source", "Failure", "503"
-          , "reset server", "Reset Destination", "Failure", "503"
-          , "reset both", "Reset", "Failure", "503"
-          , "deny", "Deny", "Failure", "503"
-          , "drop", "Drop", "Failure", "503"
-          , "drop ICMP", "Drop ICMP", "Failure", "503"
+        "alert", "Allow", "Success","200",
+        "allow", "Allow", "Success", "200",
+        "continue", "Allow", "Success", "200",
+        "override", "Allow", "Success", "200",
+        "block-continue", "Allow", "Partial", "200",
+        "block-url", "Deny", "Failure", "503",
+        "block-override", "Deny", "Failure", "302",
+        "override-lockout", "Deny", "Failure","503",
+        "reset client", "Reset Source", "Failure", "503",
+        "reset server", "Reset Destination", "Failure", "503",
+        "reset both", "Reset", "Failure", "503",
+        "deny", "Deny", "Failure", "503",
+        "drop", "Drop", "Failure", "503",
+        "drop ICMP", "Drop ICMP", "Failure", "503"
       ];
       let SeverityLookup=datatable(LogSeverity:string,EventSeverity:string)
-      [   1, "Informational" 
-          , 2, "Low" 
-          , 3, "Medium"
-          , 4, "Medium" 
-          , 5, "High"
+      [   
+        1, "Informational", 
+        2, "Low",
+        3, "Medium",
+        4, "Medium", 
+        5, "High"
       ];
+      let remove_protocol_from_list = (list:dynamic)
+      {
+        print list
+        | mv-apply l = print_0 to typeof(string) on
+        ( extend l = replace_regex (tostring(l), "^(?i:.*?)://", "") )
+        | project l
+      };
       CommonSecurityLog
       | where not(disabled)
-      | where DeviceVendor == "Palo Alto Networks"
-          and DeviceProduct == "PAN-OS"
-          and Activity == "THREAT"
-          and DeviceEventClassID == "url"
       | where (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
-      | where (array_length(url_has_any) == 0 or RequestURL has_any (url_has_any))
-      | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any)
-          , temp_DstMatch = has_any_ipv4_prefix(DestinationIP,dst_or_any)
+      | where DeviceVendor == "Palo Alto Networks"
+        and DeviceProduct == "PAN-OS"
+        and Activity == "THREAT"
+        and DeviceEventClassID == "url"
+      | where (array_length(url_has_any) == 0 or RequestURL has_any (remove_protocol_from_list(url_has_any)))
+      | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any),
+        temp_DstMatch = has_any_ipv4_prefix(DestinationIP,dst_or_any)
       | extend ASimMatchingIpAddr = case(
-          array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-",
-          temp_SrcMatch and temp_DstMatch, "Both",
-          temp_SrcMatch, "SrcIpAddr",
-          temp_DstMatch, "DstIpAddr",
-          "No match")
+        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-",
+        temp_SrcMatch and temp_DstMatch, "Both",
+        temp_SrcMatch, "SrcIpAddr",
+        temp_DstMatch, "DstIpAddr",
+        "No match")
       | where ASimMatchingIpAddr != "No match" 
       | project-away temp_*
       | extend EventResultDetails     = "NA"
       | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) has_any(eventresultdetails_in))
-      | parse-kv AdditionalExtensions as (PanOSXForwarderfor:string, PanXFFIP:string, PanOSReferer:string, PanOSRuleUUID:string, PanSrcHostname:string, PanSrcMac:string, PanSrcDeviceCat:string, PanSrcDAG:string, PanOSSrcUUID:string, PanSrcDeviceProf:string, PanSrcDeviceModel:string, PanSrcDeviceVendor:string, PanSrcDeviceOS:string, PanSrcDeviceOSv:string, PanDstHostname:string, PanDstMac:string, PanDstDeviceCat:string, PanDstDAG:string, PanOSDstUUID:string, PanDstDeviceProf:string, PanDstDeviceModel:string, PanDstDeviceVendor:string, PanDstDeviceOS:string, PanDstDeviceOSv:string) with (pair_delimiter=';', kv_delimiter='=')
-      | extend 
-          HttpRequestXff            = coalesce(PanOSXForwarderfor, PanXFFIP)
       | lookup EventLookup on DeviceAction
       | where (eventresult == '*' or EventResult =~ eventresult)
       | lookup SeverityLookup on LogSeverity
+      | parse-kv AdditionalExtensions as (
+          PanOSXForwarderfor:string,
+          PanXFFIP:string,
+          PanOSReferer:string,
+          PanOSRuleUUID:string,
+          PanSrcHostname:string,
+          PanSrcMac:string,
+          PanSrcDeviceCat:string,
+          PanSrcDAG:string,
+          PanOSSrcUUID:string,
+          PanSrcDeviceProf:string,
+          PanSrcDeviceModel:string,
+          PanSrcDeviceVendor:string,
+          PanSrcDeviceOS:string,
+          PanSrcDeviceOSv:string,
+          PanDstHostname:string,
+          PanDstMac:string,
+          PanDstDeviceCat:string,
+          PanDstDAG:string,
+          PanOSDstUUID:string,
+          PanDstDeviceProf:string,
+          PanDstDeviceModel:string,
+          PanDstDeviceVendor:string,
+          PanDstDeviceOS:string,
+          PanDstDeviceOSv:string
+        ) with (pair_delimiter=';', kv_delimiter='=')
+      | extend 
+        HttpRequestXff            = coalesce(PanOSXForwarderfor, PanXFFIP)
       | project-rename 
-          DvcHostname                 = Computer
-          , HttpReferrer              = PanOSReferer
-          , DstMacAddr                = PanDstMac
-          , SrcMacAddr                = PanSrcMac
-          , DstHostname               = PanDstHostname
-          , SrcHostname               = PanSrcHostname
-          , Url                       = RequestURL
-          , DvcId                     = DeviceExternalID
-          , SrcZone                   = DeviceCustomString4
-          , DstZone                   = DeviceCustomString5
-          , UrlCategory               = DeviceCustomString2
-          , DvcOriginalAction         = DeviceAction
-          , EventUid                  = _ItemId
-          , EventOriginalSeverity     = LogSeverity
-          , EventProductVersion       = DeviceVersion
-          , DvcInboundInterface       = DeviceInboundInterface
-          , DvcOutboundInterface      = DeviceOutboundInterface
-          , DstIpAddr                 = DestinationIP
-          , DstPortNumber             = DestinationPort
-          , SrcIpAddr                 = SourceIP
-          , SrcPortNumber             = SourcePort
-          , SrcUsername               = SourceUserName
-          , DstUsername               = DestinationUserName
-          , NetworkRuleName           = DeviceCustomString1
-          , ThreatOriginalConfidence  = ThreatConfidence
-          , DstNatIpAddr              = DestinationTranslatedAddress
-          , DstNatPortNumber          = DestinationTranslatedPort
-          , SrcNatIpAddr              = SourceTranslatedAddress
-          , SrcNatPortNumber          = SourceTranslatedPort
+        DvcHostname                = Computer,
+        HttpReferrer              = PanOSReferer,
+        DstMacAddr                = PanDstMac,
+        SrcMacAddr                = PanSrcMac,
+        DstHostname               = PanDstHostname,
+        SrcHostname               = PanSrcHostname,
+        DvcId                     = DeviceExternalID,
+        SrcZone                   = DeviceCustomString4,
+        DstZone                   = DeviceCustomString5,
+        UrlCategory               = DeviceCustomString2,
+        DvcOriginalAction         = DeviceAction,
+        EventUid                  = _ItemId,
+        EventOriginalSeverity     = LogSeverity,
+        EventProductVersion       = DeviceVersion,
+        DvcInboundInterface       = DeviceInboundInterface,
+        DvcOutboundInterface      = DeviceOutboundInterface,
+        DstIpAddr                 = DestinationIP,
+        DstPortNumber             = DestinationPort,
+        SrcIpAddr                 = SourceIP,
+        SrcPortNumber             = SourcePort,
+        SrcUsername               = SourceUserName,
+        DstUsername               = DestinationUserName,
+        NetworkRuleName           = DeviceCustomString1,
+        ThreatOriginalConfidence  = ThreatConfidence,
+        DstNatIpAddr              = DestinationTranslatedAddress,
+        DstNatPortNumber          = DestinationTranslatedPort,
+        SrcNatIpAddr              = SourceTranslatedAddress,
+        SrcNatPortNumber          = SourceTranslatedPort
       | extend
-          Dvc                         = DvcHostname
-          , DvcIdType                 = "Other"
-          , EventType                 = "HTTPsession"
-          , EventSchema               = "WebSession"
-          , EventSchemaVersion        = "0.2.5"
-          , EventProduct              = "Palo Alto"
-          , EventVendor               = "PanOS"
-          , EventStartTime            = TimeGenerated
-          , EventEndTime              = TimeGenerated
-          , HttpRequestMethod         = toupper(RequestMethod)
-          , HttpContentFormat         = RequestContext
-          , DstFQDN                   = iif(Url contains ":", split(tostring(split(trim('"',Url),"/")[0]),":")[0],tostring(split(trim('"',Url),"/")[0]))
-          , DstDomainType             = "FQDN"
-          , Src                       = SrcIpAddr
-          , SrcUsernameType           = "Windows"
-          , DstUsernameType           = "Windows"
-          , NetworkProtocolVersion    = case(
-              DstIpAddr contains "."  , "IPv4"
-              , DstIpAddr contains ":", "IPv6"
-              , "")
-          , NetworkDirection          = case(
-              FlexString2 == "client-to-server", "Outbound"
-              , FlexString2 == "server-to-client", "Inbound"
-              , "")
-          , IpAddr                    = SrcIpAddr
-          , NetworkProtocol           = toupper(Protocol)
-          , User                      = SrcUsername
-          , Rule                      = NetworkRuleName
-          , NetworkSessionId          = tostring(DeviceCustomNumber1)
-          , DvcInterface              = DvcInboundInterface
-          , Hostname                  = DstHostname
+        Dvc                       = DvcHostname,
+        DvcIdType                 = "Other",
+        EventType                 = "HTTPsession",
+        EventSchema               = "WebSession",
+        EventSchemaVersion        = "0.2.5",
+        EventProduct              = "Palo Alto",
+        EventVendor               = "PanOS",
+        EventStartTime            = TimeGenerated,
+        EventEndTime              = TimeGenerated,
+        HttpRequestMethod         = toupper(RequestMethod),
+        HttpContentFormat         = RequestContext,
+        DstFQDN                   = iif(RequestURL contains ":", split(tostring(split(trim('"',RequestURL),"/")[0]),":")[0],tostring(split(trim('"',RequestURL),"/")[0])),
+        DstDomainType             = "FQDN",
+        Src                       = SrcIpAddr,
+        SrcUsernameType           = "Windows",
+        DstUsernameType           = "Windows",
+        NetworkProtocolVersion    = case(
+          DstIpAddr contains "."  , "IPv4",
+          DstIpAddr contains ":"  , "IPv6",
+          ""),
+        NetworkDirection          = case(
+          FlexString2 == "client-to-server", "Outbound",
+          FlexString2 == "server-to-client", "Inbound",
+          ""),
+        IpAddr                    = SrcIpAddr,
+        NetworkProtocol           = toupper(Protocol),
+        User                      = SrcUsername,
+        Rule                      = NetworkRuleName,
+        NetworkSessionId          = tostring(DeviceCustomNumber1),
+        DvcInterface              = DvcInboundInterface,
+        Hostname                  = DstHostname,
+        Url                       = trim('"', RequestURL)
       | extend 
-          SessionId                 = NetworkSessionId
-          , ThreatField               = case(
-            isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Outbound", "SrcIpAddr"
-            , isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Inbound", "DstIpAddr"
-            , "")
-          , Dst                       = DstFQDN
+        SessionId                 = NetworkSessionId,
+        ThreatField               = case(
+          isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Outbound", "SrcIpAddr",
+          isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Inbound", "DstIpAddr",
+          ""),
+        Dst                       = DstFQDN
       | extend 
-          ThreatIpAddr                = case(
-            ThreatField == "SrcIpAddr", SrcIpAddr
-          , ThreatField == "DstIpAddr", DstIpAddr
-          , "")
-      | project ASimMatchingIpAddr, DeviceVendor, Dst, DstDomainType, DstFQDN, DstHostname, DstIpAddr, DstMacAddr, DstNatIpAddr, DstNatPortNumber, DstPortNumber, DstUsername, DstUsernameType, DstZone, Dvc, DvcAction, DvcHostname, DvcId, DvcIdType, DvcInboundInterface, DvcInterface, DvcOriginalAction, DvcOutboundInterface, EventCount, EventEndTime, EventOriginalSeverity, EventProduct, EventProductVersion, EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventSeverity, EventStartTime, EventType, EventUid, EventVendor, Hostname, HttpContentFormat, HttpRequestMethod, HttpRequestXff, HttpStatusCode, IpAddr, NetworkDirection, NetworkProtocol, NetworkProtocolVersion, NetworkRuleName, NetworkSessionId, Protocol, RequestContext, RequestMethod, Rule, SessionId, Src, SrcHostname, SrcIpAddr, SrcMacAddr, SrcNatIpAddr, SrcNatPortNumber, SrcPortNumber, SrcUsername, SrcUsernameType, SrcZone, ThreatField, ThreatIpAddr, ThreatOriginalConfidence, TimeGenerated, Type, Url, UrlCategory, User
+        ThreatIpAddr                = case(
+          ThreatField == "SrcIpAddr", SrcIpAddr,
+          ThreatField == "DstIpAddr", DstIpAddr,
+          "")
+      | project ASimMatchingIpAddr, DeviceVendor, Dst, DstDomainType, DstFQDN, DstHostname, DstIpAddr, DstMacAddr, DstNatIpAddr, DstNatPortNumber, DstPortNumber, DstUsername, DstUsernameType, DstZone, Dvc, DvcAction, DvcHostname, DvcId, DvcIdType, DvcInboundInterface, DvcInterface, DvcOriginalAction, DvcOutboundInterface, EventCount, EventEndTime, EventOriginalSeverity, EventProduct, EventProductVersion, EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventSeverity, EventStartTime, EventType, EventUid, EventVendor, Hostname, HttpContentFormat, HttpRequestMethod, HttpRequestXff, HttpStatusCode, IpAddr, NetworkDirection, NetworkProtocol, NetworkProtocolVersion, NetworkRuleName, NetworkSessionId, Protocol, RequestContext, Rule, SessionId, Src, SrcHostname, SrcIpAddr, SrcMacAddr, SrcNatIpAddr, SrcNatPortNumber, SrcPortNumber, SrcUsername, SrcUsernameType, SrcZone, ThreatField, ThreatIpAddr, ThreatOriginalConfidence, TimeGenerated, Type, Url, UrlCategory, User
   };
   parser (starttime=starttime, endtime=endtime, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
