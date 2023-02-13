@@ -28,6 +28,28 @@ Connect-AzAccount
 New-AzRoleAssignment -ObjectId <logic app managed identity object id> -RoleDefinitionName "Microsoft Sentinel Contributor" -ResourceGroupName "<logic app resource group name>"
 ```
 
+Alternatively, if you wish to do this through the GUI/portal:
+
+Navigate to the Log Analytics Workspaces page and select the same workspace the playbook is located in:
+
+https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.OperationalInsights%2Fworkspaces
+
+Select the "**Access control (IAM)**" option from the menu blade, then click "**Add role assignment**".
+
+![ExposureLevel_Add_Role_1](Images/ExposureLevel_Add_Role_1.png)
+
+Select the "**Microsoft Sentinel Contributor**" role, then click "**Next**".
+
+![ExposureLevel_Add_Role_2](Images/ExposureLevel_Add_Role_2.png)
+
+Select the "**Managed identity**" option, then under the subscription the logic app is located, set the value of "**Managed identity**" to "**Logic app**". Next, enter "**AS-Get-HostExposureLevel-From-MDE**", or the alternative playbook name used during deployment, in the field labeled "**Select**". Select the playbook, then click "**Select**".
+
+![ExposureLevel_Add_Role_3](Images/ExposureLevel_Add_Role_3.png)
+
+Continue on to the "**Review + assign**" tab and click "**Review + assign**".
+
+![ExposureLevel_Add_Role_4](Images/ExposureLevel_Add_Role_4.png)
+
 
 #
 ### Deployment
