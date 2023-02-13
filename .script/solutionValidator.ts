@@ -8,7 +8,7 @@ let validDomains: string[] = [];
 let validVerticals: string[] = [];
 
 try {
-    const validDomainsVerticals = JSON.parse(fs.readFileSync("ValidDomainsVerticals.json", "utf8"));
+    const validDomainsVerticals = JSON.parse(fs.readFileSync('./.script/ValidDomainsVerticals.json', "utf8"));
     validDomains = validDomainsVerticals.validDomains;
     validVerticals = validDomainsVerticals.validVerticals;
 } catch (error) {
