@@ -120,7 +120,7 @@ let CheckOptions = {
     },
     // Callback function to handle final failure
     onFinalFailed: async () => {
-        logger.logError("An error occurred, please open an issue");
+        logger.logError("Please refer link https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/sentinel/sentinel-solutions.md?msclkid=9a240b52b11411ec99ae6736bd089c4a#categories-for-microsoft-sentinel-out-of-the-box-content-and-solutions for valid Domains and Verticals.");
     },
 };
 
