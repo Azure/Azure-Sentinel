@@ -102,7 +102,7 @@ let CheckOptions = {
     },
     // Callback function to handle errors during execution
     onExecError: async (e: any, filePath: string) => {
-        console.log(`Main Template Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
+        console.log(`Solution Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
     },
     // Callback function to handle final failure
     onFinalFailed: async () => {
