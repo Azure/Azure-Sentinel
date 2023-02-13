@@ -45,15 +45,17 @@ export async function IsValidSolution(filePath: string): Promise<ExitCode> {
                     // check if the "properties" field has a "categories" field
                     if (element.properties.hasOwnProperty("categories") === true) {
                         const categories = element.properties.categories;
-
+                        
+                        let invalidDomains = [];
+                        let invalidVerticals = [];
+                        
                         // check if the categories have a "domains" field
                         if (categories.hasOwnProperty("domains")) {
                             let domains = categories.domains;
                             for (const domain of domains) {
                                 // check if the domain is valid
                                 if (!validDomains.includes(domain)) {
-                                    // throw error if the domain is not valid
-                                    throw new MainTemplateValidationError(`Invald Domain ${domain} provided`);
+                                    invalidDomains.push(domain);
                                 }
                             }
                         }
@@ -63,9 +65,21 @@ export async function IsValidSolution(filePath: string): Promise<ExitCode> {
                             let verticals = categories.verticals;
                             for (const vertical of verticals) {
                                 if (!validVerticals.includes(vertical)) {
-                                    throw new MainTemplateValidationError(`Invald Vertical ${vertical} provided`);
+                                    invalidVerticals.push(vertical);
                                 }
                             }
+                        }
+
+                        if (invalidDomains.length > 0 || invalidVerticals.length > 0) {
+                            let errorMessage = "Invalid";
+                            if (invalidDomains.length > 0) {
+                                errorMessage += ` domains: [${invalidDomains.join(", ")}]`;
+                            }
+                            if (invalidVerticals.length > 0) {
+                                errorMessage += ` verticals: [${invalidVerticals.join(", ")}]`;
+                            }
+                            errorMessage += ` provided.`;
+                            throw new MainTemplateValidationError(errorMessage);
                         }
                     }
                 }
