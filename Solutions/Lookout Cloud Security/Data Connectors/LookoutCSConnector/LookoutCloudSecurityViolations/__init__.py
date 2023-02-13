@@ -217,7 +217,7 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("The current run End time {}".format(endTime))        
         logging.info('Start: to get Violation')
         results_events = Lookout.get_Data("/apigw/v1/events?eventType=Violation",startTime,endTime)
-        logging.info("Activities was processed {} ".format(len(results_events)))
+        logging.info("The number of violations was processed {} ".format(len(results_events)))
         logging.info('End: to get Violation')         
         
         if(len(results_events)) > 0:
