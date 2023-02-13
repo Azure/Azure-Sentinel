@@ -229,10 +229,9 @@ def main(mytimer: func.TimerRequest) -> None:
          state = StateManager(connection_string)         
          state.post(str(latest_timestamp).replace("Z", "-00:00"))
          body = json.dumps(results_events)
-
-        if(len(results_events) > 0 & len(results_events) <= 2000):            
+         if(len(results_events) <= 2000):            
             sentinel.post_data(body,len(results_events))
-        elif(len(results_events) > 2000):   
+         elif(len(results_events) > 2000):   
             sentinel.gen_chunks(body)
 
         sentinel_class_vars = vars(sentinel)
