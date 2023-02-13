@@ -24,7 +24,7 @@ The following items are required under the template settings during deployment:
 # 
 ### Setup
                                                                                                                                      
-#### Create an App Registration:
+#### 1. Create an App Registration:
  
 Navigate to the Navigate to the Microsoft Azure Active Directory App Registrations page:
 
@@ -62,7 +62,7 @@ Copy the generated "**Value**" and save it for the next step, [Create an Azure K
 ![ApprovalEmail_Create_App_Registration_8](Images/ApprovalEmail_Create_App_Registration_8.png)
 
 
-#### Create an Azure Key Vault Secret:
+#### 2. Create an Azure Key Vault Secret:
 
 Navigate to the Azure Key Vaults page: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults
 
@@ -80,7 +80,7 @@ Once your secret has been added to the vault, navigate to the "**Access policies
 
 
 #
-### Deployment                                                                                                         
+### 3. Deployment                                                                                                         
                                                                                                         
 To configure and deploy this playbook:
  
@@ -140,7 +140,7 @@ When prompted, sign in to validate the connection.
 
 
 #
-### Granting Access to Azure Key Vault
+### 4. Granting Access to Azure Key Vault
 
 Before the Logic App can run successfully, the Key Vault connection created during deployment must be granted access to the Key Vault storing your App Registration Secret.
 
