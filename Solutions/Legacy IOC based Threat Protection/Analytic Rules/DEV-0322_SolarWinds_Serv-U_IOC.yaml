@@ -2,7 +2,8 @@ id: 4759ddb4-2daf-43cb-b34e-d85b85b4e4a5
 name: DEV-0322 Serv-U related IOCs - July 2021
 description: | 
   'Identifies a match across IOC's related to DEV-0322 targeting SolarWinds Serv-U software.'
-severity: High 
+severity: High
+status: Available 
 requiredDataConnectors: 
   - connectorId: DNS
     dataTypes:
@@ -43,6 +44,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
   - connectorId: WindowsFirewall
     dataTypes:
       - WindowsFirewall      
@@ -112,11 +115,12 @@ query:  |
   ),
   (AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallDnsProxy"
-  | project TimeGenerated,Resource, msg_s, Type
-  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
-  | where  ClientIP in (IPList)
-  | extend timestamp = TimeGenerated, DNSName = Request_Name, IPCustomEntity = ClientIP, AlertDetail = 'Dev-0322 IOC match'
+  | where Category == "AzureFirewallNetworkRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList)  
+  | extend DestinationIP = DestinationHost 
+  | extend IPCustomEntity = DestinationHost
   ),
   (AzureDiagnostics 
   | where ResourceType == "AZUREFIREWALLS"
@@ -124,8 +128,18 @@ query:  |
   | project TimeGenerated,Resource, msg_s
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
-  | where SourceHost in (IPList)
-  | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost, AlertDetail = 'Dev-0322 IOC match'
+  | where DestinationHost in (IPList)
+  | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = DestinationHost, AlertDetail = 'Dev-0322 IOC match'
+  ),
+  (
+  AZFWApplicationRule
+  | where Fqdn has_any (IPList)
+  | extend IPCustomEntity = SourceIp
+  ),
+  (
+  AZFWNetworkRule
+  | where DestinationIp has_any (IPList)
+  | extend IPCustomEntity = SourceIp
   ),
   (Event
   | where Source == "Microsoft-Windows-Sysmon"
@@ -190,5 +204,5 @@ entityMappings:
         columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.2
+version: 1.1.1
 kind: Scheduled

@@ -8,12 +8,42 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     if (!filePath.includes("azure-pipelines"))
     {
         const fileContent = fs.readFileSync(filePath, "utf8");
-        const searchText = "Azure Sentinel"
-        const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
-        
-        if (hasAzureSentinelText)
+        const searchText = "Azure Sentinel";
+        const expectedText = "Microsoft Sentinel";
+
+        // Read skip text from a file
+        const skipTextFile = fs.readFileSync('./.script/skip-text.txt', "utf8");
+        const skipTexts = skipTextFile.split("\n").filter(text => text.length > 0);
+
+        // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
+        let hasSkipText = false;
+        let skipTextValue = '';
+        for (const skipText of skipTexts) 
         {
-            throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' in file '${filePath}'`);
+            if (fileContent.includes(skipText)) 
+            {
+                hasSkipText = true;
+                skipTextValue = skipText;
+                break;
+            }
+        }
+
+        // REPLACE ALL SKIP TEXT WITH BLANK
+        let replacedFileContent = fileContent.replace(new RegExp(skipTexts.join('|'), 'gi'), '');
+
+        // FIND IF AZURE SENTINEL TEXT PRESENT
+        let hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
+        if (hasAzureSentinelText) 
+        {
+            // VALIDATE AND THROW ERROR
+            if (hasSkipText) 
+            {
+                throw new Error(`Please update text from '${searchText}' to '${expectedText}' except '${skipTextValue}' text in file '${filePath}'`);
+            } 
+            else 
+            {
+                throw new Error(`Please update text from '${searchText}' to '${expectedText}' in file '${filePath}'`);
+            }
         }
     }
     return ExitCode.SUCCESS;

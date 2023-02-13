@@ -1,4 +1,4 @@
-# Microsoft Azure Sentinel Deception (HoneyTokens) Solution - Preview
+# Microsoft Sentinel Deception (HoneyTokens) Solution - Community Supported
 
 For more details: <br>
 Blog post: https://aka.ms/honeytokensblog<br>

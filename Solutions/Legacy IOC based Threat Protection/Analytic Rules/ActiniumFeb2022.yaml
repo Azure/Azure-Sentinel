@@ -2,7 +2,8 @@ id: 825991eb-ea39-4590-9de2-ee97ef42eb93
 name: ACTINIUM Actor IOCs - Feb 2022
 description: | 
   'Identifies a match across various data feeds for domains, hashes and commands related to an actor tracked by Microsoft as Actinium.'
-severity: High 
+severity: High
+status: Available
 requiredDataConnectors: 
   - connectorId: DNS
     dataTypes:
@@ -38,6 +39,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWDnsQuery
 queryFrequency: 6h 
 queryPeriod: 6h 
 triggerOperator: gt 
@@ -60,7 +63,7 @@ query:  |
   or (ProcessCommandLine has_all ("schtasks.exe", "create", "wscript", "e:vbscript", ".wav")))
   | project TimeGenerated, ActionType, DeviceId, DeviceName, ProcessCommandLine, InitiatingProcessAccountName, InitiatingProcessCommandLine, FolderPath, InitiatingProcessFolderPath, ProcessId, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256, FileName
   | extend Account = AccountName, Computer = DeviceName,  FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), "InitiatingProcessSHA256", SHA256 in (sha256Hashes), "SHA256", "No Match")
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = FileName, FileHashCustomEntity = case(FileHash == "InitiatingProcessSHA256", InitiatingProcessSHA256, FileHash == "SHA256", SHA256, "No Match")
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = FileName, FileHashCustomEntity = case(FileHash == "InitiatingProcessSHA256", InitiatingProcessSHA256, FileHash == "SHA256", SHA256, "No Match"), AlgorithmCustomEntity = "SHA256"
   ),
   ( SecurityEvent
   | where EventID == 4688
@@ -71,14 +74,14 @@ query:  |
   ( CommonSecurityLog
   | where FileHash in (sha256Hashes)
   | project TimeGenerated, Message, SourceUserID, FileHash, Type
-  | extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID
+  | extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID, AlgorithmCustomEntity = "SHA256"
   ),
   ( imFileEvent
   | where Hash in~ (sha256Hashes) or  (ActingProcessCommandLine  has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ActingProcessCommandLine  has ('/tr "wscript.exe') and ActingProcessCommandLine  has ('"%PUBLIC%\\Pictures\\') and ActingProcessCommandLine  has ('//e:VBScript //b" /F')) or (ActingProcessCommandLine  has ('wscript.exe C:\\Users\\') and ActingProcessCommandLine  has ('.wav') and  ActingProcessCommandLine  has ('//e:VBScript //b') 
    or (ActingProcessCommandLine has_all ("schtasks.exe", "create", "wscript", "e:vbscript", ".wav")))
   | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = Hash
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash, AlgorithmCustomEntity = "SHA256"
   ),
   (Event
   | where Source == "Microsoft-Windows-Sysmon"
@@ -89,9 +92,9 @@ query:  |
   | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
   | extend Hashes = column_ifexists("Hashes", ""), CommandLine = column_ifexists("CommandLine", "")
   | where (Hashes has_any (sha256Hashes) ) or (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr "wscript.exe') and CommandLine has ('"%PUBLIC%\\Pictures\\') and CommandLine has ('//e:VBScript //b" /F')) or (CommandLine has ('wscript.exe C:\\Users\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b') or (CommandLine has_all ("schtasks.exe", "create", "wscript", "e:vbscript", ".wav")))
-  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
+  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, tostring(Hashes), CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = Hashes
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = Hashes, AlgorithmCustomEntity = "SHA256"
   ),
   (DnsEvents
   | where Name in~ (domains)  
@@ -113,6 +116,24 @@ query:  |
   | where isnotempty(DestinationHost)
   | where DestinationHost has_any (domains)  
   | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | project TimeGenerated,Resource, msg_s, Type
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where  Request_Name  has_any (domains)
+  | extend timestamp = TimeGenerated, DNSName = Request_Name, IPCustomEntity = ClientIP
+  ),
+  (AZFWApplicationRule
+  | where isnotempty(Fqdn)
+  | where Fqdn has_any (domains)  
+  | extend timestamp = TimeGenerated, DNSName = Fqdn, IPCustomEntity = SourceIp
+  ),
+  (AZFWDnsQuery
+  | where isnotempty(QueryName)
+  | where QueryName has_any (domains)
+  | extend timestamp = TimeGenerated, DNSName = QueryName, IPCustomEntity = SourceIp
   ),
   (DeviceNetworkEvents 
   | where isnotempty(RemoteUrl) 
@@ -137,12 +158,12 @@ entityMappings:
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: FileHashType
+        columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
         columnName: ProcessCustomEntity
-version: 1.0.2
+version: 1.1.2
 kind: Scheduled
