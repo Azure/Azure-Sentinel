@@ -1,5 +1,5 @@
 # Recorded Future - Import Indicators Logic Apps and IOC Enrichment Playbook templates
-<img alt="Recorded Future" src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/RecordedFuture.png" />
+<img alt="Recorded Future" src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/RecordedFuture.svg" with="80" height="80" />
 
 # Overview
 Recorded Future is the world’s largest provider of intelligence for enterprise security. By combining persistent and pervasive automated data collection and analytics with human analysis, Recorded Future delivers intelligence that is timely, accurate, and actionable.
