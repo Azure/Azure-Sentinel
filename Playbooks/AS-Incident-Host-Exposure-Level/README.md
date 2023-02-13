@@ -28,7 +28,8 @@ Connect-AzAccount
 New-AzRoleAssignment -ObjectId <logic app managed identity object id> -RoleDefinitionName "Microsoft Sentinel Contributor" -ResourceGroupName "<logic app resource group name>"
 ```
 
-Alternatively, if you wish to do this through the GUI/portal:
+
+**Alternatively**, if you wish to do this through the GUI/portal:
 
 Navigate to the Log Analytics Workspaces page and select the same workspace the playbook is located in:
 
