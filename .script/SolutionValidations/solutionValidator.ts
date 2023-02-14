@@ -1,8 +1,8 @@
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import * as logger from "./utils/logger";
-import { ExitCode } from "./utils/exitCode";
+import { runCheckOverChangedFiles } from "./../utils/changedFilesValidator";
+import * as logger from "./../utils/logger";
+import { ExitCode } from "./../utils/exitCode";
 import fs from "fs";
-import { MainTemplateValidationError } from "./utils/validationError";
+import { MainTemplateValidationError } from "./../utils/validationError";
 
 // initialize arrays to store valid domains and verticals
 let validDomains: string[] = [];
@@ -10,7 +10,7 @@ let validVerticals: string[] = [];
 
 // read the valid domains and verticals from the JSON file
 try {
-    const validDomainsVerticals = JSON.parse(fs.readFileSync('./.script/ValidDomainsVerticals.json', "utf8"));
+    const validDomainsVerticals = JSON.parse(fs.readFileSync('./.script/SolutionValidations/ValidDomainsVerticals.json', "utf8"));
     validDomains = validDomainsVerticals.validDomains;
     validVerticals = validDomainsVerticals.validVerticals;
 } catch (error) {
@@ -52,12 +52,18 @@ export async function IsValidSolution(filePath: string): Promise<ExitCode> {
                         // check if the categories have a "domains" field
                         if (categories.hasOwnProperty("domains")) {
                             let domains = categories.domains;
+                            if (domains.length === 0) {
+                                throw new MainTemplateValidationError("The solution must include at least one valid domain. Please provide a domain in the 'domains' field of the 'categories' object.");
+                            }
                             for (const domain of domains) {
                                 // check if the domain is valid
                                 if (!validDomains.includes(domain)) {
                                     invalidDomains.push(domain);
                                 }
                             }
+                        }
+                        else {
+                            throw new MainTemplateValidationError("The solution must include at least one valid domain. Please provide a domain in the 'domains' field of the 'categories' object.");
                         }
 
                         // check if the categories have a "verticals" field
