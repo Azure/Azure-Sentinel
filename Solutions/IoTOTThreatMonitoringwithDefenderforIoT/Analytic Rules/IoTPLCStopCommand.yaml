@@ -13,27 +13,22 @@ queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T0858
 query: |
+  let alertList = dynamic(["Controller Reset", "An S7 Stop PLC Command was Sent", "Controller Stop", "Excessive Restart Rate of an Outstation", "GE SRTP Stop PLC Command was Sent", "Outstation Restarted", "Outstation Restarts Frequently", "Profinet Device Factory Reset", "Slave Device Unrecoverable Failure", "Suspicion of Hardware Problems in Outstation"]);
   SecurityAlert
-  | where ProductName == "Azure Security Center for IoT"
-  | where AlertName == "An S7 Stop PLC Command was Sent"
-  or AlertName == "Controller Reset"
-  or AlertName == "Controller Stop"
-  or AlertName == "Excessive Restart Rate of an Outstation"
-  or AlertName == "GE SRTP Stop PLC Command was Sent"
-  or AlertName == "Outstation Restarted"
-  or AlertName == "Outstation Restarts Frequently"
-  or AlertName == "Profinet Device Factory Reset"
-  or AlertName == "Slave Device Unrecoverable Failure"
-  or AlertName == "Suspicion of Hardware Problems in Outstation"
-  | where TimeGenerated <= ProcessingEndTime + 60m
-  | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
-  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
-  | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
-  | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
-  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
-  | extend AlertManagementUri = tostring(parse_json(ExtendedProperties).AlertManagementUri)
+  | where ProviderName == "IoTSecurity"
+  | where AlertName has_any (alertList) 
+  | extend ExtendedProperties = parse_json(ExtendedProperties)
+  | where tostring(ExtendedProperties.isNew) == "True"
+  | extend DeviceId = tostring(ExtendedProperties.DeviceId), 
+           SourceDeviceAddress = tostring(ExtendedProperties.SourceDeviceAddress), 
+           DestDeviceAddress = tostring(ExtendedProperties.DestinationDeviceAddress), 
+           RemediationSteps = tostring(parse_json(RemediationSteps)[0]), 
+           Protocol = tostring(ExtendedProperties.Protocol), 
+           AlertManagementUri = tostring(ExtendedProperties.AlertManagementUri)
   | project
     TimeGenerated,
     DeviceId,
@@ -50,7 +45,8 @@ query: |
     Entities,
     VendorOriginalId,
     AlertLink,
-    AlertManagementUri
+    AlertManagementUri,
+    Techniques
 entityMappings:
 sentinelEntitiesMappings:
   - columnName: Entities
@@ -59,7 +55,6 @@ eventGroupingSettings:
 customDetails:
   Sensor: DeviceId
   Protocol: Protocol
-  AlertLink: AlertLink
   VendorOriginalId: VendorOriginalId
   AlertManagementUri: AlertManagementUri
 alertDetailsOverride:
@@ -67,5 +62,16 @@ alertDetailsOverride:
   alertDescriptionFormat: (MDIoT) {{Description}}
   alertTacticsColumnName: Tactics
   alertSeverityColumnName: AlertSeverity
-version: 1.0.0
+  alertDynamicProperties: 
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: RemediationSteps
+      value: RemediationSteps
+    - alertProperty: Techniques
+      value: Techniques
+    - alertProperty: ProductComponentName
+      value: ProductComponentName
+    - alertProperty: AlertLink
+      value: AlertLink
+version: 1.0.1
 kind: Scheduled

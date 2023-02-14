@@ -29,6 +29,24 @@ namespace Kqlvalidations.Tests
 
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
+        [ClassData(typeof(HuntingQueriesYamlFilesTestData))]
+        public void Validate_HuntingQueries_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            var res = ReadAndDeserializeYaml(encodedFilePath);
+            var id = (string)res["id"];
+
+            //we ignore known issues. We also ignore templates that are not in the skipped templates list.
+            if (ShouldSkipTemplateValidation(id))
+            {
+                return;
+            }
+
+            var queryStr = (string)res["query"];
+            ValidateKql(id, queryStr);
+        }
+
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
@@ -43,6 +61,25 @@ namespace Kqlvalidations.Tests
             
             var queryStr =  (string) res["query"];
             ValidateKql(id, queryStr);
+        }
+
+
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
+        [ClassData(typeof(HuntingQueriesYamlFilesTestData))]
+        public void Validate_HuntingQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
+        {
+            var res = ReadAndDeserializeYaml(encodedFilePath);
+            var id = (string)res["id"];
+
+            //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
+            if (ShouldSkipTemplateValidation(id) && res.ContainsKey("query"))
+            {
+                var queryStr = (string)res["query"];
+                var validationRes = _queryValidator.ValidateSyntax(queryStr);
+                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+            }
+
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -125,7 +162,7 @@ namespace Kqlvalidations.Tests
             
             var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
             var parserName = (string)yaml["ParserName"];
-            ValidateKql(parserName, queryStr);
+            ValidateKql(parserName, queryStr, false);
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -143,13 +180,20 @@ namespace Kqlvalidations.Tests
                 return;
             }
 
-            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
+            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];            
             var parserName = (string)yaml["EquivalentBuiltInFunction"];
-            ValidateKql(parserName, queryStr);
+            ValidateKql(parserName, queryStr, false);
         }
 
-        private void ValidateKql(string id, string queryStr)
+        private void ValidateKql(string id, string queryStr, bool ignoreNoTabularExpressionError = true)
         {
+            
+            // The KQL validation ignores no tabular expression error. For instance, "let x = table;" is considered a valid query.
+            // Add "| count" at the end of the query, to fail queries without tabular expressions.
+            if (!ignoreNoTabularExpressionError) {
+                queryStr += " | count";
+            }
+
             var validationResult = _queryValidator.ValidateSyntax(queryStr);
             var firstErrorLocation = (Line: 0, Col: 0);
             if (!validationResult.IsValid)
