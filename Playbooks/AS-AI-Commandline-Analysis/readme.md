@@ -16,7 +16,7 @@ This playbook is intended to be run from a Microsoft Sentinel incident that has 
 
 Before you begin, you will need to have an API key from https://openai.com/api/. 
 
-**USAGE OF THE OPENAI API IS NOT FREE**, please ensure you are aware of this before usage and select the appropriate plan for your organisation according to https://openai.com/.api/pricing/.
+**USAGE OF THE OPENAI API IS NOT FREE**, please ensure you are aware of this before usage and select the appropriate plan for your organisation according to https://openai.com/api/pricing/.
 
 #
 ### Deployment
