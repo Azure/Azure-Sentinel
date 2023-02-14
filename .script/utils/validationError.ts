@@ -44,3 +44,9 @@ export class SampleDataValidationError extends Error implements ValidationError 
     super(message);
   }
 }
+
+export class MainTemplateValidationError extends Error implements ValidationError {
+    public name = "MainTemplateValidationError";
+    constructor(message?: string) {
+        super(message);
+    }
