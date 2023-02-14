@@ -50,3 +50,4 @@ export class MainTemplateValidationError extends Error implements ValidationErro
     constructor(message?: string) {
         super(message);
     }
+}
