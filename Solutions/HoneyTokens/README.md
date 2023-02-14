@@ -27,7 +27,7 @@ In order to start using the **Microsoft Sentinel Deception (Honey Tokens)** solu
 
 ## Install the solution
 
-Install the **Microsoft Sentinel Deception (Honey Tokens)** solution as you would [other solutions](sentinel-solutions-deploy.md). On the **Azure Sentinel Deception** solution page, select **Start** to get started.
+Install the **Microsoft Sentinel Deception (Honey Tokens)** solution as you would [other solutions](sentinel-solutions-deploy.md). On the **Microsoft Sentinel Deception** solution page, select **Start** to get started.
 
 ![Screenshot of the create solution page](https://learn.microsoft.com/en-us/azure/sentinel/media/monitor-key-vault-honeytokens/honeytoken-create-solution.png)
 
