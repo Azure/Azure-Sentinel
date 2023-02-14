@@ -225,14 +225,14 @@ def main(mytimer: func.TimerRequest) -> None:
          sorted_data = sorted(results_events, key=lambda x: x["timeStamp"],reverse=False) 
          # Fetch the latest timestamp
          latest_timestamp = sorted_data[-1]["timeStamp"]       
-         logging.info("The latest timestamp {}".format(latest_timestamp))               
-         state = StateManager(connection_string)         
-         state.post(str(latest_timestamp).replace("Z", "-00:00"))
+         logging.info("The latest timestamp {}".format(latest_timestamp))
          body = json.dumps(results_events)
          if(len(results_events) <= 2000):            
             sentinel.post_data(body,len(results_events))
          elif(len(results_events) > 2000):   
             sentinel.gen_chunks(body)
+         state = StateManager(connection_string)
+         state.post(str(latest_timestamp).replace("Z", "-00:00"))
 
         sentinel_class_vars = vars(sentinel)
         success_processed, fail_processed = sentinel_class_vars["success_processed"],\
