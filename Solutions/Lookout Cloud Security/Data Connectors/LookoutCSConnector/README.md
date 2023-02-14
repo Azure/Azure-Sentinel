@@ -29,7 +29,7 @@ Following are the configuration steps to deploy Function App.
 "Workspace Key": The Sentinel Log Analytics Workspace Key  
 "LookoutClientId": The unique ID that was provided for this client
 "LookoutApiSecret": The API secret that was provided for this client
-"Baseurl": The URL used to access this client
+"Baseurl": The URL used to access this client. The url must start with "https://"
 "Schedule": A cron expression which is a string that defines a set of times, using six fields separated by white space. Each field in the cron expression represents a set of values that determine when a task should be executed. For example, the following cron expression would run a task every 5 minutes: Ex: "0 */5 * * * *" 
 "MaxResults": Maximum Results to be returned from API as per source capacity
 "FetchDelay": This integer value represents the number of minutes to be delayed while fetching of the results to prevent data loss due to delays at source.

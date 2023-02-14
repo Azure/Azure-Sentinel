@@ -1,6 +1,6 @@
 import sys
 import azure.functions as func
-import datetime
+from datetime import datetime, timedelta
 import json
 import base64
 import hashlib
@@ -24,15 +24,12 @@ maxResults = os.environ['MaxResults']
 Authurl = baseurl+"/apigw/v1/authenticate"
 table_name = "LookoutCloudSecurity"
 Schedule = os.environ['Schedule']
-fetchDelay = os.environ['FetchDelay']
-pastDays = os.environ['PastDays']
+fetchDelay = os.getenv('FetchDelay',5)
+pastDays = os.getenv('PastDays',7)
 chunksize = 500
+MaxEventCount = 2000
 token = ""
-if(fetchDelay is None):
- fetchDelay = 5
 
-if(pastDays is None):
-    pastDays = 7
 
 logging.info("The Past days were taken as {}".format(pastDays))
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -86,15 +83,15 @@ class LookOut:
                 'Content-Type': 'application/json'
                 }
         response = requests.request("POST", url, headers=headers, data=payload)
-        tokens = json.loads(response.text) 
+        tokens = json.loads(response.text)         
         return tokens['id_token']        
 	    
     def generate_date(self):
-        current_time_day = datetime.datetime.utcnow().replace(second=0, microsecond=0) 
+        current_time_day = datetime.utcnow().replace(second=0, microsecond=0) 
         logging.info("Present time {}".format(current_time_day))
-        current_time_day = (current_time_day - datetime.timedelta(minutes=int(fetchDelay))).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"       
+        current_time_day = (current_time_day - timedelta(minutes=int(fetchDelay))).strftime("%Y-%m-%dT%H:%M:%S.%fZ")       
         logging.info("the fetch delay taken as {} minutes".format(fetchDelay))
-        logging.info("After fetch time {}".format(current_time_day))
+        logging.info("After fetch delay applied time {}".format(current_time_day))
         state = StateManager(connection_string)
         past_time = state.get()
         if past_time is not None:
@@ -102,8 +99,7 @@ class LookOut:
         else:
             logging.info("There is no last run timestamp, trying to get events for last week.")
             logging.info("The past days were taken as {} days".format(pastDays))
-            past_time = (datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(days=int(pastDays))).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
-        state.post(current_time_day)
+            past_time = (datetime.utcnow().replace(second=0, microsecond=0) - timedelta(days=int(pastDays))).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         return (past_time, current_time_day)
 
     def get_Data(self,report_type_suffix,startTime,endTime):
@@ -126,7 +122,7 @@ class LookOut:
                       " this account has not subscribed to toll-free audio conference plan."
                       " Error code: {}".format(response.status_code))
             elif response.status_code == 401:
-                logging.error("Invalid access token. Error code: {}".format(response.status_code))            
+                logging.error("Unauthorized. Invalid access token. Error code: {}".format(response.status_code))            
             else:
                 logging.error("Something wrong. Error code: {}".format(response.status_code))
         except Exception as err:
@@ -144,25 +140,24 @@ class Sentinel:
         self.fail_processed = 0
         self.table_name = table_name
         self.chunksize = chunksize 
-        self.sharedkey = shared_key       
-        
-    def gen_chunks_to_object(self, data, chunksize=500):
-        chunk = []
-        for index, line in enumerate(data):
-            if (index % chunksize == 0 and index > 0):
-                yield chunk
-                del chunk[:]
-            chunk.append(line)
-        yield chunk
+        self.sharedkey = shared_key
 
     def gen_chunks(self, data):
-        for chunk in self.gen_chunks_to_object(data, chunksize=self.chunksize):
-            obj_array = []
-            for row in chunk:
-                if row != None and row != '':
-                    obj_array.append(row)
-            body = json.dumps(obj_array)
-            self.post_data(body, len(obj_array))
+        chunks = [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
+        logging.info("Entered into the chunks mode")  
+        i = 0      
+        for chunk in chunks: 
+            i = i+1
+            logging.debug("Iteration chunk {}".format(i))           
+            body = json.dumps(chunk)
+            logging.debug(body)
+            self.post_data(body, len(chunk))
+            state = StateManager(connection_string) 
+            latestTimeStamp = chunk[-1]["timeStamp"]
+            zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+            latestTimeStampnew = datetime.strptime(latestTimeStamp,zulu_time_format) + timedelta(milliseconds=1)
+            logging.info("Chunk Timestamp {}".format(latestTimeStampnew)) 
+            state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
 
 
     def build_signature(self, date, content_length, method, content_type, resource):
@@ -178,7 +173,7 @@ class Sentinel:
         method = 'POST'
         content_type = 'application/json'
         resource = '/api/logs'
-        rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+        rfc1123date = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
         signature = self.build_signature(rfc1123date, content_length, method, content_type,
                                          resource)
@@ -191,7 +186,7 @@ class Sentinel:
         }
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
-            logging.info("Chunk was processed{} Violations".format(chunk_count))
+            logging.info("Chunk was processed{} events".format(chunk_count))
             self.success_processed = self.success_processed + chunk_count
         else:
             logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
@@ -200,8 +195,7 @@ class Sentinel:
 # this function app is fired based on the Timer trigger
 # it is used to capture all the events from LookOut cloud security API   
 def main(mytimer: func.TimerRequest) -> None:
-    utc_timestamp = datetime.datetime.utcnow().replace(
-        tzinfo=datetime.timezone.utc).isoformat()
+    utc_timestamp = datetime.utcnow().isoformat()
     if mytimer.past_due:
      logging.info('The timer is past due!')
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
@@ -217,7 +211,7 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("The current run End time {}".format(endTime))        
         logging.info('Start: to get Violation')
         results_events = Lookout.get_Data("/apigw/v1/events?eventType=Violation",startTime,endTime)
-        logging.info("The number of violations was processed {} ".format(len(results_events)))
+        logging.info("The number of Violations processed {} ".format(len(results_events)))
         logging.info('End: to get Violation')         
         
         if(len(results_events)) > 0:
@@ -227,12 +221,16 @@ def main(mytimer: func.TimerRequest) -> None:
          latest_timestamp = sorted_data[-1]["timeStamp"]       
          logging.info("The latest timestamp {}".format(latest_timestamp)) 
          body = json.dumps(results_events)
-         if(len(results_events) <= 2000):            
+         if(len(results_events) <= MaxEventCount):
+            logging.debug(body)              
             sentinel.post_data(body,len(results_events))
-         elif(len(results_events) > 2000):   
-            sentinel.gen_chunks(body)
-         state = StateManager(connection_string)
-         state.post(str(latest_timestamp).replace("Z", "-00:00"))
+            state = StateManager(connection_string) 
+            zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+            latestTimeStampnew = datetime.strptime(latest_timestamp,zulu_time_format) + timedelta(milliseconds=1)
+            logging.info("The Final latest Timestamp {}".format(latestTimeStampnew)) 
+            state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+         elif(len(results_events) > MaxEventCount):              
+            sentinel.gen_chunks(sorted_data)
 
         sentinel_class_vars = vars(sentinel)
         success_processed, fail_processed = sentinel_class_vars["success_processed"],\
