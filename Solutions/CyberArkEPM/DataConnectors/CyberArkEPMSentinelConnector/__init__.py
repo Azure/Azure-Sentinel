@@ -5,7 +5,7 @@ import hmac
 import base64
 import logging
 from .pyepm import getAggregatedEvents, getDetailedRawEvents, epmAuth, getSetsList, getPolicyAuditRawEventDetails, \
-    getAggregatedPolicyAudits
+    getAggregatedPolicyAudits, getAdminAuditEvents
 import os
 from datetime import datetime, timedelta
 import json
@@ -160,6 +160,8 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("Collecting policy audit raw event details from {}".format(set_id["Name"]))
         policy_audit_raw_event_details += get_events(func_name=getPolicyAuditRawEventDetails,
                                                      auth=auth, filter_date=filter_date, set_id=set_id)["events"]
+        logging.info("Collecting Admin Audit Data from {}".format(set_id["Name"]))
+        admin_audit_data = getAdminAuditEvents(epmserver=dispatcher, epmToken=auth.json()['EPMAuthenticationResult'], authType='EPM', setid=set_id['Id'], start_time=start_time, end_time=end_time, limit=100)
 
     # Send data via data collector API
     for aggregated_event in aggregated_events:
@@ -170,4 +172,4 @@ def main(mytimer: func.TimerRequest) -> None:
         aggregated_policy_audit["event_type"] = "aggregated_policy_audits"
     for policy_audit_raw_event_detail in policy_audit_raw_event_details:
         policy_audit_raw_event_detail["event_type"] = "policy_audit_raw_event_details"
-    gen_chunks(aggregated_events + raw_events + aggregated_policy_audits + policy_audit_raw_event_details)
+    gen_chunks(aggregated_events + raw_events + aggregated_policy_audits + policy_audit_raw_event_details + admin_audit_data)

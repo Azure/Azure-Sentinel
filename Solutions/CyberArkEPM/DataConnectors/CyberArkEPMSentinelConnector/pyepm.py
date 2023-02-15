@@ -248,3 +248,48 @@ def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, ne
         return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
     else:
         return requests.post(myURL, headers=hdr, verify=False, data=data)
+
+def getAdminAuditEvents(epmserver, epmToken, authType, setid, start_time, end_time, limit=100):
+    """
+        Get Admin Audit Data
+        This method enables the user to retrieve Admin Audit Data from EPM according
+        to a range of time (between start_time and end_time)
+    """
+    # build the header
+    hdr = {}
+    hdr['Content-Type'] = 'application/json'
+    if authType == 'EPM':
+        authToken = 'basic ' + epmToken
+        hdr['Authorization'] = authToken
+    else:
+        authToken = epmToken
+        hdr['VFUser'] = authToken
+
+    # make the Rest API call
+    urllib3.disable_warnings()
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+
+    rowsCount = 0
+    offset = 0
+    events_json = []
+
+    while True:
+        #build the URL
+        myURL = epmserver + "/EPM/API/Sets/" + setid + "/AdminAudit?DateFrom=" + start_time + "&DateTo=" + end_time + "&limit=" + str(limit) + "&offset=" + str(offset)
+        r = requests.get(myURL, headers=hdr, verify=False).json()
+        events_json += r["AdminAudits"]
+        #Get TotalCount from JSON
+        total_count = r["TotalCount"]
+        rowsCount += len(r["AdminAudits"])
+
+        if total_count > rowsCount:
+            offset += limit
+        else:
+            break;
+    if (len(events_json) > 0):
+        for adminauditevent in events_json:
+            adminauditevent["event_type"] = "admin_audit"
+
+    return(events_json)
