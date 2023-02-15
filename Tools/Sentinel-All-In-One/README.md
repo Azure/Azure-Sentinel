@@ -9,18 +9,18 @@ Microsoft Sentinel All-In-One automates the following tasks:
 - Creates resource group
 - Creates Log Analytics workspace 
 - Installs Microsoft Sentinel on top of the workspace
-- Sets workspace retention, daily cap and commitment tiers if desired
+- Sets workspace retention, [daily cap](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/daily-cap) and commitment tiers if desired
 - Enables UEBA with the relevant identity providers (AAD and/or AD)
 - Enables health diagnostics for Analytics Rules, Data Connectors and Automation Rules
 - Installs Content Hub solutions 
-- Enables Data Connectors from tihs list: 
+- Enables Data Connectors from this list: 
     + Azure Active Directory (only available in Tenant scope version)
     + Azure Activity
-    + Dynamincs 365
+    + Dynamics 365
     + Microsoft 365 Defender
     + Microsoft Defender for Cloud
     + Microsoft Insider Risk Management
-    + Microsoft PowerBI
+    + Microsoft Power BI
     + Microsoft Project
     + Office 365
     + Threat Intelligence Platforms
@@ -29,6 +29,14 @@ Microsoft Sentinel All-In-One automates the following tasks:
 
 It takes around **10 minutes** to deploy if enabling analytics rules is selected. If enabling analytics rules is not needed, it will complete in around 2 minutes.
 
+## Prerequisites
+
+- Azure Subscription
+- Azure user account with enough permissions to enable the required connectors. See table below for additional permissions. Write permissions to the workspace are **always** needed.
+- Some data connectors require the relevant licence in order to be enabled. See table at the end of this page for details.
+
+## Deployment
+
 There are two versions of Microsoft Sentinel All-in-One:
 
 | All-In-One version                                 | Deploy       | Comments |
@@ -36,17 +44,13 @@ There are two versions of Microsoft Sentinel All-in-One:
 | Subscription scope                                 | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FSubscriptionLevel%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FSubscriptionLevel%2FcreateUiDefinition.json)   |  |
 | Tenant scope (supports enabling Azure AD connector)     | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FTenantLevel%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FTenantLevel%2FcreateUiDefinition.json)   | Need to grant permissions to deploy at tenant scope. [Learn more](https://learn.microsoft.com/azure/azure-resource-manager/templates/deploy-to-tenant?tabs=azure-cli#required-access). |  
 
-## Prerequisites
-
-- Azure Subscription
-- Azure user account with enough permissions to enable the required connectors. See table below for additional permissions. Write permissions to the workspace are **always** needed.
-- Some data connectors require the relevant licence in order to be enabled. See table below.
+## Supported connectors
 
 The following table summarizes permissions, licenses and permissions needed and related cost to enable each Data Connector:
 
 | Data Connector                                 | License         |  Permissions                    | Cost      |
 | ---------------------------------------------- | --------------- |---------------------------------|-----------|
-| Azure Active Directory                         | Any AAD license | Global Admin or Security Admin  | Billed    |
+| Azure Active Directory (Tenant scope version only)                        | Any AAD license | Global Admin or Security Admin  | Billed    |
 | Azure Activity                                 | None            | Subscription Reader             | Free      |
 | Dinamycs 365                                   | D365 license    | Global Admin or Security Admin  | Billed    |
 | Microsoft 365 Defender                         | M365D license   | Global Admin or Security Admin  | Free      |
