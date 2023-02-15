@@ -3,6 +3,10 @@ author: Nicholas DiCola
 
 This playbook will take each File Hash entity and query VirusTotal for file report (https://developers.virustotal.com/v3.0/reference#file-info).
 
+## Prerequisites
+
+- You will need to register to Virus Total community for an API key
+
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
 
@@ -19,9 +23,19 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Falert-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Falert-trigger%2Fazuredeploy.json)
 
-## Prerequisites
+## Post Deployment Instructions
 
-- You will need to register to Virus Total community for an API key
+**Assign Microsoft Sentinel Responder role to the playbook**
+
+The playbook uses a managed identity, which require to have Microsoft Sentinel Responder role in Sentinel instances in order to add comments.
+
+1. Select the Playbook resource.
+2. In the left menu, click Identity.
+3. Under Permissions, click Azure role assignments.
+4. Click Add role assignment (Preview).
+5. Use the drop-down lists to select the resource group that your *Sentinel Workspace* is in. If multiple workspaces are used in different resource groups consider selecting subscription as a scope instead.
+6. In the Role drop-down list, select the role 'Microsoft Sentinel Responder'.
+7. Click Save to assign the role.
 
 ## Screenshots
 **Incident Trigger**
