@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import json
+import os
 import subprocess
-import sys
 
 
 def get_function_names_by_prefix(funNamePrefix):
@@ -21,4 +21,13 @@ def remove_functions_by_prefix(funNamePrefix, resourceGroup):
     print("functions after removing --> %s" % functions)
 
 
-remove_functions_by_prefix(sys.argv[1], sys.argv[2])
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+f = open('../../cohesity.json',)
+data = json.load(f)
+resource_group = data['resource_group']
+producer_fun_prefix = data['producer_fun_prefix']
+consumer_fun_prefix = data['consumer_fun_prefix']
+f.close()
+
+remove_functions_by_prefix(consumer_fun_prefix, resource_group)
+remove_functions_by_prefix(producer_fun_prefix, resource_group)
