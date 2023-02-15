@@ -15,6 +15,7 @@ Microsoft Sentinel All-In-One automates the following tasks:
 - Installs Content Hub solutions 
 - Enables Data Connectors from this list: 
     + Azure Active Directory (only available in Tenant scope version)
+    + Azure Active Directory Information Protection
     + Azure Activity
     + Dynamics 365
     + Microsoft 365 Defender
@@ -50,7 +51,8 @@ The following table summarizes permissions, licenses and permissions needed and 
 
 | Data Connector                                 | License         |  Permissions                    | Cost      |
 | ---------------------------------------------- | --------------- |---------------------------------|-----------|
-| Azure Active Directory (Tenant scope version only)                        | Any AAD license | Global Admin or Security Admin  | Billed    |
+| Azure Active Directory (Tenant scope version only) | Any AAD license | Global Admin or Security Admin  | Billed    |
+| Azure Active Directory Information Protection  | AAD Premium 2   | Global Admin or Security Admin  | Free      |
 | Azure Activity                                 | None            | Subscription Reader             | Free      |
 | Dinamycs 365                                   | D365 license    | Global Admin or Security Admin  | Billed    |
 | Microsoft 365 Defender                         | M365D license   | Global Admin or Security Admin  | Free      |
