@@ -108,7 +108,7 @@ def main(mytimer: func.TimerRequest) -> None:
     else:
         sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
         with sentinel:
-            for obj in obj_list:
+            for obj in sorted(obj_list, key=lambda k: k['LastModified']):
                 cli.process_file(obj, dest=sentinel)
                 last_ts = obj['LastModified']
                 if last_ts:
