@@ -2,7 +2,7 @@ $jsonConversionDepth = 50
 $SolutionJsonPath = $args[0]
 $RepoRoot = Split-path -Parent $PSScriptRoot | Split-Path -Parent
 $SolutionRoot = Join-Path -Path $RepoRoot -ChildPath "Tools" | Join-Path -ChildPath "Create-Azure-Sentinel-Solution"
-$path = Join-Path -Path $SolutionRoot -ChildPath "input"
+$path = Join-Path -Path $RepoRoot -ChildPath "Solutions" | Join-Path -ChildPath "CohesitySecurity" | Join-Path -ChildPath "Data"
 
 function handleEmptyInstructionProperties ($inputObj) {
     $outputObj = $inputObj |
