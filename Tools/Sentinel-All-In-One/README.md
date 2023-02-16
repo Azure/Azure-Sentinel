@@ -33,16 +33,16 @@ It takes around **10 minutes** to deploy if enabling analytics rules is selected
 ## Prerequisites
 
 - Azure Subscription
-- Azure user account with enough permissions to enable the required connectors. See table below for additional permissions. Write permissions to the workspace are **always** needed.
+- Azure user account with enough permissions to enable the desired connectors. See table at the end of this page for additional permissions. Write permissions to the workspace are **always** needed.
 - Some data connectors require the relevant licence in order to be enabled. See table at the end of this page for details.
 
 ## Deployment
 
 There are two versions of Microsoft Sentinel All-in-One:
 
-| All-In-One version                                 | Deploy       | Comments |
+| All-In-One version                                 | Deploy       | Permissions |
 | -------------------------------------------------- | ------------ | -------- |
-| Subscription scope                                 | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FSubscriptionLevel%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FSubscriptionLevel%2FcreateUiDefinition.json)   |  |
+| Subscription scope                                 | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FSubscriptionLevel%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FSubscriptionLevel%2FcreateUiDefinition.json)   | Microsoft Sentinel Contributor as a minimum |
 | Tenant scope (supports enabling Azure AD connector)     | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FTenantLevel%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fallinonev2%2FTools%2FSentinel-All-In-One%2FTenantLevel%2FcreateUiDefinition.json)   | Need to grant permissions to deploy at tenant scope. [Learn more](https://learn.microsoft.com/azure/azure-resource-manager/templates/deploy-to-tenant?tabs=azure-cli#required-access). |  
 
 ## Supported connectors
