@@ -14,12 +14,14 @@ import hmac
 import base64
 from threading import Thread
 from io import StringIO
-
+from .state_manager import StateManager
+from dateutil.parser import parse as parse_datetime
 import azure.functions as func
 import re
 
 
-TIME_INTERVAL_MINUTES = 10
+
+MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
 DIVIDE_TO_MULTIPLE_TABLES = True
 
@@ -32,6 +34,7 @@ aws_s3_bucket = os.environ.get('S3Bucket')
 aws_access_key_id = os.environ.get('AWSAccessKeyId')
 aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
+FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
@@ -47,9 +50,17 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
 
     logging.info('Starting program')
-
+    
+    script_start_time = int(time.time())
+    state_manager_cu = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
+    
+    ts_from = state_manager_cu.get()
+    ts_from = parse_date_from(ts_from)
+    ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+    ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
+        
     cli = UmbrellaClient(aws_access_key_id, aws_secret_acces_key, aws_s3_bucket)
-    ts_from, ts_to = cli.get_time_interval()
+    
     logging.info('Searching files last modified from {} to {}'.format(ts_from, ts_to))
     obj_list = cli.get_files_list(ts_from, ts_to)
 
@@ -66,6 +77,7 @@ def main(mytimer: func.TimerRequest) -> None:
         proxy_files = []
         ip_files = []
         cdfw_files = []
+        last_ts = None
         for obj in obj_list:
             key = obj.get('Key', '')
             if 'dnslogs' in key.lower():
@@ -81,6 +93,16 @@ def main(mytimer: func.TimerRequest) -> None:
         with sentinel:
             for obj in dns_files:
                 cli.process_file(obj, dest=sentinel)
+                last_ts = obj['LastModified']
+                if last_ts:
+                    state_manager_cu.post(last_ts)
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                        return
+            
+            if last_ts:
+                state_manager_cu.post(last_ts)
+            
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
@@ -88,6 +110,16 @@ def main(mytimer: func.TimerRequest) -> None:
         with sentinel:
             for obj in proxy_files:
                 cli.process_file(obj, dest=sentinel)
+                last_ts = obj['LastModified']
+                if last_ts:
+                    state_manager_cu.post(last_ts)
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                        return
+            
+            if last_ts:
+                state_manager_cu.post(last_ts)
+                
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
@@ -95,6 +127,16 @@ def main(mytimer: func.TimerRequest) -> None:
         with sentinel:
             for obj in ip_files:
                 cli.process_file(obj, dest=sentinel)
+                last_ts = obj['LastModified']
+                if last_ts:
+                    state_manager_cu.post(last_ts)
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                        return
+            
+            if last_ts:
+                state_manager_cu.post(last_ts)
+                
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
@@ -102,6 +144,16 @@ def main(mytimer: func.TimerRequest) -> None:
         with sentinel:
             for obj in cdfw_files:
                 cli.process_file(obj, dest=sentinel)
+                last_ts = obj['LastModified']
+                if last_ts:
+                    state_manager_cu.post(last_ts)
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                        return
+            
+            if last_ts:
+                state_manager_cu.post(last_ts)
+                
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
@@ -110,6 +162,16 @@ def main(mytimer: func.TimerRequest) -> None:
         with sentinel:
             for obj in obj_list:
                 cli.process_file(obj, dest=sentinel)
+                last_ts = obj['LastModified']
+                if last_ts:
+                    state_manager_cu.post(last_ts)
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                        return
+            
+            if last_ts:
+                state_manager_cu.post(last_ts)
+                
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
@@ -126,6 +188,23 @@ def convert_list_to_csv_line(ls):
     return line.getvalue()
 
 
+def check_if_script_runs_too_long(script_start_time: int) -> bool:
+        now = int(time.time())
+        duration = now - script_start_time
+        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
+        return duration > max_duration
+
+
+def parse_date_from(date_from: str) -> datetime.datetime:
+    try:
+        date_from = parse_datetime(date_from)+ datetime.timedelta(milliseconds=1)
+    except:
+        pass
+    if not isinstance(date_from, datetime.datetime):
+        date_from = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - datetime.timedelta(days=1)
+    return date_from
+
+    
 class UmbrellaClient:
 
     def __init__(self, aws_access_key_id, aws_secret_acces_key, aws_s3_bucket):
@@ -166,13 +245,6 @@ class UmbrellaClient:
         if aws_s3_bucket.endswith('/'):
             aws_s3_bucket = aws_s3_bucket[:-1]
         return aws_s3_bucket
-
-    def get_time_interval(self):
-        ts_from = datetime.datetime.utcnow() - datetime.timedelta(minutes=TIME_INTERVAL_MINUTES + 1)
-        ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
-        ts_from = ts_from.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
-        ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
-        return ts_from, ts_to
 
     def _make_objects_list_request(self, marker='', prefix=''):
         response = self.s3.list_objects(
