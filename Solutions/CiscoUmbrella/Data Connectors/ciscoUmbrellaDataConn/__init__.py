@@ -14,7 +14,7 @@ import hmac
 import base64
 from threading import Thread
 from io import StringIO
-from .state_manager import StateManager
+from state_manager import StateManager
 from dateutil.parser import parse as parse_datetime
 import azure.functions as func
 import re
@@ -97,7 +97,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 cli.process_file(obj, dest=sentinel)
                 last_ts = obj['LastModified']
                 if last_ts:
-                    state_manager_cu.post(last_ts)
+                    state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
                     if check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
                         break
@@ -112,13 +112,13 @@ def main(mytimer: func.TimerRequest) -> None:
                 cli.process_file(obj, dest=sentinel)
                 last_ts = obj['LastModified']
                 if last_ts:
-                    state_manager_cu.post(last_ts)
+                    state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
                     if check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
                         return
             
             if last_ts:
-                state_manager_cu.post(last_ts)
+                state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
                 
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
