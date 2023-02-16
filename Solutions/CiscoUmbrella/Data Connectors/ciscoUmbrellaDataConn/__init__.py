@@ -73,89 +73,37 @@ def main(mytimer: func.TimerRequest) -> None:
     successfull_sent_events_number = 0
 
     if DIVIDE_TO_MULTIPLE_TABLES:
-        dns_files = []
-        proxy_files = []
-        ip_files = []
-        cdfw_files = []
+        sentinel_dict = {
+        'dns': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10),
+        'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
+        'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
+        'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
+                        }
         last_ts = None
-        for obj in obj_list:
+        for obj in sorted(obj_list, key=lambda k: k['LastModified']):
             key = obj.get('Key', '')
             if 'dnslogs' in key.lower():
-                dns_files.append(obj)
+                sentinel = sentinel_dict['dns']
             elif 'proxylogs' in key.lower():
-                proxy_files.append(obj)
+                sentinel = sentinel_dict['proxy']
             elif 'iplogs' in key.lower():
-                ip_files.append(obj)
+                sentinel = sentinel_dict['ip']
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
-                cdfw_files.append(obj)
-
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10)
-        with sentinel:
-            for obj in dns_files:
+                sentinel = sentinel_dict['cloudfirewall']
+            else:
+                # skip files of unknown types
+                continue
+            with sentinel:
                 cli.process_file(obj, dest=sentinel)
                 last_ts = obj['LastModified']
                 if last_ts:
                     state_manager_cu.post(last_ts)
                     if check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
-                        return
-            
-            if last_ts:
-                state_manager_cu.post(last_ts)
-            
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
+                        break
+        failed_sent_events_number = sum([sentinel.failed_sent_events_number for sentinel in sentinel_dict.values()])
+        successfull_sent_events_number = sum([sentinel.successfull_sent_events_number for sentinel in sentinel_dict.values()])
 
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10)
-        with sentinel:
-            for obj in proxy_files:
-                cli.process_file(obj, dest=sentinel)
-                last_ts = obj['LastModified']
-                if last_ts:
-                    state_manager_cu.post(last_ts)
-                    if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
-                        return
-            
-            if last_ts:
-                state_manager_cu.post(last_ts)
-                
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
-
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10)
-        with sentinel:
-            for obj in ip_files:
-                cli.process_file(obj, dest=sentinel)
-                last_ts = obj['LastModified']
-                if last_ts:
-                    state_manager_cu.post(last_ts)
-                    if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
-                        return
-            
-            if last_ts:
-                state_manager_cu.post(last_ts)
-                
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
-
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
-        with sentinel:
-            for obj in cdfw_files:
-                cli.process_file(obj, dest=sentinel)
-                last_ts = obj['LastModified']
-                if last_ts:
-                    state_manager_cu.post(last_ts)
-                    if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
-                        return
-            
-            if last_ts:
-                state_manager_cu.post(last_ts)
-                
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
 
     else:
         sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
@@ -201,7 +149,7 @@ def parse_date_from(date_from: str) -> datetime.datetime:
     except:
         pass
     if not isinstance(date_from, datetime.datetime):
-        date_from = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - datetime.timedelta(days=1)
+        date_from = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - datetime.timedelta(minutes=10)
     return date_from
 
     
@@ -282,8 +230,8 @@ class UmbrellaClient:
                     marker = response['Contents'][-1]['Key']
                 else:
                     break
-
-        return self.sort_files_by_date(files)
+                
+        return files
 
     def download_obj(self, key):
         logging.info('Started downloading {}'.format(key))
@@ -497,9 +445,6 @@ class UmbrellaClient:
                 event['EventType'] = 'cloudfirewalllogs'
                 yield event
 
-    @staticmethod
-    def sort_files_by_date(ls):
-        return sorted(ls, key=lambda k: k['LastModified'])
 
     def process_file(self, obj, dest):
         t0 = time.time()
