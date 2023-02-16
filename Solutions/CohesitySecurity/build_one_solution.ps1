@@ -696,7 +696,7 @@ foreach ($objectProperties in $contentToImport.PsObject.Properties) {
                     $customLogsText = "$baseDescriptionText This data connector creates custom log table(s) $(getAllDataTypeNames $connectorData.dataTypes) in your Microsoft Sentinel / Azure Log Analytics workspace."
                     $syslogText = "$baseDescriptionText The logs will be received in the Syslog table in your Microsoft Sentinel / Azure Log Analytics workspace."
                     $commonSecurityLogText = "$baseDescriptionText The logs will be received in the CommonSecurityLog table in your Microsoft Sentinel / Azure Log Analytics workspace."
-                    $connectorDescriptionText = $(if ($connectorDataType -eq $commonSecurityLog) { $commonSecurityLogText } elseif ($connectorDataType -eq $syslog) { $syslogText } else { $customLogsText })
+                    $connectorDescriptionText = "This product integrates Cohesity Helios with Microsoft Sentinel to stay updated with the security events from your Cohesity environment and immediately respond to a ransomware attack or an anomaly."
 
                     $baseDataConnectorStep = [PSCustomObject] @{
                         name       = "dataconnectors";
