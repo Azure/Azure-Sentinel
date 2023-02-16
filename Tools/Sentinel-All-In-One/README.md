@@ -1,5 +1,7 @@
 # Microsoft Sentinel All-in-One
 
+<p style="text-align:center;"><img src="SubscriptionLevel/Media/Sentinel All-in-One logo.jpg" alt="Microsoft Sentinel All-in-One" width="300" />
+
 Microsoft Sentinel All-in-One is a project that seeks to speed up deployment and initial configuration tasks of an Microsoft Sentinel environments. This is ideal for Proof of Concept scenarios and customer onboarding in MSSP scenarios.
 
 ## What does it do?
