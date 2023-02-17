@@ -43,8 +43,18 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         logging.info(f'{asset_job_id} is currently in this state:')
         logging.info(job_status)
 
-        if 'status' in job_status and (job_status['status'] in tio_status):
+        if 'status' in job_status and job_status['status'] is "FINISHED":
             logging.info('job is completely finished!')
+            chunks = job_status['chunks_available']
+            logging.info(f'Found these chunks: {chunks}')
+            break
+        elif 'status' in job_status and job_status['status'] is "ERROR":
+            logging.info('job is completed with Error status!')
+            chunks = job_status['chunks_available']
+            logging.info(f'Found these chunks: {chunks}')
+            break
+        elif 'status' in job_status and job_status['status'] is "CANCELLED":
+            logging.info('job is completed with Cancelled status!')
             chunks = job_status['chunks_available']
             logging.info(f'Found these chunks: {chunks}')
             break
@@ -53,8 +63,6 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
             next_check = context.current_utc_datetime + timedelta(minutes=export_poll_schedule_minutes)
             yield context.create_timer(next_check)
 
-    logging.info(
-        f'all chunks have been sent to process! {asset_job_id} finally FINISHED')
     logging.info('Checking that chunks exist...')
     logging.info(f'Number of chunks: {len(chunks)}')
 
