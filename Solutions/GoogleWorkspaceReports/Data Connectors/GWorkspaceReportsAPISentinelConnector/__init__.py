@@ -90,7 +90,7 @@ def GetEndTime(logType):
     if logType == "login":
         end_time = (end_time - timedelta(hours=int(loginFetchDelay)))
     else:
-         end_time = (end_time - timedelta(minutes=int(fetchDelay)))
+        end_time = (end_time - timedelta(minutes=int(fetchDelay)))
 
     return end_time
 
@@ -165,7 +165,7 @@ def post_data(customer_id, shared_key, body, log_type,chunk_count):
     response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
         logging.info("Logs with {} activity was processed into Azure".format(log_type))
-        logging.info("Chunk was processed{} events".format(chunk_count))
+        logging.info("Chunk was processed {} events".format(chunk_count))
     else:
         logging.warn("Response code: {}".format(response.status_code))
 
@@ -206,9 +206,9 @@ def gen_chunks(data,log_type):
     for chunk in chunks:
         try:
             i = i+1
-            logging.debug("Iteration chunk {}".format(i))
+            logging.info("Iteration chunk {}".format(i))
             body = json.dumps(chunk)
-            logging.debug(body)
+            logging.info(body)
             latest_timestamp = chunk[-1]["id"]["time"]
             post_data(customer_id, shared_key,body,log_type, len(chunk))
         except Exception as err:
