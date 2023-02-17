@@ -99,7 +99,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 if last_ts:
                     state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
                     if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         break
         failed_sent_events_number = sum([sentinel.failed_sent_events_number for sentinel in sentinel_dict.values()])
         successfull_sent_events_number = sum([sentinel.successfull_sent_events_number for sentinel in sentinel_dict.values()])
@@ -114,7 +114,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 if last_ts:
                     state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
                     if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         return
             
             if last_ts:
