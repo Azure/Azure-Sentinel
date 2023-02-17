@@ -91,7 +91,7 @@ def GetEndTime(logType):
     else:
          end_time = (end_time - timedelta(minutes=int(fetchDelay)))
 
-    return end_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return end_time
 
 def isBlank (myString):
     return not (myString and myString.strip())
@@ -111,11 +111,9 @@ def GetDates(logType):
         logging.info("There is no last time point, trying to get events for last one day.")
         past_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
         for activity in activities:
-            activity_list[activity] = past_time
+            activity_list[activity] = past_time.strftime("%Y-%m-%dT%H:%M:%SZ")
         activity_list = json.dumps(activity_list)
-    
-    return json.loads(activity_list) if (isBlank(logType)) else (json.loads(activity_list)[logType],end_time)
-
+    return json.loads(activity_list) if (isBlank(logType)) else (json.loads(activity_list)[logType],end_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
 def get_result(activity,start_time, end_time):
     result_activities = []
