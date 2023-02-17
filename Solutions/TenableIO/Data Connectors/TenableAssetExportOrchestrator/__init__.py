@@ -43,17 +43,17 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         logging.info(f'{asset_job_id} is currently in this state:')
         logging.info(job_status)
 
-        if 'status' in job_status and job_status['status'] is "FINISHED":
+        if 'status' in job_status and job_status['status'] == 'FINISHED':
             logging.info('job is completely finished!')
             chunks = job_status['chunks_available']
             logging.info(f'Found these chunks: {chunks}')
             break
-        elif 'status' in job_status and job_status['status'] is "ERROR":
+        elif 'status' in job_status and job_status['status'] == 'ERROR':
             logging.info('job is completed with Error status!')
             chunks = job_status['chunks_available']
             logging.info(f'Found these chunks: {chunks}')
             break
-        elif 'status' in job_status and job_status['status'] is "CANCELLED":
+        elif 'status' in job_status and job_status['status'] == 'CANCELLED':
             logging.info('job is completed with Cancelled status!')
             chunks = job_status['chunks_available']
             logging.info(f'Found these chunks: {chunks}')
