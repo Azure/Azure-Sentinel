@@ -14,7 +14,7 @@ import hmac
 import base64
 from threading import Thread
 from io import StringIO
-from state_manager import StateManager
+from .state_manager import StateManager
 from dateutil.parser import parse as parse_datetime
 import azure.functions as func
 import re
