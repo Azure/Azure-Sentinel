@@ -83,7 +83,8 @@ def GetEndTime(logType):
     if logType == "calendar":
         end_time = (end_time - timedelta(hours=int(calendarFetchDelay)))
     if logType == "chat":
-        end_time = (end_time - timedelta(day=int(chatFetchDelay)))
+        logging.info("Chat Fecth Delay value - {}".format(int(chatFetchDelay)))
+        end_time = (end_time - timedelta(days=int(chatFetchDelay)))
     if logType == "user_accounts":
         end_time = (end_time - timedelta(hours=int(userAccountsFetchDelay)))
     if logType == "login":
