@@ -80,17 +80,16 @@ def get_credentials():
 
 def GetEndTime(logType):
     end_time = datetime.utcnow().replace(second=0, microsecond=0)
-    match logType:
-        case "calendar":
-            end_time = (end_time - timedelta(hours=int(calendarFetchDelay)))
-        case "chat":
-            end_time = (end_time - timedelta(day=int(chatFetchDelay)))
-        case "user_accounts":
-            end_time = (end_time - timedelta(hours=int(userAccountsFetchDelay)))
-        case "login":
-            end_time = (end_time - timedelta(hours=int(loginFetchDelay)))
-        case _:
-            end_time = (end_time - timedelta(minutes=int(fetchDelay)))
+    if logType == "calendar":
+        end_time = (end_time - timedelta(hours=int(calendarFetchDelay)))
+    if logType == "chat":
+        end_time = (end_time - timedelta(day=int(chatFetchDelay)))
+    if logType == "user_accounts":
+        end_time = (end_time - timedelta(hours=int(userAccountsFetchDelay)))
+    if logType == "login":
+        end_time = (end_time - timedelta(hours=int(loginFetchDelay)))
+    else:
+         end_time = (end_time - timedelta(minutes=int(fetchDelay)))
 
     return end_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -229,13 +228,11 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info('Starting program')
     global creds
     creds = get_credentials()
-    #postactivity_list = {}
     latest_timestamp = ""
     postactivity_list = GetDates("")
     for line in activities:
       try:
         start_time,end_time = GetDates(line)
-        #resp = json.loads(start_time)
         logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
         latest_timestamp = start_time
         logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
