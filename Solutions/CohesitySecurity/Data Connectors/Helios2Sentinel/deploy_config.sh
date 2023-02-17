@@ -5,12 +5,6 @@ cd "$SCRIPTPATH"
 
 . ../../json_parser.sh
 
-az monitor log-analytics workspace delete \
-    --force \
-    --yes \
-    --resource-group "$resourcegroup" \
-    --workspace-name "$workspacename"
-
 az monitor log-analytics workspace create \
     -g "$resourcegroup" \
     -n "$workspacename"

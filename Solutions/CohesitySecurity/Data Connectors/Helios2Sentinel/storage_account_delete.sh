@@ -15,11 +15,14 @@ function get_storage_account_by_prefix()
 function delete_storage_account_by_prefix()
 {
     STORAGE_ACCOUNT_TO_DELETED=$(get_storage_account_by_prefix "$1")
-    echo "STORAGE_ACCOUNT_TO_DELETED --> $STORAGE_ACCOUNT_TO_DELETED"
-    az storage account delete \
-        --yes \
-        -n "$STORAGE_ACCOUNT_TO_DELETED" \
-        -g "$resourcegroup"
+    if [ -n "$STORAGE_ACCOUNT_TO_DELETED" ]
+    then
+        echo "STORAGE_ACCOUNT_TO_DELETED --> $STORAGE_ACCOUNT_TO_DELETED"
+        az storage account delete \
+            --yes \
+            -n "$STORAGE_ACCOUNT_TO_DELETED" \
+            -g "$resourcegroup"
+    fi
 }
 
 for ss in \
