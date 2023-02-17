@@ -5,8 +5,7 @@ cd "$SCRIPTPATH"
 
 . ../../json_parser.sh
 
-./remove.py "$producer_fun_prefix" "$resourcegroup"
-./remove.py "$consumer_fun_prefix" "$resourcegroup"
-./deploy_config.sh "$workspacename" "$resourcegroup"
+./remove.py
+./deploy_config.sh
 # ./deploy.py "$producer_fun_prefix" "./$producer_context/"
 # ./deploy.py "$consumer_fun_prefix" "./$consumer_context/"
