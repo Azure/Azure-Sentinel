@@ -66,7 +66,7 @@ def main(exportJobId: str) -> object:
     logging.info(job_details)
 
     tio_status = ['ERROR', 'CANCELLED']
-    if job_status['status'] not in tio_status:
+    if job_details['status'] not in tio_status:
         try:
             job_details['exportJobId'] = exportJobId
             send_chunks_to_queue(job_details)
