@@ -1,0 +1,866 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "defaultValue": "[resourceGroup().location]",
+      "minLength": 1,
+      "type": "string",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "subscription": {
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "type": "string",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "defaultValue": "[resourceGroup().name]",
+      "type": "string",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-prismacloudcompute-preview",
+    "_solutionId": "[variables('solutionId')]",
+    "dataCollectionRuleImmutableId": "data collection rule immutableId",
+    "_dataCollectionRuleImmutableId": "[variables('dataCollectionRuleImmutableId')]",
+    "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "_dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "PrismaCloudComputeNativePoller",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "PrismaCloudComputeNativePoller",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "dataConnectorContentId2": "PrismaCloudComputeIncidentsPoller",
+    "_dataConnectorContentId2": "[variables('dataConnectorContentId2')]",
+    "dataConnectorId2": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+    "_dataConnectorId2": "[variables('dataConnectorId2')]",
+    "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2')))]",
+    "dataConnectorVersion2": "1.0.0",
+    "logAnalyticsTableId1": "PrismaCloudCompute_CL",
+    "streamName1": "Custom-PrismaCloudCompute_IncidentsApi",
+    "dataCollectionRuleId": "PrismaCloudComputeDCR"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "PrismaCloudCompute data connector with template",
+        "displayName": "PrismaCloudCompute template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "PrismaCloudCompute data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Prisma Cloud Compute CWPP (using REST API)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The [Prisma Cloud Compute CWPP](https://prisma.pan.dev/api/cloud/cwpp/audits/#operation/get-audits-incidents) data connector allows you to connect to your Prisma Cloud CWPP instance and ingesting alerts into Microsoft Sentinel. The data connector is built on Microsoft Sentinel’s Codeless Connector Platform and uses the Prisma Cloud API to fetch security events and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.",
+                  "graphQueriesTableName": "PrismaCloudCompute_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Prisma Compute Events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of Prisma Compute Events",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    },
+                    {
+                      "description": "Total Events by Event Type",
+                      "query": "{{graphQueriesTableName}}\n | summarize count() by EventOriginalType"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "PrismaCloudCompute API Key",
+                        "description": "A Prisma Cloud Compute CWPP Monitor API username and password is required. [See the documentation to learn more about PrismaCloudCompute SIEM API](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PrismaCloudCompute/Data%20Connectors/readme.md)."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "To enable the Prisma Cloud Compute CWPP Security Events for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Path to console",
+                            "placeholder": "https://europe-west3.cloud.twistlock.com/{sasid}",
+                            "type": "text",
+                            "name": "domainname"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Prisma Access Key (API)",
+                            "placeholder": "Prisma Access Key (API)",
+                            "type": "text",
+                            "name": "username"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Secret",
+                            "placeholder": "Secret",
+                            "type": "password",
+                            "name": "password"
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ],
+                      "title": "Connect Prisma Cloud Compute CWPP Security Events to Microsoft Sentinel"
+                    }
+                  ]
+                },
+                "connectionsConfig": {
+                  "templateSpecName": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Resources/templateSpecs/',variables('dataConnectorTemplateSpecName2'))]",
+                  "templateSpecVersion": "[variables('dataConnectorVersion2')]"
+                }
+              }
+            },
+            {
+              "name": "[variables('logAnalyticsTableId1')]",
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2021-03-01-privatepreview",
+              "location": "[parameters('workspace-location')]",
+              "tags": {},
+              "properties": {
+                "schema": {
+                  "name": "[variables('logAnalyticsTableId1')]",
+                  "columns": [
+                    {
+                      "name": "PrismaId",
+                      "type": "string",
+                      "description": "_id value."
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "FQDN",
+                      "type": "string",
+                      "description": "Fqdn."
+                    },
+                    {
+                      "name": "ContainerName",
+                      "type": "string",
+                      "description": "Container Name."
+                    },
+                    {
+                      "name": "ContainerID",
+                      "type": "string",
+                      "description": "Container Id."
+                    },
+                    {
+                      "name": "ImageID",
+                      "type": "string",
+                      "description": "Image Id."
+                    },
+                    {
+                      "name": "ProfileID",
+                      "type": "string",
+                      "description": "Profile Id."
+                    },
+                    {
+                      "name": "AccountID",
+                      "type": "string",
+                      "description": "Account Id."
+                    },
+                    {
+                      "name": "SerialNumber",
+                      "type": "int",
+                      "description": "Serial Number."
+                    },
+                    {
+                      "name": "Acknowledged",
+                      "type": "boolean",
+                      "description": "Acknowledged or not."
+                    },
+                    {
+                      "name": "Category",
+                      "type": "string",
+                      "description": "Describes the type of attack."
+                    },
+                    {
+                      "name": "ResourceType",
+                      "type": "string",
+                      "description": "The Type of resource."
+                    },
+                    {
+                      "name": "Audits",
+                      "type": "dynamic",
+                      "description": "The audit information."
+                    },
+                    {
+                      "name": "Collections",
+                      "type": "dynamic",
+                      "description": "The collection of resources."
+                    },
+                    {
+                      "name": "Hostname",
+                      "type": "string",
+                      "description": "Name of the node initiated the alert."
+                    },
+                    {
+                      "name": "Cluster",
+                      "type": "string",
+                      "description": "Name of the cluster the node belongs"
+                    },
+                    {
+                      "name": "ImageName",
+                      "type": "string",
+                      "description": "Name of the image involved for the alert"
+                    },
+                    {
+                      "name": "Namespace",
+                      "type": "string",
+                      "description": "This is the grouping of the nodes in a cluster."
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[variables('dataCollectionRuleId')]",
+              "apiVersion": "2021-09-01-preview",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('_dataCollectionEndpointId')]",
+                "streamDeclarations": {
+                  "[variables('streamName1')]": {
+                    "columns": [
+                      {
+                        "name": "_id",
+                        "type": "string",
+                        "description": "_id value."
+                      },
+                      {
+                        "name": "time",
+                        "type": "datetime",
+                        "description": "The time at which the data was generated"
+                      },
+                      {
+                        "name": "fqdn",
+                        "type": "string",
+                        "description": "Fqdn."
+                      },
+                      {
+                        "name": "containerName",
+                        "type": "string",
+                        "description": "Container Name."
+                      },
+                      {
+                        "name": "containerID",
+                        "type": "string",
+                        "description": "Container Id."
+                      },
+                      {
+                        "name": "imageID",
+                        "type": "string",
+                        "description": "Image Id."
+                      },
+                      {
+                        "name": "profileID",
+                        "type": "string",
+                        "description": "Profile Id."
+                      },
+                      {
+                        "name": "accountID",
+                        "type": "string",
+                        "description": "Account Id."
+                      },
+                      {
+                        "name": "serialNum",
+                        "type": "int",
+                        "description": "Serial Number of event."
+                      },
+                      {
+                        "name": "acknowledged",
+                        "type": "boolean",
+                        "description": "Acknowledged or not."
+                      },
+                      {
+                        "name": "category",
+                        "type": "string",
+                        "description": "Describes the type of attack."
+                      },
+                      {
+                        "name": "type",
+                        "type": "string",
+                        "description": "The Type of resource."
+                      },
+                      {
+                        "name": "audits",
+                        "type": "dynamic",
+                        "description": "The audit information."
+                      },
+                      {
+                        "name": "collections",
+                        "type": "dynamic",
+                        "description": "The collection of resources."
+                      },
+                      {
+                        "name": "hostname",
+                        "type": "string",
+                        "description": "Name of the node initiated the alert."
+                      },
+                      {
+                        "name": "cluster",
+                        "type": "string",
+                        "description": "Name of the cluster the node belongs"
+                      },
+                      {
+                        "name": "imageName",
+                        "type": "string",
+                        "description": "Name of the image involved for the alert"
+                      },
+                      {
+                        "name": "namespace",
+                        "type": "string",
+                        "description": "This is the grouping of the nodes in a cluster."
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "[variables('streamName1')]"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source \r\n| project-rename \r\n TimeGenerated = ['time'], PrismaId = _id, SerialNumber = serialNum, Acknowledged = acknowledged, Hostname = hostname, FQDN = fqdn, ContainerName = containerName, ContainerID = containerID, ImageName = imageName, ImageID = imageID, ProfileID = profileID, Namespace = namespace, Category = category, ResourceType = type, Audits = audits, Collections = collections, AccountID = accountID, Cluster = cluster",
+                    "outputStream": "[concat('Custom-', variables('logAnalyticsTableId1'))]"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Palo Alto Prisma Cloud Compute",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "kind": "DataConnector",
+                      "contentId": "[variables('_dataConnectorContentId2')]",
+                      "version": "[variables('dataConnectorVersion2')]"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "apiVersion": "2022-09-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "[variables('_uiConfigId1')]",
+          "title": "Prisma Cloud Compute CWPP (using REST API)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The [Prisma Cloud Compute CWPP](https://prisma.pan.dev/api/cloud/cwpp/audits/#operation/get-audits-incidents) data connector allows you to connect to your Prisma Cloud CWPP instance and ingesting alerts into Microsoft Sentinel. The data connector is built on Microsoft Sentinel’s Codeless Connector Platform and uses the Prisma Cloud API to fetch security events and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.",
+          "graphQueriesTableName": "PrismaCloudCompute_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Prisma Compute Events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of Prisma Compute Events",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            },
+            {
+              "description": "Total Events by Event Type",
+              "query": "{{graphQueriesTableName}}\n | summarize count() by EventOriginalType"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n   | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "PrismaCloudCompute API Key",
+                "description": "A Prisma Cloud Compute CWPP Monitor API username and password is required. [See the documentation to learn more about PrismaCloudCompute SIEM API](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PrismaCloudCompute/Data%20Connectors/readme.md)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "To enable the Prisma Cloud Compute CWPP Security Events for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Path to console",
+                    "placeholder": "https://europe-west3.cloud.twistlock.com/{sasid}",
+                    "type": "text",
+                    "name": "domainname"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Prisma Access Key (API)",
+                    "placeholder": "Prisma Access Key (API)",
+                    "type": "text",
+                    "name": "username"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Secret",
+                    "placeholder": "Secret",
+                    "type": "password",
+                    "name": "password"
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ],
+              "title": "Connect Prisma Cloud Compute CWPP Security Events to Microsoft Sentinel"
+            }
+          ]
+        },
+        "connectionsConfig": {
+          "templateSpecName": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Resources/templateSpecs/',variables('dataConnectorTemplateSpecName2'))]",
+          "templateSpecVersion": "[variables('dataConnectorVersion2')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Palo Alto Prisma Cloud Compute",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId2')]",
+              "version": "[variables('dataConnectorVersion2')]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "LogicAppsCustomConnector"
+      },
+      "properties": {
+        "description": "PrismaCloudCompute data connector with template",
+        "displayName": "PrismaCloudCompute template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName2'),'/',variables('dataConnectorVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName2'))]"
+      ],
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "LogicAppsCustomConnector"
+      },
+      "properties": {
+        "description": "PrismaCloudCompute data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion2')]",
+          "parameters": {
+            "domainname": {
+              "defaultValue": "domainname",
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "domainname"
+              }
+            },
+            "password": {
+              "defaultValue": "password",
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "password"
+              }
+            },
+            "username": {
+              "defaultValue": "username",
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "username"
+              }
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "connectorDefinitionName",
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "connectorDefinitionName"
+              }
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "location": {
+              "defaultValue": "",
+              "type": "string"
+            },
+            "workspaceName": {
+              "defaultValue": "",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "type": "object",
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "[variables('_dataCollectionRuleImmutableId')]"
+              }
+            }
+          },
+          "variables": {
+            "_dataConnectorContentId2": "[variables('_dataConnectorContentId2')]",
+            "_dataConnectorEventsId1": "incidents"
+          },
+          "resources": [
+            {
+              "name": "[[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorEventsId1'))]",
+              "apiVersion": "2022-12-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                "dcrConfig": {
+                  "streamName": "[variables('streamName1')]",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "dataType": "[variables('logAnalyticsTableId1')]",
+                "auth": {
+                  "type": "Basic",
+                  "password": "[[parameters('password')]",
+                  "userName": "[[parameters('username')]"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('domainname'),'/api/v1/audits/incidents','?acknowledged=false')]",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 5,
+                  "httpMethod": "Get",
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "from",
+                  "endTimeAttributeName": "to",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba"
+                  },
+                  "queryParameters": {
+                    "sort": "time"
+                  }
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSizeParaName": "limit"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+              "properties": {
+                "parentId": "[[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorEventsId1'))]",
+                "contentId": "[variables('_dataConnectorContentId2')]",
+                "kind": "LogicAppsCustomConnector",
+                "version": "[variables('dataConnectorVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Palo Alto Prisma Cloud Compute",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Prisma Cloud compute",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-06-24",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Cloud Provider"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
