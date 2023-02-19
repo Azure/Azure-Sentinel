@@ -100,6 +100,13 @@ def isBlank (myString):
 def isNotBlank (myString):
     return bool(myString and myString.strip())
 
+def is_json(myjson):
+    try:
+        json.loads(myjson)
+    except ValueError as e:
+        return False
+    return True
+
 def GetDates(logType):
     end_time = GetEndTime(logType)
     state = StateManager(connection_string=connection_string)
@@ -107,7 +114,12 @@ def GetDates(logType):
     activity_list = {}
     if past_time is not None and len(past_time) > 0:
         logging.info("The last time point is: {}".format(past_time))
-        activity_list = past_time
+        if is_json(past_time):
+            activity_list = past_time
+        else:
+            for activity in activities:
+                activity_list[activity] = past_time
+            activity_list = json.dumps(activity_list)
     else:
         logging.info("There is no last time point, trying to get events for last one day.")
         past_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
