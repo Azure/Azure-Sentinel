@@ -165,9 +165,10 @@ def post_data(customer_id, shared_key, body, log_type,chunk_count):
     response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
         logging.info("Logs with {} activity was processed into Azure".format(log_type))
-        logging.info("Chunk was processed {} events".format(chunk_count))
+        logging.info("Chunk was processed{} events".format(chunk_count))
     else:
         logging.warn("Response code: {}".format(response.status_code))
+    return response.status_code
 
 def expand_data(obj):
     new_obj = []
@@ -199,6 +200,9 @@ def gen_chunks_to_object(data,chunksize=100):
     yield chunk
 
 def gen_chunks(data,log_type):
+    #for chunk in gen_chunks_to_object(data, chunksize=2000):
+        #body = json.dumps(chunk)
+        #post_data(customer_id, shared_key,body,log_type)
     chunks = [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
     logging.info("Entered into the chunks mode")
     latest_timestamp = "";
@@ -206,19 +210,23 @@ def gen_chunks(data,log_type):
     for chunk in chunks:
         try:
             i = i+1
-            logging.info("Iteration chunk {}".format(i))
+            logging.debug("Iteration chunk {}".format(i))
             body = json.dumps(chunk)
-            logging.info(body)
-            latest_timestamp = chunk[-1]["id"]["time"]
-            post_data(customer_id, shared_key,body,log_type, len(chunk))
+            logging.debug(body)
+            statuscode = post_data(customer_id, shared_key,body,log_type, len(chunk))
+            if (statuscode >= 200 and statuscode <= 299):
+                latest_timestamp = chunk[-1]["id"]["time"]
+                dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
+                dt += timedelta(milliseconds=1)
+                latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
+                latest_timestamp = latest_timestamp[:-3] + 'Z'
+                logging.info("Chunk Timestamp {}".format(latest_timestamp))
+                #logging.info("Logs with {} activity was processed into Azure".format(log_type))
+                #logging.info("Chunk was processed{} events".format(chunk_count))
+            else:
+                logging.warn("There is an issue with Posting data to LA - Response code: {}".format(statuscode))
         except Exception as err:
             logging.error("Something wrong. Exception error text: {}".format(err))
-        else:
-            dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
-            dt += timedelta(milliseconds=1)
-            latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
-            latest_timestamp = latest_timestamp[:-3] + 'Z'
-            logging.info("Chunk Timestamp {}".format(latest_timestamp))
     return latest_timestamp
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -232,6 +240,7 @@ def main(mytimer: func.TimerRequest) -> None:
     for line in activities:
       try:
         start_time,end_time = GetDates(line)
+        #resp = json.loads(start_time)
         logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
         latest_timestamp = start_time
         logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
@@ -245,15 +254,21 @@ def main(mytimer: func.TimerRequest) -> None:
             if(len(result_obj)) > 0 and len(result_obj) <= MaxEventCount:
             # Sort the json based on the "timestamp" key
                 body = json.dumps(result_obj)
-                logging.debug(body)
-                post_data(customer_id, shared_key,body,line, len(result_obj))
-                latest_timestamp = sorted_data[-1]["id"]["time"]
-                dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
-                dt += timedelta(milliseconds=1)
-                latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
-                latest_timestamp = latest_timestamp[:-3] + 'Z'
+                statuscode = post_data(customer_id, shared_key,body,line, len(result_obj))
+                if (statuscode >= 200 and statuscode <= 299):
+                    latest_timestamp = sorted_data[-1]["id"]["time"]
+                    dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
+                    dt += timedelta(milliseconds=1)
+                    latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
+                    latest_timestamp = latest_timestamp[:-3] + 'Z'
+                else:
+                    logging.warn("There is an issue with Posting data to LA - Response code: {}".format(statuscode))
+                    latest_timestamp = start_time
             elif(len(result_obj) > MaxEventCount):
                 latest_timestamp = gen_chunks(sorted_data, "GWorkspace_ReportsAPI_"+line)
+                if(isBlank(latest_timestamp)):
+                    latest_timestamp = start_time
+                    logging.info("The latest timestamp is same as the original start time {} - {}".format(line,latest_timestamp))
                 # Fetch the latest timestamp
                 logging.info("The latest timestamp got from api activity is {} - {}".format(line,latest_timestamp))
         postactivity_list[line] = latest_timestamp
@@ -261,6 +276,6 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.error("Something wrong. Exception error text: {}".format(err))
         logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
         raise
-    logging.info("No exceptions hence posting the data to fileshare")
+    logging.info("posting the data to fileshare")
     state = StateManager(connection_string)
     state.post(str(json.dumps(postactivity_list)))
