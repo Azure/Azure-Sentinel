@@ -360,7 +360,7 @@ For Microsoft Sentinel some additional configuration is needed:
 Step 3: Configure your Canary Console.
 Head over to your Console Global Settings.
 
-<img src="https://help.canary.tools/hc/article_attachments/4517136881693/mceclip0.png"/>
+<img src="https://help.canary.tools/hc/article_attachments/4518091730589/mceclip14.png"/>
 
 Scroll down and expand the Webhooks, select the + button on the Generic webhook option and paste your listener URL into the text field. Finally, click Add.
 
