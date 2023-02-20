@@ -28,6 +28,17 @@ After deployment, you can run this playbook manually on an alert or attach it to
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
+**Deploy with alert trigger**
+
+After deployment, you can run this playbook manually on any Sentinel incident with a Domain entity in it. This will also allow you to restrict only specific domains within an incident, rather than restricting all domains associated with an incident.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEDomain%2FRestrict-MDEDomain-entity-trigger%2Fazuredeploy.json" target="_blank">
+    <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.png"/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEDomain%2FRestrict-MDEDomain-entity-trigger%2Fazuredeploy.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>
+
 ## Prerequisites
 - **For Gov Only** You will need to update the HTTP action URL to the correct URL documented [here](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/gov?view=o365-worldwide#api)
 - You will need to assign Microsoft Sentinel Responder role to the managed identity

@@ -24,7 +24,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 **Deploy with entity trigger**
 
-After deployment, you can run this playbook manually on any incident with a File Hash entity. This will also let you specify specific file hashes to restrict, rather than restricting all file hashes in an incident.
+After deployment, you can run this playbook manually on any incident with a File Hash entity. This will also let you restrict specific file hashes, rather than restricting all file hashes in an incident, as the other triggers will doß.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-entity-trigger%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-entity-trigger%2Fazuredeploy.json)
