@@ -15,10 +15,18 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 **Deploy with alert trigger**
 
-After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
+After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will run when an alert is created.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-alert-trigger%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-alert-trigger%2Fazuredeploy.json)
+
+**Deploy with entity trigger**
+
+After deployment, you can run this playbook manually on any incident with a File Hash entity. This will also let you specify specific file hashes to restrict, rather than restricting all file hashes in an incident.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-entity-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-entity-trigger%2Fazuredeploy.json)
+
 
 ## Prerequisites
 - **For Gov Only** You will need to update the HTTP action URL to the correct URL documented [here](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/gov?view=o365-worldwide#api)
