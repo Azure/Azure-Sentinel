@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionNative",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for Microsoft Sentinel native Network Session table",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionNative",
+            "query": "let parser=(disabled:bool=false) \n{\n  ASimNetworkSessionLogs  | where not(disabled)\n    | project-rename\n        EventUid = _ItemId\n    | extend          \n        EventSchema = \"NetworkSession\",\n        DvcScopeId = iff(isempty(DvcSubscriptionId), _SubscriptionId, DvcSubscriptionId)\n    //  -- Aliases\n    | extend\n        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),\n        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),\n        Dvc = case(EventType == 'L2NetworkSession',\n              coalesce (DvcFQDN, DvcHostname, DvcId, _ResourceId, strcat (EventVendor,'/', EventProduct)),\n              coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId, strcat (EventVendor,'/', EventProduct))\n        ),\n        Dst = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),\n        Src = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),\n        DvcInterface = iff(isempty(DvcInterface), coalesce(DvcInboundInterface, DvcOutboundInterface), DvcInterface),\n        Hostname = iff  (EventType == \"EndpointNetworkSession\" and NetworkDirection == (\"Inbound\"), SrcHostname, DstHostname),\n        IpAddr = iff  (EventType == \"EndpointNetworkSession\" and NetworkDirection == (\"Inbound\"), DstIpAddr, SrcIpAddr),\n        Rule = coalesce(NetworkRuleName, tostring(NetworkRuleNumber)),\n        Duration = NetworkDuration,\n        SessionId = NetworkSessionId,\n        User = DstUsername,\n        InnerVlanId = SrcVlanId,\n        OuterVlanId = DstVlanId\n    | project-away\n        TenantId, SourceSystem, DvcSubscriptionId, _SubscriptionId, _ResourceId\n  };\nparser (disabled=disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
