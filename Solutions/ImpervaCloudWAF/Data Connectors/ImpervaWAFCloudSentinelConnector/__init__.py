@@ -157,7 +157,7 @@ class ImpervaFilesHandler:
                 parsed_cef.pop(f'{elem}Label')
                 parsed_cef.pop(elem)
         if 'start' in parsed_cef.keys() and parsed_cef['start'] is not None and parsed_cef['start']!="":
-            parsed_cef['EventGeneratedTime'] = datetime.datetime.utcfromtimestamp(int(parsed_cef['start'])).isoformat()
+            parsed_cef['EventGeneratedTime'] = datetime.datetime.utcfromtimestamp(int(parsed_cef['start'])/1000.0).isoformat()
         return parsed_cef
                 
     def gen_chunks_to_object(self, object, chunksize=100):
