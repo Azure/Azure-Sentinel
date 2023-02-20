@@ -58,3 +58,6 @@ New-AzRoleAssignment -ObjectId $MIGuid -RoleDefinitionName $RoleName -Scope /sub
 
 **Alert Trigger**
 ![Alert Trigger](./Restrict-MDEIPAddress/Restrict-MDEIPAddress-alert-trigger/images/Restrict-MDEIpAddress_alert.png)
+
+**Entity Trigger**
+![Entity Trigger](./Restrict-MDEIPAddress-entity-trigger/images/Restrict-MDEIPAddress-entityTrigger.png)

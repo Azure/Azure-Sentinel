@@ -52,3 +52,6 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 
 **Alert Trigger**
 ![Alert Trigger](./Restrict-MDEFileHash/Restrict-MDEFileHash-alert-trigger/images/Restrict-MDEFileHash_alert.png)
+
+**Entity Trigger**
+![Entity Trigger](./Restrict-MDEFileHash-entity-trigger/images/Restrict-MDEFileHash-entity-trigger-app.png)
