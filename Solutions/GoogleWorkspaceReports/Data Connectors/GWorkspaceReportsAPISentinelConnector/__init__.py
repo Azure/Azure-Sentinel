@@ -19,8 +19,8 @@ from datetime import datetime, timedelta
 
 customer_id = os.environ['WorkspaceID']
 fetchDelay = os.getenv('FetchDelay',10)
-chunksize = 500
-MaxEventCount = 2000
+timerSchedule = os.getenv('Schedule',"0 */10 * * * *")
+chunksize = 9999
 calendarFetchDelay = os.getenv('CalendarFetchDelay',6)
 chatFetchDelay = os.getenv('ChatFetchDelay',1)
 userAccountsFetchDelay = os.getenv('UserAccountsFetchDelay',3)
@@ -61,11 +61,6 @@ match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("Google Workspace Reports: Invalid Log Analytics Uri.")
 
-# Function to convert string to datetime
-def convert(date_time,format):
-    #format = '%b %d %Y %I:%M%p'  # The format
-    datetime_str = datetime.strptime(date_time, format) 
-    return datetime_str
 
 def get_credentials():
     creds = None
@@ -107,6 +102,12 @@ def is_json(myjson):
         return False
     return True
 
+# Function to convert string to datetime
+def convertToDatetime(date_time,format):
+    #format = '%b %d %Y %I:%M%p'  # The format
+    datetime_str = datetime.strptime(date_time, format) 
+    return datetime_str
+
 def GetDates(logType):
     end_time = GetEndTime(logType)
     state = StateManager(connection_string=connection_string)
@@ -114,19 +115,25 @@ def GetDates(logType):
     activity_list = {}
     if past_time is not None and len(past_time) > 0:
         logging.info("The last time point is: {}".format(past_time))
+        #activity_list = past_time
         if is_json(past_time):
             activity_list = past_time
         else:
             for activity in activities:
-                activity_list[activity] = past_time
+                newtime = datetime.strptime(past_time[:-1] + '.000Z', "%Y-%m-%dT%H:%M:%S.%fZ")
+                newtime = newtime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                newtime = newtime[:-4] + 'Z'
+                activity_list[activity] = newtime
             activity_list = json.dumps(activity_list)
     else:
         logging.info("There is no last time point, trying to get events for last one day.")
-        past_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        past_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         for activity in activities:
-            activity_list[activity] = past_time
+            activity_list[activity] = past_time[:-4] + 'Z'
         activity_list = json.dumps(activity_list)
-    return json.loads(activity_list) if (isBlank(logType)) else (json.loads(activity_list)[logType],end_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    end_time = end_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    end_time = end_time[:-4] + 'Z'
+    return json.loads(activity_list) if (isBlank(logType)) else (json.loads(activity_list)[logType],end_time)
 
 def get_result(activity,start_time, end_time):
     result_activities = []
@@ -211,7 +218,7 @@ def gen_chunks_to_object(data,chunksize=100):
         chunk.append(line)
     yield chunk
 
-def gen_chunks(data,log_type):
+def gen_chunks_with_latesttime(data,log_type):
     #for chunk in gen_chunks_to_object(data, chunksize=2000):
         #body = json.dumps(chunk)
         #post_data(customer_id, shared_key,body,log_type)
@@ -241,6 +248,10 @@ def gen_chunks(data,log_type):
             logging.error("Something wrong. Exception error text: {}".format(err))
     return latest_timestamp
 
+app = func.FunctionApp()
+@app.function_name(name="mytimer")
+@app.schedule(schedule=timerSchedule, arg_name="mytimer", run_on_startup=True,
+              use_monitor=False)
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.info('The timer is past due!')
@@ -252,42 +263,45 @@ def main(mytimer: func.TimerRequest) -> None:
     for line in activities:
       try:
         start_time,end_time = GetDates(line)
+        if not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
         #resp = json.loads(start_time)
-        logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
-        latest_timestamp = start_time
-        logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
-        result_obj = get_result(line,latest_timestamp,end_time)
-        if result_obj is not None:
-            result_obj = expand_data(result_obj)
-            sorted_data = sorted(result_obj, key=lambda x: x["id"]["time"],reverse=False)
-            #if(line == "login") and [x for x in result_obj if x['event_type'] == 'password_change']:
-                #sorted_data = list(filter(lambda x: x['event_type'] != 'password_change', sorted_data))
-                #result_obj = list(filter(lambda x: x['event_type'] != 'password_change', result_obj))
-            if(len(result_obj)) > 0 and len(result_obj) <= MaxEventCount:
-            # Sort the json based on the "timestamp" key
-                body = json.dumps(result_obj)
-                statuscode = post_data(customer_id, shared_key,body,line, len(result_obj))
-                if (statuscode >= 200 and statuscode <= 299):
-                    latest_timestamp = sorted_data[-1]["id"]["time"]
-                    dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
-                    dt += timedelta(milliseconds=1)
-                    latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
-                    latest_timestamp = latest_timestamp[:-3] + 'Z'
+            logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
+            latest_timestamp = start_time
+            logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
+            result_obj = get_result(line,latest_timestamp,end_time)
+            if result_obj is not None:
+                result_obj = expand_data(result_obj)
+                sorted_data = sorted(result_obj, key=lambda x: x["id"]["time"],reverse=False)
+                json_string = json.dumps(result_obj)
+                byte_ = json_string.encode("utf-8")
+                byteLength = len(byte_)
+                mbLength = byteLength/1024/1024
+                if(len(result_obj)) > 0 and int(mbLength) < 25 :
+                # Sort the json based on the "timestamp" key
+                    body = json.dumps(result_obj)
+                    statuscode = post_data(customer_id, shared_key,body,line, len(result_obj))
+                    if (statuscode >= 200 and statuscode <= 299):
+                        latest_timestamp = sorted_data[-1]["id"]["time"]
+                        dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
+                        dt += timedelta(milliseconds=1)
+                        latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
+                        latest_timestamp = latest_timestamp[:-3] + 'Z'
+                    else:
+                        logging.warn("There is an issue with Posting data to LA - Response code: {}".format(statuscode))
+                        latest_timestamp = start_time
                 else:
-                    logging.warn("There is an issue with Posting data to LA - Response code: {}".format(statuscode))
-                    latest_timestamp = start_time
-            elif(len(result_obj) > MaxEventCount):
-                latest_timestamp = gen_chunks(sorted_data, "GWorkspace_ReportsAPI_"+line)
-                if(isBlank(latest_timestamp)):
-                    latest_timestamp = start_time
-                    logging.info("The latest timestamp is same as the original start time {} - {}".format(line,latest_timestamp))
-                # Fetch the latest timestamp
-                logging.info("The latest timestamp got from api activity is {} - {}".format(line,latest_timestamp))
-        postactivity_list[line] = latest_timestamp
+                    latest_timestamp = gen_chunks_with_latesttime(sorted_data, "GWorkspace_ReportsAPI_"+line)
+                    if(isBlank(latest_timestamp)):
+                        latest_timestamp = start_time
+                        logging.info("The latest timestamp is same as the original start time {} - {}".format(line,latest_timestamp))
+                    # Fetch the latest timestamp
+                    logging.info("The latest timestamp got from api activity is {} - {}".format(line,latest_timestamp))
+            postactivity_list[line] = latest_timestamp
       except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
         logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
         raise
-    logging.info("posting the data to fileshare")
+    logging.info("No exceptions hence posting the data to fileshare")
     state = StateManager(connection_string)
+    state.post(str(json.dumps(postactivity_list)))
     state.post(str(json.dumps(postactivity_list)))
