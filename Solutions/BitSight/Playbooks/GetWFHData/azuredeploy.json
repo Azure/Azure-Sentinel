@@ -1,0 +1,854 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "BitSightWFHData",
+        "description":  "This playbook provides an end to end example of the collection of WFH information from BitSight. This will extract the IP from network session ASIM data and call the WFH api of BitSight to get the data of that specific IP and store the relevant WFH custom log table into a log analytic workspace.",
+        "prerequisites":  [
+            "1. Users must have a valid bitsight API token.",
+            "2. Need to create a key vault in Microsoft sentinel and store the API token as secret with the name “API-token",
+            "3. User needs to have one active log analytic workspace to ingest the WFH data."
+        ],
+        "postDeployment":  [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Click the Custom Connector connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections"
+        ],
+        "lastUpdateTime":  "2023-01-25",
+        "entities":  ["account","url"],
+        "tags":  ["Alerts","Ratings","BitSight"],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "BitSight Technologies, Inc."
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "BitSight-Get-WFH-Data",
+            "type":  "string"
+        },
+        "KeyVaultName":  {
+            "defaultValue":  "BitSightWFHData",
+            "type":  "string"
+        },
+        "tenantId": {
+            "minLength": 1,
+            "type": "string"
+        },
+        "LogAnalyticsWorkspaceId": {
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "The unique identifier of the Azure Log Analytics workspace."
+            }
+        },
+        "LogAnalyticsWorkspaceKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The primary or secondary key of the Azure Log Analytics workspace."
+            }
+        },
+        "WFHTableName": {
+            "defaultValue":  "BitSight_WFH_data",
+            "type": "string",
+            "metadata": {
+                "description": "The table name in which WFH Data will get store."
+            }
+        }
+    },
+    "variables":  {
+        "AzureloganalyticsdatacollectorConnectionName":  "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName":  "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Get_API_token":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/secrets/@{encodeURIComponent('API-token')}/value"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Get_IP_address_from_incident":  {
+                            "foreach":  "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions":  {
+                                "Parse_JSON":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@items('Get_IP_address_from_incident')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema":  {
+                                            "properties":  {
+                                                "ip_address":  {
+                                                    "items":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "type":  "array"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        }
+                                    }
+                                },
+                                "Set_IP_address":  {
+                                    "runAfter":  {
+                                        "Parse_JSON":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "IP_address",
+                                        "value":  "@{body('Parse_JSON')?['ip_address'][0]}"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_to_check_next_page_in_pagination":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Initialize_API_token":  {
+                            "runAfter":  {
+                                "Get_API_token":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "API_token",
+                                        "type":  "string",
+                                        "value":  "@{concat('Basic ',base64(concat(string(body('Get_API_token')?['value']),':',string(body('Get_API_token')?['value']))))}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_data_to_post":  {
+                            "runAfter":  {
+                                "Initialize_offset_for_API_call":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "data_to_post",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_offset_for_API_call":  {
+                            "runAfter":  {
+                                "Initialize_variable_IP_address":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "offset",
+                                        "type":  "integer",
+                                        "value":  0
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_IP_address":  {
+                            "runAfter":  {
+                                "Initialize_API_token":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "IP_address",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_check_next_page_in_pagination":  {
+                            "runAfter":  {
+                                "Initialize_data_to_post":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "next_exist",
+                                        "type":  "boolean"
+                                    }
+                                ]
+                            }
+                        },
+                        "Post_WFH_data_into_sentinel":  {
+                            "foreach":  "@variables('data_to_post')",
+                            "actions":  {
+                                "Send_Data":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "body":  "@{items('Post_WFH_data_into_sentinel')}",
+                                        "headers":  {
+                                            "Log-Type":  "[parameters('WFHTableName')]"
+                                        },
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "post",
+                                        "path":  "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Until":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Until":  {
+                            "actions":  {
+                                "Check_for_status_code":  {
+                                    "actions":  {
+                                        "Parse_JSON_2":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "ParseJson",
+                                            "inputs":  {
+                                                "content":  "@body('Get_WFH_Data_(API_Call)')",
+                                                "schema":  {
+                                                    "properties":  {
+                                                        "count":  {
+                                                            "type":  "integer"
+                                                        },
+                                                        "links":  {
+                                                            "properties":  {
+                                                                "next":  {
+                                                                    "type":  [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
+                                                                },
+                                                                "previous":  {
+                                                                    "type":  [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        },
+                                                        "results":  {
+                                                            "items":  {
+                                                                "properties":  {
+                                                                    "collection_date":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "country":  {
+                                                                        "properties":  {
+                                                                            "code":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "name":  {
+                                                                                "type":  "string"
+                                                                            }
+                                                                        },
+                                                                        "type":  "object"
+                                                                    },
+                                                                    "details":  {
+                                                                        "properties":  {
+                                                                            "grade":  {
+                                                                                "properties":  {
+                                                                                    "grade":  {
+                                                                                        "type":  "string"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            },
+                                                                            "low_vulnerabilities":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "message":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "response":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "service":  {
+                                                                                "type":  "string"
+                                                                            }
+                                                                        },
+                                                                        "type":  "object"
+                                                                    },
+                                                                    "event_date":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "forensics":  {
+                                                                        "properties":  {
+                                                                            "host_ip":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "host_port":  {
+                                                                                "type":  "integer"
+                                                                            }
+                                                                        },
+                                                                        "type":  "object"
+                                                                    },
+                                                                    "observation_id":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "occurrences":  {
+                                                                        "properties":  {
+                                                                            "count":  {
+                                                                                "type":  "integer"
+                                                                            },
+                                                                            "event_date":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "first_seen":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "last_seen":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "representative_timestamp":  {
+                                                                                "type":  "string"
+                                                                            }
+                                                                        },
+                                                                        "type":  "object"
+                                                                    },
+                                                                    "risk_type":  {
+                                                                        "type":  "string"
+                                                                    }
+                                                                },
+                                                                "required":  [
+                                                                ],
+                                                                "type":  "object"
+                                                            },
+                                                            "type":  "array"
+                                                        },
+                                                        "summaries":  {
+                                                            "properties":  {
+                                                                "infections":  {
+                                                                    "type":  "array"
+                                                                },
+                                                                "ips":  {
+                                                                    "items":  {
+                                                                        "properties":  {
+                                                                            "findings":  {
+                                                                                "properties":  {
+                                                                                    "total_count":  {
+                                                                                        "type":  "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            },
+                                                                            "grades":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "infections":  {
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "ip_address":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "locations":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "risk_types":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "service_providers":  {
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "services":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "vulnerabilities":  {
+                                                                                "type":  "array"
+                                                                            }
+                                                                        },
+                                                                        "required":  [
+                                                                        ],
+                                                                        "type":  "object"
+                                                                    },
+                                                                    "type":  "array"
+                                                                },
+                                                                "locations":  {
+                                                                    "items":  {
+                                                                        "properties":  {
+                                                                            "country":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "country_code":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "findings":  {
+                                                                                "properties":  {
+                                                                                    "total_count":  {
+                                                                                        "type":  "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            },
+                                                                            "grades":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "ips":  {
+                                                                                "properties":  {
+                                                                                    "total_count":  {
+                                                                                        "type":  "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            }
+                                                                        },
+                                                                        "required":  [
+                                                                        ],
+                                                                        "type":  "object"
+                                                                    },
+                                                                    "type":  "array"
+                                                                },
+                                                                "non_isp":  {
+                                                                    "type":  "array"
+                                                                },
+                                                                "request":  {
+                                                                    "properties":  {
+                                                                        "eligible_ip_count":  {
+                                                                            "type":  "integer"
+                                                                        },
+                                                                        "ineligible_ip_count":  {
+                                                                            "type":  "integer"
+                                                                        },
+                                                                        "ip_with_event_count":  {
+                                                                            "type":  "integer"
+                                                                        },
+                                                                        "non_isp":  {
+                                                                            "type":  "array"
+                                                                        },
+                                                                        "requested_ip_count":  {
+                                                                            "type":  "integer"
+                                                                        },
+                                                                        "requested_ips":  {
+                                                                            "items":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "type":  "array"
+                                                                        }
+                                                                    },
+                                                                    "type":  "object"
+                                                                },
+                                                                "risk_types":  {
+                                                                    "items":  {
+                                                                        "properties":  {
+                                                                            "findings":  {
+                                                                                "properties":  {
+                                                                                    "total_count":  {
+                                                                                        "type":  "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            },
+                                                                            "grades":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "ips":  {
+                                                                                "properties":  {
+                                                                                    "total_count":  {
+                                                                                        "type":  "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            },
+                                                                            "risk_type":  {
+                                                                                "type":  "string"
+                                                                            }
+                                                                        },
+                                                                        "required":  [
+                                                                        ],
+                                                                        "type":  "object"
+                                                                    },
+                                                                    "type":  "array"
+                                                                },
+                                                                "service_providers":  {
+                                                                    "type":  "array"
+                                                                },
+                                                                "services":  {
+                                                                    "items":  {
+                                                                        "properties":  {
+                                                                            "findings":  {
+                                                                                "properties":  {
+                                                                                    "total_count":  {
+                                                                                        "type":  "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            },
+                                                                            "grades":  {
+                                                                                "items":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "ips":  {
+                                                                                "properties":  {
+                                                                                    "total_count":  {
+                                                                                        "type":  "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            },
+                                                                            "service":  {
+                                                                                "type":  "string"
+                                                                            }
+                                                                        },
+                                                                        "required":  [
+                                                                        ],
+                                                                        "type":  "object"
+                                                                    },
+                                                                    "type":  "array"
+                                                                },
+                                                                "vulnerabilities":  {
+                                                                    "type":  "array"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                }
+                                            }
+                                        },
+                                        "append_result_data_to_data_to_post_list":  {
+                                            "foreach":  "@body('Parse_JSON_2')?['results']",
+                                            "actions":  {
+                                                "Append_to_array_variable":  {
+                                                    "runAfter":  {
+                                                        "Compose":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "AppendToArrayVariable",
+                                                    "inputs":  {
+                                                        "name":  "data_to_post",
+                                                        "value":  "@outputs('Compose')"
+                                                    }
+                                                },
+                                                "Compose":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Compose",
+                                                    "inputs":  {
+                                                        "results":  "@items('append_result_data_to_data_to_post_list')",
+                                                        "service_providers":  "@body('Parse_JSON_2')?['summaries']?['service_providers']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                                "Parse_JSON_2":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "Foreach"
+                                        },
+                                        "check_if_next_page_is_exist_or_not_in_response":  {
+                                            "actions":  {
+                                                "Set_next_exist_variable_to_false":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "next_exist",
+                                                        "value":  "@false"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                                "append_result_data_to_data_to_post_list":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else":  {
+                                                "actions":  {
+                                                    "Increment_offset_variable":  {
+                                                        "runAfter":  {
+                                                            "Set_next_exist_variable_to_true":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "IncrementVariable",
+                                                        "inputs":  {
+                                                            "name":  "offset",
+                                                            "value":  1000
+                                                        }
+                                                    },
+                                                    "Set_next_exist_variable_to_true":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "SetVariable",
+                                                        "inputs":  {
+                                                            "name":  "next_exist",
+                                                            "value":  "@true"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression":  {
+                                                "and":  [
+                                                    {
+                                                        "equals":  [
+                                                            "@body('Parse_JSON_2')?['links']?['next']",
+                                                            "@null"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type":  "If"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Get_WFH_Data_(API_Call)":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@outputs('Get_WFH_Data_(API_Call)')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "Get_WFH_Data_(API_Call)":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Http",
+                                    "inputs":  {
+                                        "headers":  {
+                                            "Authorization":  "@variables('API_token')"
+                                        },
+                                        "method":  "GET",
+                                        "queries":  {
+                                            "ips":  "@variables('IP_address')",
+                                            "limit":  "1000",
+                                            "offset":  "@{variables('offset')}"
+                                        },
+                                        "uri":  "https://api.bitsighttech.com/ratings/v1/findings/wfh/"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Get_IP_address_from_incident":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  "@equals(variables('next_exist'), false)",
+                            "limit":  {
+                                "count":  60,
+                                "timeout":  "PT1H"
+                            },
+                            "type":  "Until"
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azureloganalyticsdatacollector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            },
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName":  "[variables('KeyvaultConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "BitSight-Get-WFH-Data",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                },
+                "parameterValues": {
+                    "username": "[parameters('LogAnalyticsWorkspaceId')]",
+                    "password": "[parameters('LogAnalyticsWorkspaceKey')]"
+                    }
+                }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('KeyvaultConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('KeyvaultConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[parameters('tenantId')]",
+                    "token:grantType": "code",
+                    "vaultName": "[parameters('keyvaultName')]"
+                }
+            }
+        }
+    ]
+}
