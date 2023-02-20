@@ -229,33 +229,22 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "workbook-source" -NotePropertyValue "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbook-source" -NotePropertyValue "[variables('workbook-source')]"
                             };
-							
-                        $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
-                            $baseWorkbookStep = [PSCustomObject] @{
+							$baseWorkbookStep = [PSCustomObject] @{
                                 name       = "workbooks";
                                 label      = "Workbooks";
                                 subLabel   = [PSCustomObject] @{
-                                    preValidation  = "Configure the workbooks";
-                                    postValidation = "Done";
+                                preValidation  = "Configure the workbooks";
+                                postValidation = "Done";
                                 };
                                 bladeTitle = "Workbooks";
                                 elements   = @(
-									if($workbookDescriptionText -ne "") {										
-									[PSCustomObject] @{
-                                    name    = "workbook$workbookCounter-text";
-                                    type    = "Microsoft.Common.TextBlock";
-                                    options = [PSCustomObject] @{ text = $workbookDescriptionText; }
-									}
-									}
-									else {
-										[PSCustomObject] @{
+                                    [PSCustomObject] @{
                                         name    = "workbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
                                             text =  $contentToImport.WorkbookBladeDescription ? $contentToImport.WorkbookBladeDescription : "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view.";
                                         }
-                                    }
-									},
+                                    },
                                     [PSCustomObject] @{
                                         name    = "workbooks-link";
                                         type    = "Microsoft.Common.TextBlock";
@@ -265,11 +254,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                                 uri= "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
                                               }
                                             }
-                                    }
-                                )
-                            }
-                            $baseCreateUiDefinition.parameters.steps += $baseWorkbookStep
-
+										}
+                                    )
+                                }
+                                $baseCreateUiDefinition.parameters.steps += $baseWorkbookStep
                             if(!$contentToImport.TemplateSpec)
                             {
                                 #Add formattedTimeNow parameter since workbooks exist
@@ -283,6 +271,26 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "formattedTimeNow" -Value $timeNowParameter
                             }
                         }
+						if($contentToImport.TemplateSpec) {
+                            #Getting Workbook Metadata dependencies from Github
+                            $workbookData = $null
+                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            try {
+                                Write-Host "Downloading $workbookFinalPath"
+                                $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
+                                $dependencies = $workbookData | ConvertFrom-Json | Where-Object {($_.templateRelativePath.split('.')[0].ToLower() -eq $workbookKey.ToLower())}
+                                $WorkbookDependencyCriteria = @();
+                            }
+                            catch {
+                                Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
+                                break;
+                            }
+						}
+						$workbookUIParameter = [PSCustomObject] @{ name = "workbook$workbookCounter"; type = "Microsoft.Common.Section"; label = $dependencies.title; elements = @( [PSCustomObject] @{ name = "workbook$workbookCounter-text"; type = "Microsoft.Common.TextBlock"; options = @{ text = $dependencies.description; } } ) }
+                        $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUIParameter
+
+                            # Update Counter
+                            $workbookCounter += 1
                         try {
                             $data = $rawData
                             # Serialize workbook data
@@ -294,6 +302,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             Write-Host "Failed to serialize $file" -ForegroundColor Red
                             break;
                         }
+                        $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
                         #creating parameters in mainTemplate
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
@@ -425,10 +434,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
 
-                            # if($workbookDescriptionText -ne "")
-                            # {
-                                # $workbookMetadata | Add-Member -NotePropertyName "description" -NotePropertyValue $workbookDescriptionText
-                            # }
+                            if($workbookDescriptionText -ne "")
+                            {
+                                $workbookMetadata | Add-Member -NotePropertyName "description" -NotePropertyValue $workbookDescriptionText
+                            }
 
                             # Add templateSpecs/versions resource to hold actual content
                             $workbookTemplateSpecContent = [PSCustomObject]@{
@@ -1969,8 +1978,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 if ($yaml.relevantTechniques -match ' ') {
                                     $yaml.relevantTechniques = $yaml.relevantTechniques -replace ' ', ''
                                 }
-                                $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue $yaml.relevantTechniques # Add relevantTechniques property if exists
+                                $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue ([array]($yaml.relevantTechniques | ForEach-Object { ($_ -split "\.")[0] })) # Add relevantTechniques property if exists
                             }
+                           
                             $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any.
                             if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')) {
                                 # Remove surrounding single-quotes (') from YAML block literal string, in case the string starts with a single quote in Yaml.
