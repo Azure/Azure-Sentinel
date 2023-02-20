@@ -1,0 +1,59 @@
+id: 9eb2f758-003b-4303-83c6-97aed4c03e41
+name: Jamf Protect - Unified Logs
+description: |
+  'Creates an informational incident based on Jamf Protect Unified Log data in Microsoft Sentinel'
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: JamfProtect
+    dataTypes: 
+      - jamfprotect_CL
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+relevantTechniques:
+query: |
+  jamfprotect_CL
+  | where input_eventType_s == "GPUnifiedLogEvent"
+  | extend severity = case(input_match_severity_d == 0, "Informational", input_match_severity_d == 1, "Low", input_match_severity_d == 2, "Medium", input_match_severity_d == 3, "High", "Informational")
+  | where isnotempty(severity)
+  | extend Host_IPs = tostring(parse_json(input_host_ips_s)[0])
+  | extend ProviderName = "Jamf"
+  | extend ProductName = "Jamf Protect"
+  | extend ProductNameComponentName = "Unified Logging"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{input_match_event_name_s}} on {{input_host_hostname_s}}"
+  alertDescriptionFormat: "{{input_match_event_name_s}} has been captured in the unified logs"
+  alertSeverityColumnName: severity
+  alertDynamicProperties:
+    - alertProperty: ProviderName
+      value: ProviderName
+    - alertProperty: ProductName
+      value: ProductName
+customDetails:
+  Protect_Event_Type: input_eventType_s
+  Unified_Log: input_match_event_name_s
+  Tags: input_match_event_tags_s
+  Event_Process: input_match_event_process_s
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: input_host_hostname_s
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: Host_IPs
+- entityType: Process
+  fieldMappings:
+  - identifier: ProcessId
+    columnName: input_match_event_process_s
+version: 1.0.0
+kind: NRT

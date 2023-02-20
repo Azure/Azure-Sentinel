@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuditEventMicrosoftExchangeAdmin365",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Audit Event ASIM filtering parser for Microsoft Exchange 365 administrative activity",
+            "category": "ASIM",
+            "FunctionAlias": "vimAuditEventMicrosoftExchangeAdmin365",
+            "query": "let usertypes=datatable (ActorOriginalUserType:string, ActorUserType:string)\n[\n // Regular, Regular\n \"Admin\", \"Admin\"\n , \"DcAdmin\", \"Admin\"\n , \"System\", \"System\"\n , \"Application\", \"Application\"\n , \"ServicePrincipal\", \"Service Principal\"\n , \"CustomPolicy\", \"Other\"\n , \"SystemPolicy\", \"Other\"\n , \"Reserved\", \"Other\"\n];\nlet eventtypes=datatable (op:string, EventType:string)\n[\n \"Remove\", \"Delete\",\n \"New\", \"Create\",\n \"Add\", \"Create\",\n \"Enable\", \"Enable\",\n \"Install\", \"Install\",\n \"Set\", \"Set\",\n \"Disable\", \"Disable\",\n \"disable\", \"Disable\"\n];\n let parser=  (\n      starttime:datetime=datetime(null), \n      endtime:datetime=datetime(null),\n      srcipaddr_has_any_prefix:dynamic=dynamic([]), \n      eventresult:string='*',\n      actorusername_has_any:dynamic=dynamic([]),\n      eventtype_in:dynamic=dynamic([]),\n      operation_has_any:dynamic=dynamic([]),\n      object_has_any:dynamic=dynamic([]),\n      newvalue_has_any:dynamic=dynamic([]),\n      disabled:bool = false\n  ){\n  OfficeActivity\n  | where not(disabled)\n  | where\n      (isnull(starttime) or TimeGenerated >= starttime) \n      and (isnull(endtime) or TimeGenerated <= endtime)\n  | where RecordType  in ('ExchangeAdmin')\n  | where \n      (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(ClientIP,srcipaddr_has_any_prefix))\n      and (array_length(actorusername_has_any) == 0 or UserId has_any (actorusername_has_any))\n      and (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))\n      and (array_length(object_has_any) == 0 or OfficeObjectId has_any (object_has_any))\n      and (array_length(newvalue_has_any) == 0 or Parameters has_any (newvalue_has_any))\n  | project Operation, ResultStatus, Parameters, OrganizationName, OrganizationId, OfficeObjectId, ClientIP, UserId, UserKey, UserAgent, UserType, TimeGenerated, OriginatingServer, SourceRecordId, Type, _ResourceId\n  // --\n  // Calculate and filter result\n  | where (eventresult == \"*\" or (eventresult == \"Success\" and ResultStatus == \"True\"))\n  | extend EventResult = iff(ResultStatus == \"True\", \"Success\", \"Failure\")\n  // --\n  // -- Calculate and filter operation and event type\n  | extend \n      SplitOp = split (Operation,\"-\")\n  | extend\n      op=tostring(SplitOp[0])\n  | lookup eventtypes on op\n  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)\n  | project-away op    \n  // --\n  // Calculate and post-filter source IP address and port\n  | extend \n      SplitIpAddr = extract_all(@'^\\[?(.*?)\\]?:(\\d+)$', ClientIP)[0]\n  | extend \n      SrcIpAddr = iff (SplitIpAddr[1] == \"\", ClientIP, SplitIpAddr[0]),\n      SrcPortNumber = toint(iff (SplitIpAddr[1] == \"\", \"\", SplitIpAddr[1]))\n  | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr,srcipaddr_has_any_prefix))\n  // --\n  /// Calculate and post filter actor and acting app\n  | parse UserId with ActorUsername \" (\" ActingAppName \")\"\n  | extend \n      ActorUsernameType = iff (ActorUsername == \"\", \"UPN\", \"Windows\"),\n      ActorUsername = iff (ActorUsername == \"\", UserId, ActorUsername),\n      ActingAppType = iff (ActingAppName == \"\", \"\", \"Process\")\n  | where (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))\n  // --\n  // Calculate Object\n  | extend\n      SplitObject = extract_all(@'^(.*?)[\\\\/](.*)$', OfficeObjectId)[0]\n  | extend \n      Object = case (\n          SplitObject[0] == OrganizationName, SplitObject[1], \n          OfficeObjectId == \"\", SplitOp[1],\n          OfficeObjectId\n      )\n  | project-away SplitOp, OfficeObjectId\n  // --\n  | project-rename\n      SrcDescription = OriginatingServer,\n      NewValue = Parameters \n  | project-away SplitObject, UserKey, SplitIpAddr, ClientIP, UserId\n  | project-rename\n      HttpUserAgent = UserAgent, \n      ActorOriginalUserType = UserType,\n      ActorScopeId = OrganizationId,\n      ActorScope = OrganizationName,\n      EventOriginalUid = SourceRecordId\n  | lookup usertypes on ActorOriginalUserType\n  | extend\n      EventCount = int(1),\n      EventStartTime = TimeGenerated, \n      EventEndTime= TimeGenerated,\n      EventProduct = 'Exchange 365',\n      EventVendor = 'Microsoft',\n      EventSchemaVersion = '0.1.0',\n      EventSchema = 'AuditEvent',\n      TargetAppName = 'Exchange 365',\n      TargetAppType = 'SaaS application'\n  | project-away \n      ResultStatus\n  | extend\n      EventSeverity = iff(EventResult == \"Failure\", \"Low\", \"Informational\")\n  // -- Aliases\n  | extend \n      User=ActorUsername,\n      IpAddr = SrcIpAddr,\n      Value = NewValue,\n      Application = TargetAppName,\n      Dst = TargetAppName,\n      Src = coalesce (SrcIpAddr, SrcDescription),\n      Dvc = TargetAppName,\n  // -- Entity identifier explicit aliases\n      ActorUserUpn = iif (ActorUsernameType == \"UPN\", ActorUsername, \"\"),\n      ActorWindowsUsername = iif (ActorUsernameType == \"Windows\", ActorUsername, \"\")\n };\n parser (\n    starttime = starttime,\n    endtime = endtime,\n    srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,\n    actorusername_has_any = actorusername_has_any,\n    eventtype_in = eventtype_in,\n    eventresult = eventresult,\n    operation_has_any = operation_has_any,\n    object_has_any=object_has_any,\n    newvalue_has_any=newvalue_has_any,\n    disabled=disabled\n )",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),actorusername_has_any:dynamic=dynamic([]),operation_has_any:dynamic=dynamic([]),eventtype_in:dynamic=dynamic([]),eventresult:string='*',object_has_any:dynamic=dynamic([]),newvalue_has_any:dynamic=dynamic([]),disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-""" handles all Azure sentinel apis related functions here """
+""" handles all Microsoft Sentinel apis related functions here """
 import base64
 import datetime
 import requests
@@ -64,5 +64,5 @@ class logs_api:
 
             
 class management_api:
-    """ class for api modifiying and getting the data in incidents section of azure sentinel using management api """
+    """ class for api modifiying and getting the data in incidents section of Microsoft Sentinel using management api """
     pass
