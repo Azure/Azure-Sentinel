@@ -293,4 +293,3 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("No exceptions hence posting the data to fileshare")
     state = StateManager(connection_string)
     state.post(str(json.dumps(postactivity_list)))
-    state.post(str(json.dumps(postactivity_list)))
