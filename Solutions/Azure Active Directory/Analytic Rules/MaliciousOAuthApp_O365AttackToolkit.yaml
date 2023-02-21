@@ -24,18 +24,20 @@ relevantTechniques:
 query: |
   let detectionTime = 1d;
   let joinLookback = 14d;
+  let o365_attack_v1 = dynamic(["contacts.read","user.read","mail.read","notes.read.all","mailboxsettings.readwrite","Files.ReadWrite.All"]);
+  let o365_attack_v2 = dynamic(["contacts.read","user.read","mail.read","mail.send","Files.ReadWrite.All","files.read","files.read.all"]);
   AuditLogs
   | where TimeGenerated > ago(detectionTime)
   | where LoggedByService =~ "Core Directory"
   | where Category =~ "ApplicationManagement"
   | where OperationName =~ "Consent to application"
-  | where TargetResources has "mailboxsettings"
+  | where TargetResources has "mail.read"
   | extend AppDisplayName = TargetResources.[0].displayName
   | extend AppClientId = tolower(TargetResources.[0].id)
   | where AppClientId !in ((externaldata(knownAppClientId:string, knownAppDisplayName:string)[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.OAuth.KnownApplications.csv"] with (format="csv")))
   | extend ConsentFull = TargetResources[0].modifiedProperties[4].newValue
   | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope1 "]" *
-  | where ConsentFull contains "contacts.read" and ConsentFull contains "user.read" and ConsentFull contains "mail.read" and ConsentFull contains "notes.read.all" and ConsentFull contains "mailboxsettings.readwrite" and ConsentFull contains "Files.ReadWrite.All"
+  | where ConsentFull has_all (o365_attack_v1) or ConsentFull has_all (o365_attack_v2)
   | where GrantConsentType != "AllPrincipals" // NOTE: we are ignoring if OAuth application was granted to all users via an admin - but admin due diligence should be audited occasionally
   | extend GrantIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
   | extend GrantInitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
@@ -71,5 +73,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled
