@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 
 customer_id = os.environ['WorkspaceID']
 fetchDelay = os.getenv('FetchDelay',10)
-Schedule = os.getenv('Schedule',10)
+Schedule = os.getenv('Schedule',"0 */10 * * * *")
 chunksize = 9999
 calendarFetchDelay = os.getenv('CalendarFetchDelay',6)
 chatFetchDelay = os.getenv('ChatFetchDelay',1)
