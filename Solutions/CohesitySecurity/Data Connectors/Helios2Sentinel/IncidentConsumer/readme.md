@@ -2,7 +2,7 @@
 This function picks alerts from the queue and creates the corresponding records in the Microsoft Sentinel Incident table.
 
 ## Publish the Azure Function
-Run [this](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/azuredeploy.json.sh) script to create configuration and deploy the function applications to Azure.
+Run [this](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/azuredeploy.json.sh) script to create configuration and deploy the function applications to Azure.
 
 **Note:** You can ignore the **Publish the Azure Function** section if you've already run the script for deploying another Cohesity function app.
 
@@ -18,10 +18,10 @@ Check that the function successfully runs at  _``Your function name that starts 
 * Enter a name for the API key.
 * Select _Save_. The API Key Token is displayed.
 2. If you're not seeing new incidents in your workspace, then ensure that you created your Sentinel [workspace](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/microsoft.securityinsightsarg%2Fsentinel) and specified it correctly in the _Workspace_ environment variable.
-* __Attention__: It should be the same workspace as created for [IncidentProducer](https://github.com/cohesity/Azure-Sentinel/edit/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentProducer/readme.md).
+* __Attention__: It should be the same workspace as created for [IncidentProducer](https://github.com/Azure/Azure-Sentinel/edit/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentProducer/readme.md).
 3. If this function receives incidents but they are not listed in the Microsoft Sentinel Incidents table, then ensure that you have a valid queue in [Azure Storage Accounts](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Storage%2FStorageAccounts) ([steps to create a queue](https://learn.microsoft.com/azure/storage/queues/storage-quickstart-queues-portal)) and the path is correctly specified in the _AzureWebJobsStorage_ environment variable.
-* __Attention__: It should be the same queue as created for [IncidentProducer](https://github.com/cohesity/Azure-Sentinel/edit/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentProducer/readme.md).
-4. Ensure that all environment variables are set correctly. To validate, you can compare their names with the ones in [local.settings.json](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentConsumer/local.settings.json).
+* __Attention__: It should be the same queue as created for [IncidentProducer](https://github.com/Azure/Azure-Sentinel/edit/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentProducer/readme.md).
+4. Ensure that all environment variables are set correctly. To validate, you can compare their names with the ones in [local.settings.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentConsumer/local.settings.json).
 5. If you changed any of the environment variables, Cohesity highly recommends you to restart the function. Follow the steps below.
 * Go to the _Overview_ blade of the IncidentProducer function.
 * Select _Restart_.

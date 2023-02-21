@@ -12,7 +12,6 @@ using Microsoft.WindowsAzure.Storage;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
-using StackExchange.Redis;
 using System.Collections.Generic;
 using System.Collections;
 using System.Dynamic;
@@ -155,7 +154,7 @@ namespace Helios2Sentinel
 #if DEBUG
             [TimerTrigger("*/30 * * * * *")] TimerInfo myTimer,
 #else
-            [TimerTrigger("* */5 * * * *")]TimerInfo myTimer,
+            [TimerTrigger("0 */5 * * * *")]TimerInfo myTimer,
 #endif
             [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             ILogger log)

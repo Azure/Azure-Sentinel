@@ -1,11 +1,11 @@
 # Cohesity Close Helios Incident Playbook
 ## Summary
 This playbook closes the Cohesity Data Cloud alert. 
-__Remember__: It works only if you have installed the [Function Apps](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) and have received a few incidents that require closure.
+__Remember__: It works only if you have installed the [Function Apps](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) and have received a few incidents that require closure.
 
 ## Deployment Instructions
 1. Click on the "Deploy to Azure" button to deploy the playbook. This step directs you to deploy an ARM Template wizard.
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Close_Helios_Incident%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Close_Helios_Incident%2Fazuredeploy.json)
 2. Fill the required parameters:
 * __Playbook Name:__ Enter the playbook name here.
 

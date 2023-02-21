@@ -1,4 +1,4 @@
-# Cohesity Create or Update ServiceNow Incident
+# Cohesity Create or Update ServiceNow Incident Playbook
 ## Summary
 This playbook creates a ticket on ServiceNow's Now Platform. It can be also used for updating the ServiceNow ticket or closing it. For example, an automation rule can be created to close the ServiceNow ticket by running this playbook when the corresponding Sentinel ticket is closed.
 
@@ -7,7 +7,7 @@ This playbook creates a ticket on ServiceNow's Now Platform. It can be also used
 
 ## Deployment instructions
 1. Click on the "Deploy to Azure" button to deploy the playbook. This step directs you to deploy an ARM Template wizard.
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_CreateOrUpdate_ServiceNow_Incident%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_CreateOrUpdate_ServiceNow_Incident%2Fazuredeploy.json)
 2. Fill in the required parameters:
 * __Playbook Name:__ Enter the playbook name here.
 
