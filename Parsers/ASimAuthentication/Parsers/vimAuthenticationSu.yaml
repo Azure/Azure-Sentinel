@@ -1,0 +1,121 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Linux su 
+  Version: '0.2.0'
+  LastUpdated: January 30, 2022
+Product:
+  Name: su
+Normalization:
+  Schema: Authentication
+  Version: '0.1.2'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Linux su elevation commands collected using Syslog to the ASIM Authentication schema.
+ParserName: vimAuthenticationSu
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+        starttime:datetime          = datetime(null), 
+        endtime:datetime            = datetime(null),
+        targetusername_has:string   = "*", 
+        disabled:bool               = false
+    ) {
+    let prefilter = (T:(SyslogMessage:string, TimeGenerated:datetime)) {
+        T
+        | where 
+            (isnull(starttime)           or TimeGenerated >= starttime) 
+            and (isnull(endtime)         or TimeGenerated <= endtime)
+            and (targetusername_has=='*' or (SyslogMessage has targetusername_has))
+    };
+    let SyslogProjects = Syslog | project TimeGenerated, Computer, SyslogMessage, ProcessName, ProcessID, HostIP, Type, _ItemId, _ResourceId, _SubscriptionId;
+    //
+    // -- Sucessful SU
+    // Parses the event "Successful su for <user> by <user>"
+    let SuSignInAuthorized=(disabled:bool=false) {
+        SyslogProjects 
+        | where not(disabled)
+        | where ProcessName == "su" and SyslogMessage startswith "Successful su for"
+        | invoke prefilter()
+        | parse SyslogMessage with * "for " TargetUsername:string " by " ActorUsername:string
+        | extend
+            EventType = 'Elevation'
+        | project-away SyslogMessage, ProcessName
+    };
+    // 
+    // -- SU end
+    // Parsers the event "pam_unix(su[-l]:session): session closed for user <user>"
+    let SuDisconnect=(disabled:bool=false) {
+        SyslogProjects 
+        | where not(disabled)
+        | where ProcessName == "su" and SyslogMessage has_all ('pam_unix(su', 'session): session closed for user')
+        | invoke prefilter()
+        | parse SyslogMessage with * "for user " TargetUsername:string
+        | extend
+            EventType = 'Logoff'
+        | project-away SyslogMessage, ProcessName
+    };
+    union isfuzzy=false 
+        SuSignInAuthorized (disabled = disabled)
+        , SuDisconnect(disabled = disabled)
+    | where targetusername_has=='*' or (TargetUsername has targetusername_has)
+    | invoke _ASIM_ResolveDvcFQDN ('Computer')
+    | extend
+        EventVendor             = 'Linux'
+        , EventProduct          = 'su'
+        , DvcOs                 = 'Linux'
+        , TargetDvcOs           = 'Linux'
+        , EventCount            = int(1)
+        , EventSchema           = 'Authentication'
+        , EventSchemaVersion    = '0.1.2'
+        , EventResult           = 'Success'
+        , EventStartTime        = TimeGenerated
+        , EventEndTime          = TimeGenerated
+        , ActorUsernameType     = 'Simple'
+        , TargetUsernameType    = 'Simple'
+        , EventSeverity         = 'Informational'
+        , ActingAppType         = 'Process'
+        , DvcIdType             = iff (isnotempty(_ResourceId), "AzureResourceId", "")
+        , ActingAppId           = tostring(ProcessID)
+    | project-away Computer, ProcessID
+    | project-rename 
+        EventUid                = _ItemId
+        , DvcScopeId            = _SubscriptionId
+        , DvcId                 = _ResourceId
+        , DvcIpAddr             = HostIP
+    //
+    // -- Aliases
+    | extend
+        User                    = TargetUsername
+        , Dvc                   = DvcHostname
+        , Dst                   = coalesce (DvcFQDN, DvcHostname, DvcIpAddr)
+        , TargetDomain          = DvcDomain
+        , TargetFQDN            = DvcFQDN
+        , TargetDomainType      = DvcDomainType
+        , TargetHostname        = DvcHostname
+        , TargetDvcId           = DvcId
+        , TargetDvcScopeId      = DvcScopeId
+        , TargetDvcIdType       = DvcDomainType
+        , IpAddr                = DvcIpAddr
+        , TargetIpAddr          = DvcIpAddr
+  };
+  parser (
+        disabled            = disabled,
+        starttime           = starttime, 
+        endtime             = endtime,
+        targetusername_has  = targetusername_has
+  )

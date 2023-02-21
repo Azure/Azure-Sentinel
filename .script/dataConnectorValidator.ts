@@ -64,6 +64,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.ThreatIntelligenceIndicator;
   }
+  else if (dataTypes[0].name.includes("MicrosoftPurviewInformationProtection"))
+  {
+    return ConnectorCategory.MicrosoftPurviewInformationProtection;
+  }
   else if (dataTypes[0].name.includes("Event"))
   {
     return ConnectorCategory.Event;
@@ -87,6 +91,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
         return ConnectorCategory.SysLog;
     }
     return ConnectorCategory.RestAPI;
+  }
+  else if (dataTypes[0].name.includes("Dynamics365Activity"))
+  {
+    return ConnectorCategory.Dynamics365Activity;
   }
   return "";
 }
