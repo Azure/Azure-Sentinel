@@ -11,7 +11,6 @@ from google.auth.transport.requests import Request
 import azure.functions as func
 import logging
 import os
-import json
 import time
 import re
 from .state_manager import StateManager
@@ -115,7 +114,6 @@ def GetDates(logType):
     activity_list = {}
     if past_time is not None and len(past_time) > 0:
         logging.info("The last time point is: {}".format(past_time))
-        #activity_list = past_time
         if is_json(past_time):
             activity_list = past_time
         else:
@@ -219,9 +217,6 @@ def gen_chunks_to_object(data,chunksize=100):
     yield chunk
 
 def gen_chunks_with_latesttime(data,log_type):
-    #for chunk in gen_chunks_to_object(data, chunksize=2000):
-        #body = json.dumps(chunk)
-        #post_data(customer_id, shared_key,body,log_type)
     chunks = [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
     logging.info("Entered into the chunks mode")
     latest_timestamp = "";
@@ -240,18 +235,13 @@ def gen_chunks_with_latesttime(data,log_type):
                 latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
                 latest_timestamp = latest_timestamp[:-3] + 'Z'
                 logging.info("Chunk Timestamp {}".format(latest_timestamp))
-                #logging.info("Logs with {} activity was processed into Azure".format(log_type))
-                #logging.info("Chunk was processed{} events".format(chunk_count))
             else:
                 logging.warn("There is an issue with Posting data to LA - Response code: {}".format(statuscode))
         except Exception as err:
             logging.error("Something wrong. Exception error text: {}".format(err))
     return latest_timestamp
 
-app = func.FunctionApp()
-@app.function_name(name="mytimer")
-@app.schedule(schedule=timerSchedule, arg_name="mytimer", run_on_startup=True,
-              use_monitor=False)
+
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.info('The timer is past due!')
@@ -264,7 +254,6 @@ def main(mytimer: func.TimerRequest) -> None:
       try:
         start_time,end_time = GetDates(line)
         if not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
-        #resp = json.loads(start_time)
             logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
             latest_timestamp = start_time
             logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
