@@ -1,5 +1,5 @@
 # Restrict-MDEIpAddress
-author: Nicholas DiCola
+authors: Nicholas DiCola, Kevin Caballero, Sarah van den Bovenkamp
 
 This playbook will take IP entities and generate alert and block threat indicators for each IP in MDE for 90 days.
 

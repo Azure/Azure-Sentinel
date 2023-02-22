@@ -1,5 +1,5 @@
 # Restrict-MDEFileHash
-author: Nicholas DiCola
+authors: Nicholas DiCola, Kevin Caballero, Sarah van den Bovenkamp
 
 This playbook will take FileHash entities and generate alert and block threat indicators for each file hash in MDE for 90 days.
 

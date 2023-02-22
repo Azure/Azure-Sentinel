@@ -1,5 +1,5 @@
 # Restrict-MDEDomain
-author: Nicholas DiCola
+authors: Nicholas DiCola, Kevin Caballero, Sarah van den Bovenkamp
 
 This playbook will take DNS entities and generate alert and block threat indicators for each domain in MDE for 90 days.
 

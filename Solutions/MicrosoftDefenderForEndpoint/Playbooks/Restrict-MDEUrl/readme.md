@@ -1,5 +1,5 @@
 # Restrict-MDEUrl
-author: Nathan Swift, Nicholas DiCola
+authors: Nathan Swift, Nicholas DiCola, Kevin Caballero, Sarah van den Bovenkamp
 
 This playbook will take URL entities and generate alert and block threat indicators for each URL in MDE for 90 days.
 
