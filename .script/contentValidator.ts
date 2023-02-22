@@ -5,51 +5,50 @@ import * as logger from "./utils/logger";
 
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
-    if (!filePath.includes("azure-pipelines"))
+    // WE SHOULD SKIP ANY FILE WHICH IS LISTED BELOW
+    const isExcludedFile = (filePath.includes("azure-pipelines")
+        || filePath.includes("azureDeploy")
+        || filePath.includes("host.json")
+        || filePath.includes("proxies.json")
+        || filePath.includes("azuredeploy")
+        || filePath.includes("function.json"));
+
+    // WE SHOULD CHECK ONLY IN BELOW FOLDERS
+    const isIncludedFolderFile = (filePath.includes("/Data/") 
+        || filePath.includes("/data/")
+        || filePath.includes("/Data Connectors/") 
+        || filePath.includes("/DataConnectors/")
+        || filePath.includes("createUiDefinition.json"));
+
+    if (!isExcludedFile && isIncludedFolderFile)
     {
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
 
         // Read skip text from a file
-        const skipTextFile = fs.readFileSync('./.script/skip-text.txt', "utf8");
-        const skipTexts = skipTextFile.split("\n").filter(text => text.length > 0);
+        const skipTextFile = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
+        const validTags = skipTextFile.split("\n").filter(tag => tag.length > 0);
 
         // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
-        let hasSkipText = false;
-        let skipTextValue = '';
-        for (const skipText of skipTexts) 
+        var fileContentObj = JSON.parse(fileContent.replace(/\\/g, '\\\\'));
+        for (const tagName of validTags) 
         {
-            if (fileContent.includes(skipText)) 
+            let hasDescriptionTag = fileContentObj[tagName];
+            if (hasDescriptionTag)
             {
-                hasSkipText = true;
-                skipTextValue = skipText;
-                break;
-            }
-        }
+                let hasAzureSentinelText = hasDescriptionTag.toLowerCase().includes(searchText.toLowerCase());
 
-        // REPLACE ALL SKIP TEXT WITH BLANK
-        let replacedFileContent = fileContent.replace(new RegExp(skipTexts.join('|'), 'gi'), '');
-
-        // FIND IF AZURE SENTINEL TEXT PRESENT
-        let hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
-        if (hasAzureSentinelText) 
-        {
-            // VALIDATE AND THROW ERROR
-            if (hasSkipText) 
-            {
-                throw new Error(`Please update text from '${searchText}' to '${expectedText}' except '${skipTextValue}' text in file '${filePath}'`);
-            } 
-            else 
-            {
-                throw new Error(`Please update text from '${searchText}' to '${expectedText}' in file '${filePath}'`);
-            }
+                if (hasAzureSentinelText) {
+                    throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
+                }
+            }
         }
     }
     return ExitCode.SUCCESS;
 }
 
-let fileTypeSuffixes = ["json", "txt", "md", "yaml", "yml", "py"];
+let fileTypeSuffixes = ["json"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
     onCheckFile: (filePath: string) => {
