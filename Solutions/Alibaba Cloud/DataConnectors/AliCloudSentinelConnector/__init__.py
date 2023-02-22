@@ -40,12 +40,18 @@ if (not match):
 def generate_date():
     current_time = datetime.utcnow().replace(second=0, microsecond=0) - timedelta(minutes=10)
     state = StateManager(connection_string=connection_string)
-    past_time = state.get()
-    if past_time is not None:
-        logging.info("The last time point is: {}".format(past_time))
+    i = state.get()
+    if i is not None:
+        past_time = datetime.strptime(state.get(), "%d.%m.%Y %H:%M:%S")
+        if past_time is not None:
+            logging.info("The last time point is: {}".format(past_time))
+        else:
+            logging.info("There is no last time point, trying to get events for last hour")
+            past_time = (current_time - timedelta(minutes=60))
     else:
         logging.info("There is no last time point, trying to get events for last hour")
         past_time = (current_time - timedelta(minutes=60))
+
     state.post(current_time.strftime("%d.%m.%Y %H:%M:%S"))
     return past_time, current_time
 

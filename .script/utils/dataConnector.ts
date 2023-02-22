@@ -196,5 +196,7 @@ export enum ConnectorCategory {
   AzureFunction="Azure_Function",
   AzureDiagnostics="AzureDiagnostics",
   AzureDevOpsAuditing="AzureDevOpsAuditing",
-  ThreatIntelligenceIndicator="ThreatIntelligenceIndicator"
+  ThreatIntelligenceIndicator="ThreatIntelligenceIndicator",
+  MicrosoftPurviewInformationProtection="MicrosoftPurviewInformationProtection",
+  Dynamics365Activity="Dynamics365Activity"
 }

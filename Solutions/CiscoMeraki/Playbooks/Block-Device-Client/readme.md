@@ -3,7 +3,7 @@
 ![meraki](../../Connector/MerakiConnector/logo.jpg)
 
 ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of device clients with suspicious activity.
  2. For each client in the list, checks if the client is blocked by any network of the organization.
   - If client does not exist in network, then incident comment is created saying client not found.
@@ -58,12 +58,12 @@
 4.  Click Save
 
 ## b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with hosts. 
+- In Microsoft sentinel analytical rules should be configured to trigger an incident with hosts. 
 - Device Client MAC needs to be mapped with hostname in Host entity.
 - Configure the automation rules to trigger the playbook.
 
 # Playbook steps explained
-## When Azure Sentinel incident creation rule is triggered
+## When Microsoft Sentinel incident creation rule is triggered
   Captures potentially malicious client incident information.
 
 ## Entities - Get Hosts

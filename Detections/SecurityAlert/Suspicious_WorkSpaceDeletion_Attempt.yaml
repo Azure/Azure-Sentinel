@@ -1,7 +1,7 @@
 id: a5b3429d-f1da-42b9-883c-327ecb7b91ff
 name: Workspace deletion attempt from an infected device
 description: |
-  'This hunting query will alert on any sign-ins from devices infected with malware in correlation with potential workspace deletion activity. 
+  'This query will alert on any sign-ins from devices infected with malware in correlation with potential workspace deletion activity. 
   Attackers may attempt to delete  workspaces containing  compute instances  after successful compromise to cause service unavailability to regular business operation.'
 severity: Medium
 requiredDataConnectors:
@@ -11,8 +11,11 @@ requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
       - AzureActivity
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
 queryFrequency: 1d
-queryPeriod: 1d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -22,28 +25,36 @@ relevantTechniques:
   - T1078
   - T1489
 query: |
-  SecurityAlert 
-  | where AlertName == "Sign-in from an infected device"
-  | extend Extprop = parsejson(Entities)
-  | mv-expand Extprop
-  | extend Extprop = parsejson(Extprop)
-  | extend CmdLine = iff(Extprop['Type']=="process", Extprop['CommandLine'], '')
-  | extend File = iff(Extprop['Type']=="file", Extprop['Name'], '')
-  | extend Account = Extprop['Name']
-  | extend Domain = Extprop['UPNSuffix']
-  | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
-  | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '')
-  | extend Process = iff(isnotempty(CmdLine), CmdLine, File)
-  | summarize count() by AlertName, AlertSeverity, CompromisedEntity, Account, IpAddress
-  | join kind=inner 
-  (
-  AzureActivity
-  | where OperationNameValue hassuffix ("/workspaces/computes/delete")
-  | where ActivityStatusValue =~ "Succeeded"
-  | summarize  StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatusValue = makelist(ActivityStatusValue),  OperationIds = makelist(OperationId), CorrelationIds = makelist(CorrelationId), Resources = makelist(Resource), ResourceGroups = makelist(ResourceGroup), ResourceIds = makelist(ResourceId), ActivityCountByCallerIPAddress = count()  
-  by CallerIpAddress, Caller, OperationNameValue
-  ) on $left. IpAddress == $right. CallerIpAddress
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+    SecurityAlert
+    | where TimeGenerated > ago(1d)
+    | where ProductName == "Azure Active Directory Identity Protection"
+    | where AlertName == "Sign-in from an infected device"
+    | mv-expand Entity = todynamic(Entities)
+    | where Entity.Type == "account"
+    | extend AadTenantId = tostring(Entity.AadTenantId)
+    | extend AadUserId = tostring(Entity.AadUserId)
+    | extend IpAddress = tostring(parse_json(Entities)[2].Address)
+    | join kind=inner (
+    IdentityInfo
+    | distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName
+    | extend UserAccount = AccountUPN
+    | extend UserName = AccountDisplayName
+    | where isnotempty(AccountDisplayName) and isnotempty(UserAccount)
+    | project AccountTenantId, AccountObjectId, UserAccount, UserName
+    )
+    on
+    $left.AadTenantId == $right.AccountTenantId,
+    $left.AadUserId == $right.AccountObjectId
+    | extend CompromisedEntity = iff(CompromisedEntity == "N/A" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)
+    | project  AlertName, AlertSeverity, CompromisedEntity, UserAccount, IpAddress,TimeGenerated, UserName
+    | join kind=inner 
+    (
+    AzureActivity
+    | where OperationNameValue hassuffix ("/workspaces/computes/delete")
+    | where ActivityStatusValue has_any ("Succeeded", "Success")
+    | project TimeGenerated, _ResourceId, SubscriptionId, UserAccount=Caller, IpAddress=CallerIpAddress, CorrelationId, OperationId, ResourceGroup, TenantId
+    ) on IpAddress, UserAccount
+    | extend timestamp = TimeGenerated, AccountCustomEntity = UserAccount, IPCustomEntity = IpAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -53,7 +64,7 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.1
+version: 1.0.4
 kind: Scheduled
 metadata:
     source:
