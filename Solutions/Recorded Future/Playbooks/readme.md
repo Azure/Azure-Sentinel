@@ -1,5 +1,5 @@
 # Recorded Future - Import Indicators Logic Apps and IOC Enrichment Playbook templates
-<img alt="Recorded Future" src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/RecordedFuture.svg" with=80 height=80/>
+<img alt="Recorded Future" src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/RecordedFuture.svg" with="80" height="80" />
 
 # Overview
 Recorded Future is the world’s largest provider of intelligence for enterprise security. By combining persistent and pervasive automated data collection and analytics with human analysis, Recorded Future delivers intelligence that is timely, accurate, and actionable.
@@ -61,7 +61,7 @@ This playbook leverages the Recorded Future API to automate the ingestion of Rec
 
 ## Response (Enrichment) - IP, Domain, Hash, URL
 
-This playbook leverages the Recorded Future API to automatically enrich the IP, Domain, Url and Hash indicators, found in incidents, with the following Recorded Future context: Risk Score, Risk Rules, research links, technical links and Link to Intelligence Card. The enrichment content will be posted as a comment in the Microsoft Sentinel incident. For additional information please visit [Recorded Future](https://www.recordedfuture.com/integrations/microsoft). 
+This playbook leverages the Recorded Future API to automatically enrich the IP, Domain, Url and Hash indicators, found in incidents. Incidents will be enriched with the following Recorded Future context: Risk Score, Risk Rules, research links, technical links, previous detections and Link to Intelligence Card. The enrichment content will be posted as a comment in the Microsoft Sentinel incident. For additional information please visit [Recorded Future](https://www.recordedfuture.com/integrations/microsoft). 
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash%2FRecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash.json)
@@ -72,7 +72,7 @@ This playbook leverages the Recorded Future API to automatically enrich the IP, 
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/LogicAppDark.png)
 
 ### Configuration of Enrichment playbook
-After the enrichment playbook is installed and connections are configured. Create an automation rule to automate the enrichment process. The enrichment playbook will add recorded future intelligence to known entities in the incident as incident comment. 
+After the enrichment playbook is installed and connections are configured. Create an automation rule to automate the enrichment process. This will automate the enrichment of Recorded Future intelligence to known entities in all incidents. 
 
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRuleMenu.png)<br/>
 
@@ -81,3 +81,10 @@ In Sentinel goto Automation and create [Automation rule]. Give the new rule a na
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png)<br/>
 
 This will trigger Recorded Future playbook to run when any incident is created. Recorded future will then enrich the incident if it contains entities of type IP, Domain, Url and FileHash. 
+
+### Recorded Future Intelligence Cloud Settings
+The Recoded Future Intelligence Cloud aggregates data related to Sigma Rules and other indicators, driving collective insights to better identify threats.
+Anonymized data is collected for analytical purposes to identify trends and insights with the Intelligence Cloud. 
+[Click here to learn more](https://support.recordedfuture.commc/en-us/articles/11633413141779)
+
+![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/IntelligenceCloudParameter.png)
