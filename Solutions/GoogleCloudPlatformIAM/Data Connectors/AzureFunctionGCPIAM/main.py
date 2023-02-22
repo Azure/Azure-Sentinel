@@ -103,24 +103,41 @@ def main(mytimer: func.TimerRequest):
         timestamp>="{}"
     """.format(last_ts)
 
-    last_ts = None
+# Get the list of resources and split them into batches
+    resources = get_recource_names()
+    batch_size = 10
+    page_size = 1000
+    resource_batches = [resources[i:i+batch_size] for i in range(0, len(resources), batch_size)]
+    logging.info('Processing {} resource batches'.format(len(resource_batches)))
+
+    last_max_ts = None
     with sentinel:
-        for entry in gcp_cli.list_entries(resource_names=get_recource_names(), filter_=filt, order_by='timestamp', page_size=1000):
-            event = parse_entry(entry)
-            sentinel.send(event)
+        for resource_batch in resource_batches:
+            resource_filter = ' OR '.join(['resource.type="{}" AND resource.labels.project_id="{}"'.format(resource_type, project_id) for resource_type, project_id in [resource.split('/') for resource in resource_batch]])
+            batch_filt = '{} AND ({})'.format(filt, resource_filter)
+            logging.info('Processing batch with filter: {}'.format(batch_filt))
+            for entry in gcp_cli.list_entries(filter_=batch_filt, order_by='timestamp', page_size=1000):
+                event = parse_entry(entry)
+                sentinel.send(event)
 
-            last_ts = event['timestamp']
-            if sentinel.is_empty():
-                logging.info('Saving last timestamp - {}'.format(last_ts))
-                state_manager.post(last_ts)
-                if check_if_script_runs_too_long(start_ts):
-                    logging.info('Script is running too long. Saving progress and exit.')
-                    break
+                last_ts = event['timestamp']
+                if last_max_ts is None or last_ts > last_max_ts:
+                    last_max_ts= last_ts
 
-    if last_ts:
-        last_ts = event['timestamp']
-        logging.info('Saving last timestamp - {}'.format(last_ts))
-        state_manager.post(last_ts)
+                if sentinel.is_empty():
+                    logging.info('Saving last max timestamp - {}'.format(last_max_ts))
+                    state_manager.post(last_max_ts)
+                    if check_if_script_runs_too_long(start_ts):
+                        logging.info('Script is running too long. Saving progress and exit.')
+                        break
+
+            if sentinel.is_empty() and last_max_ts:
+                logging.info('Saving max last timestamp - {}'.format(last_max_ts))
+                state_manager.post(last_max_ts)
+
+            if check_if_script_runs_too_long(start_ts):
+                logging.info('Script is running too long. Saving progress and exit.')
+                break
 
     remove_credentials_file()
     logging.info('Script finished. Sent events number: {}'.format(sentinel.successfull_sent_events_number))
