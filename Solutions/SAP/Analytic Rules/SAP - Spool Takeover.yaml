@@ -1,0 +1,65 @@
+id: 27d73c8f-88fd-41b8-a785-231541aa32a0
+name: SAP - Spool Takeover
+description: |
+    Identifies a user printing a spool request which was created by someone else.
+
+    Source Action: Create a Spool Request using one user, Output it in using another user.
+
+    *Data Sources: SAPcon -  Spool Log*
+    *Data Sources: SAPcon -  Spool Output Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPSpoolLog
+queryFrequency: 12h
+queryPeriod: 12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Collection
+- Exfiltration
+- CommandAndControl
+relevantTechniques: ''
+query: |
+    // Define variables
+    let AuditLogIn = dynamic(['AU1', 'AU5']); // Messages of connect with user
+    // Query logic
+    let LastLogin =
+    SAPAuditLog
+    | where MessageID in (AuditLogIn)
+    | summarize TimeGenerated = arg_max(TimeGenerated, *) by SystemID, ClientID, User; // Get last connection date for user
+    // Query Logic
+    SAPSpoolOutputLog // Get all spool outputs
+    | lookup kind=inner SAPSpoolLog on SpoolRequestNumber
+    | lookup kind=inner LastLogin on User, SystemID
+    | where User != User1 // The user that created the request is not the one that printed it
+    | project TimeGenerated, Instance, SystemID, ClientID, UserCreated = User1, UserPrinted = User, SpoolRequestNumber, Email, TerminalIPv6, Host
+alertDetailsOverride: null
+customDetails:
+    SAP_User: UserPrinted
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.31

@@ -132,7 +132,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
 
     $contentToImport = Get-Content -Raw $inputJsonPath | Out-String | ConvertFrom-Json
-    $basePath = $(if ($contentToImport.BasePath) { $contentToImport.BasePath + "/" } else { "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/" })
+    $basePath = $(if ($contentToImport.BasePath) { $contentToImport.BasePath} else { "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/" })
 
     # Content Counters - (for adding numbering to each item)
     $analyticRuleCounter = 1

@@ -1,0 +1,100 @@
+id: 9fadb366-a7ec-474c-90e1-d1a823176a1e
+name: SAP - Sensitive Role Changes
+description: |
+    Identifies changes in sensitive roles.
+    Source Action: Change a role using PFCG.
+    Sensitive roles should be maintained in "SAP - Sensitive Roles" Watchlist
+
+    *Data Sources: SAPcon - Change Documents Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPSystems
+queryFrequency: 12h
+queryPeriod: 12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Impact
+- PrivilegeEscalation
+- Persistence
+relevantTechniques: ''
+query: |
+    // Sensitive Roles Changes
+    // Define variables
+    let RoleObjectClass = "PFCG";
+    let ChangeType = "U";
+    let AuditLogIn = dynamic(['AU1', 'AU5']); // Messages of connect with user
+    let SensitiveRoles = _GetWatchlist("SAP - Sensitive Roles");
+    // Maintain if watchlist is not available
+    let fixedRoles = datatable(Role: string)['SAP_BC_BASIS_ADMIN', 'SAP_BC_AUTH_PROFILE_ADMIN'];
+    let UnitedRoles =
+    toscalar(union fixedRoles, SensitiveRoles
+    | summarize Roles = make_list(Role));
+    let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    let SelectedSystems = SAPSystems(SelectedSystemRoles=SelectedSystemRoles) | project SystemID= SearchKey;
+    // here you can exclude system users which are OK to run sensitive role updates
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'UpdateSensitiveAuthOK'
+    let excludeUsersTags= dynamic(['UpdateSensitiveAuthOK']);
+    let excludedUsers= _GetWatchlist('SAP_User_Config')| where Tags has_any (excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    // Query logic
+    let LastLogin =
+    SAPAuditLog
+    | where MessageID in (AuditLogIn)
+    | summarize TimeGenerated = arg_max(TimeGenerated, *) by SystemID, ClientID, User; // Get last connection date for user
+    SAPChangeDocsLog
+    | where ObjectClass == RoleObjectClass // Relevant role object class
+    | where ObjectID in (UnitedRoles) // Role is sensitive
+    | where TypeofChange_Header == ChangeType
+    | join kind= inner  SelectedSystems on SystemID
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | extend AuthorizationObj = extract(@"\S+\s+(\S+)\s+", 1, ChangedTableKey, typeof(string)) // Extract Authorization Object
+    | extend Authorization = extract(@"\S+\s+\S+\s+(\S+\d+)", 1, ChangedTableKey, typeof(string)) // Extract Authorization
+    | lookup kind=inner LastLogin on User // Get IP
+    | project TimeGenerated, Instance, SystemID, ClientID, Email, User, TerminalIPv6, Host, Role = ObjectID, FieldName , AuthorizationObj, Authorization, OldValue = ValueOld, NewValue = ValueNew
+    | extend Email= iff(isempty(Email),User, Email), Host= iff(isempty(Host), TerminalIPv6, Host)
+    | extend AlertDescription= strcat('Sensitive Role ' , Role, ' was updated by ', User), Dummy=' '
+    | extend PackedDetails= pack_all()
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{AlertDescription}}'
+    alertDescriptionFormat: |
+        Identifies changes in sensitive roles.
+        Source Action: Change a role using PFCG.
+        Sensitive roles should be maintained in "SAP - Sensitive Roles" Watchlist
+
+        *Data Sources: SAPcon - Change Documents Log*
+        {{PackedDetails}}
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: SecurityGroup
+    fieldMappings:
+    -   identifier: DistinguishedName
+        columnName: Role
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19

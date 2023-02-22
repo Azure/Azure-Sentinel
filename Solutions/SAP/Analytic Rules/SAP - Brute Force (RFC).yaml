@@ -1,0 +1,61 @@
+id: c2cc3901-d6bd-4189-bb5f-ab464dcfd079
+name: SAP - Brute Force (RFC)
+description: |
+    Identifies brute force attacks on the SAP system using RFC logons
+
+    Source Action: Attempt to login from the same IP to several systems/clients within the scheduled time interval using RFC
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+relevantTechniques: ''
+query: |
+    // Define variables
+    // Audit Log Classes - Failed Logons / Password Check
+    // let AuditClasses = dynamic(['AUO', 'AU2', 'AU6', 'BU1']);
+    let AuditClasses = dynamic(['AU6']);//RFC only
+    let perIPLimit = 300;
+    // Query logic
+    SAPAuditLog
+    | where MessageID in (AuditClasses)
+    | extend DetailsBy = pack("User", User, "Email", Email, "SystemID", SystemID, "ClientID", ClientID)
+    | summarize LoginbyIPAttempts = count(), Details = make_set(DetailsBy), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
+        by TerminalIPv6
+    // Check if number of login attempts per IP is higher than limit
+    | where LoginbyIPAttempts > perIPLimit
+    | mv-expand Details
+    | evaluate bag_unpack(Details, "Details_")
+    | project
+        StartTime, EndTime,  TerminalIPv6,
+        Email = column_ifexists("Details_Email", ""), User = column_ifexists("Details_User", ""),
+        SysetmID = column_ifexists("Details_SystemID", ""),
+       ClientID = column_ifexists("Details_ClientID", "")
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SysetmID
+    -   identifier: AppId
+        columnName: ClientID
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.33

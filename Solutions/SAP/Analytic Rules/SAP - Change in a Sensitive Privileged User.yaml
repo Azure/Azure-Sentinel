@@ -1,0 +1,98 @@
+id: 3eab4a41-1d7b-453d-8631-a7d74936973b
+name: SAP - Change in a Sensitive Privileged User
+description: |
+    Identifies changes of sensitive privileged users.
+    Source Action: Change user details / authorizations using SU01.
+    <p>Users are considered as Privileged when one of these conditions apply: </p>
+    <li>If they are named in the SAP - Privileged Users Watchlist
+    <li>If they have a profile which is included in the SAP - Sensitive Profiles watchlist
+    <li>If they have a role which is included in the SAP - Sensitive Roles watchlist
+    This Rule requires a fresh full reload of SAP user master data to be performed daily.
+    *Data Sources: SAPcon -  Audit Log*
+    *Data Sources: SAPcon -  User MD*
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersHeader
+    - SAPUsersGetPrivileged
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- PrivilegeEscalation
+- CredentialAccess
+relevantTechniques: ''
+query: |
+    // Change in a Sensitive Privileged User
+    // time span for audit events
+    let AuditTimeAgo= 75m;
+    // Audit Log Classes - User Master Changes
+    let AuditClasses = dynamic(['AU7', 'BUV', 'BUW', 'AU8', 'AU9', 'AUA', 'AUB', 'AUD', 'DUH', 'BU2']);
+    let UsersEmails = SAPUsersHeader()
+    | project-keep User, SystemID, Client, Email
+    | project-rename ClientID= Client, ChangedEmail=Email, ChangedUser=User;
+    SAPAuditLog
+    | where TimeGenerated > ago(AuditTimeAgo)
+    | where MessageID in (AuditClasses)
+    // The user that we are making change in is a sensitive privileged user
+    | extend ChangedUser = Variable1
+    | join kind= inner (SAPUsersGetPrivileged())
+    on $left.ClientID == $right.Client
+    , $left.SystemID == $right.SystemID
+    , $left.ChangedUser == $right.User
+    | extend MessageText = iff(MessageText endswith_cs ".", substring(MessageText, 0, strlen(MessageText)-1), MessageText)
+    | extend MessageTextDyna = replace_string(MessageText, "User", "Privileged User")
+    | extend MessageTextDyna = replace_string(MessageTextDyna, "user", "Privileged User")
+    | lookup UsersEmails
+    on SystemID, ClientID, ChangedUser
+    | project-keep TimeGenerated, Instance,  SystemID, ClientID, User, MessageText, MessageID, Email,  TerminalIPv6, Host, ChangedUser, ChangedEmail, MessageTextDyna
+    | extend Email= iff(isempty(Email),User, Email), Host= iff(isempty(Host), TerminalIPv6, Host), Dummy= ''
+    | extend ChangedEmail= iff(isempty(ChangedEmail),ChangedUser, ChangedEmail)
+    | extend PackedDetails= pack_all()
+alertDetailsOverride:
+    alertDisplayNameFormat: SAP - High -{{MessageTextDyna}} in system {{SystemID}}
+    alertDescriptionFormat: |
+        Identifies changes of sensitive privileged users.
+        Source Action: Change user details / authorizations using SU01.
+        <p>Users are considered as Privileged when one of these conditions apply: </p>
+        <li>If they are named in the SAP - Privileged Users Watchlist
+        <li>If they have a profile which is included in the SAP - Sensitive Profiles watchlist
+        <li>If they have a role which is included in the SAP - Sensitive Roles watchlist
+        Packed Details - {{PackedDetails}}
+        *Data Sources: SAPcon -  User MD*
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+    SAPChangedUser: ChangedUser
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: ChangedEmail
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19

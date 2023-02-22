@@ -1,0 +1,64 @@
+id: bd39a2f0-2eaa-41e6-a071-70c42e42dd21
+name: SAP - FTP for non authorized servers
+description: |
+    Identifies FTP connection for non authorized server.
+    Maintain new Watchlist, similar to SAPFTP_SERVERS
+    Source Action: Create a new FTP connection e.g. by using Function Module FTP_CONNECT.
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+- InitialAccess
+- CommandAndControl
+relevantTechniques: ''
+query: |
+    // Define variables
+    let AuditClasses = dynamic(['DU8']); // Message of Successfull FTP Connection
+    let FTPSafeConnections = _GetWatchlist("SAP - FTP Servers");
+    let fixedConnections = datatable(Client: string, Description: string,
+    FTP_Server_Name: string, FTP_Server_Port: string)
+        // Maintain these if WatchList is not available
+        [100, "description", "http://ourorgftpserver.com/", 22]
+    ;
+    let UnitedConnections = toscalar(union kind=outer isfuzzy=true FTPSafeConnections, fixedConnections | summarize Connections = make_set(FTP_Server_Name));
+    // Query logic
+    SAPAuditLog
+    | where MessageID in (AuditClasses)
+    | extend TerminalIPv6 = Variable1
+    | where TerminalIPv6 !in (UnitedConnections) // The IP is unknown
+    | project TimeGenerated, Instance ,User, SystemID, ClientID, Email, TerminalIPv6, Host
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.19

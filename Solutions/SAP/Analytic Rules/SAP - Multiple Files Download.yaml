@@ -1,0 +1,57 @@
+id: 4285d707-f969-4a8c-801f-e9c6a328d884
+name: SAP - Multiple Files Download
+description: |
+    Identifies multiple files downloads for a user within a specific timerange.
+
+    Source Action: Download multiple files while using SAPGui to Excel/Lists etc.
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+queryFrequency: 12h
+queryPeriod: 12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Collection
+- Exfiltration
+- CredentialAccess
+relevantTechniques: ''
+query: |
+    // Define variables
+    let NumberOfDownloads = 10; // Number of downloads of user as threshold
+    let HoursBucket = 2h; // How much time between buckets
+    let AuditClasses = dynamic(["AUY"]); // Relevant message
+    // Query logic
+    SAPAuditLog // Get all downloads
+    | where MessageID in (AuditClasses)
+    | summarize DownloadsByUser = count() by bin(TimeGenerated, HoursBucket), SystemID, ClientID, User, TerminalIPv6, Email, Host
+    | where DownloadsByUser >= NumberOfDownloads // User downloaded more than threshold
+    | project SystemID, ClientID, User, Email, TerminalIPv6, Host,DownloadsByUser
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19

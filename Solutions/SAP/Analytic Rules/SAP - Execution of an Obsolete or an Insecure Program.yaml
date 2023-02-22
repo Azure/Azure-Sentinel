@@ -1,0 +1,92 @@
+id: 6a6ff9e7-b167-49a1-bff8-00dadf62b34c
+name: SAP - Execution of an Obsolete or an Insecure Program
+description: |
+    Identifies execution of an obsolete insecure ABAP program.
+    Source Action: Execute a program directly using SE38/SA38/SE80 or by using a background job.
+    **Recommended for Production only**
+    Obsolete programs should be maintained in "SAP - Obsolete Programs" Watchlist
+    *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetVIP
+    - SAPSystems
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+- CommandAndControl
+relevantTechniques: ''
+query: |
+    // Execution of Obsolete/Insecure Program
+    // Define Variables
+    let AuditClasses = dynamic(['AUW']); // Audit Log Classes - Report Started
+    let ObsoletePrograms = _GetWatchlist("SAP - Obsolete Programs");
+    // Maintain if watchlist is not available
+    let fixedObPrograms = datatable(ABAPProgram:string)['RSAU_READ_LOG'];
+    let UnitedPrograms =
+    toscalar(union fixedObPrograms, ObsoletePrograms
+    | summarize Programs = make_set(ABAPProgram));
+    let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    let SelectedSystems = SAPSystems(SelectedSystemRoles=SelectedSystemRoles) | project SystemID= SearchKey;
+    // here you can exclude system users which are OK to run obsolete/ sensitive programs
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'RunObsoleteProgOK'
+    let excludeUsersTags= dynamic(['RunObsoleteProgOK']);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= dynamic(["RunObsoleteProgOK"]))| summarize by User2Exclude=SAPUser;
+    // Query logic
+    SAPAuditLog
+    | where MessageID in (AuditClasses)
+    | where ABAPProgramName in (UnitedPrograms) // The program is obsolete
+    | join kind= inner  SelectedSystems on SystemID
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | project TimeGenerated, Instance,SystemID, ClientID, User, ABAPProgramName, MessageText, TransactionCode, MessageID
+    , Email= iff(isempty(Email),User, Email), TerminalIPv6, Host= iff(isempty(Host), TerminalIPv6, Host)
+    | extend AlertDescription= strcat('Obsolete/ Insecure Program ' , ABAPProgramName, ' was executed by ', User), Dummy=' '
+    | extend PackedDetails= pack_all()
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{AlertDescription}}'
+    alertDescriptionFormat: |
+        Identifies execution of an obsolete/insecure ABAP program.
+        Source Action: Execute a program directly using SE38/SA38/SE80 or by using a background job.
+        **Recommended for Production only**
+        Obsolete programs should be maintained in "SAP - Obsolete Programs" Watchlist
+        *Data Sources: SAPcon -  Audit Log*
+        {{PackedDetails}}
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: Process
+    fieldMappings:
+    -   identifier: ProcessId
+        columnName: TransactionCode
+    -   identifier: CommandLine
+        columnName: ABAPProgramName
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19

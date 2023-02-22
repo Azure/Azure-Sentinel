@@ -1,0 +1,13 @@
+{
+    "properties": {
+        "category": "SAPFunctions",
+        "displayName": "SAPUsersGetPrivileged",
+        "query": "// this function returns privilileged user by default but can also return sensitive users\r\n// let IncludeSensitiveUsers= false;// can also do IncludeSensitive= true which will include users with sensitive profiles\r\n// privileged users are users which are directly named as such \r\nlet PrivelegedUsers = _GetWatchlist('SAP - Privileged Users');\r\nlet FixedUsers = datatable(User: string, Client: string, SystemID: string) [\"DDIC\", \"XXX\",\"001\"];\r\n// privileged users can also be such that carry a privileged role\r\nlet fixedRoles = datatable(Role: string) ['SAP_BC_BASIS_ADMIN', 'SAP_BC_AUTH_PROFILE_ADMIN'];\r\n// privileged users can also be such that carry a privileged profile\r\nlet fixedProfiles = datatable(Profile: string) [\"SAP_ALL\", \"SAP_NEW\"];\r\nlet AuditTimeAgo = totimespan(toscalar(SAPGetParameters('UserMDLookBack')| project-keep ValueLow));\r\nlet availableSystems= SAPAuditLog\r\n| where TimeGenerated > ago(AuditTimeAgo)\r\n| summarize by SystemID, Client= ClientID\r\n| extend dummy ='';\r\n// get the user assignments to roles and profiles\r\nlet UserAssignments= materialize(SAPUsersAssignments() | project User, ChildRoles, DirectRoles, Profiles, Client, SystemID);\r\n// privileged users\r\nlet PrivUsersByMD = UserAssignments\r\n| mv-expand ChildRoles, DirectRoles, Profiles\r\n| where DirectRoles in (fixedRoles) or ChildRoles in (fixedRoles) or Profiles in (fixedProfiles)\r\n| summarize by User, Client, SystemID\r\n| extend IsPrivileged= true;\r\n\r\n// cross join watchlist users with available systems and clients\r\nlet FixedUPriv = ((PrivelegedUsers\r\n    | union isfuzzy=true  FixedUsers \r\n    | summarize by User\r\n    | extend dummy = '') \r\n    | join kind= fullouter availableSystems\r\n        on $left.dummy == $right.dummy)\r\n    | extend IsPrivileged= true;\r\n\r\nFixedUPriv\r\n| union isfuzzy=true PrivUsersByMD, FixedUsers\r\n| where Client != \"XXX\"\r\n| summarize by User, Client, SystemID",
+        "functionAlias": "SAPUsersGetPrivileged",
+        "version": 2,
+        "etag": "*"
+    },
+    "name": "SAPUsersGetPrivileged",
+    "type": "savedSearches",
+    "apiVersion": "2022-10-01"
+}

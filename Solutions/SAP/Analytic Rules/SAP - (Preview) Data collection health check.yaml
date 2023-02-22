@@ -1,0 +1,79 @@
+id: 2af909e9-9c84-4198-b8c7-e80fe9f00ffb
+name: SAP - (Preview) Data collection health check
+description: 'Produces insights on potential SAP agent connectivity issues.'
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPConnectorHealth
+    - SAPConnectorOverview
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Impact
+relevantTechniques: ''
+query: |
+    // ***IMPORTANT***- Lookback period is maintained in the KQL
+    // please keep the Query scheduling parameter of "Lookup data from the last" to be 14 days so
+    // the algorithm can detect anomalies across history
+    let RedAgo = 2d;
+    let YellowAgo = 1d;
+    let GreenAgo= 1h;
+    let LogLookBack= 14d;
+    let StepSize= 1d;
+    // 0.1 is very sensitive and is required for low activity workspaces with under 1M events a day.
+    // 0.5 can work better for high scale WSs (between 1M and 10M records a day). 1 can be used for WSs with over 10m records a day
+    let Threshold= 0.1;
+    let SystemLevelIssues= SAPConnectorHealth()
+        | summarize arg_max(LastSeen, *) by SystemID // last status per SystemID
+        | where SystemID !in (dynamic(["N/A", "AGE", "Agent Version Check"])) // agents checks are not interesting
+        | where MessageCode != "OKOK" // only show problems
+        | where Status == "Yellow" or Status == "Red"
+        | extend Severity= case(Status == "Yellow", "Medium", Status == "Red", "High", "Unknown")
+        | extend Log= 'Entire system'
+        | extend Details= replace_string(Details, "System", strcat("SAP System ", SystemID));
+    let LogContinuationTS= union SAPConnectorOverview()
+        | where TimeGenerated > ago(LogLookBack)
+        | project Type, TimeGenerated, SystemID= SystemID_s
+        | make-series RecordCount= count(), LastSeen= max(TimeGenerated) on TimeGenerated from ago(LogLookBack) to now() step StepSize by Log= Type, SystemID;
+    let LogContinuationAnomal= LogContinuationTS
+        | extend (RecordCountAnomalies, score, baseline) = series_decompose_anomalies(RecordCount, Threshold= Threshold, Test_points= 1)
+        | where array_index_of(RecordCountAnomalies, -1, -1) > 0 // some log is missing in the last bucket
+        | extend Severity= iff(RecordCount[-1] == 0, "Low", "Informational") // determine severity according to certainty
+        | extend Details= strcat('SAP- Potential log loss for log ', Log, ' from System ', SystemID)
+        | extend LastSeen= todatetime(LastSeen[-1])
+        | extend ExtendedDetails= strcat('Log ', Log, ' from System ', SystemID, ' has produced ', RecordCount[-1], ' recods since ', format_datetime(todatetime(TimeGenerated[-1]), 'yy-MM-dd [hh:mm:ss tt]'), '. Expected number of records is ', round(toint(baseline[-1]), 0));
+    (LogContinuationAnomal
+    | join kind=leftantisemi (SystemLevelIssues
+        | where Status == "Red"
+        | summarize by SystemID)
+        on SystemID) // System-wide issues should overtake log level issues
+    | union SystemLevelIssues
+    | where Severity != "Informational" // optionally can have these cases produce alerts by deleting this filter
+    | project Log, SystemID, LastSeen, Severity, Details, ExtendedDetails
+        , Agent, MessageCode, AgentVersion
+    | extend Dummy= ''
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{Details}}'
+    alertDescriptionFormat: |
+        <img src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SAP/Workbooks/SAPVMIcon.svg" width="30"/>
+          </br>
+        {{ExtendedDetails}}.
+        </br>
+        For more troubleshooting guidance, visit the  [Troubleshooting your Microsoft Sentinel Solution for SAP deployment](https://learn.microsoft.com/azure/sentinel/sap/sap-deploy-troubleshoot) guide.
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Severity
+customDetails:
+    Log: Log
+    MessageCode: MessageCode
+entityMappings:
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.52

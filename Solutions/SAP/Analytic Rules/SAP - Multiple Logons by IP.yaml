@@ -1,0 +1,86 @@
+id: e5a176ef-dd12-47a3-a5ef-1900997f1b17
+name: SAP - Multiple Logons by IP
+description: |
+    Identifies logon of several users from same IP within scheduled time interval.
+
+    Source Action: Logon using several users thorugh the same IP.
+    Networks can be excluded from this alert by specifying ranges in the 'SAP - Excluded Networks' watchlist.
+    This rule alerts on "empty" IP addresses as well- Add an entry with serachkey= 000.00.000.0 and Description= EmptyIPAddressesShouldBeExcluded in the 'SAP - Excluded Networks' watchlist to avoid alerting on empty IP addresses
+    *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- InitialAccess
+relevantTechniques: ''
+query: |
+    // SAP - Medium - Multiple Logons by IP
+    // Define variables
+    let AuditClasses = dynamic(['AU1', 'AU5']); // Audit Log Classes - Dialog Logon Successful, RFC Logon Successful
+    let DialogLogonTypes = dynamic(['A', 'C', 'F', 'R', 'S', 'U', 'H', 'u', ' ']); // Dialog / CPIC / RFC Int / RFC Ext / SRFC / User Switch / HTTP / Restore Session / API Call
+    let excNetworks = materialize(_GetWatchlist('SAP - Excluded Networks')); // Networks that should be removed from query
+    // add an entry with serachkey= 000.00.000.0 and Description= EmptyIPAddressesShouldBeExcluded in the 'SAP - Excluded Networks' watchlist
+    // to avoid alerting on empty IP addresses
+    let EmptyIPAddressesShouldBeExcluded = toscalar(excNetworks
+    | where Description == 'EmptyIPAddressesShouldBeExcluded'
+    | summarize Count =count()
+    | project IfEmptyIPAddressesShouldBeExcluded = iff(Count> 0, true, false));
+    let fixedNetworks =
+    datatable(Network:string)
+    // Maintain these if WatchList is not available
+        ["255.68.255.0/32", ""];
+    let UnitedNetworks = union excNetworks, fixedNetworks
+    | summarize by Network
+    | where isnotempty(Network)
+    | extend DummyJoinField= 1;
+    let UsersPerIP = 1;
+    // Query logic
+    SAPAuditLog
+    // rule only cares for audit records with IP addresses
+    | where isnotempty(TerminalIPv6) or  EmptyIPAddressesShouldBeExcluded== false
+    | where MessageID in (AuditClasses)
+    | where Variable1 in (DialogLogonTypes)
+    | extend DummyJoinField= 1
+    | join kind= inner UnitedNetworks on DummyJoinField
+    // check if IP is in one of the ranges of the watchlist
+    | extend IPIsInRange= ipv4_is_in_range(TerminalIPv6, Network )
+    | extend UserandEmail = pack("ID", User, "Email", Email)
+    // count cases in which an IP address shows in any of the ranges in the watchlist
+    | summarize CountUsers = dcount(strcat(User, "_&_", Email)), Users = make_set(UserandEmail), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
+    , IPIsInRange= countif(IPIsInRange)
+        by SystemID, ClientID, TerminalIPv6
+    // filter out matches of IPs and excluded networks
+    | where IPIsInRange == 0
+    | where CountUsers > UsersPerIP
+    | mv-expand Users
+    | evaluate bag_unpack(Users, "User_")
+    | project SystemID , ClientID, TerminalIPv6, StartTime, EndTime,
+        User = column_ifexists("User_ID", ""),
+        Email = column_ifexists("User_Email", "")
+    | extend Email= iff(isempty(Email), User, Email)
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19

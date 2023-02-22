@@ -1,0 +1,82 @@
+id: 797db008-0a53-4510-9883-b32673f9c3f5
+name: SAP - Execution of a Sensitive Transaction Code
+description: |
+    Identifies execution of a sensitive Transaction Code.
+
+    Source Action: Execute a sensitive Transaction Code.
+
+    **Recommended for Production only**
+
+    Transaction Codes should be maintained in watchlist ""SAP - Sensitive Transaction Codes""
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetVIP
+    - SAPSystems
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+- Execution
+relevantTechniques: ''
+query: |
+    // SAP - Execution of a Sensitive Transaction Code
+    // Define Variables
+    // the actual lookback period is 1h. The alert looks back further to allow for user master data to be built slowly
+    let TimeAgo= 1h;
+    let AuditClasses = dynamic(['AU3']); // Audit Log Classes - Transaction Started
+    let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey;
+    // Get Relevant Transaction Codes
+    let SensitiveTcode = _GetWatchlist('SAP - Sensitive Transactions') | summarize by TransactionCode;
+    // here you can exclude system users which are OK to execute a Sensitive Transaction Code
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'ExecuteSensitiveOK'
+    // can also specify SAP Roles or Profiles to exclude
+    let excludeUsersTags= dynamic(['ExecuteSensitiveOK','SAP_ALL']);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    // Query logic
+    SAPAuditLog
+    | where ingestion_time() > ago(TimeAgo)
+    | where MessageID in (AuditClasses)
+    | where SystemID in (SelectedSystems)
+    | where TransactionCode in (SensitiveTcode)
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | project-rename SystemIDTemp = SystemID
+    | project-rename SystemID= SystemIDTemp
+    | project-rename SystemID= SystemID
+    | order by TimeGenerated asc
+    | project TimeGenerated,Instance ,SystemID, ClientID, User, TransactionCode, MessageText, MessageID, Email, TerminalIPv6, Host
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+    TransactionCode: TransactionCode
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.31

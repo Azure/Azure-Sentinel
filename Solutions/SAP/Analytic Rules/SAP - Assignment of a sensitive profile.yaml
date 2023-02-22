@@ -1,0 +1,117 @@
+id: 4e228f1a-55cc-4abc-8ef4-5e385b60f9c0
+name: SAP - Assignment of a sensitive profile
+description: |
+    Identifies new assignments of a sensitive profile to a user.
+
+    Source Action: Assign a profile to a User using SU01.
+
+    Sensitive profiles can be maintained using the "SAP - Sensitive Profiles" watchlist
+
+    *Data Sources: SAPcon -  Change Documents Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetVIP
+queryFrequency: 12h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- PrivilegeEscalation
+relevantTechniques: ''
+query: |
+    // Define Variables
+    // Audit Log Classes - Authorizations for user changed
+    // the actual lookback period is 1h. The alert looks back further to allow for user master data to be built slowly
+    let TimeAgo= 12h;
+    let Identity = 'IDENTITY';
+    let ProfileChangeDoc = 'SUSR_UST04';
+    let Insert = "I";
+    let logsThreshold = 3600; // 3600 seconds
+    let AuditClasses = dynamic(['AUB']); // Authorizations for user &A changed.
+    // Maintain these if WatchList is not available
+    let SensitiveProfiles =  _GetWatchlist('SAP - Sensitive Profiles');
+    let fixedProfile = datatable(Profile:string)['SAP_ALL','SAP_NEW'];// Maintain these if System doesn't have CR's
+    // here you can exclude system users which are OK to assign a Sensitive profile
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'AssignSensitiveProfileOK'
+    // can also specify SAP Roles or Profiles to exclude
+    let excludeUsersTags= dynamic(['AssignSensitiveProfileOK']);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    let fixedChangeDocs = datatable(User : string, ObjectClass : string, TableName : string, TypeofChange_Item : string , ChangedTableKey : string, ObjectID : string, TimeGenerated : datetime, ValueNew : string, SystemID : string, Instance: string, ClientID: string, UpdatedOn_t: datetime)[];
+    let ChangeDocs =
+    (union isfuzzy=true table("SAPChangeDocsLog"), fixedChangeDocs)
+    | where ingestion_time() > ago(TimeAgo)
+    | project-rename ChangedOn= UpdatedOn_t;
+    let IdentityChangeDocuments =
+    // Identity Change documents which represents profiles assignment
+        ChangeDocs
+        | where ObjectClass == Identity // Identity
+        and TableName == ProfileChangeDoc // Profile Change Doc
+        and TypeofChange_Item == Insert // Insert
+        | extend Profile = ChangedTableKey
+        | extend UserAssigned = ObjectID;
+    let UnitedProfiles =
+    toscalar(union fixedProfile, SensitiveProfiles
+    | summarize Profiles = make_list(Profile));
+    // Query logic
+    SAPAuditLog
+    | where ingestion_time() > ago(TimeAgo)
+    | where MessageID in (AuditClasses)
+    | project-rename AuditedOn= UpdatedOn_t
+    | summarize by AuditedOn, TerminalIPv6, User, Host, Email
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | lookup kind = leftouter (IdentityChangeDocuments) on User
+    | where Profile in (UnitedProfiles)
+    | where abs(datetime_diff('second',ChangedOn,AuditedOn)) <= logsThreshold
+    or isnull(AuditedOn)
+    | project
+    // Details
+    ChangedOn, Instance , SystemID, ClientID, Profile, User,  UserAssigned,
+    Email, TerminalIPv6, Host, AuditedOn
+    | extend Dummy= '',  PackedDetails= pack_all()
+alertDetailsOverride:
+    alertDisplayNameFormat: SAP - Sensitive profile {{Profile}} has been assigned
+        by user {{User}} to user {{UserAssigned}}
+    alertDescriptionFormat: |+
+        Sensitive profiles are maintained in watchlist 'SAP - Sensitive Profiles' in System {{SystemID}}.
+        {PackedDetails}
+        Identifies new assignments of a sensitive profile to a user.
+
+        Source Action: Assign a profile to a User using SU01.
+
+        Sensitive profiles can be maintained using the "SAP - Sensitive Profiles" watchlist
+
+
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+    SAP_Profile: Profile
+    UserAssigned: UserAssigned
+    PackedDetails: PackedDetails
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.31

@@ -1,0 +1,65 @@
+id: db123b5e-bcc2-43a5-9e13-8ac1e1a3c530
+name: SAP - Dialog logon attempt from a privileged user
+description: |
+    Identifies dialog logon (Type AUM) attempts by priviledged users (See Function SAPUsersGetPrivileged) on SAP system .
+    Source Action: Attempt to login from the same IP to several systems/clients within the scheduled time interval.
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetPrivileged
+queryFrequency: 6h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+relevantTechniques: ''
+query: |
+    // SAP - High- Dialog logon attempt from a privileged user
+    // time span for audit events
+    let AuditTimeAgo= 6h;
+    // Define variables
+    let AuditClasses = dynamic(['AUM']);//Dialog only
+    let perIPLimit = 1;
+    // Query logic
+    SAPAuditLog
+    | where TimeGenerated > ago(AuditTimeAgo)
+    | where MessageID in (AuditClasses)
+    | extend DetailsBy = pack("User", User, "Email", Email, "SystemID", SystemID, "ClientID", ClientID)
+    | summarize LoginbyIPAttempts = count(), Details = make_set(DetailsBy), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
+        by TerminalIPv6
+    // Check if number of login attempts per IP is higher than limit
+    | where LoginbyIPAttempts > perIPLimit
+    | mv-expand Details
+    | evaluate bag_unpack(Details, "Details_")
+    | project
+        StartTime, EndTime,  TerminalIPv6,
+        Email = column_ifexists("Details_Email", ""), User = column_ifexists("Details_User", ""),
+        SysetmID = column_ifexists("Details_SystemID", ""),
+       ClientID = column_ifexists("Details_ClientID", "")
+    | join kind= inner (SAPUsersGetPrivileged | project User ) on $left.User == $right.User
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SysetmID
+    -   identifier: AppId
+        columnName: ClientID
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.29

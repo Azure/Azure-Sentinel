@@ -1,0 +1,73 @@
+id: 4258c51d-59db-4502-9b02-fb2ab20e97d4
+name: SAP - Client Configuration Change
+description: |
+    Identifies changes for client configuration such as: Client role, Changes recording mode.
+
+    Source Action:  Perofrm client configurations changes using SCC4 transaction code.
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPSystems
+queryFrequency: 5h
+queryPeriod: 5h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+- Exfiltration
+- Persistence
+relevantTechniques: ''
+query: |
+    // Audit Log Classes - Client Change Configuration
+    let AuditClasses = dynamic(['EU2']); // Relevent message
+    let SelectedSystemRoles=dynamic(["Production", "UAT"]);
+    let SelectedSystems= SAPSystems(SelectedSystemRoles=SelectedSystemRoles) | summarize by SystemRole, SystemID= SearchKey;
+    SAPAuditLog
+    | where MessageID in (AuditClasses)
+    | join kind=inner SelectedSystems on SystemID
+    | project-rename ClientIDTemp = ClientID
+    | project-rename ClientID= Variable1
+    | parse Variable2 with Currency "|" ClientRole "|" RecordingChanges "|" CrossClientObjectChanges "|" ClientCopyProtectionLevel "|" ProtectionSAPUpgrade "|" CATTeCATT "|"  LockedforCopy // Parse every object before the | char
+    | project TimeGenerated, Instance, SystemID, SystemRole, User, ClientID,
+    Currency,ClientRole,RecordingChanges,CrossClientObjectChanges,ClientCopyProtectionLevel,CATTeCATT,LockedforCopy,ProtectionSAPUpgrade,
+    MessageText, Email, TerminalIPv6, Host
+    | extend Severity= iff(SystemRole=="Production","High","Medium"), Dummy= ""
+alertDetailsOverride:
+    alertDisplayNameFormat: SAP - Client Configuration Change for a {{SystemRole}}
+        System
+    alertDescriptionFormat: 'System {SystemID} configuration has changed by user {{User}}
+
+        '
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Severity
+customDetails:
+    SystemRole: SystemRole
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.31

@@ -1,0 +1,114 @@
+id: 03b9a2cf-8434-44ad-b42f-9a35701f1c2a
+name: SAP - Assignment of a sensitive role
+description: |
+    Identifies new assignments for a sensitive role to a user.
+
+    Source Action: Assign a role to a User using SU01 / PFCG.
+
+    Sensitive roles should be maintained in watchlist "SAP -  Sensitive Roles"
+
+    *Data Sources: SAPcon -  Change Documents Log, Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersEmail
+queryFrequency: 12h
+queryPeriod: 12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- PrivilegeEscalation
+relevantTechniques: ''
+query: |
+    // Assignment of a sensitive role
+    // Define Variables
+    let Roles = 'PFCG';
+    let UsersRoles = 'AGR_USERS';
+    let Insert = "I";
+    let logsThreshold = 3600; // 3600 seconds
+    // Audit Log Classes - Authorizations for user changed
+    let AuditClasses = dynamic(['AUB', 'AUD']); // Authorizations for user &A changed.
+    // Maintain these if WatchList is not available
+    let SensitiveRoles =  _GetWatchlist('SAP - Sensitive Roles');
+    let fixedRoles = datatable(Role: string)['SAP_BC_BASIS_ADMIN', 'SAP_BC_AUTH_PROFILE_ADMIN'];
+    // here you can exclude system users which are OK to assign sensitive roles
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'SensitiveRoleOK'
+    let excludeUsersTags= dynamic(['SensitiveRoleOK']);
+    let excludedUsers= _GetWatchlist('SAP_User_Config')| where Tags has_any (excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    let UnitedRoles =
+    toscalar(union fixedRoles, SensitiveRoles
+    | summarize Roles = make_list(Role));
+    let ChangeCheck =
+    SAPChangeDocsLog
+    | where ObjectClass == Roles // Roles
+        and TableName == UsersRoles // Users Roles
+        and TypeofChange_Item == Insert // Insert
+    | extend UserAssigned = trim_end(@"[^\w]+" ,extract(@"^.{1,33}\s*?(.{1,12})\s*?\d{16}", 1, ChangedTableKey))
+    | extend Role = ObjectID
+    | where Role in (UnitedRoles);
+    // Query logic
+    SAPAuditLog
+    | where MessageID in (AuditClasses)
+    | summarize by TimeGenerated, TerminalIPv6, User, Host, Email, ClientID, SystemID
+    | extend User= trim_end(@"[^\w]+" , User)
+    | lookup kind = inner (ChangeCheck) on User, ClientID, SystemID
+    | where Role in (UnitedRoles)
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | project-rename TimeGenAudit = TimeGenerated1
+    | where abs(datetime_diff('second', TimeGenerated, TimeGenAudit)) <= logsThreshold
+    or isnull(TimeGenAudit)
+    | extend AlertDescription= iff(User == UserAssigned,strcat('User ', User, ' has self-assigned a sensitive role '),strcat('User ', User, ' has Assigned a sensitive role to User ', UserAssigned))
+    | extend Severity= iff(User == UserAssigned, "High", "Medium")
+    | extend PackedDetails= pack_all(), Dummy=' '
+    | lookup (SAPUsersEmail | project SystemID, ClientID, UserAssigned= User, UserAssignedEmail= Email) on UserAssigned, SystemID, ClientID
+    | extend Tactics= "Privilege Escalation"
+    | project
+        // Details
+        TimeGenerated, Instance , SystemID, ClientID, Role, User, UserAssigned,
+        Email, TerminalIPv6, Host, AlertDescription, Severity, PackedDetails, UserAssignedEmail, Tactics
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{AlertDescription}}'
+    alertDescriptionFormat: |
+        Identifies new assignments for a sensitive role to a user.
+
+        Source Action: Assign a role to a User using SU01 / PFCG.
+
+        Sensitive roles should be maintained in watchlist "SAP -  Sensitive Roles"
+
+        *Data Sources: SAPcon -  Change Documents Log, Audit Log*
+        {{PackedDetails}}
+    alertTacticsColumnName: Tactics
+    alertSeverityColumnName: Severity
+customDetails:
+    SAP_User: User
+    UserAssigned: UserAssigned
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: HostName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: UserAssignedEmail
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19
