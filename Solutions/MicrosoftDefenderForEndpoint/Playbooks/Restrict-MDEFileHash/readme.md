@@ -47,12 +47,15 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 ```
 
 ## Screenshots
-**Incident Trigger**
+**Incident Trigger:**  
+
 ![Incident Trigger](./Restrict-MDEFileHash-incident-trigger/images/designerLight.png)
 
-**Alert Trigger**
+**Alert Trigger:**  
+
 ![Alert Trigger](./Restrict-MDEFileHash-alert-trigger/images/Restrict-MDEFileHash_alert.png)
 
-**Entity Trigger**
+**Entity Trigger:**  
+
 ![Entity Trigger Light](./Restrict-MDEFileHash-entity-trigger/images/Restrict-MDEFileHash-entityTrigger-light.png)
 ![Entity Trigger Dark](./Restrict-MDEFileHash-entity-trigger/images/Restrict-MDEFileHash-entityTrigger-dark.png)

@@ -53,12 +53,15 @@ New-AzRoleAssignment -ObjectId $MIGuid -RoleDefinitionName $RoleName -Scope /sub
 ```
 
 ## Screenshots
-**Incident Trigger**
+**Incident Trigger:**  
+
 ![Incident Trigger](./Restrict-MDEIPAddress-incident-trigger/images/designerLight.png)
 
-**Alert Trigger**
+**Alert Trigger:**  
+
 ![Alert Trigger](./Restrict-MDEIPAddress-alert-trigger/images/Restrict-MDEIpAddress_alert.png)
 
-**Entity Trigger**
+**Entity Trigger:**  
+
 ![Entity Trigger Light](./Restrict-MDEIPAddress-entity-trigger/images/Restrict-MDEIPAddress-entityTrigger-light.png)
 ![Entity Trigger](./Restrict-MDEIPAddress-entity-trigger/images/Restrict-MDEIPAddress-entityTrigger-dark.png)
