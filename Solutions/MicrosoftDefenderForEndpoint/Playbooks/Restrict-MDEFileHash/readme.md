@@ -24,7 +24,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 **Deploy with entity trigger**
 
-After deployment, you can run this playbook manually on any incident with a File Hash entity. This will also let you restrict specific file hashes, rather than restricting all file hashes in an incident, as the other triggers will doß.
+After deployment, you can run this playbook manually on any incident with a File Hash entity. This will also let you restrict specific file hashes, rather than restricting all file hashes in an incident.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-entity-trigger%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-entity-trigger%2Fazuredeploy.json)
@@ -48,10 +48,11 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 
 ## Screenshots
 **Incident Trigger**
-![Incident Trigger](./Restrict-MDEFileHash/Restrict-MDEFileHash-incident-trigger/images/designerLight.png)
+![Incident Trigger](./Restrict-MDEFileHash-incident-trigger/images/designerLight.png)
 
 **Alert Trigger**
-![Alert Trigger](./Restrict-MDEFileHash/Restrict-MDEFileHash-alert-trigger/images/Restrict-MDEFileHash_alert.png)
+![Alert Trigger](./Restrict-MDEFileHash-alert-trigger/images/Restrict-MDEFileHash_alert.png)
 
 **Entity Trigger**
-![Entity Trigger](./Restrict-MDEFileHash-entity-trigger/images/Restrict-MDEFileHash-entity-trigger-app.png)
+![Entity Trigger Light](./Restrict-MDEFileHash-entity-trigger/images/Restrict-MDEFileHash-entityTrigger-light.png)
+![Entity Trigger Dark](./Restrict-MDEFileHash-entity-trigger/images/Restrict-MDEFileHash-entityTrigger-dark.png)

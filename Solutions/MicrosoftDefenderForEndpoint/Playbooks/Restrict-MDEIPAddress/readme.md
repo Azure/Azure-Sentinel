@@ -16,7 +16,7 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 **Deploy with alert trigger**
 
-After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
+After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will run when an alert is created.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEIPAddress%2FRestrict-MDEIPAddress-alert-trigger%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEIPAddress%2FRestrict-MDEIPAddress-alert-trigger%2Fazuredeploy.json)
@@ -54,10 +54,11 @@ New-AzRoleAssignment -ObjectId $MIGuid -RoleDefinitionName $RoleName -Scope /sub
 
 ## Screenshots
 **Incident Trigger**
-![Incident Trigger](./Restrict-MDEIPAddress/Restrict-MDEIPAddress-incident-trigger/images/designerLight.png)
+![Incident Trigger](./Restrict-MDEIPAddress-incident-trigger/images/designerLight.png)
 
 **Alert Trigger**
-![Alert Trigger](./Restrict-MDEIPAddress/Restrict-MDEIPAddress-alert-trigger/images/Restrict-MDEIpAddress_alert.png)
+![Alert Trigger](./Restrict-MDEIPAddress-alert-trigger/images/Restrict-MDEIpAddress_alert.png)
 
 **Entity Trigger**
-![Entity Trigger](./Restrict-MDEIPAddress-entity-trigger/images/Restrict-MDEIPAddress-entityTrigger.png)
+![Entity Trigger Light](./Restrict-MDEIPAddress-entity-trigger/images/Restrict-MDEIPAddress-entityTrigger-light.png)
+![Entity Trigger](./Restrict-MDEIPAddress-entity-trigger/images/Restrict-MDEIPAddress-entityTrigger-dark.png)
