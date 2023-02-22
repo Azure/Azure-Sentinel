@@ -24,7 +24,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Restrict-MDEIpAddress-entityTrigger",
+            "defaultValue": "Restrict-MDEIP-entityTrigger",
             "type": "string"
         }
     },
@@ -46,7 +46,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_entity": {
+                        "Microsoft_Sentinel_entity_(IP)": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -62,28 +62,46 @@
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V3)": {
+                        "Condition": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<p>An AlertAndBlock request has been sent to the security centre API for the IP address@{triggerBody()?['Entity']?['properties']?['Address']} . Note that the expiration time for this request is 90 days.<br>\nHTTP Response of AlertAndBlock request: @{outputs('HTTP_-_Alert_And_Block_IP')['statusCode']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
                             "runAfter": {
-                                "HTTP": [
+                                "HTTP_-_Alert_And_Block_IP": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": {
-                                    "incidentArmId": "@triggerBody()?['IncidentArmID']",
-                                    "message": "<p>An AlertAndBlock request has been sent to the security centre API for the IP address@{triggerBody()?['Entity']?['properties']?['Address']} . Note that the expiration time for this request is 90 days.<br>\nHTTP Response of AlertAndBlock request: @{outputs('HTTP')['statusCode']}</p>"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['IncidentArmID']",
+                                                "@null"
+                                            ]
+                                        }
                                     }
-                                },
-                                "method": "post",
-                                "path": "/Incidents/Comment"
-                            }
+                                ]
+                            },
+                            "type": "If"
                         },
-                        "HTTP": {
+                        "HTTP_-_Alert_And_Block_IP": {
                             "runAfter": {},
                             "type": "Http",
                             "inputs": {
@@ -94,7 +112,7 @@
                                 "body": {
                                     "action": "AlertAndBlock",
                                     "application": "Microsoft Sentinel",
-                                    "description": "IP blocked by Block-IP-MDE-entityTrigger Logic app from an entity in Sentinel Incident (ARM ID): @{triggerBody()?['IncidentArmID']}. Properties: @{triggerBody()?['Entity']?['properties']}",
+                                    "description": "IP blocked by Restrict-MDEIP-entityTrigger Logic app from an entity in Sentinel Incident (ARM ID): @{triggerBody()?['IncidentArmID']}. Properties: @{triggerBody()?['Entity']?['properties']}",
                                     "expirationTime": "@{addDays(utcNow(), 90)}",
                                     "indicatorType": "IpAddress",
                                     "indicatorValue": "@{triggerBody()?['Entity']?['properties']?['Address']}",
@@ -130,12 +148,12 @@
             "name": "[parameters('PlaybookName')]",
             "type": "Microsoft.Logic/workflows",
             "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Restrict-MDEIP-entityTrigger",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
             "identity": {
                 "type": "SystemAssigned"
-            },
-            "tags": {
-                "hidden-SentinelTemplateName": "Block-IP-MDE-entityTrigger",
-                "hidden-SentinelTemplateVersion": "1.0"
             },
             "apiVersion": "2017-07-01",
             "dependsOn": [
