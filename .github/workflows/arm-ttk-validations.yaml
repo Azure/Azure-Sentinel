@@ -9,11 +9,6 @@ jobs:
       solutionName: ${{ steps.step1.outputs.solutionName }}
       mainTemplateChanged: ${{ steps.step1.outputs.mainTemplateChanged }}
       createUiChanged: ${{ steps.step1.outputs.createUiChanged }}
-      hasPlaybooksChanged: ${{ steps.step1.outputs.hasPlaybooksChanged }}
-      playbookFilesList: ${{ steps.step1.outputs.playbookFilesList}}
-      dataConnectorFileName: ${{ steps.step1.outputs.dataConnectorFileName }}
-      isDataConnectorFolderNameWithSpace: ${{ steps.step1.outputs.isDataConnectorFolderNameWithSpace}}
-      hasDataConnectorFileChanged: ${{ steps.step1.outputs.hasDataConnectorFileChanged}}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -25,128 +20,56 @@ jobs:
           $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
           Write-Host "List of files in PR: $diff"
           
-          $hasmainTemplateOrCreateUiDefinitionTemplateChanged = $false
-          $hasPlaybooksChanged = $false
-          $hasDataConnectorFileChanged = $false
-          $isDataConnectorFolderNameWithSpace = $false
-          $playbookFilesList = @()
-          $dataConnectorFileNames = @()
+          $hasmainTemplateChanged = $false
+          $hasCreateUiDefinitionTemplateChanged = $false
 
           $SourceDiff = $diff | ForEach-Object {
             $currentFile = Get-ChildItem -Path $_ -File
-            $currentFileStr = $currentFile.ToString()
-            $mainTemplateChanged = $currentFileStr.ToLower().Contains("maintemplate.json")
-            $createUiDefinitionTemplateChanged = $currentFileStr.ToLower().Contains("createuidefinition.json")
 
-            if ($mainTemplateChanged -eq $true)
+            if ($null -ne $currentFile)
             {
-              $hasmainTemplateChanged = $true
-            }
+              $currentFileStr = $currentFile.ToString()
+              $mainTemplateChanged = $currentFileStr.ToLower().Contains("maintemplate.json")
+              $createUiDefinitionTemplateChanged = $currentFileStr.ToLower().Contains("createuidefinition.json")
 
-            if ($createUiDefinitionTemplateChanged -eq $true)
-            {
-              $hasCreateUiDefinitionTemplateChanged = $true
-            }
-
-            $fileValue = (($currentFile.DirectoryName).Split("\")[-1])
-            $playbooksFolderIndex = $fileValue.IndexOf("Playbooks/")
-            $playbooksWithSingleFileFolderIndex = $fileValue.IndexOf("Playbooks")
-            if ($playbooksFolderIndex -gt 0 -or $playbooksWithSingleFileFolderIndex -gt 0)
-            {
-              if ($currentFileStr.Contains(".json"))
+              if ($mainTemplateChanged -eq $true)
               {
-                $hasPlaybooksChanged = $true
-                $playbookFilesList += $currentFileStr + ","
+                $hasmainTemplateChanged = $true
               }
-            }
 
-            $dataConnectorFolderWithSpaceIndex = $fileValue.IndexOf("Data Connectors")
-            $dataConnectorFolderWithoutSpaceIndex = $fileValue.IndexOf("DataConnectors")
-            
-            if ($dataConnectorFolderWithSpaceIndex -gt 0 -or $dataConnectorFolderWithoutSpaceIndex -gt 0)
-            {
-              # CHANGES ARE MADE IN DATA CONNECTOR FILE
-              if ($currentFileStr.Contains("azuredeploy"))
+              if ($createUiDefinitionTemplateChanged -eq $true)
               {
-                $dataConnectorFileNames += $currentFileStr
-                if ($dataConnectorFolderWithSpaceIndex -gt 0)
-                {
-                  $isDataConnectorFolderNameWithSpace = $true
-                }
-                $hasDataConnectorFileChanged = $true
+                $hasCreateUiDefinitionTemplateChanged = $true
               }
-            }
-            
-            $solutionIndex = $fileValue.IndexOf("Solutions/")
-            if ($solutionIndex -gt -1 -and $null -ne $solutionIndex  -and $solutionName -ne '')
-            {
-              $solutionNameWithOtherPath = $fileValue.SubString($solutionIndex + 10)
-              if ($solutionNameWithOtherPath -ne '' -and $solutionNameWithOtherPath -ne $null)
+
+              $solutionIndex = $fileValue.IndexOf("Solutions/")
+              if ($solutionIndex -gt -1 -and $null -ne $solutionIndex  -and $solutionName -ne '')
               {
-                $headers = $solutionNameWithOtherPath -split '/', 3
-                if ($null -ne $headers[0])
+                $solutionNameWithOtherPath = $fileValue.SubString($solutionIndex + 10)
+                if ($solutionNameWithOtherPath -ne '' -and $solutionNameWithOtherPath -ne $null)
                 {
-                  $sName = $headers[0]
+                  $headers = $solutionNameWithOtherPath -split '/', 3
+                  if ($null -ne $headers[0])
+                  {
+                    $sName = $headers[0]
+                  }
                 }
               }
-            }
-          }
-
-          if ($hasPlaybooksChanged -eq $true)
-          {
-            $playbooksBasePath = "/home/runner/work/Azure-Sentinel/Azure-Sentinel/Solutions/$sName/Playbooks/"
-            $filteredPlaybookFiles = $playbookFilesList.Split(",")
-            $finalizedPlaybookFiles = @()
-            foreach($playbookFile in $filteredPlaybookFiles)
-            {
-              if ($playbookFile.Contains(".json"))
-              {
-                $fileName = $playbookFile.Replace($playbooksBasePath, '')
-                $finalizedPlaybookFiles += $fileName
-              }
-            }
-          }
-
-          if ($hasDataConnectorFileChanged -eq $true)
-          {
-            if ($isDataConnectorFolderNameWithSpace -eq $true)
-            {
-              $dataConnectorBasePath = "/home/runner/work/Azure-Sentinel/Azure-Sentinel/Solutions/$sName/Data Connectors/"
-            }
-            else
-            {
-              $dataConnectorBasePath = "/home/runner/work/Azure-Sentinel/Azure-Sentinel/Solutions/$sName/DataConnectors/"
-            }
-            
-            $finalizedDataConnectorFilesList = @()
-            foreach($dataConnectorFileItem in $dataConnectorFileNames)
-            {
-              $finalizedDataConnectorFilesList += $dataConnectorFileItem.Replace($dataConnectorBasePath, '')
             }
           }
 
           Write-Output "::set-output name=solutionName::$sName"
           Write-Output "::set-output name=mainTemplateChanged::$hasmainTemplateChanged"
           Write-Output "::set-output name=createUiChanged::$hasCreateUiDefinitionTemplateChanged"
-          Write-Output "::set-output name=hasPlaybooksChanged::$hasPlaybooksChanged"
-          Write-Output "::set-output name=playbookFilesList::$finalizedPlaybookFiles"
-          Write-Output "::set-output name=hasDataConnectorFileChanged::$hasDataConnectorFileChanged"
-          Write-Output "::set-output name=dataConnectorFileNames::$finalizedDataConnectorFilesList"
-          Write-Output "::set-output name=isDataConnectorFolderNameWithSpace::$isDataConnectorFolderNameWithSpace"
 
       - uses: docker/build-push-action@v2
         id: publishGithubPackage
         name: Run ARM-TTK
-        if: ${{ success() && steps.step1.outcome == 'success' && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.hasPlaybooksChanged == 'true' || steps.step1.outputs.mainTemplateChanged == 'true' || steps.step1.outputs.createUiChanged == 'true' || steps.step1.outputs.hasDataConnectorFileChanged == 'true') }}
+        if: ${{ success() && steps.step1.outcome == 'success' && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.mainTemplateChanged == 'true' || steps.step1.outputs.createUiChanged == 'true') }}
         env: 
           SolutionName: ${{ steps.step1.outputs.solutionName }}
           mainTemplateChanged: ${{ steps.step1.outputs.mainTemplateChanged }}
           createUiChanged: ${{ steps.step1.outputs.createUiChanged }}
-          hasPlaybooksChanged: ${{ steps.step1.outputs.hasPlaybooksChanged }}
-          playbookFilesList: ${{ steps.step1.outputs.playbookFilesList }}
-          dataConnectorFileNames: ${{ steps.step1.outputs.dataConnectorFileNames }}
-          isDataConnectorFolderNameWithSpace: ${{ steps.step1.outputs.isDataConnectorFolderNameWithSpace }}
-          hasDataConnectorFileChanged: ${{ steps.step1.outputs.hasDataConnectorFileChanged }}
         with:
           context: .
           file: ./.github/actions/Dockerfile
@@ -155,8 +78,3 @@ jobs:
             SolutionName
             mainTemplateChanged
             createUiChanged
-            hasPlaybooksChanged
-            playbookFilesList
-            dataConnectorFileNames
-            isDataConnectorFolderNameWithSpace
-            hasDataConnectorFileChanged
