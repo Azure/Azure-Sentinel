@@ -1,0 +1,79 @@
+id: 44da53c3-f3b0-4b70-afff-f79275cb9442
+name: Jamf Protect - Network Threats
+description: |
+  'Creates an incident based based on Jamf Protect's Network Threat Event Stream alerts.'
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: JamfProtect
+    dataTypes: 
+      - jamfprotect_CL
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+  - InitialAccess
+relevantTechniques:
+query: |
+  jamfprotect_CL
+  | where event_metadata_product_s == "Threat Events Stream"
+      and event_action_s == "Blocked"
+      and isnotempty(event_severity_d)
+  | extend severity = case(event_severity_d == 2, "Informational", event_severity_d == 4, "Low", event_severity_d == 6, "Medium", event_severity_d == 8, "High", event_severity_d == 10, "High", "Informational")
+  | extend Category =  event_eventType_description_s
+  | extend AlertURL = event_eventUrl_s
+  | extend User = event_user_name_s
+  | extend Email = event_user_email_s
+  | extend Hostname = event_device_userDeviceName_s
+  | extend Destination_IPs = event_destination_ip_s
+  | extend Destination = event_destination_name_s
+  | extend Tactics = "Initial Access"
+  | extend Action = event_action_s
+  | extend ProviderName = "Jamf"
+  | extend ProductName = "Jamf Protect"
+  | extend ProductNameComponentName = "Network Threat Prevention"
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+alertDetailsOverride:
+  alertDisplayNameFormat: "Network Threat detected on {{Hostname}}"
+  alertDescriptionFormat: "A Network Threat has been {{Action}} on {{Hostname}}"
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: severity
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: AlertURL
+    - alertProperty: ProviderName
+      value: ProviderName
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: RemediationSteps
+      value: Action
+customDetails:
+  Category: Category
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: Hostname
+  - identifier: OSVersion
+    columnName: event_device_os_s
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: Destination_IPs
+- entityType: Account
+  fieldMappings:
+  - identifier: AadUserId
+    columnName: Email
+  - identifier: FullName
+    columnName: User
+- entityType: URL
+  fieldMappings:
+  - identifier: Url
+    columnName: Destination
+version: 1.0.0
+kind: NRT
