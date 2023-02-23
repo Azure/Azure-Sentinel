@@ -47,18 +47,18 @@ isSplitAWSResourceTypes = os.environ.get('SplitAWSResourceTypes')
 collection_schedule = int(fresh_event_timestamp)
 
 
-def main():
-    # if mytimer.past_due:
-    #     print('The timer is past due!')
+def main(mytimer: func.TimerRequest) -> None:
+    if mytimer.past_due:
+        logging.info('The timer is past due!')
 
-    print('Starting program')
+    logging.info('Starting program')
 
     cli = S3Client(aws_access_key_id, aws_secret_acces_key, aws_region_name, aws_s3_bucket)
     ts_from, ts_to = cli.get_time_interval()
     print("From:{0}".format(ts_from))
     print("To:{0}".format(ts_to))
 
-    print('Searching files last modified from {} to {}'.format(ts_from, ts_to))
+    logging.info('Searching files last modified from {} to {}'.format(ts_from, ts_to))
     obj_list = cli.get_files_list(ts_from, ts_to)
 
     failed_sent_events_number = 0
@@ -71,31 +71,27 @@ def main():
         for log in log_events:
             if len(log) > 0:
                 coreEvents.append(log)
-        break
+
     file_events = 0
     t0 = time.time()
-    print('Total number of files is {}'.format(len(coreEvents)))
-    try:
-        for event in coreEvents:
-            sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type,
-                                              queue_size=10000, bulks_number=10)
-            with sentinel:
-                sentinel.send(event)
-            file_events += 1
-            failed_sent_events_number += sentinel.failed_sent_events_number
-            successfull_sent_events_number += sentinel.successfull_sent_events_number
-    except BaseException:
-        print(BaseException)
-
+    logging.info('Total number of files is {}'.format(len(coreEvents)))
+    for event in coreEvents:
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type,
+                                          queue_size=10000, bulks_number=10)
+        with sentinel:
+            sentinel.send(event)
+        file_events += 1
+        failed_sent_events_number += sentinel.failed_sent_events_number
+        successfull_sent_events_number += sentinel.successfull_sent_events_number
 
     if failed_sent_events_number:
-        print('{} AWS S3 files have not been sent'.format(failed_sent_events_number))
+        logging.info('{} AWS S3 files have not been sent'.format(failed_sent_events_number))
 
     if successfull_sent_events_number:
-        print('Program finished. {} AWS S3 files have been sent.'.format(successfull_sent_events_number))
+        logging.info('Program finished. {} AWS S3 files have been sent.'.format(successfull_sent_events_number))
 
     if successfull_sent_events_number == 0 and failed_sent_events_number == 0:
-        print('No Fresh AWS S3 files')
+        logging.info('No Fresh AWS S3 files')
 
 
 def convert_list_to_csv_line(ls):
@@ -157,7 +153,7 @@ class S3Client:
         return aws_s3_bucket
 
     def get_time_interval(self):
-        ts_from = datetime.datetime.utcnow() - datetime.timedelta(minutes=3600)
+        ts_from = datetime.datetime.utcnow() - datetime.timedelta(minutes=collection_schedule + 1)
         ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         ts_from = ts_from.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
         ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
@@ -176,7 +172,7 @@ class S3Client:
             else:
                 raise Exception('HTTP Response Code - {}'.format(response_code))
         except Exception as err:
-            print('Error while getting objects list - {}'.format(err))
+            logging.error('Error while getting objects list - {}'.format(err))
             raise Exception
 
     def get_files_list(self, ts_from, ts_to):
@@ -202,19 +198,19 @@ class S3Client:
         return self.sort_files_by_date(files)
 
     def download_obj(self, key):
-        print('Started downloading {}'.format(key))
+        logging.info('Started downloading {}'.format(key))
         res = self.s3.get_object(Bucket=self.aws_s3_bucket, Key=key)
         try:
             response_code = res.get('ResponseMetadata', {}).get('HTTPStatusCode', None)
             if response_code == 200:
                 body = res['Body']
                 data = body.read()
-                print('File {} downloaded'.format(key))
+                logging.info('File {} downloaded'.format(key))
                 return data
             else:
-                print('Error while getting object {}. HTTP Response Code - {}'.format(key, response_code))
+                logging.error('Error while getting object {}. HTTP Response Code - {}'.format(key, response_code))
         except Exception as err:
-            print('Error while getting object {} - {}'.format(key, err))
+            logging.error('Error while getting object {} - {}'.format(key, err))
 
     def unpack_file(self, downloaded_obj, key):
         try:
@@ -232,7 +228,7 @@ class S3Client:
             return extracted_file
 
         except Exception as err:
-            print('Error while unpacking file {} - {}'.format(key, err))
+            logging.error('Error while unpacking file {} - {}'.format(key, err))
 
     @staticmethod
     def convert_empty_string_to_null_values(d: dict):
@@ -572,10 +568,10 @@ class AzureSentinelConnector:
 
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
-            print('{} events have been successfully sent to Azure Sentinel'.format(events_number))
+            logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
             self.successfull_sent_events_number += events_number
         else:
-            print(
+            logging.error(
                 "Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
             self.failed_sent_events_number += events_number
 
@@ -590,6 +586,3 @@ class AzureSentinelConnector:
             middle = int(len(queue) / 2)
             queues_list = [queue[:middle], queue[middle:]]
             return self._split_big_request(queues_list[0]) + self._split_big_request(queues_list[1])
-
-    if __name__ == "__main__":
-        main()
