@@ -22,19 +22,13 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 
     if (!isExcludedFile && isIncludedFolderFile)
     {
-        console.log("file name " + filePath);
-        const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
 
-        // Read skip text from a file
         const skipTextFile = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
         const validTags = skipTextFile.split("\n").filter(tag => tag.length > 0);
-        console.log(fileContent);
-        // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
-        //var fileContentObj = JSON.parse(fileContent.replace(/\\/g, '\\\\'));
-        // var fileContentStringify = JSON.stringify(fileContent);
-        // console.log(fileContentStringify)
+
+        const fileContent = fs.readFileSync(filePath, "utf8");
         var fileContentObj = JSON.parse(fileContent);
 
         for (const tagName of validTags) 
@@ -51,7 +45,6 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
             if (tagContent)
             {
                 let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
-                console.log("inside of if");
                 if (hasAzureSentinelText) {
                     throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
                 }
