@@ -33,9 +33,9 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         console.log(fileContent);
         // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
         //var fileContentObj = JSON.parse(fileContent.replace(/\\/g, '\\\\'));
-        var fileContentStringify = JSON.stringify(fileContent);
-        console.log(fileContentStringify)
-        var fileContentObj = JSON.parse(fileContentStringify);
+        // var fileContentStringify = JSON.stringify(fileContent);
+        // console.log(fileContentStringify)
+        var fileContentObj = JSON.parse(fileContent);
 
         for (const tagName of validTags) 
         {
