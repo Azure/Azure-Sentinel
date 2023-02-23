@@ -33,7 +33,10 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 
         // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
         //var fileContentObj = JSON.parse(fileContent.replace(/\\/g, '\\\\'));
-        var fileContentObj = JSON.parse(JSON.stringify(fileContent));
+        var fileContentStringify = JSON.stringify(fileContent);
+        console.log(fileContentStringify)
+        var fileContentObj = JSON.parse(fileContentStringify);
+
         for (const tagName of validTags) 
         {
             if (filePath.includes("createUiDefinition.json"))
