@@ -22,23 +22,29 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 
     if (!isExcludedFile && isIncludedFolderFile)
     {
-        const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
 
-        // Read skip text from a file
-        const skipTextFile = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
-        const validTags = skipTextFile.split("\n").filter(tag => tag.length > 0);
+        const tagsList = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
+        const validTags = tagsList.split("\n").filter(tag => tag.length > 0);
 
-        // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
-        var fileContentObj = JSON.parse(fileContent.replace(/\\/g, '\\\\'));
+        const fileContent = fs.readFileSync(filePath, "utf8");
+        var fileContentObj = JSON.parse(fileContent);
+
         for (const tagName of validTags) 
         {
-            let hasDescriptionTag = fileContentObj[tagName];
-            if (hasDescriptionTag)
+            if (filePath.includes("createUiDefinition.json"))
             {
-                let hasAzureSentinelText = hasDescriptionTag.toLowerCase().includes(searchText.toLowerCase());
+                var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
+            }
+            else
+            {
+                var tagContent = fileContentObj[tagName];
+            }
 
+            if (tagContent)
+            {
+                let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
                 if (hasAzureSentinelText) {
                     throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
                 }
