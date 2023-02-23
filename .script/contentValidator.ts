@@ -30,7 +30,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         // Read skip text from a file
         const skipTextFile = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
         const validTags = skipTextFile.split("\n").filter(tag => tag.length > 0);
-
+        console.log(fileContent);
         // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
         //var fileContentObj = JSON.parse(fileContent.replace(/\\/g, '\\\\'));
         var fileContentStringify = JSON.stringify(fileContent);
