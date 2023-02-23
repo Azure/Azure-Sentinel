@@ -24,9 +24,6 @@ SCRIPT_EXECUTION_INTERVAL_MINUTES = 5
 # if ts of last processed file is older than "now - MAX_PERIOD_MINUTES" then script will get events from "now - MAX_PERIOD_MINUTES"
 MAX_PERIOD_MINUTES = 60 * 24 * 7
 
-MAX_SCRIPT_EXEC_TIME_MINUTES = 5
-
-
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
 if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
@@ -103,9 +100,8 @@ def main(mytimer: func.TimerRequest):
         timestamp>="{}"
     """.format(last_ts)
 
-# Set the batch size and page size for pagination
-    batch_size = 10
-    page_size = 1000
+# Set the batch size
+    batch_size = 3
 
 # Get the list of resources and split them into batches
     resources = get_recource_names()
@@ -116,47 +112,22 @@ def main(mytimer: func.TimerRequest):
     last_max_ts = None
     with sentinel:
         for resource_batch in resource_batches:
-            resource_filter = ' OR '.join(['resource.type="{}" AND resource.labels.project_id="{}"'.format(resource_type, project_id) for resource_type, project_id in [resource.split('/') for resource in resource_batch]])
-            batch_filt = '{} AND ({})'.format(filt, resource_filter)
-            logging.info('Processing batch with filter: {}'.format(batch_filt))
-             # Initialize the page token to None to start from the beginning
+            logging.info('Processing resource batch: {}'.format(resource_batch))
+            
+            # Call the list_entries() function with and Iterate through the results and process each event
+            for entry in gcp_cli.list_entries(resource_names=resource_batch, filter_=filt, order_by='timestamp', page_size=1000):
+                event = parse_entry(entry)
+                sentinel.send(event)
+                
+                last_ts = event['timestamp']
+                if last_max_ts is None or last_ts > last_max_ts:
+                    last_max_ts = last_ts
 
-            page_token = None
-            while True:
-                # Call the list_entries() function with the page token and page size
-                results = gcp_cli.list_entries(filter_=batch_filt, order_by='timestamp', page_size=page_size, page_token=page_token)
 
-                # Iterate through the results and process each event
-                for entry in results:
-                    event = parse_entry(entry)
-                    sentinel.send(event)
-
-                    last_ts = event['timestamp']
-                    if last_max_ts is None or last_ts > last_max_ts:
-                        last_max_ts = last_ts
-
-                    if sentinel.is_empty():
-                        logging.info('Saving last max timestamp - {}'.format(last_max_ts))
-                        state_manager.post(last_max_ts)
-                        if check_if_script_runs_too_long(start_ts):
-                            logging.info('Script is running too long. Saving progress and exit.')
-                            break
-
-                # If the page token is None, there are no more pages to process
-                if not results.next_page_token:
-                    break
-
-                # Update the page token to the next page
-                page_token = results.next_page_token
-
-            if sentinel.is_empty() and last_max_ts:
-                logging.info('Saving max last timestamp - {}'.format(last_max_ts))
-                state_manager.post(last_max_ts)
-
-            if check_if_script_runs_too_long(start_ts):
-                logging.info('Script is running too long. Saving progress and exit.')
-                break
-
+    if last_max_ts:
+        logging.info('Saving max last timestamp - {}'.format(last_max_ts))
+        state_manager.post(last_max_ts)
+            
     remove_credentials_file()
     logging.info('Script finished. Sent events number: {}'.format(sentinel.successfull_sent_events_number))
 
@@ -211,8 +182,4 @@ def get_last_ts(state_manager: StateManager):
     return last_ts.isoformat()
 
 
-def check_if_script_runs_too_long(start_ts):
-    now = int(time.time())
-    duration = now - start_ts
-    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
-    return duration > max_duration
+
