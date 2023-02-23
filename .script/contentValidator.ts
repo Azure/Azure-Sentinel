@@ -25,8 +25,8 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
 
-        const skipTextFile = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
-        const validTags = skipTextFile.split("\n").filter(tag => tag.length > 0);
+        const tagsList = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
+        const validTags = tagsList.split("\n").filter(tag => tag.length > 0);
 
         const fileContent = fs.readFileSync(filePath, "utf8");
         var fileContentObj = JSON.parse(fileContent);
