@@ -37,7 +37,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         {
             if (filePath.includes("createUiDefinition.json"))
             {
-                var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
+                var tagContent = fileContentObj["parameters"]["config"]["basics"]["description"];
             }
             else
             {
