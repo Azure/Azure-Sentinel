@@ -43,14 +43,22 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "uiConfigId1": "WindowsFirewall",
+    "uiConfigId1": "WindowsFirewallAma",
     "_uiConfigId1": "[variables('uiConfigId1')]",
-    "dataConnectorContentId1": "WindowsFirewall",
+    "dataConnectorContentId1": "WindowsFirewallAma",
     "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
     "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
     "_dataConnectorId1": "[variables('dataConnectorId1')]",
     "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
     "dataConnectorVersion1": "1.0.0",
+    "uiConfigId2": "WindowsFirewall",
+    "_uiConfigId2": "[variables('uiConfigId2')]",
+    "dataConnectorContentId2": "WindowsFirewall",
+    "_dataConnectorContentId2": "[variables('dataConnectorContentId2')]",
+    "dataConnectorId2": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+    "_dataConnectorId2": "[variables('dataConnectorId2')]",
+    "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2')))]",
+    "dataConnectorVersion2": "1.0.0",
     "workbookVersion1": "1.0.0",
     "workbookContentId1": "WindowsFirewall",
     "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
@@ -58,7 +66,7 @@
     "_workbookContentId1": "[variables('workbookContentId1')]"
   },
   "resources": [
-    {
+  {
       "type": "Microsoft.Resources/templateSpecs",
       "apiVersion": "2021-05-01",
       "name": "[variables('dataConnectorTemplateSpecName1')]",
@@ -85,7 +93,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Windows Firewall data connector with template version 2.0.1",
+        "description": "Windows Firewall data connector with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -97,32 +105,90 @@
               "apiVersion": "2021-03-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
-              "kind": "StaticUI",
+              "kind": "GenericUI",
               "properties": {
                 "connectorUiConfig": {
                   "id": "[variables('_uiConfigId1')]",
-                  "title": "Windows Firewall",
+                  "title": "Windows Firewall Events via AMA (Preview)",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer.",
+                  "descriptionMarkdown": "Windows Firewall is a Microsoft Windows application that filters information coming to your system from the internet and blocking potentially harmful programs. The firewall software blocks most programs from communicating through the firewall. Customers wishing to stream their Windows Firewall application logs collected from their machines can now use the AMA to stream those logs to the Microsoft Sentinel workspace.",
                   "graphQueries": [
                     {
                       "metricName": "Total data received",
-                      "legend": "AzureDiagnostics",
-                      "baseQuery": "WindowsFirewall"
+                      "legend": "ASimNetworkSessionLogs",
+                      "baseQuery": "ASimNetworkSessionLogs\n| where EventProduct == \"Windows Firewall\""
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All logs",
+                      "query": "ASimNetworkSessionLogs\n| where EventProduct == \"Windows Firewall\"\n            | sort by TimeGenerated"
                     }
                   ],
                   "connectivityCriterias": [
                     {
-                      "type": "OmsSolutions",
-                      "value": [
-                        "WindowsFirewall"
-                      ]
+                      "type": "ASimNetworkSessionLogs",
+                      "value": null
                     }
                   ],
                   "dataTypes": [
                     {
-                      "name": "WindowsFirewall",
-                      "lastDataReceivedQuery": "WindowsFirewall\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                      "name": "ASimNetworkSessionLogs",
+                      "lastDataReceivedQuery": "ASimNetworkSessionLogs\n| where EventProduct == \"Windows Firewall\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 2,
+                    "isPreview": false,
+                    "featureFlag": {
+                      "feature": "WindowsFirewallAMA",
+                      "featureStates": {
+                        "1": 1,
+                        "2": 1,
+                        "3": 1,
+                        "4": 1
+                      }
+                    }
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/datasources",
+                        "permissionsDisplayText": "read and write permissions.",
+                        "providerDisplayName": "Workspace data sources",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "description": "To collect data from non-Azure VMs, they must have Azure Arc installed and enabled. [Learn more](https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-install?tabs=ARMAgentPowerShell,PowerShellWindows,PowerShellWindowsArc,CLIWindows,CLIWindowsArc)"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "> Windows Firewall events are collected only from Windows agents.",
+                      "instructions": [
+                        {
+                          "type": "WindowsFirewallAma"
+                        }
+                      ],
+                      "title": "Enable data collection rule"
+                    },
+                    {
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenCreateDataCollectionRule",
+                            "dataCollectionRuleType": 4
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ]
                     }
                   ]
                 }
@@ -193,12 +259,236 @@
       "apiVersion": "2021-03-01-preview",
       "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
       "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Windows Firewall Events via AMA (Preview)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "Windows Firewall is a Microsoft Windows application that filters information coming to your system from the internet and blocking potentially harmful programs. The firewall software blocks most programs from communicating through the firewall. Customers wishing to stream their Windows Firewall application logs collected from their machines can now use the AMA to stream those logs to the Microsoft Sentinel workspace.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ASimNetworkSessionLogs",
+              "baseQuery": "ASimNetworkSessionLogs\n| where EventProduct == \"Windows Firewall\""
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ASimNetworkSessionLogs",
+              "lastDataReceivedQuery": "ASimNetworkSessionLogs\n| where EventProduct == \"Windows Firewall\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "ASimNetworkSessionLogs",
+              "value": null
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All logs",
+              "query": "ASimNetworkSessionLogs\n| where EventProduct == \"Windows Firewall\"\n            | sort by TimeGenerated"
+            }
+          ],
+          "availability": {
+            "status": 2,
+            "isPreview": false,
+            "featureFlag": {
+              "feature": "WindowsFirewallAMA",
+              "featureStates": {
+                "1": 1,
+                "2": 1,
+                "3": 1,
+                "4": 1
+              }
+            }
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/datasources",
+                "permissionsDisplayText": "read and write permissions.",
+                "providerDisplayName": "Workspace data sources",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "description": "To collect data from non-Azure VMs, they must have Azure Arc installed and enabled. [Learn more](https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-install?tabs=ARMAgentPowerShell,PowerShellWindows,PowerShellWindowsArc,CLIWindows,CLIWindowsArc)"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "> Windows Firewall events are collected only from Windows agents.",
+              "instructions": [
+                {
+                  "type": "WindowsFirewallAma"
+                }
+              ],
+              "title": "Enable data collection rule"
+            },
+            {
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenCreateDataCollectionRule",
+                    "dataCollectionRuleType": 4
+                  },
+                  "type": "InstallAgent"
+                }
+              ]
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Windows Firewall data connector with template",
+        "displayName": "Windows Firewall template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName2'),'/',variables('dataConnectorVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName2'))]"
+      ],
+      "properties": {
+        "description": "Windows Firewall data connector with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion2')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId2'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "StaticUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId2')]",
+                  "title": "Windows Firewall",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219791&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "AzureDiagnostics",
+                      "baseQuery": "WindowsFirewall"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "OmsSolutions",
+                      "value": [
+                        "WindowsFirewall"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "WindowsFirewall",
+                      "lastDataReceivedQuery": "WindowsFirewall\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+                "contentId": "[variables('_dataConnectorContentId2')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Windows Firewall",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId2')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+        "contentId": "[variables('_dataConnectorContentId2')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion2')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Windows Firewall",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId2'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
       "kind": "StaticUI",
       "properties": {
         "connectorUiConfig": {
           "title": "Windows Firewall",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer.",
+          "descriptionMarkdown": "Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219791&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).",
           "graphQueries": [
             {
               "metricName": "Total data received",
@@ -220,7 +510,7 @@
               ]
             }
           ],
-          "id": "[variables('_uiConfigId1')]"
+          "id": "[variables('_uiConfigId2')]"
         }
       }
     },
@@ -251,7 +541,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "WindowsFirewallWorkbook Workbook with template version 2.0.1",
+        "description": "WindowsFirewallWorkbook Workbook with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -340,7 +630,7 @@
       "apiVersion": "2022-01-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.1",
+        "version": "2.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
@@ -367,6 +657,11 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId1')]",
               "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId2')]",
+              "version": "[variables('dataConnectorVersion2')]"
             },
             {
               "kind": "Workbook",
