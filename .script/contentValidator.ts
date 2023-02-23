@@ -22,6 +22,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 
     if (!isExcludedFile && isIncludedFolderFile)
     {
+        console.log("file name " + filePath);
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
@@ -34,11 +35,19 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         var fileContentObj = JSON.parse(fileContent.replace(/\\/g, '\\\\'));
         for (const tagName of validTags) 
         {
-            let hasDescriptionTag = fileContentObj[tagName];
-            if (hasDescriptionTag)
+            if (filePath.includes("createUiDefinition.json"))
             {
-                let hasAzureSentinelText = hasDescriptionTag.toLowerCase().includes(searchText.toLowerCase());
+                var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
+            }
+            else
+            {
+                var tagContent = fileContentObj[tagName];
+            }
 
+            if (tagContent)
+            {
+                let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
+                console.log("inside of if");
                 if (hasAzureSentinelText) {
                     throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
                 }
