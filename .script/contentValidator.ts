@@ -5,13 +5,15 @@ import * as logger from "./utils/logger";
 
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
+    console.log(`FilePath ${filePath}`)
     const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
     const requiredFolderFiles = ["/Data/", "/data/", "/DataConnectors/", "/Data Connectors/", "createUiDefinition.json"]
 
     const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
     const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
+    console.log(`hasIgnoredFile ${hasIgnoredFile} , hasRequiredFolderFiles ${hasRequiredFolderFiles}`)
 
-    if (!hasIgnoredFile && hasRequiredFolderFiles) 
+    if (!hasIgnoredFile && hasRequiredFolderFiles)
     {
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
@@ -26,15 +28,20 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         {
             if (filePath.includes("createUiDefinition.json"))
             {
+                console.log("aa")
                 var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
+                console.log(tagContent)
             }
             else
             {
+                console.log("bb")
                 var tagContent = fileContentObj[tagName];
+                console.log(tagContent)
             }
 
             if (tagContent)
             {
+                console.log("cc")
                 let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
                 if (hasAzureSentinelText) {
                     throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
