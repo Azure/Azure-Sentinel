@@ -16,7 +16,7 @@ relevantTechniques:
 eventGroupingSettings:
   aggregationKind: SingleAlert
 query: |
-  let BEC_Keywords = dynamic(['invoice','invoices','payment','payroll','paycheck','transfer','bank statement','bank details','wire','closing','funds','bank account','account details','iban','ACH','remit','remittance','purchase','deposit','pro-forma','bank',"platnosc","PO#","Zahlung","Rechnung","Paiement", "virement bancaire","Banküberweisung","virement","hacked","phishing","payrollhelpdesk","direct deposit"]);
+  let BEC_Keywords = dynamic(['invoice','invoices','payment','payroll','paycheck','transfer','bank statement','bank details','wire','closing','funds','bank account','account details','iban','ACH','remit','remittance','purchase','deposit','pro-forma','bank',"platnosc","PO#","Zahlung","Rechnung","Paiement", "virement bancaire","Bankuberweisung","virement","hacked","phishing","payrollhelpdesk","direct deposit"]);
   // Adjust these thresholds based on your environment
   let threshold = 10;
   let deviation = 2;
@@ -27,11 +27,13 @@ query: |
     // Remove anonymous access due to noise, monitor for this seperately
   | where isnotempty(User)
   | where User !~ "app@sharepoint"
-  | where EventType =~ "FileAccessed" and EventOriginalType !~ "FileSyncDownloadedFull"
+  | where EventType =~ "FileAccessed"
+  | extend OriginalEvent = columnifexists("EventOriginalType","Unknown")
+  | where OriginalEvent !~ "FileSyncDownloadedFull"
   | where EventProduct in ("SharePoint 365", "Azure File Storage", "OneDrive" , "SharePoint")
   | where FilePath has_any(BEC_Keywords)
   | extend _AuthDetails = column_ifexists("AuthorizationDetails", "None")
-  | extend SPuser = case(_AuthDetails != "None", tostring(parse_json(tostring(_AuthDetails[0].principals))[0].id), "Unknown")
+  | extend SPuser = case(gettype(_AuthDetails) == "array", tostring(parse_json(tostring(_AuthDetails[0].principals))[0].id), "Unknown")
   | extend User = case(isnotempty(User), User, SPuser)
     // Look for unique files accessed
   | summarize baseline_file_count=dcount(FileName) by User, bin(TimeGenerated, 1d)
@@ -40,11 +42,13 @@ query: |
   | where TimeGenerated > ago(1d)
   | where isnotempty(User)
   | where User !~ "app@sharepoint"
-  | where EventType =~ "FileAccessed" and EventOriginalType !~ "FileSyncDownloadedFull"
+  | where EventType =~ "FileAccessed"
+  | extend OriginalEvent = columnifexists("EventOriginalType","Unknown")
+  | where OriginalEvent !~ "FileSyncDownloadedFull"
   | where EventProduct in ("SharePoint 365", "Azure File Storage", "OneDrive" , "SharePoint")
   | where FilePath has_any(BEC_Keywords)
   | extend _AuthDetails = column_ifexists("AuthorizationDetails", "None")
-  | extend SPuser = case(_AuthDetails != "None", tostring(parse_json(tostring(_AuthDetails[0].principals))[0].id), "Unknown")
+  | extend SPuser = case(gettype(_AuthDetails) == "array", tostring(parse_json(tostring(_AuthDetails[0].principals))[0].id), "Unknown")
   | extend User = case(isnotempty(User), User, SPuser));
   current_events
   | summarize number_of_files_accessed = dcount(FilePath), files_accessed=make_set(FilePath, MaxSize=1000) by User, bin(TimeGenerated, 1d)
