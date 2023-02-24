@@ -26,18 +26,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 
         for (const tagName of validTags) 
         {
-            if (filePath.includes("createUiDefinition.json"))
-            {
-                console.log("aa")
-                var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
-                console.log(tagContent)
-            }
-            else
-            {
-                console.log("bb")
-                var tagContent = fileContentObj[tagName];
-                console.log(tagContent)
-            }
+            var tagContent = GetTagContent(tagName);
 
             if (tagContent)
             {
@@ -50,6 +39,31 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         }
     }
     return ExitCode.SUCCESS;
+
+    function GetTagContent(tagName: any) {
+        if (filePath.includes("createUiDefinition.json")) {
+            console.log("aa");
+            var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
+            if (tagContent == 'undefined') {
+                //MAKE FIRST LETTER OF THE WORD CAPS
+                const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
+                var tagContent = fileContentObj["parameters"]["config"]["basics"][firstLetterCapsInTagName];
+            }
+            console.log(tagContent);
+        }
+
+        else {
+            console.log("bb");
+            var tagContent = fileContentObj[tagName];
+            if (tagContent == 'undefined') {
+                //MAKE FIRST LETTER OF THE WORD CAPS
+                const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
+                var tagContent = fileContentObj[firstLetterCapsInTagName];
+            }
+            console.log(tagContent);
+        }
+        return tagContent;
+    }
 }
 
 let fileTypeSuffixes = ["json"];
