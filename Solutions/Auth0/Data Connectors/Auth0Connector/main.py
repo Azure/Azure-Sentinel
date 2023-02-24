@@ -143,6 +143,7 @@ class Auth0Connector:
         try:
             token = resp.json()['access_token']
         except KeyError:
+            logging.info("Key Error in " + resp)
             raise Exception('Token not provided.')
         return token
 
