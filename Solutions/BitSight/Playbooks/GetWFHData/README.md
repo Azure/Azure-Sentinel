@@ -19,13 +19,13 @@ This playbook provides an end to end example of the collection of WFH informatio
 ### Deployment instructions<a name="Deployment-instructions"></a>
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
     * Key Vault Name: Name of keyvault where secrets are stored.
     * Tenant Id: TenantId of azure active directory where keyvault is located.
     * Log Analytics Workspace Id: Id of workspace where you want to store data of WFH.
     * Log Analytics Workspace Key: Key of workspace where you want to store data of WFH.
-    * WFH Table Name: WFH data table name. 
+    * WFH Table Name: WFH data table name.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https%3A%2F%2Fportal.azure.com%2F%23create%2FMicrosoft.Template%2Furi%2Fhttps%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FBitSight%2FPlaybooks%2FGetWFHData%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https%3A%2F%2Fportal.azure.us%2F%23create%2FMicrosoft.Template%2Furi%2Fhttps%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FBitSight%2FPlaybooks%2FGetWFHData%2Fazuredeploy.json)
 
@@ -44,7 +44,7 @@ Once deployment is complete, authorize each connection like keyvault.
 ##### b. Configurations in Microsoft Sentinel
 
 1. In Microsoft Sentinel, one should have deployed an [ASimNetworkSession parser](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession).
-2. In Microsoft Sentinel, analytics rules should be configured to trigger an incident. 
+2. In Microsoft Sentinel, analytics rules should be configured to trigger an incident.
   > 1. Add your deployed logic app in analytic rule to be trigger on every generated incident, to do this follow below steps
   >> * Select the analytic rule you have deployed.
   >> * Click on **Edit**
@@ -54,7 +54,7 @@ Once deployment is complete, authorize each connection like keyvault.
   >> * In second dropdown select your deployed playbook
   >> * Click on **Apply**
   >> * Save the Analytic rule.
-  > 2. An incident should have the **ip_address** - custom entity that contains Src ip address from ASimNetworkSession.  
+  > 2. An incident should have the **ip_address** - custom entity that contains Src ip address from ASimNetworkSession.
 
 #### Sample analytics rule query
 ```
