@@ -11,7 +11,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
     const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
 
-    if (!hasIgnoredFile && hasRequiredFolderFiles)
+    if (!hasIgnoredFile && hasRequiredFolderFiles) 
     {
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
