@@ -44,18 +44,17 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         if (filePath.includes("createUiDefinition.json")) {
             console.log("aa");
             var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
-            if (tagContent == 'undefined') {
+            if (tagContent == undefined) {
                 //MAKE FIRST LETTER OF THE WORD CAPS
                 const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
                 var tagContent = fileContentObj["parameters"]["config"]["basics"][firstLetterCapsInTagName];
             }
             console.log(tagContent);
         }
-
         else {
             console.log("bb");
             var tagContent = fileContentObj[tagName];
-            if (tagContent == 'undefined') {
+            if (tagContent == undefined) {
                 //MAKE FIRST LETTER OF THE WORD CAPS
                 const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
                 var tagContent = fileContentObj[firstLetterCapsInTagName];
