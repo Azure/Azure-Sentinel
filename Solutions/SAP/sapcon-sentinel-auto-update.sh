@@ -76,6 +76,9 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 		
 		# Populate settings.json	
 		if [ -f "$settingsjson" ]; then
+			sudo chmod --reference "$0" "$settingsjson"
+			sudo chown --reference "$0" "$settingsjson"
+			sudo sync "$settingsjson"
 			if [ ! -s "$settingsjson" ]; then
 				echo $UPDATEPOLICY> "$settingsjson"
 			else
@@ -93,6 +96,7 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 	sudo chmod --reference "$0" "/tmp/$AUTOUPDATESCRIPT"
 	sudo chown --reference "$0" "/tmp/$AUTOUPDATESCRIPT"
 	sudo sync "/tmp/$AUTOUPDATESCRIPT"
+	sudo mkdir -p /opt/sapcon/
 	sudo mv "/tmp/$AUTOUPDATESCRIPT" "/opt/sapcon/$AUTOUPDATESCRIPT"
 	sudo chmod +x "/opt/sapcon/$AUTOUPDATESCRIPT"
 
@@ -136,11 +140,11 @@ function update_agents() {
 		fi
 
 		if [ ! "$SKIPIMAGEPULL" ]; then
-			CLOUD=$(docker inspect "$contname" --format '{{.Config.Labels.Cloud}}')
+			CLOUD=$(docker inspect "$contname" --format '{{index .Config.Labels "Cloud"}}')
 
 			dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
 
-			if [ "$CLOUD" == 'public' ]; then
+			if [ "$CLOUD" == 'public' ] || [ -z $CLOUD ]; then
 				tagver=':latest'
 			elif [ "$CLOUD" == 'fairfax' ]; then
 				tagver=':ffx-latest'
