@@ -20,48 +20,40 @@ jobs:
           $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
           Write-Host "List of files in PR: $diff"
           
-          $requiredFiles = @("mainTemplate.json", "createUiDefinition.json")
-          
           $hasmainTemplateChanged = $false
           $hasCreateUiDefinitionTemplateChanged = $false
 
-          $SourceDiff = $diff | ForEach-Object {
-            $currentFile = Get-ChildItem -Path $_
-            if ($currentFile)
+          $requiredFiles = @("mainTemplate.json", "createUiDefinition.json")
+          $filesList = $diff | Where-Object {$_ -match ($requiredFiles -Join "|")}
+
+          if ($filesList.Count > 0)
+          {
+            if ($filesList -Contains "mainTemplate.json")
             {
-              $currentFileStr = $currentFile.ToString()
-              $mainTemplateChanged = $currentFileStr.ToLower().Contains("maintemplate.json")
-              $createUiDefinitionTemplateChanged = $currentFileStr.ToLower().Contains("createuidefinition.json")
+              $hasmainTemplateChanged = $true
+            }
 
-              if ($mainTemplateChanged -eq $true)
-              {
-                $hasmainTemplateChanged = $true
-              }
+            if ($filesList -Contains "createUiDefinition.json")
+            {
+              $hasCreateUiDefinitionTemplateChanged = $true
+            }
 
-              if ($createUiDefinitionTemplateChanged -eq $true)
+            $fileValue = $filesList[0]
+            $solutionIndex = $fileValue.IndexOf("Solutions/")
+            $solutionNameWithOtherPath = $fileValue.SubString($solutionIndex + 10)
+            if ($solutionNameWithOtherPath -ne '' -and $solutionNameWithOtherPath -ne $null)
+            {
+              $headers = $solutionNameWithOtherPath -split '/', 3
+              if ($null -ne $headers[0])
               {
-                $hasCreateUiDefinitionTemplateChanged = $true
-              }
-
-              $fileValue = (($currentFile.DirectoryName).Split("\")[-1])
-              $solutionIndex = $fileValue.IndexOf("Solutions/")
-              if ($solutionIndex -gt -1 -and $null -ne $solutionIndex  -and $solutionName -ne '')
-              {
-                $solutionNameWithOtherPath = $fileValue.SubString($solutionIndex + 10)
-                if ($solutionNameWithOtherPath -ne '' -and $solutionNameWithOtherPath -ne $null)
-                {
-                  $headers = $solutionNameWithOtherPath -split '/', 3
-                  if ($null -ne $headers[0])
-                  {
-                    $sName = $headers[0]
-                  }
-                }
+                $sName = $headers[0]
               }
             }
+
+            Write-Output "::set-output name=solutionName::$sName"
+            Write-Output "::set-output name=mainTemplateChanged::$hasmainTemplateChanged"
+            Write-Output "::set-output name=createUiChanged::$hasCreateUiDefinitionTemplateChanged"
           }
-          Write-Output "::set-output name=solutionName::$sName"
-          Write-Output "::set-output name=mainTemplateChanged::$hasmainTemplateChanged"
-          Write-Output "::set-output name=createUiChanged::$hasCreateUiDefinitionTemplateChanged"
 
       - uses: docker/build-push-action@v2
         id: publishGithubPackage
