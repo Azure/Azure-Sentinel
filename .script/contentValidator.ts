@@ -5,22 +5,13 @@ import * as logger from "./utils/logger";
 
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
-    // WE SHOULD SKIP ANY FILE WHICH IS LISTED BELOW
-    const isExcludedFile = (filePath.includes("azure-pipelines")
-        || filePath.includes("azureDeploy")
-        || filePath.includes("host.json")
-        || filePath.includes("proxies.json")
-        || filePath.includes("azuredeploy")
-        || filePath.includes("function.json"));
+    const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
+    const requiredFolderFiles = ["/Data/", "/data/", "/DataConnectors/", "/Data Connectors/", "createUiDefinition.json"]
 
-    // WE SHOULD CHECK ONLY IN BELOW FOLDERS
-    const isIncludedFolderFile = (filePath.includes("/Data/") 
-        || filePath.includes("/data/")
-        || filePath.includes("/Data Connectors/") 
-        || filePath.includes("/DataConnectors/")
-        || filePath.includes("createUiDefinition.json"));
+    const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
+    const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
 
-    if (!isExcludedFile && isIncludedFolderFile)
+    if (!hasIgnoredFile && hasRequiredFolderFiles)
     {
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
@@ -33,14 +24,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 
         for (const tagName of validTags) 
         {
-            if (filePath.includes("createUiDefinition.json"))
-            {
-                var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
-            }
-            else
-            {
-                var tagContent = fileContentObj[tagName];
-            }
+            var tagContent = GetTagContent(tagName);
 
             if (tagContent)
             {
@@ -52,6 +36,26 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         }
     }
     return ExitCode.SUCCESS;
+
+    function GetTagContent(tagName: any) {
+        if (filePath.includes("createUiDefinition.json")) {
+            var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
+            if (tagContent == undefined) {
+                //MAKE FIRST LETTER OF THE WORD CAPS
+                const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
+                var tagContent = fileContentObj["parameters"]["config"]["basics"][firstLetterCapsInTagName];
+            }
+        }
+        else {
+            var tagContent = fileContentObj[tagName];
+            if (tagContent == undefined) {
+                //MAKE FIRST LETTER OF THE WORD CAPS
+                const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
+                var tagContent = fileContentObj[firstLetterCapsInTagName];
+            }
+        }
+        return tagContent;
+    }
 }
 
 let fileTypeSuffixes = ["json"];
