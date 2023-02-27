@@ -6,51 +6,49 @@ import * as logger from "./utils/logger";
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
     const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
-    //const requiredFolderFiles = ["/Data/", "/data/", "/DataConnectors/", "/Data Connectors/", "createUiDefinition.json"]
-    const requiredFolderFilesTag = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
+    const requiredFolderFiles = ["/Data/", "/data/", "/DataConnectors/", "/Data Connectors/", "createUiDefinition.json"]
 
-    if (requiredFolderFilesTag)
+    const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
+    const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
+
+    if (!hasIgnoredFile && hasRequiredFolderFiles)
     {
-        const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
-        const hasRequiredFolderFiles = requiredFolderFilesTag.filter(item => { return filePath.includes(item.key)}).length > 0
+        const searchText = "Azure Sentinel";
+        const expectedText = "Microsoft Sentinel";
 
-        if (!hasIgnoredFile && hasRequiredFolderFiles)
+        const fileContent = fs.readFileSync(filePath, "utf8");
+        var fileContentObj = JSON.parse(fileContent);
+
+        const jsonTagObj = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
+
+        let tagContent = "";
+        let tagName = ""
+        if (jsonTagObj.hasOwnProperty("createUiDefinition"))
         {
-            const searchText = "Azure Sentinel";
-            const expectedText = "Microsoft Sentinel";
-            let tagContent = "";
-            let tagName = ""
-
-            const fileContent = fs.readFileSync(filePath, "utf8");
-            var fileContentObj = JSON.parse(fileContent);
-
-            if (requiredFolderFilesTag.hasOwnProperty("createUiDefinition"))
-            {
-                console.log("aa")
-                const tagName = requiredFolderFilesTag.createUiDefinition;
-                tagContent = GetTagContent(tagName);
-            }
-            else if (requiredFolderFilesTag.hasOwnProperty("data"))
-            {
-                console.log("bb")
-                const tagName = requiredFolderFilesTag.data;
-                tagContent = GetTagContent(tagName);
-            }
-            else if (requiredFolderFilesTag.hasOwnProperty("dataConnectors"))
-            {
-                console.log("cc")
-                const tagName = requiredFolderFilesTag.dataConnectors;
-                tagContent = GetTagContent(tagName);
-            }
-
-            if (tagContent)
-            {
-                console.log("dd")
-                console.log(`tagContent ${tagContent}`)
-                let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
-                if (hasAzureSentinelText) {
-                    throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
-                }
+            console.log("aa")
+            tagName = jsonTagObj.createUiDefinition;
+            tagContent = GetTagContent(tagName);
+        }
+        else if (jsonTagObj.hasOwnProperty("data"))
+        {
+            console.log("bb")
+            tagName = jsonTagObj.data;
+            tagContent = GetTagContent(tagName);
+        }
+        else if (jsonTagObj.hasOwnProperty("dataConnectors"))
+        {
+            console.log("cc")
+            tagName = jsonTagObj.dataConnectors;
+            tagContent = GetTagContent(tagName);
+        }
+        console.log(`tagContent a: ${tagContent}`)
+        if (tagContent)
+        {
+            console.log("dd")
+            console.log(`tagContent b: ${tagContent}`)
+            let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
+            if (hasAzureSentinelText) {
+                throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
             }
         }
     }
