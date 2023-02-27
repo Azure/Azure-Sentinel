@@ -249,7 +249,7 @@ def get_grant_users_events(
     cs = ctx.cursor(DictCursor)
     try:
         cs.execute("use schema snowflake.account_usage")
-        cs.execute(f"SELECT * from GRANTS_TO_USERS WHERE SYSTEM$TIMESTAMP > '{date_from.isoformat()}' ORDER BY SYSTEM$TIMESTAMP ASC")
+        cs.execute(f"SELECT * from GRANTS_TO_USERS WHERE CREATED_ON > '{date_from.isoformat()}' ORDER BY CREATED_ON ASC")
         for row in cs:
             row = parse_grant_users_event(row)
             yield row
@@ -286,8 +286,8 @@ def parse_query_event(event: dict) -> dict:
     return event
 
 def parse_grant_users_event(event: dict) -> dict:
-    if "SYSTEM$TIMESTAMP" in event and isinstance(event["SYSTEM$TIMESTAMP"], datetime.datetime):
-        event["EVENT_TIMESTAMP"] = event["SYSTEM$TIMESTAMP"].isoformat()
+    if "CREATED_ON" in event and isinstance(event["CREATED_ON"], datetime.datetime):
+        event["CREATED_ON"] = event["CREATED_ON"].isoformat()
     event["source_table"] = "GRANTS_TO_USERS"
     return event
 
