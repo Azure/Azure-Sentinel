@@ -18,30 +18,38 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         {
             const searchText = "Azure Sentinel";
             const expectedText = "Microsoft Sentinel";
-
-            const tagsList = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
-            const validTags = tagsList.split("\n").filter(tag => tag.length > 0);
+            let tagContent = "";
+            let tagName = ""
 
             const fileContent = fs.readFileSync(filePath, "utf8");
             var fileContentObj = JSON.parse(fileContent);
 
-            for (const tagName of validTags) 
+            if (requiredFolderFilesTag.hasOwnProperty("createUiDefinition"))
             {
-                var tagContent = GetTagContent(tagName);
+                const tagName = requiredFolderFilesTag.createUiDefinition;
+                tagContent = GetTagContent(tagName);
+            }
+            else if (requiredFolderFilesTag.hasOwnProperty("data"))
+            {
+                const tagName = requiredFolderFilesTag.data;
+                tagContent = GetTagContent(tagName);
+            }
+            else if (requiredFolderFilesTag.hasOwnProperty("dataConnectors"))
+            {
+                const tagName = requiredFolderFilesTag.dataConnectors;
+                tagContent = GetTagContent(tagName);
+            }
 
-                if (tagContent)
-                {
-                    let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
-                    if (hasAzureSentinelText) {
-                        throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
-                    }
+            if (tagContent)
+            {
+                let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
+                if (hasAzureSentinelText) {
+                    throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
                 }
             }
         }
-
     }
 
-    
     return ExitCode.SUCCESS;
 
     function GetTagContent(tagName: any) {
