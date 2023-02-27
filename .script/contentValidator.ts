@@ -8,7 +8,10 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
     const dataFolder = ["/Data/", "/data/"]
     const dataConnectors = ["/DataConnectors/", "/Data Connectors/"]
-    const requiredFolderFiles = [dataFolder, dataConnectors, "createUiDefinition.json"]
+    let requiredFolderFiles = [];
+    requiredFolderFiles.push(...dataFolder)
+    requiredFolderFiles.push(...dataConnectors)
+    requiredFolderFiles.push("createUiDefinition.json")
 
     const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
     const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
