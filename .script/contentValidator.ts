@@ -49,12 +49,12 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         }
         else
         {
-            console.warn(`Skipping file ${filePath} from Content Validation as ${searchText} text not found`);
+            console.log(`Skipping file ${filePath} from Content Validation as ${searchText} text not found`);
         }
     }
     else
     {
-        console.warn(`Skipping file ${filePath} from Content Validation as the file is not from folder Data, Data Connector or createUiDefinition file`);
+        console.log(`Skipping file ${filePath} from Content Validation as the file is not from folder Data, Data Connector or createUiDefinition file`);
     }
 
     return ExitCode.SUCCESS;
