@@ -6,7 +6,9 @@ import * as logger from "./utils/logger";
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
     const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
-    const requiredFolderFiles = ["/Data/", "/data/", "/DataConnectors/", "/Data Connectors/", "createUiDefinition.json"]
+    const dataFolder = ["/Data/", "/data/"]
+    const dataConnectors = ["/DataConnectors/", "/Data Connectors/"]
+    const requiredFolderFiles = [dataFolder, dataConnectors, "createUiDefinition.json"]
 
     const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
     const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
@@ -15,30 +17,26 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     {
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
-
-        const fileContent = fs.readFileSync(filePath, "utf8");
-        var fileContentObj = JSON.parse(fileContent);
-
-        const jsonTagObj = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
-
         let tagContent = "";
         let tagName = ""
+
+        const hasDataFolder = dataFolder.filter(item => { return filePath.includes(item)}).length > 0
+        const hasDataConnectorFolder = dataConnectors.filter(item => { return filePath.includes(item)}).length > 0
+
+        const jsonTagObj = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
         if (jsonTagObj.hasOwnProperty("createUiDefinition") && filePath.includes('createUiDefinition'))
         {
             tagName = jsonTagObj.createUiDefinition;
-            console.log(`tagName value 1 ${tagName}`)
             tagContent = GetTagContent(tagName);
         }
-        else if (jsonTagObj.hasOwnProperty("data") && (filePath.includes('/data/') || filePath.includes('/Data/')))
+        else if (hasDataFolder && jsonTagObj.hasOwnProperty("data"))
         {
             tagName = jsonTagObj.data;
-            console.log(`tagName value 2 ${tagName}`)
             tagContent = GetTagContent(tagName);
         }
-        else if (jsonTagObj.hasOwnProperty("dataConnectors") && (filePath.includes('/DataConnectors/') || filePath.includes('/Data Connectors/')))
+        else if (hasDataConnectorFolder && jsonTagObj.hasOwnProperty("dataConnectors"))
         {
             tagName = jsonTagObj.dataConnectors;
-            console.log(`tagName value 3 ${tagName}`)
             tagContent = GetTagContent(tagName);
         }
 
@@ -54,6 +52,8 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     return ExitCode.SUCCESS;
 
     function GetTagContent(tagName: any) {
+        var fileContentObj = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
         if (filePath.includes("createUiDefinition.json")) {
             var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
             if (tagContent == undefined) {
