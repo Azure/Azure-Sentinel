@@ -1,7 +1,7 @@
 from azure.storage.fileshare import ShareClient
 from azure.storage.fileshare import ShareFileClient
 from azure.core.exceptions import ResourceNotFoundError
-
+# Azure Sentinel
 
 class StateManager:
     def __init__(self, connection_string, share_name='funcstatemarkershare', file_path='funcstatemarkerfile'):
