@@ -47,6 +47,14 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
                 throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
             }
         }
+        else
+        {
+            console.warn(`Skipping file ${filePath} from Content Validation as ${searchText} text not found`);
+        }
+    }
+    else
+    {
+        console.warn(`Skipping file ${filePath} from Content Validation as the file is not from folder Data, Data Connector or createUiDefinition file`);
     }
 
     return ExitCode.SUCCESS;
