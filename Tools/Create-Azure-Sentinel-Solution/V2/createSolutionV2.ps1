@@ -483,7 +483,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             };
                         }
                         }
-                        $workbookCounter += 1
+                        # $workbookCounter += 1
                     }
                     elseif ($objectKeyLowercase -eq "playbooks") {
                         Write-Host "Generating Playbook using $file"
