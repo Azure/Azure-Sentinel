@@ -57,6 +57,8 @@ def main(mytimer: func.TimerRequest):
     state_manager_queries = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_queries')
     state_manager_rlogins = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_rlogins')
     state_manager_rqueries = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_rqueries')
+    state_manager_grantstousers = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_grantstousers')
+    state_manager_datatransferhistory = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_rqueries')
 
     logins_date_from = state_manager_logins.get()
     logins_date_from = parse_date_from(logins_date_from)
@@ -138,6 +140,49 @@ def main(mytimer: func.TimerRequest):
         logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
         return
     
+
+    grantstousers_date_from = state_manager_grantstousers.get()
+    grantstousers_date_from = parse_date_from(grantstousers_date_from)
+    logging.info(f'Getting GRANTS TO USERS events from {grantstousers_date_from}')
+    last_ts = None
+    for event in get_grant_users_events(ctx, grantstousers_date_from):
+        sentinel.send(event)
+        last_ts = event.get('CREATED_ON')
+        if sentinel.is_empty() and last_ts:
+            state_manager_grantstousers.post(last_ts)
+            if check_if_script_runs_too_long(script_start_time):
+                logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                return
+    sentinel.flush()
+    if last_ts:
+        state_manager_grantstousers.post(last_ts)
+    
+    if check_if_script_runs_too_long(script_start_time):
+        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+        return
+
+    datatransferhistory_date_from = state_manager_datatransferhistory.get()
+    datatransferhistory_date_from = parse_date_from(datatransferhistory_date_from)
+    logging.info(f'Getting DATATRANSFER HISTORY events from {datatransferhistory_date_from}')
+    last_ts = None
+    for event in get_datatransfer_events(ctx, datatransferhistory_date_from):
+        sentinel.send(event)
+        last_ts = event.get("START_TIME")
+        if sentinel.is_empty() and last_ts:
+            state_manager_datatransferhistory.post(last_ts)
+            if check_if_script_runs_too_long(script_start_time):
+                logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+                return
+    
+    sentinel.flush()
+    if last_ts:
+        state_manager_logins.post(last_ts)
+        state_manager_datatransferhistory.post(last_ts)
+    
+    if check_if_script_runs_too_long(script_start_time):
+        logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
+        return
+
     ctx.close()
     logging.info(f'Script finished. Sent events: {sentinel.successfull_sent_events_number}')
 
@@ -199,6 +244,31 @@ def get_reader_query_events(ctx: snowflake.connector.SnowflakeConnection, date_f
     finally:
         cs.close()
 
+def get_grant_users_events(
+    ctx: snowflake.connector.SnowflakeConnection, date_from: datetime.datetime) -> Iterable[dict]:
+    cs = ctx.cursor(DictCursor)
+    try:
+        cs.execute("use schema snowflake.account_usage")
+        cs.execute(f"SELECT * from GRANTS_TO_USERS WHERE SYSTEM$TIMESTAMP > '{date_from.isoformat()}' ORDER BY SYSTEM$TIMESTAMP ASC")
+        for row in cs:
+            row = parse_grant_users_event(row)
+            yield row
+    finally:
+        cs.close()
+
+
+def get_datatransfer_events(
+    ctx: snowflake.connector.SnowflakeConnection, date_from: datetime.datetime) -> Iterable[dict]:
+    cs = ctx.cursor(DictCursor)
+    try:
+        cs.execute("use schema snowflake.account_usage")
+        cs.execute(f"SELECT * from DATATRANSFER_HISTORY WHERE START_TIME > '{date_from.isoformat()}' ORDER BY START_TIME ASC")
+        for row in cs:
+            row = parse_datatransfer_event(row)
+            yield row
+    finally:
+        cs.close()
+
 
 def parse_login_event(event: dict) -> dict:
     if 'EVENT_TIMESTAMP' in event and isinstance(event['EVENT_TIMESTAMP'], datetime.datetime):
@@ -213,6 +283,21 @@ def parse_query_event(event: dict) -> dict:
     if 'END_TIME' in event and isinstance(event['END_TIME'], datetime.datetime):
         event['END_TIME'] = event['END_TIME'].isoformat()
     event['source_table'] = 'QUERY_HISTORY'
+    return event
+
+def parse_grant_users_event(event: dict) -> dict:
+    if "SYSTEM$TIMESTAMP" in event and isinstance(event["SYSTEM$TIMESTAMP"], datetime.datetime):
+        event["EVENT_TIMESTAMP"] = event["SYSTEM$TIMESTAMP"].isoformat()
+    event["source_table"] = "GRANTS_TO_USERS"
+    return event
+
+
+def parse_datatransfer_event(event: dict) -> dict:
+    if "START_TIME" in event and isinstance(event["START_TIME"], datetime.datetime):
+        event["START_TIME"] = event["START_TIME"].isoformat()
+    if "END_TIME" in event and isinstance(event["END_TIME"], datetime.datetime):
+        event["END_TIME"] = event["END_TIME"].isoformat()
+    event["source_table"] = "DATATRANSFER_HISTORY"
     return event
 
 
