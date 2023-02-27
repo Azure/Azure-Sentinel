@@ -26,22 +26,27 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 
             if (requiredFolderFilesTag.hasOwnProperty("createUiDefinition"))
             {
+                console.log("aa")
                 const tagName = requiredFolderFilesTag.createUiDefinition;
                 tagContent = GetTagContent(tagName);
             }
             else if (requiredFolderFilesTag.hasOwnProperty("data"))
             {
+                console.log("bb")
                 const tagName = requiredFolderFilesTag.data;
                 tagContent = GetTagContent(tagName);
             }
             else if (requiredFolderFilesTag.hasOwnProperty("dataConnectors"))
             {
+                console.log("cc")
                 const tagName = requiredFolderFilesTag.dataConnectors;
                 tagContent = GetTagContent(tagName);
             }
 
             if (tagContent)
             {
+                console.log("dd")
+                console.log(`tagContent ${tagContent}`)
                 let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
                 if (hasAzureSentinelText) {
                     throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
