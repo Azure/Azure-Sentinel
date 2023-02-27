@@ -6,7 +6,9 @@ import * as logger from "./utils/logger";
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
     const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
-    const requiredFolderFiles = ["/Data/", "/data/", "/DataConnectors/", "/Data Connectors/", "createUiDefinition.json"]
+    const dataFolder = ["/Data/", "/data/"]
+    const dataConnectorsFolder = ["/DataConnectors/", "/Data Connectors/"]
+    let requiredFolderFiles = [...dataFolder, ...dataConnectorsFolder, "createUiDefinition.json"];
 
     const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
     const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
@@ -15,29 +17,51 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     {
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
+        let tagContent = "";
+        let tagName = ""
 
-        const tagsList = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
-        const validTags = tagsList.split("\n").filter(tag => tag.length > 0);
+        const hasDataFolder = dataFolder.filter(item => { return filePath.includes(item)}).length > 0
+        const hasDataConnectorFolder = dataConnectorsFolder.filter(item => { return filePath.includes(item)}).length > 0
 
-        const fileContent = fs.readFileSync(filePath, "utf8");
-        var fileContentObj = JSON.parse(fileContent);
-
-        for (const tagName of validTags) 
+        const jsonTagObj = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
+        if (jsonTagObj.hasOwnProperty("createUiDefinition") && filePath.includes('createUiDefinition'))
         {
-            var tagContent = GetTagContent(tagName);
+            tagName = jsonTagObj.createUiDefinition;
+            tagContent = GetTagContent(tagName);
+        }
+        else if (hasDataFolder && jsonTagObj.hasOwnProperty("data"))
+        {
+            tagName = jsonTagObj.data;
+            tagContent = GetTagContent(tagName);
+        }
+        else if (hasDataConnectorFolder && jsonTagObj.hasOwnProperty("dataConnectors"))
+        {
+            tagName = jsonTagObj.dataConnectors;
+            tagContent = GetTagContent(tagName);
+        }
 
-            if (tagContent)
-            {
-                let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
-                if (hasAzureSentinelText) {
-                    throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
-                }
+        if (tagContent)
+        {
+            let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
+            if (hasAzureSentinelText) {
+                throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
             }
         }
+        else
+        {
+            console.log(`Skipping file ${filePath} from Content Validation as ${searchText} text not found`);
+        }
     }
+    else
+    {
+        console.log(`Skipping file ${filePath} from Content Validation as the file is not from folder Data, Data Connector or createUiDefinition file`);
+    }
+
     return ExitCode.SUCCESS;
 
     function GetTagContent(tagName: any) {
+        var fileContentObj = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
         if (filePath.includes("createUiDefinition.json")) {
             var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
             if (tagContent == undefined) {
