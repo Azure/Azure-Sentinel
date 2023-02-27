@@ -244,8 +244,7 @@ def get_reader_query_events(ctx: snowflake.connector.SnowflakeConnection, date_f
     finally:
         cs.close()
 
-def get_grant_users_events(
-    ctx: snowflake.connector.SnowflakeConnection, date_from: datetime.datetime) -> Iterable[dict]:
+def get_grant_users_events(ctx: snowflake.connector.SnowflakeConnection, date_from: datetime.datetime) -> Iterable[dict]:
     cs = ctx.cursor(DictCursor)
     try:
         cs.execute("use schema snowflake.account_usage")
@@ -257,8 +256,7 @@ def get_grant_users_events(
         cs.close()
 
 
-def get_datatransfer_events(
-    ctx: snowflake.connector.SnowflakeConnection, date_from: datetime.datetime) -> Iterable[dict]:
+def get_datatransfer_events(ctx: snowflake.connector.SnowflakeConnection, date_from: datetime.datetime) -> Iterable[dict]:
     cs = ctx.cursor(DictCursor)
     try:
         cs.execute("use schema snowflake.account_usage")
@@ -286,18 +284,18 @@ def parse_query_event(event: dict) -> dict:
     return event
 
 def parse_grant_users_event(event: dict) -> dict:
-    if "CREATED_ON" in event and isinstance(event["CREATED_ON"], datetime.datetime):
-        event["CREATED_ON"] = event["CREATED_ON"].isoformat()
-    event["source_table"] = "GRANTS_TO_USERS"
+    if 'CREATED_ON' in event and isinstance(event['CREATED_ON'], datetime.datetime):
+        event['CREATED_ON'] = event['CREATED_ON'].isoformat()
+    event['source_table'] = 'GRANTS_TO_USERS'
     return event
 
 
 def parse_datatransfer_event(event: dict) -> dict:
-    if "START_TIME" in event and isinstance(event["START_TIME"], datetime.datetime):
-        event["START_TIME"] = event["START_TIME"].isoformat()
-    if "END_TIME" in event and isinstance(event["END_TIME"], datetime.datetime):
-        event["END_TIME"] = event["END_TIME"].isoformat()
-    event["source_table"] = "DATATRANSFER_HISTORY"
+    if 'START_TIME' in event and isinstance(event['START_TIME'], datetime.datetime):
+        event['START_TIME'] = event['START_TIME'].isoformat()
+    if 'END_TIME' in event and isinstance(event['END_TIME'], datetime.datetime):
+        event['END_TIME'] = event['END_TIME'].isoformat()
+    event['source_table'] = 'DATATRANSFER_HISTORY'
     return event
 
 
