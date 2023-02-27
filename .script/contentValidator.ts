@@ -6,35 +6,42 @@ import * as logger from "./utils/logger";
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
     const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
-    const requiredFolderFiles = ["/Data/", "/data/", "/DataConnectors/", "/Data Connectors/", "createUiDefinition.json"]
+    //const requiredFolderFiles = ["/Data/", "/data/", "/DataConnectors/", "/Data Connectors/", "createUiDefinition.json"]
+    const requiredFolderFilesTag = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
 
-    const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
-    const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
-
-    if (!hasIgnoredFile && hasRequiredFolderFiles)
+    if (requiredFolderFilesTag)
     {
-        const searchText = "Azure Sentinel";
-        const expectedText = "Microsoft Sentinel";
+        const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
+        const hasRequiredFolderFiles = requiredFolderFilesTag.filter(item => { return filePath.includes(item.key)}).length > 0
 
-        const tagsList = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
-        const validTags = tagsList.split("\n").filter(tag => tag.length > 0);
-
-        const fileContent = fs.readFileSync(filePath, "utf8");
-        var fileContentObj = JSON.parse(fileContent);
-
-        for (const tagName of validTags) 
+        if (!hasIgnoredFile && hasRequiredFolderFiles)
         {
-            var tagContent = GetTagContent(tagName);
+            const searchText = "Azure Sentinel";
+            const expectedText = "Microsoft Sentinel";
 
-            if (tagContent)
+            const tagsList = fs.readFileSync('./.script/validate-tag-text.txt', "utf8");
+            const validTags = tagsList.split("\n").filter(tag => tag.length > 0);
+
+            const fileContent = fs.readFileSync(filePath, "utf8");
+            var fileContentObj = JSON.parse(fileContent);
+
+            for (const tagName of validTags) 
             {
-                let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
-                if (hasAzureSentinelText) {
-                    throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
+                var tagContent = GetTagContent(tagName);
+
+                if (tagContent)
+                {
+                    let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
+                    if (hasAzureSentinelText) {
+                        throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
+                    }
                 }
             }
         }
+
     }
+
+    
     return ExitCode.SUCCESS;
 
     function GetTagContent(tagName: any) {
