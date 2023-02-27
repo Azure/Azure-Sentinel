@@ -289,8 +289,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 						$workbookUIParameter = [PSCustomObject] @{ name = "workbook$workbookCounter"; type = "Microsoft.Common.Section"; label = $dependencies.title; elements = @( [PSCustomObject] @{ name = "workbook$workbookCounter-text"; type = "Microsoft.Common.TextBlock"; options = @{ text = $dependencies.description; } } ) }
                         $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUIParameter
 
-                            # Update Counter
-                            $workbookCounter += 1
                         try {
                             $data = $rawData
                             # Serialize workbook data
@@ -483,7 +481,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             };
                         }
                         }
-                        # $workbookCounter += 1
+                        $workbookCounter += 1
                     }
                     elseif ($objectKeyLowercase -eq "playbooks") {
                         Write-Host "Generating Playbook using $file"
