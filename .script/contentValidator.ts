@@ -7,11 +7,8 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 {
     const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
     const dataFolder = ["/Data/", "/data/"]
-    const dataConnectors = ["/DataConnectors/", "/Data Connectors/"]
-    let requiredFolderFiles = [];
-    requiredFolderFiles.push(...dataFolder)
-    requiredFolderFiles.push(...dataConnectors)
-    requiredFolderFiles.push("createUiDefinition.json")
+    const dataConnectorsFolder = ["/DataConnectors/", "/Data Connectors/"]
+    let requiredFolderFiles = [...dataFolder, ...dataConnectorsFolder, "createUiDefinition.json"];
 
     const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
     const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
@@ -24,7 +21,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         let tagName = ""
 
         const hasDataFolder = dataFolder.filter(item => { return filePath.includes(item)}).length > 0
-        const hasDataConnectorFolder = dataConnectors.filter(item => { return filePath.includes(item)}).length > 0
+        const hasDataConnectorFolder = dataConnectorsFolder.filter(item => { return filePath.includes(item)}).length > 0
 
         const jsonTagObj = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
         if (jsonTagObj.hasOwnProperty("createUiDefinition") && filePath.includes('createUiDefinition'))
