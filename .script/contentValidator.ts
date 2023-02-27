@@ -23,19 +23,22 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 
         let tagContent = "";
         let tagName = ""
-        if (jsonTagObj.hasOwnProperty("createUiDefinition"))
+        if (jsonTagObj.hasOwnProperty("createUiDefinition") && filePath.includes('createUiDefinition'))
         {
             tagName = jsonTagObj.createUiDefinition;
+            console.log(`tagName value 1 ${tagName}`)
             tagContent = GetTagContent(tagName);
         }
-        else if (jsonTagObj.hasOwnProperty("data"))
+        else if (jsonTagObj.hasOwnProperty("data") && (filePath.includes('/data/') || filePath.includes('/Data/')))
         {
             tagName = jsonTagObj.data;
+            console.log(`tagName value 2 ${tagName}`)
             tagContent = GetTagContent(tagName);
         }
-        else if (jsonTagObj.hasOwnProperty("dataConnectors"))
+        else if (jsonTagObj.hasOwnProperty("dataConnectors") && (filePath.includes('/DataConnectors/') || filePath.includes('/Data Connectors/')))
         {
             tagName = jsonTagObj.dataConnectors;
+            console.log(`tagName value 3 ${tagName}`)
             tagContent = GetTagContent(tagName);
         }
 
