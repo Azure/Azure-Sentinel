@@ -25,27 +25,22 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         let tagName = ""
         if (jsonTagObj.hasOwnProperty("createUiDefinition"))
         {
-            console.log("aa")
             tagName = jsonTagObj.createUiDefinition;
             tagContent = GetTagContent(tagName);
         }
         else if (jsonTagObj.hasOwnProperty("data"))
         {
-            console.log("bb")
             tagName = jsonTagObj.data;
             tagContent = GetTagContent(tagName);
         }
         else if (jsonTagObj.hasOwnProperty("dataConnectors"))
         {
-            console.log("cc")
             tagName = jsonTagObj.dataConnectors;
             tagContent = GetTagContent(tagName);
         }
-        console.log(`tagContent a: ${tagContent}`)
+
         if (tagContent)
         {
-            console.log("dd")
-            console.log(`tagContent b: ${tagContent}`)
             let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
             if (hasAzureSentinelText) {
                 throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
