@@ -71,7 +71,7 @@ try {
 
     Write-Output "Creating new workspace named $Workspace in region $Location..."
     # Create the new workspace for the given name, region, and resource group
-    New-AzOperationalInsightsWorkspace -Location $Location -Name $Workspace -Sku Standard -ResourceGroupName $ResourceGroup
+    New-AzOperationalInsightsWorkspace -Location $Location -Name $Workspace -Sku pergb2018 -ResourceGroupName $ResourceGroup
 
 }
 
@@ -88,7 +88,7 @@ $msTemplates = Get-AzSentinelAlertRuleTemplate -WorkspaceName $Workspace -Resour
 
 #Urls to be used for Sentinel API calls
 $baseUri = "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${Workspace}"
-$connectedDataConnectorsUri = "$baseUri/providers/Microsoft.SecurityInsights/dataConnectors/?api-version=2020-01-01"
+$connectedDataConnectorsUri = "$baseUri/providers/Microsoft.SecurityInsights/dataConnectors/?api-version=2022-07-01-preview"
 
 function Get-ConnectedDataconnectors{
     try {
@@ -170,7 +170,7 @@ function BuildDataconnectorPayload($dataConnector, $guid, $etag, $isEnabled){
 }
 
 function EnableOrUpdateDataconnector($baseUri, $guid, $connectorBody, $isEnabled){ 
-	$uri = "${baseUri}/providers/Microsoft.SecurityInsights/dataConnectors/${guid}?api-version=2020-01-01"
+	$uri = "${baseUri}/providers/Microsoft.SecurityInsights/dataConnectors/${guid}?api-version=2022-07-01-preview"
 	try {
 		$result = Invoke-AzRestMethod -Path $uri -Method PUT -Payload ($connectorBody | ConvertTo-Json -Depth 3)
 		if ($result.StatusCode -eq 200) {
@@ -281,15 +281,15 @@ foreach ($connector in $connectors.connectors) {
         }  
     }
 
-    #AzureSecurityCenter connector
+    #MicrosoftDefenderforCloud connector
     elseif ($connector.kind -eq "AzureSecurityCenter") {  
         $dataConnectorBody = ""        
         #query for connected Data connectors
         $connectorProperties = checkDataConnector($connector.kind)
         $dataConnectorBody = BuildDataconnectorPayload $connector $connectorProperties.guid $connectorProperties.etag $connectorProperties.isEnabled
         EnableOrUpdateDataconnector $baseUri $connectorProperties.guid $dataConnectorBody $connectorProperties.isEnabled
-        Write-Host "Adding Analytics Rule for data connector Azure Security Center..." -NoNewline
-        EnableMSAnalyticsRule "Azure Security Center" 
+        Write-Host "Adding Analytics Rule for data connector Microsoft Defender for Cloud..." -NoNewline
+        EnableMSAnalyticsRule "Microsoft Defender for Cloud" 
     }
     #Office365 connector
     elseif ($connector.kind -eq "Office365") {
@@ -327,17 +327,17 @@ foreach ($connector in $connectors.connectors) {
         $dataConnectorBody = BuildDataconnectorPayload $connector $connectorProperties.guid $connectorProperties.etag $connectorProperties.isEnabled
         EnableOrUpdateDataconnector $baseUri $connectorProperties.guid $dataConnectorBody $connectorProperties.isEnabled
     }
-    #MicrosoftDefenderAdvancedThreatProtection connector
+    #Microsoft Defender for Endpoint connector
     elseif ($connector.kind -eq "MicrosoftDefenderAdvancedThreatProtection") {
         $dataConnectorBody = ""        
         #query for connected Data connectors
         $connectorProperties = checkDataConnector($connector.kind)
         $dataConnectorBody = BuildDataconnectorPayload $connector $connectorProperties.guid $connectorProperties.etag $connectorProperties.isEnabled
         EnableOrUpdateDataconnector $baseUri $connectorProperties.guid $dataConnectorBody $connectorProperties.isEnabled
-        Write-Host "Adding Analytics Rule for data connector Microsoft Defender Advanced Threat Protection..." -NoNewline
-        EnableMSAnalyticsRule "Microsoft Defender Advanced Threat Protection" 
+        Write-Host "Adding Analytics Rule for data connector Microsoft Defender for Endpoint..." -NoNewline
+        EnableMSAnalyticsRule "Microsoft Defender for Endpoint"
     }
-    #Azure Active Directory Identity Protection connector
+    ##Azure Active Directory Identity Protection connector
     elseif ($connector.kind -eq "AzureActiveDirectory") {
         $dataConnectorBody = ""        
         #query for connected Data connectors
@@ -347,7 +347,57 @@ foreach ($connector in $connectors.connectors) {
         Write-Host "Adding Analytics Rule for data connector Azure Active Directory Identity Protection..." -NoNewline
         EnableMSAnalyticsRule "Azure Active Directory Identity Protection" 
     }
-    #AzureActiveDirectory
+    #Microsoft Defender for Identity connector  
+    elseif ($connector.kind -eq "AzureAdvancedThreatProtection") {
+        $dataConnectorBody = ""        
+        #query for connected Data connectors
+        $connectorProperties = checkDataConnector($connector.kind)
+        $dataConnectorBody = BuildDataconnectorPayload $connector $connectorProperties.guid $connectorProperties.etag $connectorProperties.isEnabled
+        EnableOrUpdateDataconnector $baseUri $connectorProperties.guid $dataConnectorBody $connectorProperties.isEnabled
+        Write-Host "Adding Analytics Rule for data connector Microsoft Defender for Identity..." -NoNewline
+        EnableMSAnalyticsRule "Microsoft Defender for Identity" 
+    }
+    #MicrosoftThreatIntelligence connector 
+    elseif ($connector.kind -eq "MicrosoftThreatIntelligence") {
+        $dataConnectorBody = ""        
+        #query for connected Data connectors
+        $connectorProperties = checkDataConnector($connector.kind)
+        $dataConnectorBody = BuildDataconnectorPayload $connector $connectorProperties.guid $connectorProperties.etag $connectorProperties.isEnabled
+        EnableOrUpdateDataconnector $baseUri $connectorProperties.guid $dataConnectorBody $connectorProperties.isEnabled
+        Write-Host "Adding Analytics Rule for data connector Microsoft Threat Intelligence..." -NoNewline
+        EnableMSAnalyticsRule "Microsoft Threat Intelligence" 
+    }
+    #Microsoft Defender for IoT connector 
+    elseif ($connector.kind -eq "IOT") {
+        $dataConnectorBody = ""        
+        #query for connected Data connectors
+        $connectorProperties = checkDataConnector($connector.kind)
+        $dataConnectorBody = BuildDataconnectorPayload $connector $connectorProperties.guid $connectorProperties.etag $connectorProperties.isEnabled
+        EnableOrUpdateDataconnector $baseUri $connectorProperties.guid $dataConnectorBody $connectorProperties.isEnabled
+        Write-Host "Adding Analytics Rule for data connector Microsoft Defender for IoT..." -NoNewline
+        EnableMSAnalyticsRule "Microsoft Defender for IoT" 
+    }
+    #Microsoft Defender for Office 365 (Preview) connector 
+    elseif ($connector.kind -eq "OfficeATP") {
+        $dataConnectorBody = ""        
+        #query for connected Data connectors
+        $connectorProperties = checkDataConnector($connector.kind)
+        $dataConnectorBody = BuildDataconnectorPayload $connector $connectorProperties.guid $connectorProperties.etag $connectorProperties.isEnabled
+        EnableOrUpdateDataconnector $baseUri $connectorProperties.guid $dataConnectorBody $connectorProperties.isEnabled
+        Write-Host "Adding Analytics Rule for data connector Microsoft Defender for Office 365 (Preview)..." -NoNewline
+        EnableMSAnalyticsRule "Microsoft Defender for Office 365 (Preview)" 
+    } 
+    #Dynamics365 connector        
+    elseif ($connector.kind -eq "Dynamics365") {
+        $dataConnectorBody = ""        
+        #query for connected Data connectors
+        $connectorProperties = checkDataConnector($connector.kind)
+        $dataConnectorBody = BuildDataconnectorPayload $connector $connectorProperties.guid $connectorProperties.etag $connectorProperties.isEnabled
+        EnableOrUpdateDataconnector $baseUri $connectorProperties.guid $dataConnectorBody $connectorProperties.isEnabled
+        Write-Host "Adding Analytics Rule for data connector Dynamics 365..." -NoNewline
+        EnableMSAnalyticsRule "Dynamics 365" 
+    } 
+    # Azure Active Directory connector
     elseif ($connector.kind -eq "AzureActiveDirectoryDiagnostics") {
         <# Azure Active Directory Audit/SignIn logs - requires special call and is therefore not connectors file
         # Be aware that you executing SPN needs Owner rights on tenant scope for this operation, can be added with following CLI

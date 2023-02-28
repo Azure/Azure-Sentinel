@@ -229,12 +229,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "workbook-source" -NotePropertyValue "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbook-source" -NotePropertyValue "[variables('workbook-source')]"
                             };
-                            $baseWorkbookStep = [PSCustomObject] @{
+							$baseWorkbookStep = [PSCustomObject] @{
                                 name       = "workbooks";
                                 label      = "Workbooks";
                                 subLabel   = [PSCustomObject] @{
-                                    preValidation  = "Configure the workbooks";
-                                    postValidation = "Done";
+                                preValidation  = "Configure the workbooks";
+                                postValidation = "Done";
                                 };
                                 bladeTitle = "Workbooks";
                                 elements   = @(
@@ -242,7 +242,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "workbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
-                                            text =  $contentToImport.WorkbookBladeDescription ? $contentToImport.WorkbookBladeDescription : "This Microsoft Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Microsoft Sentinel and combine them into unified interactive experiences.";
+                                            text =  $contentToImport.WorkbookBladeDescription ? $contentToImport.WorkbookBladeDescription : "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view.";
                                         }
                                     },
                                     [PSCustomObject] @{
@@ -254,11 +254,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                                 uri= "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
                                               }
                                             }
-                                    }
-                                )
-                            }
-                            $baseCreateUiDefinition.parameters.steps += $baseWorkbookStep
-
+										}
+                                    )
+                                }
+                                $baseCreateUiDefinition.parameters.steps += $baseWorkbookStep
                             if(!$contentToImport.TemplateSpec)
                             {
                                 #Add formattedTimeNow parameter since workbooks exist
@@ -272,6 +271,24 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "formattedTimeNow" -Value $timeNowParameter
                             }
                         }
+						if($contentToImport.TemplateSpec) {
+                            #Getting Workbook Metadata dependencies from Github
+                            $workbookData = $null
+                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            try {
+                                Write-Host "Downloading $workbookFinalPath"
+                                $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
+                                $dependencies = $workbookData | ConvertFrom-Json | Where-Object {($_.templateRelativePath.split('.')[0].ToLower() -eq $workbookKey.ToLower())}
+                                $WorkbookDependencyCriteria = @();
+                            }
+                            catch {
+                                Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
+                                break;
+                            }
+						}
+						$workbookUIParameter = [PSCustomObject] @{ name = "workbook$workbookCounter"; type = "Microsoft.Common.Section"; label = $dependencies.title; elements = @( [PSCustomObject] @{ name = "workbook$workbookCounter-text"; type = "Microsoft.Common.TextBlock"; options = @{ text = $dependencies.description; } } ) }
+                        $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUIParameter
+
                         try {
                             $data = $rawData
                             # Serialize workbook data
@@ -1451,12 +1468,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
                         $connectorDataType = $(getConnectorDataTypes $connectorData.dataTypes)
                         $isParserAvailable = $($contentToImport.Parsers -and ($contentToImport.Parsers.Count -gt 0))
-                        $baseDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Microsoft Sentinel workspace. Configure and enable this data connector in the Data Connector gallery after this Solution deploys."
+                        $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
                         $parserText = "The Solution installs a parser that transforms the ingested data into Microsoft Sentinel normalized format. The normalized format enables better correlation of different types of data from different data sources to drive end-to-end outcomes seamlessly in security monitoring, hunting, incident investigation and response scenarios in Microsoft Sentinel."
-                        $customLogsText = "$baseDescriptionText This data connector creates custom log table(s) $(getAllDataTypeNames $connectorData.dataTypes) in your Microsoft Sentinel / Azure Log Analytics workspace."
-                        $syslogText = "$baseDescriptionText The logs will be received in the Syslog table in your Microsoft Sentinel / Azure Log Analytics workspace."
-                        $commonSecurityLogText = "$baseDescriptionText The logs will be received in the CommonSecurityLog table in your Microsoft Sentinel / Azure Log Analytics workspace."
-                        $connectorDescriptionText = $(if ($connectorDataType -eq $commonSecurityLog) { $commonSecurityLogText } elseif ($connectorDataType -eq $syslog) { $syslogText } else { $customLogsText })
 
                         $baseDataConnectorStep = [PSCustomObject] @{
                             name       = "dataconnectors";
@@ -1703,7 +1716,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $huntingQueryDescription = ""
                             if ($yaml.description) {
-                                $huntingQueryDescription = $yaml.description.substring(1, $yaml.description.length - 3)
+                                $huntingQueryDescription = $yaml.description.Trim();
+                                if($huntingQueryDescription.StartsWith("'"))
+                                {
+                                    $huntingQueryDescription = $huntingQueryDescription.substring(1, $huntingQueryDescription.length-1)
+                                }
+
+                                if($huntingQueryDescription.EndsWith("'"))
+                                {
+                                    $huntingQueryDescription = $huntingQueryDescription.substring(0, $huntingQueryDescription.length-1)
+                                }
+
                                 $descriptionObj = [PSCustomObject]@{
                                     name  = "description";
                                     value = $huntingQueryDescription
@@ -1830,7 +1853,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             $dependencyDescription = ""
                             if ($yaml.requiredDataConnectors) {
-                                $dependencyDescription = "It depends on the $($yaml.requiredDataConnectors.connectorId) data connector and $($($yaml.requiredDataConnectors.dataTypes)) data type and $($yaml.requiredDataConnectors.connectorId) parser."
+                                # $dependencyDescription = "It depends on the $($yaml.requiredDataConnectors.connectorId) data connector and $($($yaml.requiredDataConnectors.dataTypes)) data type and $($yaml.requiredDataConnectors.connectorId) parser."
+                                $dependencyDescription = "This hunting query depends on $($yaml.requiredDataConnectors.connectorId) data connector ($($($yaml.requiredDataConnectors.dataTypes)) Parser or Table)"
                             }
                             $huntingQueryElement = [PSCustomObject]@{
                                 name     = "huntingquery$huntingQueryCounter";
@@ -1948,6 +1972,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $alertRule | Add-Member -NotePropertyName tactics -NotePropertyValue $yaml.tactics # Add Tactics property if exists
                             }
+                            if ($yaml.relevantTechniques -and ($yaml.relevantTechniques.Count -gt 0) ) {
+                                if ($yaml.relevantTechniques -match ' ') {
+                                    $yaml.relevantTechniques = $yaml.relevantTechniques -replace ' ', ''
+                                }
+                                $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue ([array]($yaml.relevantTechniques | ForEach-Object { ($_ -split "\.")[0] })) # Add relevantTechniques property if exists
+                            }
+                           
                             $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any.
                             if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')) {
                                 # Remove surrounding single-quotes (') from YAML block literal string, in case the string starts with a single quote in Yaml.

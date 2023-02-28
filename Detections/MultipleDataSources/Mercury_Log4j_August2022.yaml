@@ -40,6 +40,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWDnsQuery
   - connectorId: WindowsFirewall
     dataTypes:
       - WindowsFirewall      
@@ -114,10 +116,49 @@ query:  |
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
-  | where DestinationHost has_any (domains)  
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList) or DestinationHost has_any (domains) 
   | extend DNSName = DestinationHost 
   | extend IPCustomEntity = SourceHost
-  ), 
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallNetworkRule"
+  | where msg_s has_any (IPList)
+  | parse msg_s with Protocol " request from " SourceIP ":" SourcePortInt:int " to " TargetIP ":" TargetPortInt:int *
+  | parse kind=regex flags=U msg_s with * ". Action\\: " Action1a "\\."
+  | parse msg_s with * ". Policy: " Policy ". Rule Collection Group: " RuleCollectionGroup "." *
+  | parse msg_s with * " Rule Collection: "  RuleCollection ". Rule: " Rule 
+  | extend IPCustomEntity = SourceIP
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | where msg_s has_any (domains)
+  | parse msg_s with "DNS Request: " SourceIP ":" SourcePortInt:int " - " QueryID:int " " RequestType " " RequestClass " " hostname ". " protocol " " details
+  | extend
+      ResponseDuration = extract("[0-9]*.?[0-9]+s$", 0, msg_s),
+      SourcePort = tostring(SourcePortInt),
+      QueryID =  tostring(QueryID)
+  | extend IPCustomEntity = SourceIP
+  | project TimeGenerated,SourceIP,hostname,RequestType,ResponseDuration,details,msg_s
+  | order by TimeGenerated
+  ),
+  (AZFWApplicationRule
+  | where Fqdn has_any (domains) or Fqdn has_any (IPList)
+  | extend IPCustomEntity = SourceIp
+  ),
+  (AZFWDnsQuery
+  | where isnotempty(QueryName)
+  | where QueryName has_any (domains)
+  | extend DNSName = QueryName
+  | extend IPCustomEntity = SourceIp
+  ),
+  (AZFWNetworkRule
+  | where DestinationIp  has_any (IPList)  
+  | extend DestinationIP = DestinationIp 
+  | extend IPCustomEntity = SourceIp
+  ),
   (CommonSecurityLog
   | where FileHash in (sha256Hashes)
   | project TimeGenerated, Message, SourceUserID, FileHash, Type
@@ -173,7 +214,7 @@ entityMappings:
         columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.3
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:

@@ -1,6 +1,6 @@
-# Microsoft SharePoint ASIM AuditEvent Normalization Parser
+# Microsoft Windows ASIM AuditEvent Normalization Parser
 
-ARM template for ASIM AuditEvent schema parser for Microsoft SharePoint.
+ARM template for ASIM AuditEvent schema parser for Microsoft Windows.
 
 This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) in the SecurityEvent, WindowsEvent and Event tables to the ASIM Audit Event schema.
 
