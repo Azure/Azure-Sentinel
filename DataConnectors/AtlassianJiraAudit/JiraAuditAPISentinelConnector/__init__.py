@@ -71,7 +71,7 @@ def get_result(time_range):
     to_time = time_range[1]
     offset = 0
     limit = 1000
-    element_count = 0
+    element_count = None
     global_element_count = 0
     while element_count != 0:
         result = get_result_request(offset,limit,from_time,to_time)
@@ -86,7 +86,7 @@ def get_result(time_range):
             post_status_code = post_data(json.dumps(result))
             if post_status_code is not None:
                 global_element_count = global_element_count + element_count
-    logging.info("Processed {} events to Azure Sentinel. Time period: from {} to {}.".format(global_element_count,from_time, to_time))
+    logging.info("Processed {} events to Microsoft Sentinel. Time period: from {} to {}.".format(global_element_count,from_time, to_time))
 
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
@@ -127,4 +127,3 @@ def main(mytimer: func.TimerRequest)  -> None:
         logging.info('The timer is past due!')
     logging.info('Starting program')
     get_result(generate_date())
-

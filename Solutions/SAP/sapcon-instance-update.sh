@@ -134,17 +134,11 @@ while IFS= read -r contname; do
 	fi
 
 	log "Checking if upgrade is necessary for agent $contname"
-	if [[ -z $(docker inspect "$contname" --format '{{ .Config.Labels }}' | grep "Cloud") ]]; then
-		CLOUD='public'
-	else
-		CLOUD=$(docker inspect "$contname" --format '{{.Config.Labels.Cloud}}')
-		if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'mooncake' ]; then
-			CLOUD='public'
-		fi
-	fi
+	CLOUD=$(docker inspect "$contname" --format '{{index .Config.Labels "Cloud"}}')
+
 	labelstring="--label Cloud=$CLOUD"
 	if [ ! $DEVMODE ]; then
-		if [ "$CLOUD" == 'public' ]; then
+		if [ "$CLOUD" == 'public' ] || [ -z $CLOUD ]; then
 			tag=':latest'
 		elif [ "$CLOUD" == 'fairfax' ]; then
 			tag=':ffx-latest'
@@ -152,6 +146,9 @@ while IFS= read -r contname; do
 		elif [ "$CLOUD" == 'mooncake' ]; then
 			tag=':mc-latest'
 			az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
+		else
+			log "Skipping container $contname as its Cloud label is not supported: $CLOUD"
+			continue
 		fi
 		if [ $PREVIEW ]; then
 			tagver="$tag-preview"
