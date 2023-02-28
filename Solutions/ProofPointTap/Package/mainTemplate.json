@@ -27,19 +27,25 @@
       "metadata": {
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Proofpoint TAP",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
     }
   },
   "variables": {
     "solutionId": "azuresentinel.azure-sentinel-proofpoint",
     "_solutionId": "[variables('solutionId')]",
-    "operationId-getCampaignById": "getCampaignById",
-    "_operationId-getCampaignById": "[variables('operationId-getCampaignById')]",
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "uiConfigId1": "ProofpointTAPNativePoller",
+    "uiConfigId1": "ProofpointTAP",
     "_uiConfigId1": "[variables('uiConfigId1')]",
-    "dataConnectorContentId1": "ProofpointTAPNativePoller",
+    "dataConnectorContentId1": "ProofpointTAP",
     "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
     "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
     "_dataConnectorId1": "[variables('dataConnectorId1')]",
@@ -53,16 +59,21 @@
     "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
     "_parserId1": "[variables('parserId1')]",
     "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]",
-    "analyticRuleVersion1": "1.0.2",
+    "analyticRuleVersion1": "1.0.3",
     "analyticRulecontentId1": "0558155e-4556-447e-9a22-828f2a7de06b",
     "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
     "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
     "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]",
-    "analyticRuleVersion2": "1.0.2",
+    "analyticRuleVersion2": "1.0.3",
     "analyticRulecontentId2": "8675dd7a-795e-4d56-a79c-fc848c5ee61c",
     "_analyticRulecontentId2": "[variables('analyticRulecontentId2')]",
     "analyticRuleId2": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId2'))]",
     "analyticRuleTemplateSpecName2": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId2')))]",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "ProofPointTAPWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
     "ProofpointTAPConnector": "ProofpointTAPConnector",
     "_ProofpointTAPConnector": "[variables('ProofpointTAPConnector')]",
     "playbookVersion1": "1.0",
@@ -89,7 +100,9 @@
     "playbookContentId4": "ProofpointTAP-CheckAccountInVAP",
     "_playbookContentId4": "[variables('playbookContentId4')]",
     "playbookId4": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId4'))]",
-    "playbookTemplateSpecName4": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId4')))]"
+    "playbookTemplateSpecName4": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId4')))]",
+    "operationId-getCampaignById": "getCampaignById",
+    "_operationId-getCampaignById": "[variables('operationId-getCampaignById')]"
   },
   "resources": [
     {
@@ -119,7 +132,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "ProofPointTap data connector with template version 2.0.1",
+        "description": "ProofPointTap data connector with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -131,37 +144,80 @@
               "apiVersion": "2021-03-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
-              "kind": "APIPolling",
+              "kind": "GenericUI",
               "properties": {
                 "connectorUiConfig": {
                   "id": "[variables('_uiConfigId1')]",
-                  "title": "Proofpoint TAP",
+                  "title": "Proofpoint TAP (using Azure Function)",
                   "publisher": "Proofpoint",
-                  "descriptionMarkdown": "The Proofpoint TAP data connector provides the capability to ingest [Proofpoint TAP events](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API) into Microsoft Sentinel.",
-                  "graphQueriesTableName": "ProofpointTAPNativePoller_CL",
+                  "descriptionMarkdown": "The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/products/advanced-threat-protection/targeted-attack-protection) connector provides the capability to ingest Proofpoint TAP logs and events into Microsoft Sentinel. The connector provides visibility into Message and Click events in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.",
                   "graphQueries": [
                     {
                       "metricName": "Total data received",
-                      "legend": "Proofpoint TAP events",
-                      "baseQuery": "{{graphQueriesTableName}}"
+                      "legend": "Proofpoint TAP Messages Delivered",
+                      "baseQuery": "ProofPointTAPMessagesDelivered_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Proofpoint TAP Messages Blocked",
+                      "baseQuery": "ProofPointTAPMessagesBlocked_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Proofpoint TAP Clicks Permitted",
+                      "baseQuery": "ProofPointTAPClicksPermitted_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Proofpoint TAP Clicks Blocked",
+                      "baseQuery": "ProofPointTAPClicksBlocked_CL"
                     }
                   ],
                   "sampleQueries": [
                     {
-                      "description": "All Proofpoint TAP events",
-                      "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                      "description": "Malware click events permitted",
+                      "query": "ProofPointTAPClicksPermitted_CL\n | where classification_s == \"malware\" \n | take 10"
+                    },
+                    {
+                      "description": "Phishing click events blocked",
+                      "query": "ProofPointTAPClicksBlocked_CL\n | where classification_s == \"phish\" \n | take 10"
+                    },
+                    {
+                      "description": "Malware messages events delivered",
+                      "query": "ProofPointTAPMessagesDelivered_CL\n | mv-expand todynamic(threatsInfoMap_s)\n | extend classification = tostring(threatsInfoMap_s.classification)\n | where classification == \"malware\" \n | take 10"
+                    },
+                    {
+                      "description": "Phishing message events blocked",
+                      "query": "ProofPointTAPMessagesBlocked_CL\n | mv-expand todynamic(threatsInfoMap_s)\n | extend classification = tostring(threatsInfoMap_s.classification)\n | where classification == \"phish\""
                     }
                   ],
                   "dataTypes": [
                     {
-                      "name": "{{graphQueriesTableName}}",
-                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                      "name": "ProofPointTAPClicksPermitted_CL",
+                      "lastDataReceivedQuery": "ProofPointTAPClicksPermitted_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ProofPointTAPClicksBlocked_CL",
+                      "lastDataReceivedQuery": "ProofPointTAPClicksBlocked_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ProofPointTAPMessagesDelivered_CL",
+                      "lastDataReceivedQuery": "ProofPointTAPMessagesDelivered_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ProofPointTAPMessagesBlocked_CL",
+                      "lastDataReceivedQuery": "ProofPointTAPMessagesBlocked_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
                     }
                   ],
-                  "connectivityCriteria": [
+                  "connectivityCriterias": [
                     {
-                      "type": "SentinelKindsV2",
-                      "value": []
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ProofPointTAPMessagesDelivered_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "ProofPointTAPMessagesBlocked_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "ProofPointTAPClicksPermitted_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "ProofPointTAPMessagesBlocked_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
                     }
                   ],
                   "availability": {
@@ -172,7 +228,7 @@
                     "resourceProvider": [
                       {
                         "provider": "Microsoft.OperationalInsights/workspaces",
-                        "permissionsDisplayText": "read and write permissions are required.",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
                         "providerDisplayName": "Workspace",
                         "scope": "Workspace",
                         "requiredPermissions": {
@@ -183,7 +239,7 @@
                       },
                       {
                         "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
                         "providerDisplayName": "Keys",
                         "scope": "Workspace",
                         "requiredPermissions": {
@@ -193,52 +249,66 @@
                     ],
                     "customs": [
                       {
-                        "name": "Proofpoint TAP API credentials",
-                        "description": "Proofpoint TAP API username and password are required. [See the documentation to learn more about Proofpoint SIEM API](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API)."
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Proofpoint TAP API Key",
+                        "description": "A Proofpoint TAP API username and password is required. [See the documentation to learn more about Proofpoint SIEM API](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API)."
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
-                      "description": "Enable Proofpoint TAP Logs.",
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to Proofpoint TAP to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": "**STEP 1 - Configuration steps for the Proofpoint TAP API**\n\n1. Log into the Proofpoint TAP console \n2. Navigate to **Connect Applications** and select **Service Principal**\n3. Create a **Service Principal** (API Authorization Key)"
+                    },
+                    {
+                      "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Proofpoint TAP connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Proofpoint TAP API Authorization Key(s), readily available.",
                       "instructions": [
                         {
                           "parameters": {
-                            "enable": "true"
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
                           },
-                          "type": "BasicAuth"
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
                         }
-                      ],
-                      "title": "Connect Proofpoint TAP to Microsoft Sentinel"
+                      ]
+                    },
+                    {
+                      "description": "Use this method for automated deployment of the Proofpoint TAP connector.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinelproofpointtapazuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **API Username**, **API Password**, and validate the **Uri**.\n> - The default URI is pulling data for the last 300 seconds (5 minutes) to correspond with the default Function App Timer trigger of 5 minutes. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly (in the function.json file, post deployment) to prevent overlapping data ingestion. \n> - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+                      "title": "Option 1 - Azure Resource Manager (ARM) Template"
+                    },
+                    {
+                      "description": "This method provides the step-by-step instructions to deploy the Proofpoint TAP connector manually with Azure Function.",
+                      "title": "Option 2 - Manual Deployment of Azure Functions"
+                    },
+                    {
+                      "description": "**1. Create a Function App**\n\n1.  From the Azure Portal, navigate to [Function App](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp), and select **+ Add**.\n2. In the **Basics** tab, ensure Runtime stack is set to **Powershell Core**. \n3. In the **Hosting** tab, ensure the **Consumption (Serverless)** plan type is selected.\n4. Make other preferrable configuration changes, if needed, then click **Create**."
+                    },
+                    {
+                      "description": "**2. Import Function App Code**\n\n1. In the newly created Function App, select **Functions** on the left pane and click **+ Add**.\n2. Select **Timer Trigger**.\n3. Enter a unique Function **Name** and modify the cron schedule, if needed. The default value is set to run the Function App every 5 minutes. (Note: the Timer trigger should match the `timeInterval` value below to prevent overlapping data), click **Create**.\n4. Click on **Code + Test** on the left pane. \n5. Copy the [Function App Code](https://aka.ms/sentinelproofpointtapazurefunctioncode) and paste into the Function App `run.ps1` editor.\n5. Click **Save**."
+                    },
+                    {
+                      "description": "**3. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following six (6) application settings individually, with their respective string values (case-sensitive): \n\t\tapiUsername\n\t\tapipassword\n\t\tworkspaceID\n\t\tworkspaceKey\n\t\turi\n\t\tlogAnalyticsUri (optional)\n> - Set the `uri` value to: `https://tap-api-v2.proofpoint.com/v2/siem/all?format=json&sinceSeconds=300`\n> - The default URI is pulling data for the last 300 seconds (5 minutes) to correspond with the default Function App Timer trigger of 5 minutes. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly to prevent overlapping data ingestion.\n> - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details.\n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`\n4. Once all application settings have been entered, click **Save**."
                     }
                   ]
-                },
-                "pollingConfig": {
-                  "auth": {
-                    "authType": "Basic"
-                  },
-                  "request": {
-                    "apiEndpoint": "https://tap-api-v2.proofpoint.com/v2/siem/all",
-                    "httpMethod": "Get",
-                    "queryTimeIntervalAttributeName": "interval",
-                    "queryTimeIntervalDelimiter": "/",
-                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-                    "queryWindowInMin": 5,
-                    "queryParameters": {
-                      "format": "json"
-                    }
-                  },
-                  "paging": {
-                    "pagingType": "None"
-                  },
-                  "response": {
-                    "eventsJsonPaths": [
-                      "$..messagesDelivered",
-                      "$..messagesBlocked",
-                      "$..clicksPermitted",
-                      "$..clicksBlocked"
-                    ]
-                  }
                 }
               }
             },
@@ -307,37 +377,79 @@
       "apiVersion": "2021-03-01-preview",
       "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
       "location": "[parameters('workspace-location')]",
-      "kind": "APIPolling",
+      "kind": "GenericUI",
       "properties": {
         "connectorUiConfig": {
-          "id": "[variables('_uiConfigId1')]",
-          "title": "Proofpoint TAP",
+          "title": "Proofpoint TAP (using Azure Function)",
           "publisher": "Proofpoint",
-          "descriptionMarkdown": "The Proofpoint TAP data connector provides the capability to ingest [Proofpoint TAP events](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API) into Microsoft Sentinel.",
-          "graphQueriesTableName": "ProofpointTAPNativePoller_CL",
+          "descriptionMarkdown": "The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/products/advanced-threat-protection/targeted-attack-protection) connector provides the capability to ingest Proofpoint TAP logs and events into Microsoft Sentinel. The connector provides visibility into Message and Click events in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.",
           "graphQueries": [
             {
               "metricName": "Total data received",
-              "legend": "Proofpoint TAP events",
-              "baseQuery": "{{graphQueriesTableName}}"
-            }
-          ],
-          "sampleQueries": [
+              "legend": "Proofpoint TAP Messages Delivered",
+              "baseQuery": "ProofPointTAPMessagesDelivered_CL"
+            },
             {
-              "description": "All Proofpoint TAP events",
-              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+              "metricName": "Total data received",
+              "legend": "Proofpoint TAP Messages Blocked",
+              "baseQuery": "ProofPointTAPMessagesBlocked_CL"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "Proofpoint TAP Clicks Permitted",
+              "baseQuery": "ProofPointTAPClicksPermitted_CL"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "Proofpoint TAP Clicks Blocked",
+              "baseQuery": "ProofPointTAPClicksBlocked_CL"
             }
           ],
           "dataTypes": [
             {
-              "name": "{{graphQueriesTableName}}",
-              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+              "name": "ProofPointTAPClicksPermitted_CL",
+              "lastDataReceivedQuery": "ProofPointTAPClicksPermitted_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ProofPointTAPClicksBlocked_CL",
+              "lastDataReceivedQuery": "ProofPointTAPClicksBlocked_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ProofPointTAPMessagesDelivered_CL",
+              "lastDataReceivedQuery": "ProofPointTAPMessagesDelivered_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ProofPointTAPMessagesBlocked_CL",
+              "lastDataReceivedQuery": "ProofPointTAPMessagesBlocked_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
             }
           ],
-          "connectivityCriteria": [
+          "connectivityCriterias": [
             {
-              "type": "SentinelKindsV2",
-              "value": []
+              "type": "IsConnectedQuery",
+              "value": [
+                "ProofPointTAPMessagesDelivered_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                "ProofPointTAPMessagesBlocked_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                "ProofPointTAPClicksPermitted_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                "ProofPointTAPMessagesBlocked_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Malware click events permitted",
+              "query": "ProofPointTAPClicksPermitted_CL\n | where classification_s == \"malware\" \n | take 10"
+            },
+            {
+              "description": "Phishing click events blocked",
+              "query": "ProofPointTAPClicksBlocked_CL\n | where classification_s == \"phish\" \n | take 10"
+            },
+            {
+              "description": "Malware messages events delivered",
+              "query": "ProofPointTAPMessagesDelivered_CL\n | mv-expand todynamic(threatsInfoMap_s)\n | extend classification = tostring(threatsInfoMap_s.classification)\n | where classification == \"malware\" \n | take 10"
+            },
+            {
+              "description": "Phishing message events blocked",
+              "query": "ProofPointTAPMessagesBlocked_CL\n | mv-expand todynamic(threatsInfoMap_s)\n | extend classification = tostring(threatsInfoMap_s.classification)\n | where classification == \"phish\""
             }
           ],
           "availability": {
@@ -348,7 +460,7 @@
             "resourceProvider": [
               {
                 "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "read and write permissions are required.",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
                 "providerDisplayName": "Workspace",
                 "scope": "Workspace",
                 "requiredPermissions": {
@@ -359,7 +471,7 @@
               },
               {
                 "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
                 "providerDisplayName": "Keys",
                 "scope": "Workspace",
                 "requiredPermissions": {
@@ -369,52 +481,67 @@
             ],
             "customs": [
               {
-                "name": "Proofpoint TAP API credentials",
-                "description": "Proofpoint TAP API username and password are required. [See the documentation to learn more about Proofpoint SIEM API](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API)."
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Proofpoint TAP API Key",
+                "description": "A Proofpoint TAP API username and password is required. [See the documentation to learn more about Proofpoint SIEM API](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API)."
               }
             ]
           },
           "instructionSteps": [
             {
-              "description": "Enable Proofpoint TAP Logs.",
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to Proofpoint TAP to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": "**STEP 1 - Configuration steps for the Proofpoint TAP API**\n\n1. Log into the Proofpoint TAP console \n2. Navigate to **Connect Applications** and select **Service Principal**\n3. Create a **Service Principal** (API Authorization Key)"
+            },
+            {
+              "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Proofpoint TAP connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Proofpoint TAP API Authorization Key(s), readily available.",
               "instructions": [
                 {
                   "parameters": {
-                    "enable": "true"
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
                   },
-                  "type": "BasicAuth"
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
                 }
-              ],
-              "title": "Connect Proofpoint TAP to Microsoft Sentinel"
+              ]
+            },
+            {
+              "description": "Use this method for automated deployment of the Proofpoint TAP connector.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinelproofpointtapazuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **API Username**, **API Password**, and validate the **Uri**.\n> - The default URI is pulling data for the last 300 seconds (5 minutes) to correspond with the default Function App Timer trigger of 5 minutes. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly (in the function.json file, post deployment) to prevent overlapping data ingestion. \n> - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+              "title": "Option 1 - Azure Resource Manager (ARM) Template"
+            },
+            {
+              "description": "This method provides the step-by-step instructions to deploy the Proofpoint TAP connector manually with Azure Function.",
+              "title": "Option 2 - Manual Deployment of Azure Functions"
+            },
+            {
+              "description": "**1. Create a Function App**\n\n1.  From the Azure Portal, navigate to [Function App](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp), and select **+ Add**.\n2. In the **Basics** tab, ensure Runtime stack is set to **Powershell Core**. \n3. In the **Hosting** tab, ensure the **Consumption (Serverless)** plan type is selected.\n4. Make other preferrable configuration changes, if needed, then click **Create**."
+            },
+            {
+              "description": "**2. Import Function App Code**\n\n1. In the newly created Function App, select **Functions** on the left pane and click **+ Add**.\n2. Select **Timer Trigger**.\n3. Enter a unique Function **Name** and modify the cron schedule, if needed. The default value is set to run the Function App every 5 minutes. (Note: the Timer trigger should match the `timeInterval` value below to prevent overlapping data), click **Create**.\n4. Click on **Code + Test** on the left pane. \n5. Copy the [Function App Code](https://aka.ms/sentinelproofpointtapazurefunctioncode) and paste into the Function App `run.ps1` editor.\n5. Click **Save**."
+            },
+            {
+              "description": "**3. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following six (6) application settings individually, with their respective string values (case-sensitive): \n\t\tapiUsername\n\t\tapipassword\n\t\tworkspaceID\n\t\tworkspaceKey\n\t\turi\n\t\tlogAnalyticsUri (optional)\n> - Set the `uri` value to: `https://tap-api-v2.proofpoint.com/v2/siem/all?format=json&sinceSeconds=300`\n> - The default URI is pulling data for the last 300 seconds (5 minutes) to correspond with the default Function App Timer trigger of 5 minutes. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly to prevent overlapping data ingestion.\n> - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details.\n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`\n4. Once all application settings have been entered, click **Save**."
             }
-          ]
-        },
-        "pollingConfig": {
-          "auth": {
-            "authType": "Basic"
-          },
-          "request": {
-            "apiEndpoint": "https://tap-api-v2.proofpoint.com/v2/siem/all",
-            "httpMethod": "Get",
-            "queryTimeIntervalAttributeName": "interval",
-            "queryTimeIntervalDelimiter": "/",
-            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-            "queryWindowInMin": 5,
-            "queryParameters": {
-              "format": "json"
-            }
-          },
-          "paging": {
-            "pagingType": "None"
-          },
-          "response": {
-            "eventsJsonPaths": [
-              "$..messagesDelivered",
-              "$..messagesBlocked",
-              "$..clicksPermitted",
-              "$..clicksBlocked"
-            ]
-          }
+          ],
+          "id": "[variables('_uiConfigId1')]"
         }
       }
     },
@@ -445,7 +572,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "ProofpointTAPEvent Data Parser with template version 2.0.1",
+        "description": "ProofpointTAPEvent Data Parser with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserVersion1')]",
@@ -576,7 +703,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "MalwareAttachmentDelivered_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "MalwareAttachmentDelivered_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion1')]",
@@ -604,36 +731,36 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "ProofpointTAP",
                     "dataTypes": [
                       "ProofPointTAPMessagesDelivered_CL"
-                    ],
-                    "connectorId": "ProofpointTAPNativePoller"
+                    ]
                   }
                 ],
                 "tactics": [
                   "InitialAccess"
                 ],
                 "techniques": [
-                  "T1566.001"
+                  "T1566"
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "AccountCustomEntity",
                         "identifier": "FullName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -696,7 +823,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "MalwareLinkClicked_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "MalwareLinkClicked_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion2')]",
@@ -724,45 +851,45 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "ProofpointTAP",
                     "dataTypes": [
                       "ProofPointTAPClicksPermitted_CL"
-                    ],
-                    "connectorId": "ProofpointTAPNativePoller"
+                    ]
                   }
                 ],
                 "tactics": [
                   "InitialAccess"
                 ],
                 "techniques": [
-                  "T1566.002"
+                  "T1566"
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "AccountCustomEntity",
                         "identifier": "FullName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "columnName": "URLCustomEntity",
                         "identifier": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ]
               }
@@ -801,6 +928,113 @@
     {
       "type": "Microsoft.Resources/templateSpecs",
       "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "ProofPointTap Workbook with template",
+        "displayName": "ProofPointTap workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ProofpointTAPWorkbook Workbook with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain extensive insight into Proofpoint Targeted Attack Protection (TAP) by analyzing, collecting and correlating TAP log events.\nThis workbook provides visibility into message and click events that were permitted, delivered, or blocked"
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":11,\"content\":{\"version\":\"LinkItem/1.0\",\"style\":\"tabs\",\"links\":[{\"cellValue\":\"selectedTab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Messages\",\"subTarget\":\"Messages\",\"style\":\"link\"},{\"cellValue\":\"selectedTab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Clicks\",\"subTarget\":\"Clicks\",\"style\":\"link\"}]},\"name\":\"links - 4\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"326a3767-8597-43ee-a116-44fc7280c63a\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"value\":{\"durationMs\":5184000000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":900000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2419200000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true},\"resourceType\":\"microsoft.insights/components\",\"label\":\"Time Range\"},{\"id\":\"59948c5e-ab41-4b57-85f0-5e65966dd98e\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Classification\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"union ProofPointTAPMessagesBlocked_CL, ProofPointTAPMessagesDelivered_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| distinct classification\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"]},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},{\"id\":\"503a952f-d169-4c5a-bf2e-5e74672bd9d4\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"ThreatType\",\"label\":\"Threat Type\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"union ProofPointTAPMessagesBlocked_CL, ProofPointTAPMessagesDelivered_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| distinct threatType_\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"]},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}],\"style\":\"above\",\"queryType\":0,\"resourceType\":\"microsoft.insights/components\"},\"name\":\"parameters - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union ProofPointTAPMessagesBlocked_CL, ProofPointTAPMessagesDelivered_CL\\r\\n| mv-expand todynamic(threatsInfoMap_s)\\r\\n| extend classification = tostring(threatsInfoMap_s.classification)\\r\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\r\\n| where classification in ({Classification}) or '*' in ({Classification})\\r\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\r\\n| summarize phish = countif(classification == 'phish'), malware = countif(classification == \\\"malware\\\"), impostor = countif(classification == \\\"impostor\\\"), spam = countif(classification == \\\"spam\\\") by bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"title\":\"Message Events by Classification\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\",\"tileSettings\":{\"showBorder\":false},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"classification\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"phish\",\"color\":\"blue\"},{\"seriesName\":\"malware\",\"color\":\"red\"},{\"seriesName\":\"impostor\",\"color\":\"green\"},{\"seriesName\":\"spam\",\"color\":\"magenta\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Messages\"},\"customWidth\":\"50\",\"name\":\"query - 2 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union ProofPointTAPClicksBlocked_CL, ProofPointTAPClicksPermitted_CL\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\") by bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"showAnalytics\":true,\"title\":\"Click Events by Classification\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"unstackedbar\",\"tileSettings\":{\"showBorder\":false},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"classification\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"phish\",\"color\":\"blue\"},{\"seriesName\":\"malware\",\"color\":\"redBright\"},{\"seriesName\":\"spam\",\"color\":\"magenta\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Clicks\"},\"customWidth\":\"50\",\"name\":\"query - 2 - Clicks\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union ProofPointTAPClicksBlocked_CL, ProofPointTAPClicksPermitted_CL\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize ClicksBlocked = countif(Type == \\\"ProofPointTAPClicksBlocked_CL\\\"), ClicksPermitted = countif(Type == \\\"ProofPointTAPClicksPermitted_CL\\\") by bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"showAnalytics\":true,\"title\":\"Clicks Blocked vs. Permitted\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\",\"tileSettings\":{\"showBorder\":false},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"classification\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"phish\",\"color\":\"blue\"},{\"seriesName\":\"malware\",\"color\":\"redBright\"},{\"seriesName\":\"spam\",\"color\":\"magenta\"},{\"seriesName\":\"ClicksBlocked\",\"color\":\"redBright\"},{\"seriesName\":\"ClicksPermitted\",\"color\":\"green\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Clicks\"},\"customWidth\":\"50\",\"name\":\"query - 2 - Clicks - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union ProofPointTAPMessagesBlocked_CL, ProofPointTAPMessagesDelivered_CL\\r\\n| mv-expand todynamic(threatsInfoMap_s)\\r\\n| extend classification = tostring(threatsInfoMap_s.classification)\\r\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\r\\n| where classification in ({Classification}) or '*' in ({Classification})\\r\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\r\\n| mv-expand todynamic(recipient_s)\\r\\n| summarize MessagesBlocked = countif(Type == \\\"ProofPointTAPMessagesBlocked_CL\\\"), MessagesDelivered = countif(Type == \\\"ProofPointTAPMessagesDelivered_CL\\\") by bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"showAnalytics\":true,\"title\":\"Messages Blocked vs. Delivered\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\",\"tileSettings\":{\"showBorder\":false},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"classification\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"MessagesBlocked\",\"color\":\"red\"},{\"seriesName\":\"MessagesDelivered\",\"color\":\"green\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Messages\"},\"customWidth\":\"50\",\"name\":\"query - 2 -\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ProofPointTAPClicksBlocked_CL\\r\\n| extend URL = extract(@\\\"\\\\/\\\\/(www.)?([a-zA-Z0-9-_.]+)(\\\\/|$)\\\",2,url_s)\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\"), count() by URL\\r\\n| project-rename Total = count_\\r\\n| top 10 by Total\",\"size\":0,\"showAnalytics\":true,\"title\":\"Top 10 Clicks Blocked by Domain\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"URL\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"phish\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\",\"showIcon\":true}},{\"columnMatch\":\"malware\",\"formatter\":8,\"formatOptions\":{\"palette\":\"red\",\"showIcon\":true}},{\"columnMatch\":\"spam\",\"formatter\":8,\"formatOptions\":{\"palette\":\"magenta\",\"showIcon\":true}},{\"columnMatch\":\"Total\",\"formatter\":3,\"formatOptions\":{\"palette\":\"blueOrange\",\"showIcon\":true}}]},\"tileSettings\":{\"showBorder\":false},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"classification\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"phish\",\"color\":\"blue\"},{\"seriesName\":\"malware\",\"color\":\"redBright\"},{\"seriesName\":\"impostor\",\"color\":\"magenta\"},{\"seriesName\":\"spam\",\"color\":\"green\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Clicks\"},\"customWidth\":\"50\",\"name\":\"query_clicks_top10clicksblockedbydomain\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ProofPointTAPClicksPermitted_CL\\r\\n| extend URL = extract(@\\\"\\\\/\\\\/(www.)?([a-zA-Z0-9-_.]+)(\\\\/|$)\\\",2,url_s)\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\"), count() by URL\\r\\n| project-rename Total = count_\\r\\n| top 10 by Total\",\"size\":0,\"showAnalytics\":true,\"title\":\"Top 10 Clicks Permitted by Domain\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"URL\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"phish\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\",\"showIcon\":true}},{\"columnMatch\":\"malware\",\"formatter\":8,\"formatOptions\":{\"palette\":\"red\",\"showIcon\":true}},{\"columnMatch\":\"spam\",\"formatter\":8,\"formatOptions\":{\"palette\":\"magenta\",\"showIcon\":true}},{\"columnMatch\":\"Total\",\"formatter\":3,\"formatOptions\":{\"palette\":\"blueOrange\",\"showIcon\":true}},{\"columnMatch\":\"Type\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}}],\"sortBy\":[{\"itemKey\":\"$gen_heatmap_phish_1\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"$gen_heatmap_phish_1\",\"sortOrder\":2}],\"tileSettings\":{\"showBorder\":false},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"classification\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"phish\",\"color\":\"blue\"},{\"seriesName\":\"malware\",\"color\":\"redBright\"},{\"seriesName\":\"impostor\",\"color\":\"magenta\"},{\"seriesName\":\"spam\",\"color\":\"green\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Clicks\"},\"customWidth\":\"50\",\"name\":\"query_clicks_top10clickspermittedbydomain\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ProofPointTAPClicksBlocked_CL\\r\\n| extend URL = extract(@\\\"\\\\/\\\\/(www.)?([a-zA-Z0-9-_.]+)(\\\\/|$)\\\",2,url_s)\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\"), count() by senderIP_s\\r\\n| project-rename Total = count_, SenderIP = senderIP_s\\r\\n| top 10 by Total\",\"size\":0,\"showAnalytics\":true,\"title\":\"Top 10 Clicks Blocked by Sender IP\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"SenderIP\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"phish\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\",\"showIcon\":true}},{\"columnMatch\":\"malware\",\"formatter\":8,\"formatOptions\":{\"palette\":\"red\",\"showIcon\":true}},{\"columnMatch\":\"spam\",\"formatter\":8,\"formatOptions\":{\"palette\":\"purple\",\"showIcon\":true}},{\"columnMatch\":\"Total\",\"formatter\":3,\"formatOptions\":{\"palette\":\"blueOrange\",\"showIcon\":true}},{\"columnMatch\":\"URL\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}}],\"labelSettings\":[{\"columnId\":\"SenderIP\",\"label\":\"Sender IP\"},{\"columnId\":\"phish\"},{\"columnId\":\"malware\"},{\"columnId\":\"spam\"},{\"columnId\":\"Total\"}]},\"tileSettings\":{\"showBorder\":false},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"classification\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"phish\",\"color\":\"blue\"},{\"seriesName\":\"malware\",\"color\":\"redBright\"},{\"seriesName\":\"impostor\",\"color\":\"magenta\"},{\"seriesName\":\"spam\",\"color\":\"green\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Clicks\"},\"customWidth\":\"50\",\"name\":\"query_clicks_top10clicksblockedbysenderIP\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ProofPointTAPClicksPermitted_CL\\r\\n| extend URL = extract(@\\\"\\\\/\\\\/(www.)?([a-zA-Z0-9-_.]+)(\\\\/|$)\\\",2,url_s)\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\"), count() by clickIP_s\\r\\n| project-rename Total = count_, ClickIP = clickIP_s\\r\\n| top 10 by Total\",\"size\":0,\"showAnalytics\":true,\"title\":\"Top 10 Clicks Permitted by Click IP\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"ClickIP\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"phish\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\",\"showIcon\":true}},{\"columnMatch\":\"malware\",\"formatter\":8,\"formatOptions\":{\"palette\":\"red\",\"showIcon\":true}},{\"columnMatch\":\"spam\",\"formatter\":8,\"formatOptions\":{\"palette\":\"purple\",\"showIcon\":true}},{\"columnMatch\":\"Total\",\"formatter\":3,\"formatOptions\":{\"palette\":\"blueOrange\",\"showIcon\":true}},{\"columnMatch\":\"URL\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"Type\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}}],\"sortBy\":[{\"itemKey\":\"$gen_heatmap_phish_1\",\"sortOrder\":2}],\"labelSettings\":[{\"columnId\":\"ClickIP\",\"label\":\"Click IP\"},{\"columnId\":\"phish\"},{\"columnId\":\"malware\"},{\"columnId\":\"spam\"},{\"columnId\":\"Total\"}]},\"sortBy\":[{\"itemKey\":\"$gen_heatmap_phish_1\",\"sortOrder\":2}],\"tileSettings\":{\"showBorder\":false},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"classification\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"phish\",\"color\":\"blue\"},{\"seriesName\":\"malware\",\"color\":\"redBright\"},{\"seriesName\":\"impostor\",\"color\":\"magenta\"},{\"seriesName\":\"spam\",\"color\":\"green\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Clicks\"},\"customWidth\":\"50\",\"name\":\"query_clicks_top10clickspermittedbyclickip\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ProofPointTAPMessagesBlocked_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| where classification in ({Classification}) or '*' in ({Classification})\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\n| mv-expand todynamic(recipient_s)\\n| summarize phish = countif(classification == \\\"phish\\\"), malware = countif(classification == \\\"malware\\\"), impostor = countif(classification == \\\"impostor\\\"), spam = countif(classification == \\\"spam\\\"), count() by sender_s \\n| project-rename Total = count_, SourceAddress = sender_s \\n| top 10 by Total\",\"size\":0,\"title\":\"Top 10 Blocked Sender Address\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"SourceAddress\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"phish\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\",\"showIcon\":true}},{\"columnMatch\":\"malware\",\"formatter\":8,\"formatOptions\":{\"palette\":\"red\",\"showIcon\":true}},{\"columnMatch\":\"impostor\",\"formatter\":8,\"formatOptions\":{\"palette\":\"green\",\"showIcon\":true}},{\"columnMatch\":\"spam\",\"formatter\":8,\"formatOptions\":{\"palette\":\"magenta\",\"showIcon\":true}},{\"columnMatch\":\"Total\",\"formatter\":3,\"formatOptions\":{\"palette\":\"greenRed\",\"showIcon\":true}},{\"columnMatch\":\"SourceIP\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Messages\"},\"customWidth\":\"70\",\"name\":\"query - 5 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ProofPointTAPMessagesBlocked_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| where classification in ({Classification}) or '*' in ({Classification})\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\n| mv-expand todynamic(recipient_s)\\n| summarize count() by threatType_  \",\"size\":0,\"title\":\"Threat Type\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Messages\"},\"customWidth\":\"30\",\"name\":\"query - 11\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ProofPointTAPMessagesBlocked_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| where classification in ({Classification}) or '*' in ({Classification})\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\n| mv-expand todynamic(recipient_s)\\n| summarize phish = countif(classification == \\\"phish\\\"), malware = countif(classification == \\\"malware\\\"), impostor = countif(classification == \\\"impostor\\\"), spam = countif(classification == \\\"spam\\\"), count() by senderIP_s\\n| top 10 by count_\",\"size\":0,\"title\":\"Top 10 Blocked Sender IP \",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"senderIP_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"phish\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\",\"showIcon\":true}},{\"columnMatch\":\"malware\",\"formatter\":8,\"formatOptions\":{\"palette\":\"red\",\"showIcon\":true}},{\"columnMatch\":\"impostor\",\"formatter\":8,\"formatOptions\":{\"palette\":\"green\",\"showIcon\":true}},{\"columnMatch\":\"spam\",\"formatter\":8,\"formatOptions\":{\"palette\":\"magenta\",\"showIcon\":true}},{\"columnMatch\":\"count_\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"SourceIP\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"Total\",\"formatter\":3,\"formatOptions\":{\"palette\":\"greenRed\",\"showIcon\":true}}],\"labelSettings\":[{\"columnId\":\"senderIP_s\",\"label\":\"Sender IP\"},{\"columnId\":\"phish\"},{\"columnId\":\"malware\"},{\"columnId\":\"impostor\"},{\"columnId\":\"spam\"},{\"columnId\":\"count_\",\"label\":\"Total\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Messages\"},\"customWidth\":\"45\",\"name\":\"query - 5 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ProofPointTAPMessagesBlocked_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| where classification in ({Classification}) or '*' in ({Classification})\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\n| mv-expand todynamic(recipient_s)\\n| summarize phish = countif(classification == \\\"phish\\\"), malware = countif(classification == \\\"malware\\\"), impostor = countif(classification == \\\"impostor\\\"), spam = countif(classification == \\\"spam\\\"), count() by tostring(recipient_s)\\n| project-rename Total = count_, Recipient = recipient_s\\n| top 10 by Total\",\"size\":0,\"title\":\"Top 10 Recipients\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"SourceIP\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"phish\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\",\"showIcon\":true}},{\"columnMatch\":\"malware\",\"formatter\":8,\"formatOptions\":{\"palette\":\"red\",\"showIcon\":true}},{\"columnMatch\":\"impostor\",\"formatter\":8,\"formatOptions\":{\"palette\":\"green\",\"showIcon\":true}},{\"columnMatch\":\"spam\",\"formatter\":8,\"formatOptions\":{\"palette\":\"magenta\",\"showIcon\":true}},{\"columnMatch\":\"Total\",\"formatter\":3,\"formatOptions\":{\"palette\":\"greenRed\",\"showIcon\":true}}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"Messages\"},\"customWidth\":\"50\",\"name\":\"query - 5 - Copy - Copy\"}],\"fromTemplateId\":\"sentinel-ProofPointTAPWorkbook\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=ProofPointTAPWorkbook; logoFileName=proofpointlogo.svg; description=Gain extensive insight into Proofpoint Targeted Attack Protection (TAP) by analyzing, collecting and correlating TAP log events.\nThis workbook provides visibility into message and click events that were permitted, delivered, or blocked; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Proofpoint TAP; templateRelativePath=ProofpointTAP.json; subtitle=; provider=Proofpoint}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ProofPointTap",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "ProofPointTAPMessagesBlocked_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ProofPointTAPMessagesDelivered_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ProofPointTAPClicksPermitted_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ProofPointTAPClicksBlocked_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ProofpointTAP",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
       "name": "[variables('playbookTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -825,7 +1059,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "ProofpointTAPConnector Playbook with template version 2.0.1",
+        "description": "ProofpointTAPConnector Playbook with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -1795,7 +2029,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "Get-ProofpointTAPEvents Playbook with template version 2.0.1",
+        "description": "Get-ProofpointTAPEvents Playbook with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -2104,7 +2338,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName3'))]"
       ],
       "properties": {
-        "description": "ProofpointTAP-AddForensicsInfoToIncident Playbook with template version 2.0.1",
+        "description": "ProofpointTAP-AddForensicsInfoToIncident Playbook with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -2488,7 +2722,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName4'))]"
       ],
       "properties": {
-        "description": "ProofpointTAP-CheckAccountInVAP Playbook with template version 2.0.1",
+        "description": "ProofpointTAP-CheckAccountInVAP Playbook with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion4')]",
@@ -2896,7 +3130,7 @@
       "apiVersion": "2022-01-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.1",
+        "version": "2.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
@@ -2938,6 +3172,11 @@
               "kind": "AnalyticsRule",
               "contentId": "[variables('analyticRulecontentId2')]",
               "version": "[variables('analyticRuleVersion2')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
             },
             {
               "kind": "LogicAppsCustomConnector",
