@@ -3,9 +3,9 @@
  When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the IP details of his authenthication and managment activities from Entrust
  2. Adds a rich comment to the incident with all the collected information
-    ![Comment example](./images/Entrust-EnrichIncidentWithIPDetails.png)
+    ![Comment example](./Images/Entrust-EnrichIncidentWithIPDetails.png)
 
-![Playbook Designer view](./images/Entrust-EnrichIncidentwithIPDetails_light.png)<br>
+![Playbook Designer view](./Images/Entrust-EnrichIncidentwithIPDetails_light.png)<br>
 
 ### Prerequisites 
 1. User should be having an active subscription of product to open the product documentation.
