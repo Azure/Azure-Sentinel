@@ -260,7 +260,7 @@ def get_datatransfer_events(ctx: snowflake.connector.SnowflakeConnection, date_f
     cs = ctx.cursor(DictCursor)
     try:
         cs.execute("use schema snowflake.account_usage")
-        cs.execute(f"SELECT * from DATATRANSFER_HISTORY WHERE START_TIME > '{date_from.isoformat()}' ORDER BY START_TIME ASC")
+        cs.execute(f"SELECT * from DATA_TRANSFER_HISTORY WHERE START_TIME > '{date_from.isoformat()}' ORDER BY START_TIME ASC")
         for row in cs:
             row = parse_datatransfer_event(row)
             yield row
@@ -286,6 +286,8 @@ def parse_query_event(event: dict) -> dict:
 def parse_grant_users_event(event: dict) -> dict:
     if 'CREATED_ON' in event and isinstance(event['CREATED_ON'], datetime.datetime):
         event['CREATED_ON'] = event['CREATED_ON'].isoformat()
+    if 'DELETED_ON' in event and isinstance(event['DELETED_ON'], datetime.datetime):
+        event['DELETED_ON'] = event['DELETED_ON'].isoformat()
     event['source_table'] = 'GRANTS_TO_USERS'
     return event
 
@@ -295,7 +297,7 @@ def parse_datatransfer_event(event: dict) -> dict:
         event['START_TIME'] = event['START_TIME'].isoformat()
     if 'END_TIME' in event and isinstance(event['END_TIME'], datetime.datetime):
         event['END_TIME'] = event['END_TIME'].isoformat()
-    event['source_table'] = 'DATATRANSFER_HISTORY'
+    event['source_table'] = 'DATA_TRANSFER_HISTORY'
     return event
 
 
