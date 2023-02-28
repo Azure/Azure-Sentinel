@@ -9,6 +9,8 @@ This playbook is used by other playbooks to poll for results from some of the as
 1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.
 2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).
 3. Store Service account credentials in Key Vault and obtain keyvault name and tenantId
+    a. Create a Key Vault with unique name
+    b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively
 
 ### Deployment instructions
 
