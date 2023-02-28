@@ -3,8 +3,8 @@ Author: Steven Steiner <steven.steiner@cyberark.com>
 Version: 0.0.1
 Date Created: 6/10/2019 16:19
 """
-import certifi, json, requests, urllib3
-
+import certifi, json, requests, urllib3, urllib
+from lxml import html
 
 def epmAuth(dispatcher, username, password):
     """
@@ -39,6 +39,62 @@ def epmAuth(dispatcher, username, password):
 
     return requests.post(myURL, headers=hdr, data=logonBody, verify=False)
 
+def samlAuth(dispatcher, username, password, identityTenantID, identityTenantURL, identityAppKey):
+
+    #StartAuth
+    url = identityTenantURL + "/Security/StartAuthentication"
+
+    payload = "{\r\n    \"TenantId\": \"" + identityTenantID + "\",\r\n    \"User\": \"" + username + "\",\r\n    \"Version\": \"1.0\"        \r\n}\r\n\r\n"
+    headers = {
+    'X-CENTRIFY-NATIVE-CLIENT': 'true',
+    'Content-Type': 'application/json'
+    }
+
+    urllib3.disable_warnings()
+    session = requests.Session()
+
+    # response = requests.request("POST", url, headers=headers, data = payload, verify = False)
+    response = session.post(url, headers=headers, data = payload, verify = False)
+
+    json_data = json.loads(response.text)
+    session_id = json_data.get("Result").get("SessionId")
+    mechanism_id = json_data.get("Result").get("Challenges")[0].get("Mechanisms")[0].get("MechanismId")
+
+    #AdvanceAuthentication
+    url = identityTenantURL + "/Security/AdvanceAuthentication?X-CENTRIFY-NATIVE-CLIENT=true&"
+
+    payload = "{\r\n    \"TenantId\": \"" + identityTenantID + "\",\r\n    \"SessionId\": \"" + session_id + "\",\r\n    \"MechanismId\": \"" + mechanism_id + "\",\r\n    \"Action\": \"Answer\",\r\n    \"Answer\": \"" + password + "\"\r\n}"
+    headers = {
+    'Content-Type': 'application/json',
+    'X-CENTRIFY-NATIVE-CLIENT': 'true'
+    }
+
+    response = session.post(url, headers=headers, data = payload, verify = False)
+
+    #AppClick
+
+    url = identityTenantURL + "/uprest/HandleAppClick?appkey=" + identityAppKey + "&markAppVisited=true"
+
+    payload={}
+    headers = {
+    'X-CENTRIFY-NATIVE-CLIENT': 'true',
+    'Authorization': 'bearer AuthorizationToken'
+    }
+    response = session.get(url, headers=headers, data = payload, verify = False)
+
+
+    tree = html.fromstring(response.content)
+    samlresponse = tree.xpath('//input[@name="SAMLResponse"]/@value[last()]')[0]
+
+    #SAML Logon
+    url = dispatcher + "/SAML/Logon"
+
+    payload='SAMLResponse=' + urllib.parse.quote(samlresponse)
+
+    headers = {
+    'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    return session.post(url, headers=headers, data=payload)
 
 def winAuth(epmsrv, username, password, version=None):
     """

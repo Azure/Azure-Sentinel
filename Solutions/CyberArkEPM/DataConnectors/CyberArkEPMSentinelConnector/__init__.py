@@ -5,7 +5,7 @@ import hmac
 import base64
 import logging
 from .pyepm import getAggregatedEvents, getDetailedRawEvents, epmAuth, getSetsList, getPolicyAuditRawEventDetails, \
-    getAggregatedPolicyAudits, getAdminAuditEvents
+    getAggregatedPolicyAudits, getAdminAuditEvents, samlAuth
 import os
 from datetime import datetime, timedelta
 import json
@@ -18,6 +18,10 @@ username = os.environ['CyberArkEPMUsername']
 password = os.environ['CyberArkEPMPassword']
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
+use_saml_auth = os.environ['UseSAMLAuth']
+identity_tenant_url = os.environ['IdentityTenantURL']
+identity_tenant_id = os.environ['IdentityTenantID']
+identity_appkey = os.environ['IdentityAppKey']
 log_type = "CyberArkEPM"
 connection_string = os.environ['AzureWebJobsStorage']
 chunksize = 2000
@@ -133,7 +137,10 @@ def main(mytimer: func.TimerRequest) -> None:
     start_time, end_time = generate_date()
     logging.info('Data processing. Period(UTC): {} - {}'.format(start_time, end_time))
     try:
-        auth = epmAuth(dispatcher=dispatcher, username=username, password=password)
+        if(str(use_saml_auth).lower() == "true"):
+            auth = samlAuth(dispatcher=dispatcher, username=username, password=password, identityTenantID=identity_tenant_id, identityTenantURL=identity_tenant_url, identityAppKey=identity_appkey)
+        else:
+            auth = epmAuth(dispatcher=dispatcher, username=username, password=password)
         if auth.status_code == 401:
             logging.error(
                 "The authentication credentials are incorrect or missing. Error code: {}".format(auth.status_code))
