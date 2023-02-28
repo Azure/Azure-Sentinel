@@ -3,9 +3,9 @@
  When a Soc analysts,triggered this playbook over some name entity then Playbook performs below actions
  1. Fetches the user details ,user group and roles details from Entrust
  2. Adds a rich comment to the incident associated with entity with all the collected information
-    ![Comment example](./images/Entrust-EnrichIncidentWithUserDetails_incident_comment.png)
+    ![Comment example](./Images/Entrust-EnrichIncidentWithUserDetails_incident_comment.png)
 
-![Playbook Designer view](./images/Entrust-EnrichIncidentWithUserDetails_light.png)<br>
+![Playbook Designer view](./Images/Entrust-EnrichIncidentWithUserDetails_light.png)<br>
 
 ### Prerequisites 
 1. User should be having an active subscription of product to open the product documentation.
