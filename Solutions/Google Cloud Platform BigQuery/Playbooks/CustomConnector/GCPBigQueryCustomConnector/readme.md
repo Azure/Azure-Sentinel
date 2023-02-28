@@ -1,6 +1,6 @@
 # Google Cloud Platform Identity and Access Management Logic Apps Custom connector
 
-<img src="../../google_logo.svg" alt="Google" style="width:150px; height:150px"/><br>
+<img src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/google_logo.svg" alt="Google" style="width:150px; height:150px"/><br>
 
 This custom connector connects to Google Cloud Platform (GCP) BigQuery Service API to execute actions supported by API returns response in JSON format.
 
@@ -9,7 +9,7 @@ This custom connector connects to Google Cloud Platform (GCP) BigQuery Service A
 *  OAuth2.0 Authentication
 
 ### Prerequisites to deploy Custom Connector 
-1. Get/Verify Shodan API Endpoint Url (Default: https://bigquery.googleapis.com)
+1. Get/Verify GCP BigQuery API Endpoint Url (Default: https://bigquery.googleapis.com)
 2. Enable BigQuery API in GCP Console (see [instructions](https://developers.google.com/identity/protocols/oauth2/web-server#enable-apis)).
 3. Create authorization credentials (see [instructions](https://developers.google.com/identity/protocols/oauth2/web-server#creatingcred)). As a redirection url, use the redirection url that you can find on the connector page (in Azure go to **Logic Apps Custom Connector** -> **GCPBigQueryCustomConnector** -> click **Edit** -> **Security** -> copy *Redirect URL*). If this is your first time creating a client ID, you can also configure your consent screen by clicking Consent Screen. (The [following procedure](https://support.google.com/cloud/answer/6158849?hl=en#userconsent) explains how to set up the Consent screen.) You won't be prompted to configure the consent screen after you do it the first time. Note that [the following scope](https://developers.google.com/identity/protocols/oauth2/scopes#iam) has to be enabled in the consent screen.
 4. In Azure go to **Logic Apps Custom Connector** -> **GCPBigQueryCustomConnector** -> click **Edit** -> **Security** -> fill the *Client id* and *Client secret*, obtained in the previous step -> click **Update connector**.
@@ -18,7 +18,7 @@ This custom connector connects to Google Cloud Platform (GCP) BigQuery Service A
 ### Deployment instructions 
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGoogleCloudPlatformIAM%2FPlaybooks%2FGCP_IAMConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGoogleCloudPlatformIAM%2FPlaybooks%2FGCP_IAMConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGoogle%2520Cloud%2520Platform%2520BigQuery%2FPlaybooks%2FCustomConnector%2FGCPBigQueryCustomConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGoogle%2520Cloud%2520Platform%2520BigQuery%2FPlaybooks%2FCustomConnector%2FGCPBigQueryCustomConnector%2Fazuredeploy.json)
 
 
 ## Actions supported by GCP BigQuery Logic App Connector
