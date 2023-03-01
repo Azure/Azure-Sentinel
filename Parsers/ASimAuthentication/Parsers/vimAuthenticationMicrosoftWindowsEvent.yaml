@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for Windows Security Events
-  Version: '1.1.1'
-  LastUpdated: Aug 8, 2021
+  Version: '0.2'
+  LastUpdated: Feb 23 2023
 Product:
   Name: Windows Security Events
 Normalization:
@@ -131,7 +131,6 @@ ParserQuery: |
                   EventResult = iff(EventID == 4625, 'Failure', 'Success')
           | project-rename 
               TargetDvcHostname = Computer
-          // , TargetUserType=AccountType - no AccountType in windowsEvents
              , EventOriginalUid = EventOriginId
              , EventOriginalType=EventID
           | extend  EventCount=int(1)
@@ -146,6 +145,9 @@ ParserQuery: |
                   , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
                   , SrcDvcOs = 'Windows'
                   , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
+          | extend
+                  ActorUserType = _ASIM_GetUserType (ActorUsername, ActorUserId)
+                  , TargetUserType = _ASIM_GetUserType (TargetUsername, TargetUserId)
           | lookup LogonStatus on EventStatus
           | lookup LogonTypes on LogonType
               /// ** Aliases 
@@ -174,7 +176,6 @@ ParserQuery: |
        , TargetSessionId=TargetLogonId
        , ActorUserId=SubjectUserSid
        , TargetUserId =TargetUserSid
-       , TargetUserType=AccountType
        , SrcDvcHostname = WorkstationName
        , TargetDvcHostname = Computer
        , EventOriginalUid = EventOriginId
@@ -197,7 +198,10 @@ ParserQuery: |
       , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
       , SrcDvcOs = 'Windows'
       , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
-    | project-away TargetUserName
+    | project-away TargetUserName, AccountType
+    | extend
+        ActorUserType = _ASIM_GetUserType (ActorUsername, ActorUserId)
+      , TargetUserType = _ASIM_GetUserType (TargetUsername, TargetUserId)
     | lookup LogonStatus on EventStatus
     | lookup LogonTypes  on LogonType
     /// ** Aliases 
