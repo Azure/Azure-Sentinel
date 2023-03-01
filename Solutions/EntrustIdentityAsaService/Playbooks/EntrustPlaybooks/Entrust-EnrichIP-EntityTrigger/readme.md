@@ -1,7 +1,7 @@
-# Entrust-Enrichment of User Details Playbook - entity
+# Entrust-Enrichment of IP Details Playbook - entity
  ## Summary
- When a Soc analysts, triggered this playbook over some name entity then Playbook performs below actions
- 1. Fetches the user details, user group and roles details from Entrust
+ When a Soc analysts, triggered this playbook over some IP entity then Playbook performs below actions
+ 1. Fetches the IP details, authentication and administration details from Entrust.
  2. Adds a rich comment to the incident associated with entity with all the collected information
     ![Comment example](./Images/Entrust-EnrichIP-EntityTrigger_incident_comment.png)
 
