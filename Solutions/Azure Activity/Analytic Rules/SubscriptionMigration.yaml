@@ -3,12 +3,12 @@ kind: Scheduled
 name: Subscription moved to another tenant
 description: |
   Detects when a subscription is moved to another tenant. This may indicate a subscription hijacking event.
-severity: High
+severity: Low
 requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
       - AzureActivity
-queryPeriod: 10m
+queryPeriod: 20m
 queryFrequency: 5m
 triggerOperator: gt
 triggerThreshold: 0
@@ -17,16 +17,19 @@ tactics:
 relevantTechniques:
   - T1496
 query: |
+  let queryFrequency = 5m;
   let eventCapture = "moved from tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) to tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
   AzureActivity
+  | where ingestion_time() > ago(queryFrequency)
   | where OperationNameValue == "Microsoft.Subscription/updateTenant/action"
-  | extend EventCapture = extract_all(eventCapture, tostring(Properties_d.message))
-  | extend SourceTenant = iff(isnotempty(EventCapture), EventCapture[0][0], "")
-  | extend DestinationTenant = iff(isnotempty(EventCapture), EventCapture[0][1], "")
+  | where isnotempty(Properties_d)
+  | extend Summary = tostring(Properties_d.message)
+  | extend EventCapture = extract_all(eventCapture, Summary)
+  | extend SourceTenantId = iff(isnotempty(EventCapture), EventCapture[0][0], "")
+  | extend DestinationTenantId = iff(isnotempty(EventCapture), EventCapture[0][1], "")
   | extend UserParts = split(Caller, "@")
-  | extend UserName = iff(array_length(UserParts)==2, UserParts[0], Caller)
-  | extend UserUPNSuffix = iff(array_length(UserParts)==2, UserParts[1], "")
-  | extend Summary=Properties_d.message
+  | extend UserName = iff(array_length(UserParts) == 2, UserParts[0], Caller)
+  | extend UserUPNSuffix = iff(array_length(UserParts) == 2, UserParts[1], "")
 eventGroupingSettings:
   aggregationKind: SingleAlert
 entityMappings:
@@ -41,20 +44,16 @@ entityMappings:
       - identifier: UPNSuffix
         columnName: UserUPNSuffix
 customDetails:
-  DestinationTenant: DestinationTenant
-  SourceTenant: SourceTenant
+  DestinationTenantId: DestinationTenantId
+  SourceTenantId: SourceTenantId
   SubscriptionId: SubscriptionId
 alertDetailsOverride:
   alertDescriptionFormat: |
-    The user {{Caller}} migrated a subscription:
+    The user {{Caller}} moved a subscription:
+    
     {{Summary}}
-incidentConfiguration:
-  createIncident: true
-  groupingConfiguration:
-    enabled: true
-    groupByEntities:
-      - Account
-    lookbackDuration: 5h
-    matchingMethod: Selected
-    reopenClosedIncident: false
+    
+    If this was not expected, it may indicate a subscription hijacking event.
+  alertDisplayNameFormat: |
+    Subscription {{SubscriptionId}} changed tenants
 version: 1.0.0
