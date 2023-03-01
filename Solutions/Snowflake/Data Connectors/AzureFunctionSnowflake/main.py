@@ -58,7 +58,7 @@ def main(mytimer: func.TimerRequest):
     state_manager_rlogins = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_rlogins')
     state_manager_rqueries = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_rqueries')
     state_manager_grantstousers = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_grantstousers')
-    state_manager_datatransferhistory = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_rqueries')
+    state_manager_datatransferhistory = StateManager(FILE_SHARE_CONN_STRING, file_path='snowflake_datatransferhistory')
 
     logins_date_from = state_manager_logins.get()
     logins_date_from = parse_date_from(logins_date_from)
