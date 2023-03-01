@@ -54,11 +54,10 @@ query: |
   | extend ResourceId = column_ifexists("_ResourceId", _ResourceId), SourceComputerId = column_ifexists("SourceComputerId", SourceComputerId)
   | lookup ReasontoSubStatus on SubStatus
   | extend coalesce(Reason, strcat('Unknown reason substatus: ', SubStatus))
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by EventID, 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by bin(TimeGenerated,10m), EventID, 
   Activity, Computer, Account, TargetAccount, TargetUserName, TargetDomainName, 
   LogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress
   | where FailedLogonCount >= threshold
-  | extend timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   ),
   (
   (WindowsEvent 
@@ -82,26 +81,28 @@ query: |
   | extend WorkstationName = tostring(EventData.WorkstationName)
   | extend IpAddress = tostring(EventData.IpAddress)
   | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by EventID, 
-  Activity, Computer,  TargetAccount, TargetUserName, TargetDomainName, 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by bin(TimeGenerated,10m), EventID, 
+  Activity, Computer, TargetAccount, TargetUserName, TargetDomainName, 
   LogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress
   | where FailedLogonCount >= threshold
-  | extend timestamp = StartTime, AccountCustomEntity = TargetAccount, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   )))
+  | summarize arg_max(TimeGenerated, *) by Computer, TargetUserName, TargetDomainName
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: TargetUserName
+      - identifier: NTDomain
+        columnName: TargetDomainName
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: Computer
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.1.2
+        columnName: IpAddress
+version: 1.2.2
 kind: Scheduled
 metadata:
     source:
