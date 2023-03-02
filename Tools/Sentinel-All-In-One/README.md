@@ -56,7 +56,7 @@ The following table summarizes permissions, licenses and permissions needed and 
 | Azure Active Directory (Tenant scope version only) | Any AAD license | Global Admin or Security Admin  | Billed    |
 | Azure Active Directory Identity Protection  | AAD Premium 2   | Global Admin or Security Admin  | Free      |
 | Azure Activity                                 | None            | Subscription Reader             | Free      |
-| Dinamycs 365                                   | D365 license    | Global Admin or Security Admin  | Billed    |
+| Dynamics 365                                   | D365 license    | Global Admin or Security Admin  | Billed    |
 | Microsoft 365 Defender                         | M365D license   | Global Admin or Security Admin  | Free      |
 | Microsoft Defender for Cloud                   | MDC license     | Security Reader                 | Free      |
 | Microsoft Insider Risk Management              | IRM license     | Global Admin or Security Admin  | Free      |
