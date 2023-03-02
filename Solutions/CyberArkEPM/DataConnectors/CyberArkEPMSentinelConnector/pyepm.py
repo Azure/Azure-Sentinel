@@ -3,7 +3,7 @@ Author: Steven Steiner <steven.steiner@cyberark.com>
 Version: 0.0.1
 Date Created: 6/10/2019 16:19
 """
-import certifi, json, requests, urllib3, urllib
+import json, requests, urllib3, urllib
 from lxml import html
 
 def epmAuth(dispatcher, username, password):
@@ -54,7 +54,7 @@ def samlAuth(dispatcher, username, password, identityTenantID, identityTenantURL
     session = requests.Session()
 
     # response = requests.request("POST", url, headers=headers, data = payload, verify = False)
-    response = session.post(url, headers=headers, data = payload, verify = False)
+    response = session.post(url, headers=headers, data = payload)
 
     json_data = json.loads(response.text)
     session_id = json_data.get("Result").get("SessionId")
@@ -69,7 +69,7 @@ def samlAuth(dispatcher, username, password, identityTenantID, identityTenantURL
     'X-CENTRIFY-NATIVE-CLIENT': 'true'
     }
 
-    response = session.post(url, headers=headers, data = payload, verify = False)
+    session.post(url, headers=headers, data = payload)
 
     #AppClick
 
@@ -80,7 +80,7 @@ def samlAuth(dispatcher, username, password, identityTenantID, identityTenantURL
     'X-CENTRIFY-NATIVE-CLIENT': 'true',
     'Authorization': 'bearer AuthorizationToken'
     }
-    response = session.get(url, headers=headers, data = payload, verify = False)
+    response = session.get(url, headers=headers, data = payload)
 
 
     tree = html.fromstring(response.content)
@@ -334,7 +334,7 @@ def getAdminAuditEvents(epmserver, epmToken, authType, setid, start_time, end_ti
     while True:
         #build the URL
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/AdminAudit?DateFrom=" + start_time + "&DateTo=" + end_time + "&limit=" + str(limit) + "&offset=" + str(offset)
-        r = requests.get(myURL, headers=hdr, verify=False).json()
+        r = requests.get(myURL, headers=hdr).json()
         events_json += r["AdminAudits"]
         #Get TotalCount from JSON
         total_count = r["TotalCount"]
