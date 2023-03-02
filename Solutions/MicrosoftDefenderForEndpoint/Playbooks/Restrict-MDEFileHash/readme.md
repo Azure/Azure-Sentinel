@@ -1,5 +1,5 @@
 # Restrict-MDEFileHash
-author: Nicholas DiCola
+authors: Nicholas DiCola, Kevin Caballero, Sarah van den Bovenkamp
 
 This playbook will take FileHash entities and generate alert and block threat indicators for each file hash in MDE for 90 days.
 
@@ -13,12 +13,22 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-incident-trigger%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-incident-trigger%2Fazuredeploy.json)
 
+
 **Deploy with alert trigger**
 
-After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
+After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will run when an alert is created.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-alert-trigger%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-alert-trigger%2Fazuredeploy.json)
+
+
+**Deploy with entity trigger**
+
+After deployment, you can run this playbook manually on any incident with a File Hash entity. This will also let you restrict specific file hashes, rather than restricting all file hashes in an incident.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-entity-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEFileHash%2FRestrict-MDEFileHash-entity-trigger%2Fazuredeploy.json)
+
 
 ## Prerequisites
 - **For Gov Only** You will need to update the HTTP action URL to the correct URL documented [here](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/gov?view=o365-worldwide#api)
@@ -37,8 +47,15 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 ```
 
 ## Screenshots
-**Incident Trigger**
-![Incident Trigger](./Restrict-MDEFileHash/Restrict-MDEFileHash-incident-trigger/images/designerLight.png)
+**Incident Trigger:**  
 
-**Alert Trigger**
-![Alert Trigger](./Restrict-MDEFileHash/Restrict-MDEFileHash-alert-trigger/images/Restrict-MDEFileHash_alert.png)
+![Incident Trigger](./Restrict-MDEFileHash-incident-trigger/images/designerLight.png)
+
+**Alert Trigger:**  
+
+![Alert Trigger](./Restrict-MDEFileHash-alert-trigger/images/Restrict-MDEFileHash_alert.png)
+
+**Entity Trigger:**  
+
+![Entity Trigger Light](./Restrict-MDEFileHash-entity-trigger/images/Restrict-MDEFileHash-entityTrigger-light.png)
+![Entity Trigger Dark](./Restrict-MDEFileHash-entity-trigger/images/Restrict-MDEFileHash-entityTrigger-dark.png)
