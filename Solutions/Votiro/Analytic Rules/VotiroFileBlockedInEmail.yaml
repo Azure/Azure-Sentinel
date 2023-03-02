@@ -1,7 +1,8 @@
 id: 0b8b91de-c63e-4bc2-b5f4-b15d3b379ec9
 name: Votiro - File Blocked in Email
 description: |
- 'If the syslog message includes-Blocked under  -Sanitization result-field  and false under -password protected- field and not null under -from- field  create an alert with the following message:attachment [file name] with the hash [file hash] was blocked in an email that was sent from user [from] to the following recipients [Recipients]  by Votiro due to Policy [policy name], see more detail in the following link [incident url].'
+ 'The analytic rule is designed to identify when a file attachment is blocked in an email due to a Votiro policy. The rule looks for specific indicators in the syslog message, including "Blocked" in the Sanitization Result field, "false" in the Password Protected field, and a non-null value in the From field.
+ When these indicators are present, the rule generates an alert that includes details about the blocked attachment, such as the file name and hash, and information about the email, such as the sender and recipient(s). The alert also includes information about the Votiro policy that blocked the attachment and provides a link to additional details about the incident.'
 severity: Low
 requiredDataConnectors:
   - connectorId: Votiro
@@ -11,10 +12,22 @@ queryFrequency: 10m
 queryPeriod: 10m
 triggerOperator: gt
 triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - DefenseEvasion
+  - Impact
+  - InitialAccess
+relevantTechniques:
+  - T0885
+  - T1036
+  - T1027
+  - T1486
+  - T1566
 query: let Votiro_view  = view () {
   VotiroEvents
-   | where SanitizationResult == "Blocked" and PasswordProtected == "false" and From != "null"
-   | extend FileWithEmailDetails = strcat_delim(' ', SrcFileName, 'with the hash', SrcFileSHA256, 'was blocked in an email that was sent from user', From, 'to the following recipients', Recipients)};Votiro_view
+   | parse-where SanitizationResult =~ "Blocked" and PasswordProtected =~ "false" and From != "null"
+   | extend FileWithEmailDetails = strcat_delim(' ', SrcFileName, 'with the hash', SrcFileSHA256, 'was blocked in an email that was sent from user', From, 'to the following recipients', Recipients)
+   | distinct FileWithEmailDetails};Votiro_view
 incidentConfiguration:
   createIncident: true
 eventGroupingSettings:
