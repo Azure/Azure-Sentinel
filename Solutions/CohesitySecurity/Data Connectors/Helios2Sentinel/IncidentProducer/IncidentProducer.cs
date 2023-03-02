@@ -57,11 +57,8 @@ namespace Helios2Sentinel
             [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             dynamic alert, ILogger log)
         {
-            dynamic output = new ExpandoObject();
-            output.properties = new ExpandoObject();
-            output.properties.title = "Cluster: " + alert.clusterName;
-            output.properties.status = ((string)alert.alertState).Equals("kOpen", StringComparison.OrdinalIgnoreCase) ? "New" : "Closed";
-            output.properties.severity = "Medium";
+            string title = "Cluster: " + alert.clusterName;
+            string severity = "Medium";
 
             string id = alert.id;
             int i = 0;
@@ -79,34 +76,47 @@ namespace Helios2Sentinel
                     WriteData(id + "\\" + (string)prop.key, (string)prop.value, log);
                     break;
                 case 1:
-                    output.properties.title += ". Object: " + prop.value;
+                    title += ". Object: " + prop.value;
                     WriteData(id + "\\" + (string)prop.key, (string)prop.value, log);
                     break;
                 case 3:
-                    output.properties.title += ". Source: " + prop.value;
+                    title += ". Source: " + prop.value;
                     break;
                 case 12:
                     sev = long.Parse((string)prop.value);
 
                     if (sev >= 70)
-                        output.properties.severity = "High";
+                        severity = "High";
                     else if (sev < 30)
-                        output.properties.severity = "Low";
+                        severity = "Low";
                     else
-                        output.properties.severity = "Medium";
+                        severity = "Medium";
                     break;
                 }
                 i++;
                 if (i == 13) break;
             }
-            output.properties.Description = alert.alertDocument.alertDescription + ". Alert cause: " + alert.alertDocument.alertCause + ". Anomaly Strength: " + sev + ". Additional Info: " + alert.alertDocument.alertHelpText + ". Helios ID: " + alert.id;
+            string description = alert.alertDocument.alertDescription + ". Alert cause: " + alert.alertDocument.alertCause + ". Anomaly Strength: " + sev + ". Additional Info: " + alert.alertDocument.alertHelpText + ". Helios ID: " + alert.id;
 
+            dynamic incident = ConstructIncident(title, description, severity);
             lock (queueLock)
             {
-                outputQueueItem.Add(JsonConvert.SerializeObject(output));
+                outputQueueItem.Add(JsonConvert.SerializeObject(incident));
             }
 
             return Task.CompletedTask;
+        }
+
+        private static object ConstructIncident(string title, string description, string severity)
+        {
+            dynamic incidient = new ExpandoObject();
+            incidient.properties = new ExpandoObject();
+            incidient.properties.title = title;
+            incidient.properties.description = description;
+            incidient.properties.severity = severity;
+            incidient.properties.status = "New";
+
+            return incidient;
         }
 
         private static string GetData(string path, ILogger log)
@@ -165,8 +175,7 @@ namespace Helios2Sentinel
 
             try
             {
-                string apiKey = GetSecret("ApiKey", log);
-                string blobKey = Environment.GetEnvironmentVariable("Workspace") + "\\" + apiKey;
+                string blobKey = Environment.GetEnvironmentVariable("Workspace") + "\\last-request-end-time-usecs";
                 bool hasException = false;
 
                 try
@@ -177,14 +186,14 @@ namespace Helios2Sentinel
                 {
                     hasException = true;
                     WriteData(blobKey, endDateUsecs.ToString(), log);
-                    log.LogError("apiKey Exception --> 2 " + apiKey);
-                    log.LogError("blobKey Exception --> 2 " + blobKey);
-                    log.LogError("Exception --> 2 " + ex.Message);
+                    log.LogError("blobKey Exception --> " + blobKey);
+                    log.LogError("Exception --> " + ex.Message);
                 }
 
                 if (startDateUsecs == 0 || hasException)
                 {
-                    TestAlertToQueue(outputQueueItem);
+                    log.LogInformation("Adding welcome alert to the queue");
+                    AddWelcomeAlertToQueue(outputQueueItem);
                     startDateUsecs = GetPreviousUnixTime(log);
                 }
 
@@ -229,17 +238,17 @@ namespace Helios2Sentinel
             }
         }
 
-        private static void TestAlertToQueue([Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem)
+        private static void AddWelcomeAlertToQueue([Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem)
         {
-            dynamic output = new ExpandoObject();
-            output.properties = new ExpandoObject();
-            output.properties.title = "Test Incident";
-            output.properties.Description = "This is a test incident that confirms that the installation has completed correctly.";
-            output.properties.severity = "Low";
+            string title = "Hello from Cohesity!";
+            string description = "This is a test incident that confirms that the Cohesity function app installation has completed correctly. This is NOT a ransomware-related incident.";
+            string severity = "Low";
+
+            dynamic incident = ConstructIncident(title, description, severity);
 
             lock (queueLock)
             {
-                outputQueueItem.Add(JsonConvert.SerializeObject(output));
+                outputQueueItem.Add(JsonConvert.SerializeObject(incident));
             }
         }
 
