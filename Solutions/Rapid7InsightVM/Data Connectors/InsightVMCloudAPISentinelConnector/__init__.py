@@ -109,7 +109,7 @@ class InsightVMAPI:
         delay_res = []
         if res:
             for event in res["data"]:
-                if event["last_scan_end"] and parse_date(event["last_scan_end"]) < end_time:
+                if "last_scan_end" in event and parse_date(event["last_scan_end"]) < end_time:
                     delay_res.append(event)
         else:
             res = {}
