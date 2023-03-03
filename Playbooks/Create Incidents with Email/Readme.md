@@ -44,7 +44,7 @@ Step 2: Incident created in Sentinel
 
 ### Use cases
 
-SOC - In a organization there might be Security Incident / Suspecious activity occurring to the resources where Security is not tightened up yet. 
+SOC - In a organization there might be Security Incident / Suspicious activity occurring to the resources where Security is not tightened up yet. 
 So an email address can be whistle blower here. A suspicious activity can be reported over a dedicated email address to create an incident and address the incident.
 
 
