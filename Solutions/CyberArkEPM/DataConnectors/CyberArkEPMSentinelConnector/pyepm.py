@@ -37,7 +37,7 @@ def epmAuth(dispatcher, username, password):
     # make the Rest API call
     urllib3.disable_warnings()
 
-    return requests.post(myURL, headers=hdr, data=logonBody, verify=False)
+    return requests.post(myURL, headers=hdr, data=logonBody)
 
 def samlAuth(dispatcher, username, password, identityTenantID, identityTenantURL, identityAppKey):
 
@@ -119,7 +119,7 @@ def winAuth(epmsrv, username, password, version=None):
 
     # make the Rest API call
     urllib3.disable_warnings()
-    return requests.post(myURL, headers=hdr, data=logonBody, verify=False)
+    return requests.post(myURL, headers=hdr, data=logonBody)
 
 
 def getVersion(dispatcher, version=None):
@@ -135,7 +135,7 @@ def getVersion(dispatcher, version=None):
 
     # make the Rest API call
     urllib3.disable_warnings()
-    return requests.get(myURL, verify=False)
+    return requests.get(myURL)
 
 
 def getSetsList(epmserver, epmToken, authType, version=None):
@@ -161,7 +161,7 @@ def getSetsList(epmserver, epmToken, authType, version=None):
 
     # make the Rest API call
     urllib3.disable_warnings()
-    return requests.get(myURL, headers=hdr, verify=False)
+    return requests.get(myURL, headers=hdr)
 
 
 def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
@@ -194,9 +194,9 @@ def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor=
     # check to see if there are any keyword arguments passed in to this function
     # if so, use them
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, verify=False, data=data, params=kwargs)
+        return requests.post(myURL, headers=hdr, data=data, params=kwargs)
     else:
-        return requests.post(myURL, headers=hdr, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, data=data)
 
 
 def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
@@ -230,9 +230,9 @@ def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
     else:
-        return requests.post(myURL, headers=hdr, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, data=data)
 
 
 def getAggregatedPolicyAudits(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
@@ -265,9 +265,9 @@ def getAggregatedPolicyAudits(epmserver, epmToken, authType, setid, data, next_c
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
     else:
-        return requests.post(myURL, headers=hdr, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, data=data)
 
 
 def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000,
@@ -301,9 +301,9 @@ def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, ne
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
     else:
-        return requests.post(myURL, headers=hdr, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, data=data)
 
 def getAdminAuditEvents(epmserver, epmToken, authType, setid, start_time, end_time, limit=100):
     """
