@@ -19,8 +19,9 @@ This playbook provides an end to end example of the collection of Ransomware Ano
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
+    * API Hostname: Hostname of the RubrikApi instance
     * Teams Group Id: Id of the Teams Group where the adaptive card will be posted
     * Teams Channel Id: Id of the Teams Channel where the adaptive card will be posted
 
