@@ -79,7 +79,6 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
       // Here we finish iterating over the current workbook metadata object. We will add the parsed workbook changes only if all fields are populated.
       if(templateRelativePath != null && newVersion != null && oldVersion != null){
         workbookVersionChanges[templateRelativePath] = {"newVersion": newVersion, "oldVersion": oldVersion};
-        console.log("newVersion " + newVersion + ", oldVersion " + oldVersion);
       }
     }
     currentLine++;
