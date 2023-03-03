@@ -5,51 +5,84 @@ import * as logger from "./utils/logger";
 
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
-    if (!filePath.includes("azure-pipelines"))
+    const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
+    const dataFolder = ["/Data/", "/data/"]
+    const dataConnectorsFolder = ["/DataConnectors/", "/Data Connectors/"]
+    let requiredFolderFiles = [...dataFolder, ...dataConnectorsFolder, "createUiDefinition.json"];
+
+    const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
+    const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
+
+    if (!hasIgnoredFile && hasRequiredFolderFiles)
     {
-        const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
+        let tagContent = "";
+        let tagName = ""
 
-        // Read skip text from a file
-        const skipTextFile = fs.readFileSync('./.script/skip-text.txt', "utf8");
-        const skipTexts = skipTextFile.split("\n").filter(text => text.length > 0);
+        const hasDataFolder = dataFolder.filter(item => { return filePath.includes(item)}).length > 0
+        const hasDataConnectorFolder = dataConnectorsFolder.filter(item => { return filePath.includes(item)}).length > 0
 
-        // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
-        let hasSkipText = false;
-        let skipTextValue = '';
-        for (const skipText of skipTexts) 
+        const jsonTagObj = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
+        if (jsonTagObj.hasOwnProperty("createUiDefinition") && filePath.includes('createUiDefinition'))
         {
-            if (fileContent.includes(skipText)) 
-            {
-                hasSkipText = true;
-                skipTextValue = skipText;
-                break;
-            }
+            tagName = jsonTagObj.createUiDefinition;
+            tagContent = GetTagContent(tagName);
+        }
+        else if (hasDataFolder && jsonTagObj.hasOwnProperty("data"))
+        {
+            tagName = jsonTagObj.data;
+            tagContent = GetTagContent(tagName);
+        }
+        else if (hasDataConnectorFolder && jsonTagObj.hasOwnProperty("dataConnectors"))
+        {
+            tagName = jsonTagObj.dataConnectors;
+            tagContent = GetTagContent(tagName);
         }
 
-        // REPLACE ALL SKIP TEXT WITH BLANK
-        let replacedFileContent = fileContent.replace(new RegExp(skipTexts.join('|'), 'gi'), '');
-
-        // FIND IF AZURE SENTINEL TEXT PRESENT
-        let hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
-        if (hasAzureSentinelText) 
+        if (tagContent)
         {
-            // VALIDATE AND THROW ERROR
-            if (hasSkipText) 
-            {
-                throw new Error(`Please update text from '${searchText}' to '${expectedText}' except '${skipTextValue}' text in file '${filePath}'`);
-            } 
-            else 
-            {
-                throw new Error(`Please update text from '${searchText}' to '${expectedText}' in file '${filePath}'`);
-            }
+            let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
+            if (hasAzureSentinelText) {
+                throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
+            }
+        }
+        else
+        {
+            console.log(`Skipping file ${filePath} from Content Validation as ${searchText} text not found`);
         }
     }
+    else
+    {
+        console.log(`Skipping file ${filePath} from Content Validation as the file is not from folder Data, Data Connector or createUiDefinition file`);
+    }
+
     return ExitCode.SUCCESS;
+
+    function GetTagContent(tagName: any) {
+        var fileContentObj = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+        if (filePath.includes("createUiDefinition.json")) {
+            var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
+            if (tagContent == undefined) {
+                //MAKE FIRST LETTER OF THE WORD CAPS
+                const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
+                var tagContent = fileContentObj["parameters"]["config"]["basics"][firstLetterCapsInTagName];
+            }
+        }
+        else {
+            var tagContent = fileContentObj[tagName];
+            if (tagContent == undefined) {
+                //MAKE FIRST LETTER OF THE WORD CAPS
+                const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
+                var tagContent = fileContentObj[firstLetterCapsInTagName];
+            }
+        }
+        return tagContent;
+    }
 }
 
-let fileTypeSuffixes = ["json", "txt", "md", "yaml", "yml", "py"];
+let fileTypeSuffixes = ["json"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
     onCheckFile: (filePath: string) => {
