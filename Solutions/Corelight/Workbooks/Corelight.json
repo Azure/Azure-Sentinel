@@ -86,7 +86,7 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "conn\n| distinct _system_name\n| sort by _system_name",
+            "query": "union corelight_conn, corelight_conn_red\n| distinct _system_name\n| sort by _system_name",
             "typeSettings": {
               "additionalResourceOptions": [
                 "value::all"
@@ -221,7 +221,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "(notice\r\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\r\n//| where note != \"LongConnection::found\" and note != \"SSL::Invalid_Server_Cert\"\r\n//| project-rename Alert = note \r\n| union suricata_corelight)\r\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\r\n//| where alert_category != \"Not Suspicious Traffic\" and alert_category != \"Attempted Information Leak\" and alert_category != \"Potentially Bad Traffic\"\r\n//| where _path_s == \"notice\"\r\n//| project-rename Alert = alert_category\r\n| extend Category = coalesce(note, alert_category), Alert = coalesce(msg, alert_signature), Severity=coalesce(severity_level, alert_severity, 7.), Type = _path\r\n| extend PartitionKey = case(_path == \"suricata_corelight\", Alert, Category)\r\n| where (isnotempty(uid) or isnotempty(community_id))\r\n| partition hint.strategy=native by PartitionKey\r\n(\r\n  top 10 by TimeGenerated\r\n)\r\n| order by Severity asc, TimeGenerated\r\n\r\n// hack to hide empty columns\r\n| evaluate narrow()\r\n| where isnotempty(Value) and Value != \"##(null)\" or Column == \"_system_name_s\"\r\n| evaluate pivot(Column, any(Value), Row)\r\n\r\n| project-reorder TimeGenerated, Type, Category, Alert, Severity, uid, id_orig_h, id_resp_h, id_resp_p\r\n",
+              "query": "(corelight_notice\r\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\r\n//| where note != \"LongConnection::found\" and note != \"SSL::Invalid_Server_Cert\"\r\n//| project-rename Alert = note \r\n| union corelight_suricata_corelight)\r\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\r\n//| where alert_category != \"Not Suspicious Traffic\" and alert_category != \"Attempted Information Leak\" and alert_category != \"Potentially Bad Traffic\"\r\n//| where _path_s == \"notice\"\r\n//| project-rename Alert = alert_category\r\n| extend Category = coalesce(note, alert_category), Alert = coalesce(msg, alert_signature), Severity=coalesce(severity_level, alert_severity, 7.), Type = _path\r\n| extend PartitionKey = case(_path == \"suricata_corelight\", Alert, Category)\r\n| where (isnotempty(uid) or isnotempty(community_id))\r\n| partition hint.strategy=native by PartitionKey\r\n(\r\n  top 10 by TimeGenerated\r\n)\r\n| order by Severity asc, TimeGenerated\r\n\r\n// hack to hide empty columns\r\n| evaluate narrow()\r\n| where isnotempty(Value) and Value != \"##(null)\" or Column == \"_system_name_s\"\r\n| evaluate pivot(Column, any(Value), Row)\r\n\r\n| project-reorder TimeGenerated, Type, Category, Alert, Severity, uid, id_orig_h, id_resp_h, id_resp_p\r\n",
               "size": 0,
               "showAnalytics": true,
               "title": "Recent Events Summary (10 most recent per message type)",
@@ -261,7 +261,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "suricata_corelight\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| summarize alert_count=count() by source_ip=id_orig_h, alert_signature, severity=alert_severity\n| top 10 by alert_count\n",
+              "query": "corelight_suricata_corelight\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| summarize alert_count=count() by source_ip=id_orig_h, alert_signature, severity=alert_severity\n| top 10 by alert_count\n",
               "size": 0,
               "showAnalytics": true,
               "title": "Suricata Top Alerts by Source",
@@ -294,7 +294,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where local_resp == true and (proto == \"tcp\" or (proto == \"udp\" and orig_bytes > 0 and resp_bytes > 0))\n| where conn_state != \"S0\"\n| summarize count() by id_resp_h, id_resp_p, service\n| summarize Count=count() by service\n| top 20 by Count\n",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where local_resp == true and (proto == \"tcp\" or (proto == \"udp\" and orig_bytes > 0 and resp_bytes > 0))\n| where conn_state != \"S0\"\n| summarize count() by id_resp_h, id_resp_p, service\n| summarize Count=count() by service\n| top 20 by Count\n",
               "size": 3,
               "showAnalytics": true,
               "title": "Local Hosts Seen Offering Services",
@@ -310,7 +310,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where proto==\"tcp\" or (proto==\"udp\" and orig_pkts>0 and resp_pkts>0)\n| where conn_state != \"S0\"\n| where local_resp==true\n| summarize Count=count() by portproto=strcat(tostring(toint(id_resp_p)), \"/\", proto)\n| top 15 by Count",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where proto==\"tcp\" or (proto==\"udp\" and orig_pkts>0 and resp_pkts>0)\n| where conn_state != \"S0\"\n| where local_resp==true\n| summarize Count=count() by portproto=strcat(tostring(toint(id_resp_p)), \"/\", proto)\n| top 15 by Count",
               "size": 3,
               "showAnalytics": true,
               "title": "Top Responder Ports",
@@ -326,7 +326,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where local_orig == false and local_resp == true\n| where proto==\"tcp\" or (proto==\"udp\" and orig_pkts>0 and resp_pkts>0)\n| where conn_state!=\"S0\"\n| summarize number_of_conns=count(), orig_bytes_sum=sum(orig_bytes) by id_orig_h, service\n| extend orig_data = format_bytes(orig_bytes_sum, 2)\n| order by orig_bytes_sum desc\n| top 20 by orig_bytes_sum desc\n| project-away orig_bytes_sum\n",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where local_orig == false and local_resp == true\n| where proto==\"tcp\" or (proto==\"udp\" and orig_pkts>0 and resp_pkts>0)\n| where conn_state!=\"S0\"\n| summarize number_of_conns=count(), orig_bytes_sum=sum(orig_bytes) by id_orig_h, service\n| extend orig_data = format_bytes(orig_bytes_sum, 2)\n| order by orig_bytes_sum desc\n| top 20 by orig_bytes_sum desc\n| project-away orig_bytes_sum\n",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Inbound Data Flows by Originator",
@@ -341,7 +341,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where proto == \"tcp\" or (proto == \"udp\" and orig_pkts>0 and resp_pkts>0)\n| where local_orig==true and local_resp==false\n| where conn_state != \"S0\"\n| summarize number_of_conns=count(), orig_bytes_sum=sum(orig_bytes) by id_orig_h, service\n| extend orig_data = format_bytes(orig_bytes_sum, 2)\n| order by orig_bytes_sum desc\n| project-away orig_bytes_sum",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where proto == \"tcp\" or (proto == \"udp\" and orig_pkts>0 and resp_pkts>0)\n| where local_orig==true and local_resp==false\n| where conn_state != \"S0\"\n| summarize number_of_conns=count(), orig_bytes_sum=sum(orig_bytes) by id_orig_h, service\n| extend orig_data = format_bytes(orig_bytes_sum, 2)\n| order by orig_bytes_sum desc\n| project-away orig_bytes_sum",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Outbound Data Flows by Originator",
@@ -356,7 +356,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where conn_state==\"S0\"\n| summarize Count=count() by id_orig_h, id_resp_p, service\n| order by Count desc",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where conn_state==\"S0\"\n| summarize Count=count() by id_orig_h, id_resp_p, service\n| order by Count desc",
               "size": 0,
               "showAnalytics": true,
               "title": "Hosts Generating S0 (possible scan) Traffic",
@@ -371,7 +371,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where proto==\"tcp\" or (proto==\"udp\" and orig_pkts>0 and resp_pkts>0)\n| where conn_state != \"S0\"\n| summarize number_of_conns=count(), orig_bytes_sum=sum(orig_bytes), resp_bytes_sum=sum(resp_bytes) by id_orig_h, id_resp_h, id_resp_p, proto\n| extend total_bytes_sum = orig_bytes_sum + resp_bytes_sum\n| extend total_data = format_bytes(total_bytes_sum, 2)\n| top 20 by total_bytes_sum desc",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where proto==\"tcp\" or (proto==\"udp\" and orig_pkts>0 and resp_pkts>0)\n| where conn_state != \"S0\"\n| summarize number_of_conns=count(), orig_bytes_sum=sum(orig_bytes), resp_bytes_sum=sum(resp_bytes) by id_orig_h, id_resp_h, id_resp_p, proto\n| extend total_bytes_sum = orig_bytes_sum + resp_bytes_sum\n| extend total_data = format_bytes(total_bytes_sum, 2)\n| top 20 by total_bytes_sum desc",
               "size": 0,
               "showAnalytics": true,
               "title": "Largest transfers between host/port pairs",
@@ -385,7 +385,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where local_resp == true and conn_state == \"S0\"\n| summarize Count=count() by id_resp_h, id_resp_p, service\n| top 30 by Count",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where local_resp == true and conn_state == \"S0\"\n| summarize Count=count() by id_resp_h, id_resp_p, service\n| top 30 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Possible Down Services",
@@ -400,7 +400,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| summarize Count=count() by history\n| top 20 by Count",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| summarize Count=count() by history\n| top 20 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Monitor Health Asymmetry (All UPPER or lower is bad)",
@@ -415,7 +415,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "conn\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where local_orig == false and local_resp == false\n| summarize Count=count() by id_orig_h, id_resp_h, id_resp_p, service\n| top 20 by Count",
+              "query": "union corelight_conn, corelight_conn_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where local_orig == false and local_resp == false\n| summarize Count=count() by id_orig_h, id_resp_h, id_resp_p, service\n| top 20 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Remote to Remote Connections",
@@ -430,7 +430,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "notice\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where note == \"LongConnection::found\"\n| summarize Count=count(1), arg_max(TimeGenerated, id_orig_h, id_resp_h, id_resp_p, sub, msg) by uid\n| extend seconds=sub\n| top 20 by seconds desc\n",
+              "query": "corelight_notice\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where note == \"LongConnection::found\"\n| summarize Count=count(1), arg_max(TimeGenerated, id_orig_h, id_resp_h, id_resp_p, sub, msg) by uid\n| extend seconds=sub\n| top 20 by seconds desc\n",
               "size": 0,
               "showAnalytics": true,
               "title": "Longest Lived Connections, (May have already closed)",
@@ -450,7 +450,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "conn\n| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"conn\"\n| where isnotempty(service)\n| summarize count() by tostring(service) | take 10",
+                    "query": "union corelight_conn, corelight_conn_red\n| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"conn\"\n| where isnotempty(service)\n| summarize count() by tostring(service) | take 10",
                     "size": 3,
                     "title": "Top Services",
                     "timeContextFromParameter": "TimeRange",
@@ -478,7 +478,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "conn\n| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"conn\"\n| where isnotempty(id_resp_p)\n| extend dstprt = tostring(toint(id_resp_p))\n| summarize Count=count() by dstprt | sort by Count desc |take 10",
+                    "query": "union corelight_conn, corelight_conn_red\n| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"conn\"\n| where isnotempty(id_resp_p)\n| extend dstprt = tostring(toint(id_resp_p))\n| summarize Count=count() by dstprt | sort by Count desc |take 10",
                     "size": 3,
                     "title": "Top Responder Ports",
                     "timeContextFromParameter": "TimeRange",
@@ -506,7 +506,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "conn\n//| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"conn\"\n//| extend NetworkDirection = case(LocalOrig == true,\"outbound\", LocalOrig == false, \"inbound\",'')\n| where local_orig == true and local_resp == false\n//| where isnotempty(SrcIpAddr) and isnotempty(DstIpAddr) and isnotempty(SrcIpBytes) and isnotempty(DstIpBytes)\n| extend bytes = toint(orig_bytes_d) + toint(resp_bytes_d)\n| summarize Bytes=sum(bytes) by id_orig_h, id_resp_h, proto | sort by Bytes desc | take 15",
+                    "query": "union corelight_conn, corelight_conn_red\n//| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"conn\"\n//| extend NetworkDirection = case(LocalOrig == true,\"outbound\", LocalOrig == false, \"inbound\",'')\n| where local_orig == true and local_resp == false\n//| where isnotempty(SrcIpAddr) and isnotempty(DstIpAddr) and isnotempty(SrcIpBytes) and isnotempty(DstIpBytes)\n| extend bytes = toint(orig_bytes_d) + toint(resp_bytes_d)\n| summarize Bytes=sum(bytes) by id_orig_h, id_resp_h, proto | sort by Bytes desc | take 15",
                     "size": 0,
                     "title": "Top Outbound Data Flows by Originator Bytes",
                     "timeContextFromParameter": "TimeRange",
@@ -520,7 +520,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "conn\n//| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"conn\"\n//| extend NetworkDirection = case(LocalOrig == true,\"outbound\", LocalOrig == false, \"inbound\",'')\n| where local_orig == false and local_resp == true\n//| where isnotempty(SrcIpAddr) and isnotempty(DstIpAddr) and isnotempty(SrcIpBytes) and isnotempty(DstIpBytes)\n| extend bytes = toint(orig_bytes_d) + toint(resp_bytes_d)\n| summarize Bytes=sum(bytes) by id_orig_h, id_resp_h, proto | sort by Bytes desc | take 15",
+                    "query": "union corelight_conn, corelight_conn_red\n//| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"conn\"\n//| extend NetworkDirection = case(LocalOrig == true,\"outbound\", LocalOrig == false, \"inbound\",'')\n| where local_orig == false and local_resp == true\n//| where isnotempty(SrcIpAddr) and isnotempty(DstIpAddr) and isnotempty(SrcIpBytes) and isnotempty(DstIpBytes)\n| extend bytes = toint(orig_bytes_d) + toint(resp_bytes_d)\n| summarize Bytes=sum(bytes) by id_orig_h, id_resp_h, proto | sort by Bytes desc | take 15",
                     "size": 0,
                     "title": "Top Inbound Data Flows by Originator Bytes",
                     "timeContextFromParameter": "TimeRange",
@@ -534,7 +534,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "conn\n//| where EventType startswith \"conn\"\n| where TimeGenerated  {TimeRange} \n| summarize Count=count() by id_orig_h | sort by Count",
+                    "query": "union corelight_conn, corelight_conn_red\n//| where EventType startswith \"conn\"\n| where TimeGenerated  {TimeRange} \n| summarize Count=count() by id_orig_h | sort by Count",
                     "size": 3,
                     "title": "Top Originators (sources) by # of connections",
                     "timeContextFromParameter": "TimeRange",
@@ -549,7 +549,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "conn\n//| where EventType startswith \"conn\"\n| where TimeGenerated  {TimeRange} \n| summarize Count=count() by id_resp_h | sort by Count",
+                    "query": "union corelight_conn, corelight_conn_red\n//| where EventType startswith \"conn\"\n| where TimeGenerated  {TimeRange} \n| summarize Count=count() by id_resp_h | sort by Count",
                     "size": 3,
                     "title": "Top Responders (destinations) by # of connections",
                     "timeContextFromParameter": "TimeRange",
@@ -564,7 +564,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "conn\n//| where EventType startswith \"conn\"\n| where TimeGenerated  {TimeRange}\n| where isnotempty(id_orig_h) and isnotempty(id_resp_h) and isnotempty(service) and isnotempty(id_orig_p) and isnotempty(id_resp_p)\n| summarize Duration=avg(toint(duration)), make_list(id_orig_h), make_list(id_resp_h), make_list(proto) by uid | sort by Duration desc | take 50",
+                    "query": "union corelight_conn, corelight_conn_red\n//| where EventType startswith \"conn\"\n| where TimeGenerated  {TimeRange}\n| where isnotempty(id_orig_h) and isnotempty(id_resp_h) and isnotempty(service) and isnotempty(id_orig_p) and isnotempty(id_resp_p)\n| summarize Duration=avg(toint(duration)), make_list(id_orig_h), make_list(id_resp_h), make_list(proto) by uid | sort by Duration desc | take 50",
                     "size": 0,
                     "title": "Open/Active Long Lived Connections (requires Long Connections Pkg)",
                     "timeContextFromParameter": "TimeRange",
@@ -604,7 +604,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n//| where is_broadcast_b!=true\n| summarize Count=count() by qtype_name\n| top 10 by Count",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n//| where is_broadcast_b!=true\n| summarize Count=count() by qtype_name\n| top 10 by Count",
               "size": 3,
               "showAnalytics": true,
               "title": "Top Query Types",
@@ -620,7 +620,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where (rcode_name==\"NXTOMAIN\" or rcode==3) and qtype_name != \"PTR\"\n| summarize Count=count() by qtype_name\n| top 20 by Count",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where (rcode_name==\"NXTOMAIN\" or rcode==3) and qtype_name != \"PTR\"\n| summarize Count=count() by qtype_name\n| top 20 by Count",
               "size": 3,
               "showAnalytics": true,
               "title": "No response DNS query by type",
@@ -636,7 +636,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53 and (rcode_name == \"NXDOMAIN\" or rcode == 3) and qtype_name != \"PTR\"\n| summarize Count=count() by query\n| top 100 by Count",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53 and (rcode_name == \"NXDOMAIN\" or rcode == 3) and qtype_name != \"PTR\"\n| summarize Count=count() by query\n| top 100 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Queries by Count to Non-Existent Domains",
@@ -651,7 +651,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53\n| summarize Count=count() by id_orig_h\n| top 20 by Count",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53\n| summarize Count=count() by id_orig_h\n| top 20 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Originators by Count",
@@ -666,7 +666,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53 and qtype_name != \"ptr\"\n| summarize Count=count() by query\n| top 100 by Count",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53 and qtype_name != \"ptr\"\n| summarize Count=count() by query\n| top 100 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Queries by Count",
@@ -681,7 +681,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p==53 and qtype_name==\"PTR\" and (rcode_name==\"NOERROR\" or rcode==0)\n| summarize Count=count() by query\n| top 100 by Count",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p==53 and qtype_name==\"PTR\" and (rcode_name==\"NOERROR\" or rcode==0)\n| summarize Count=count() by query\n| top 100 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Successful Reverse Queries by Count",
@@ -696,7 +696,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53 and (rcode_name == \"NXDOMAIN\" or rcode == 3) and qtype_name != \"PTR\"\n| summarize Count=count() by id_orig_h\n| top 20 by Count\n",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53 and (rcode_name == \"NXDOMAIN\" or rcode == 3) and qtype_name != \"PTR\"\n| summarize Count=count() by id_orig_h\n| top 20 by Count\n",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Host querying Non-Existent Domains",
@@ -711,7 +711,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53 and qtype_name == \"PTR\" and (rcode_name == \"NXDOMAIN\" or rcode == 3)\n| summarize Count=count() by query\n| top 100 by Count",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where id_resp_p == 53 and qtype_name == \"PTR\" and (rcode_name == \"NXDOMAIN\" or rcode == 3)\n| summarize Count=count() by query\n| top 100 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Reverse Queries by Count to Non-Existent Domains",
@@ -726,7 +726,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dns\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| extend query_length = string_size(query)\n| summarize Count=count() by id_orig_h, query_length, query\n| order by query_length desc",
+              "query": "union corelight_dns, corelight_dns_red\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| extend query_length = string_size(query)\n| summarize Count=count() by id_orig_h, query_length, query\n| order by query_length desc",
               "size": 0,
               "showAnalytics": true,
               "title": "DNS by Query Length",
@@ -763,7 +763,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "files\n| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"files\"\n| where isnotempty(mime_type)\n| where mime_type != \"application/pkix-cert\"\n| summarize Count=count() by mime_type | sort by Count desc | take 20\n",
+                    "query": "corelight_files\n| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"files\"\n| where isnotempty(mime_type)\n| where mime_type != \"application/pkix-cert\"\n| summarize Count=count() by mime_type | sort by Count desc | take 20\n",
                     "size": 0,
                     "title": "Top 20 Mime Types by File Count",
                     "timeContextFromParameter": "TimeRange",
@@ -777,7 +777,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "files\n| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"files\"\n| where isnotempty(mime_type)\n| where mime_type != \"application/pkix-cert\"\n| summarize [\"File Count\"]=count() by source | sort by [\"File Count\"] desc | take 15\n",
+                    "query": "corelight_files\n| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"files\"\n| where isnotempty(mime_type)\n| where mime_type != \"application/pkix-cert\"\n| summarize [\"File Count\"]=count() by source | sort by [\"File Count\"] desc | take 15\n",
                     "size": 0,
                     "title": "Top File Protocols by File Count",
                     "timeContextFromParameter": "TimeRange",
@@ -791,7 +791,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "files\n//| where EventType startswith \"files\"\n| where isnotempty(mime_type)\n| where mime_type != \"application/pkix-cert\"\n| extend NetworkDirection = case(local_orig == \"true\", \"outbound\", local_orig == \"false\", \"inbound\", \"\" )\n|make-series [\"Files Sent\"]=countif(NetworkDirection==\"outbound\"), [\"Files Received\"]=countif(NetworkDirection==\"inbound\") on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by _path | project [\"Files Sent\"], [\"Files Received\"], TimeGenerated",
+                    "query": "corelight_files\n//| where EventType startswith \"files\"\n| where isnotempty(mime_type)\n| where mime_type != \"application/pkix-cert\"\n| extend NetworkDirection = case(local_orig == \"true\", \"outbound\", local_orig == \"false\", \"inbound\", \"\" )\n|make-series [\"Files Sent\"]=countif(NetworkDirection==\"outbound\"), [\"Files Received\"]=countif(NetworkDirection==\"inbound\") on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by _path | project [\"Files Sent\"], [\"Files Received\"], TimeGenerated",
                     "size": 0,
                     "title": "File Flow - # of Files",
                     "timeContextFromParameter": "TimeRange",
@@ -812,7 +812,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "files\n//| where EventType startswith \"files\"\n| where isnotempty(mime_type)\n| where mime_type != \"application/pkix-cert\"\n//| extend NetworkDirection = case(local_orig == true, \"outbound\", local_orig == false, \"inbound\", \"\" )\n// fixme: drop _d\n|make-series [\"Bytes Sent\"]=sumif(toint(seen_bytes_d), local_orig == true), [\"Bytes Received\"]=sumif(toint(seen_bytes_d),local_orig == false) on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by EventType",
+                    "query": "corelight_files\n//| where EventType startswith \"files\"\n| where isnotempty(mime_type)\n| where mime_type != \"application/pkix-cert\"\n//| extend NetworkDirection = case(local_orig == true, \"outbound\", local_orig == false, \"inbound\", \"\" )\n// fixme: drop _d\n|make-series [\"Bytes Sent\"]=sumif(toint(seen_bytes_d), local_orig == true), [\"Bytes Received\"]=sumif(toint(seen_bytes_d),local_orig == false) on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by EventType",
                     "size": 0,
                     "title": "File Flow - Bytes",
                     "timeContextFromParameter": "TimeRange",
@@ -853,7 +853,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize distinct_referrers=count_distinct(referrer)",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize distinct_referrers=count_distinct(referrer)",
               "size": 3,
               "showAnalytics": true,
               "title": "Distinct Referrers",
@@ -872,7 +872,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize distinct_user_agents=count_distinct(user_agent)",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize distinct_user_agents=count_distinct(user_agent)",
               "size": 3,
               "showAnalytics": true,
               "title": "Distinct User Agents",
@@ -891,7 +891,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize count_distinct(host)",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize count_distinct(host)",
               "size": 3,
               "showAnalytics": true,
               "title": "Distinct Hosts",
@@ -910,7 +910,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize distinct_connections=count_distinct(uid)",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize distinct_connections=count_distinct(uid)",
               "size": 3,
               "showAnalytics": true,
               "title": "Distinct Connections",
@@ -929,7 +929,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize avg = format_bytes(avg(response_body_len), 2)",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize avg = format_bytes(avg(response_body_len), 2)",
               "size": 3,
               "showAnalytics": true,
               "title": "Average Body Length",
@@ -948,7 +948,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| extend ua_length = strlen(user_agent)\n| summarize avg_ua_length = round(avg(ua_length))",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| extend ua_length = strlen(user_agent)\n| summarize avg_ua_length = round(avg(ua_length))",
               "size": 3,
               "showAnalytics": true,
               "title": "Average User Agent Length",
@@ -967,7 +967,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by host\n| top 10 by Count",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by host\n| top 10 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Host Headers by Count",
@@ -996,7 +996,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by status_msg\n| top 10 by Count",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by status_msg\n| top 10 by Count",
               "size": 3,
               "showAnalytics": true,
               "title": "HTTP Status Code Breakdown",
@@ -1012,7 +1012,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by id_orig_h\n| top 10 by Count",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by id_orig_h\n| top 10 by Count",
               "size": 0,
               "showAnalytics": true,
               "title": "Top Originators",
@@ -1027,7 +1027,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by user_agent\n| top 10 by Count asc",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by user_agent\n| top 10 by Count asc",
               "size": 0,
               "showAnalytics": true,
               "title": "Rare User Agents",
@@ -1044,7 +1044,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by host, status_code\n| top 10 by Count asc",
+              "query": "corelight_http\n| where \"(all values)\" == \"{Sensor}\" or _system_name in ({Sensor})\n| where host != \"control\"\n| summarize Count=count() by host, status_code\n| top 10 by Count asc",
               "size": 0,
               "showAnalytics": true,
               "title": "Rare Host Headers",
@@ -1082,7 +1082,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "software\n//| where EventType startswith \"software\"\n| where TimeGenerated  {TimeRange}\n//| where isnotempty(SoftwareType)\n| summarize Count=count() by name | sort by Count | take 20\n",
+                    "query": "corelight_software\n//| where EventType startswith \"software\"\n| where TimeGenerated  {TimeRange}\n//| where isnotempty(SoftwareType)\n| summarize Count=count() by name | sort by Count | take 20\n",
                     "size": 0,
                     "title": "Top Software",
                     "timeContextFromParameter": "TimeRange",
@@ -1096,7 +1096,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "software\n//| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"software\"\n| where isnotempty(software_type)\n| summarize Count=count() by name, unparsed_version | sort by Count",
+                    "query": "corelight_software\n//| where TimeGenerated  {TimeRange}\n//| where EventType startswith \"software\"\n| where isnotempty(software_type)\n| summarize Count=count() by name, unparsed_version | sort by Count",
                     "size": 0,
                     "title": "Top Software Versions",
                     "timeContextFromParameter": "TimeRange",
@@ -1125,7 +1125,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "software\n//| where EventType startswith \"software\"\n| where isnotempty(software_type)\n| summarize Count=count() by software_type | sort by Count",
+                    "query": "corelight_software\n//| where EventType startswith \"software\"\n| where isnotempty(software_type)\n| summarize Count=count() by software_type | sort by Count",
                     "size": 0,
                     "title": "Top Software Types",
                     "timeContextFromParameter": "TimeRange",
