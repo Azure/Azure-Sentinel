@@ -29,6 +29,11 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let UserTypeLookup = datatable (UserType:string, TargetUserType:string) [
+    'Member', 'Regular',
+    'Guest','Guest', 
+    '',''
+  ];
   let AADSigninLogs=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
   SigninLogs | where not(disabled)
   // ************************************************************************* 
@@ -72,37 +77,17 @@ ParserQuery: |
        , TargetSessionId=CorrelationId
        , TargetUserId = UserId
        , TargetUsername=UserPrincipalName
-       , TargetUserType=UserType
        , TargetAppId = ResourceIdentity
        , TargetAppName=ResourceDisplayName
-   | project-reorder
-       TimeGenerated
-       ,EventProduct
-       , EventOriginalUid
-       , EventResult
-       , EventOriginalResultDetails
-       , EventStartTime
-       , EventEndTime
-       , LogonMethod 
-       , TargetSessionId
-       , TargetUserId
-       , TargetUsername
-       , SrcDvcId
-       , SrcDvcHostname 
-       , SrcDvcOs
-       , HttpUserAgent 
-       , SrcGeoCity
-       , SrcGeoCountry
-       , TargetAppId
-       , TargetAppName
-       , SrcDvcIpAddr
-       // ** Aliases
-        | extend 
-          User=TargetUsername
-        , LogonTarget=TargetAppName
-        , Dvc=EventVendor
-       // -- Entity identifier explicit aliases
-        , TargetUserUpn = ActorUsername
-        , TargetUserAadId = TargetUserId        
-       };
-       AADSigninLogs(starttime, endtime, targetusername_has, disabled)
+    | lookup UserTypeLookup on UserType
+    | project-away UserType
+    // ** Aliases
+    | extend 
+      User=TargetUsername
+    , LogonTarget=TargetAppName
+    , Dvc=EventVendor
+    // -- Entity identifier explicit aliases
+    , TargetUserUpn = ActorUsername
+    , TargetUserAadId = TargetUserId        
+    };
+  AADSigninLogs(starttime, endtime, targetusername_has, disabled)

@@ -92,6 +92,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
     }
     return ConnectorCategory.RestAPI;
   }
+  else if (dataTypes[0].name.includes("Dynamics365Activity"))
+  {
+    return ConnectorCategory.Dynamics365Activity;
+  }
   return "";
 }
 
