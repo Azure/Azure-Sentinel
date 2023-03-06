@@ -44,7 +44,6 @@ logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(l
 def main(mytimer: func.TimerRequest):
     logging.info('Starting script')
 
-    start_ts = int(time.time())
 
     create_credentials_file()
 
