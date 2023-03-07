@@ -60,6 +60,7 @@ def get_credentials():
             creds = pickle.loads(pickle_string)
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
+                    logging.info("Came to refresh the token : refresh_token : {}, token_uri: {}, client_id: {}, client_secret: {}".format(creds.refresh_token, creds.token_uri, creds.client_id, creds.client_secret))
                     creds.refresh(Request())
                     logging.info("Token refreshed!!")
         except Exception as pickle_read_exception:
@@ -172,6 +173,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info('Starting program')
     global creds
     creds = get_credentials()
+    logging.info("Credentials Object : {}".format(str(creds)))
     start_time, end_time = generate_date()
     logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
     for line in activities:
