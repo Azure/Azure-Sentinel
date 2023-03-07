@@ -267,7 +267,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 if(len(result_obj)) > 0 and int(mbLength) < 25 :
                 # Sort the json based on the "timestamp" key
                     body = json.dumps(result_obj)
-                    statuscode = post_data(customer_id, shared_key,body,line, len(result_obj))
+                    statuscode = post_data(customer_id, shared_key,body,"GWorkspace_ReportsAPI_"+line, len(result_obj))
                     if (statuscode >= 200 and statuscode <= 299):
                         latest_timestamp = sorted_data[-1]["id"]["time"]
                         dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
