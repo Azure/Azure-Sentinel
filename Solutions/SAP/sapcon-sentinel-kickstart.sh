@@ -430,8 +430,6 @@ Note: The required SAP log change requests expose custom RFC FMs that are requir
 For more information see the SAP documentation.
 '
 
-pause '[Press enter to agree and proceed as we guide you through the installation process. Alternately, press CTRL+C to cancel the process]'
-
 #Globals
 containername=sapcon
 sysconf=systemconfig.ini
@@ -515,29 +513,20 @@ else
 	exit 1
 fi
 
-if [ $DEVMODE ]; then
-	dockerimage=$(echo "$DEVURL" | awk -F: '{print $1}')
-	acr=$(echo "$DEVURL" | awk -F/ '{print $1}')
-	sudo docker login "$acr" -u "$DEVACRLOGIN" -p "$DEVACRPWD"
-	tagver=$(echo "$DEVURL" | awk -F: '{print ":"$2}')
-else
-	dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
-	if [ $CLOUD == 'public' ]; then
-		tagver=':latest'
-	elif [ $CLOUD == 'fairfax' ]; then
-		tagver=':ffx-latest'
-		az cloud set --name "AzureUSGovernment" >/dev/null 2>&1
-	elif [ $CLOUD == 'mooncake' ]; then
-		tagver=':mc-latest'
-		az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
-	fi
-	
-	if [ $PREVIEW ]; then
-		tagver="$tagver-preview"
-	fi
-
+dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
+if [ $CLOUD == 'public' ]; then
+	tagver=':latest'
+elif [ $CLOUD == 'fairfax' ]; then
+	tagver=':ffx-latest'
+	az cloud set --name "AzureUSGovernment" >/dev/null 2>&1
+elif [ $CLOUD == 'mooncake' ]; then
+	tagver=':mc-latest'
+	az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 fi
 
+if [ $PREVIEW ]; then
+	tagver="$tagver-preview"
+fi
 
 # sudo groupadd docker
 echo "Creating group 'docker' and adding current user to 'docker' group"
@@ -597,14 +586,6 @@ if [ -z "$SID" ]; then
 	done
 fi
 
-if [ -z "$CLIENTNUMBER" ]; then
-	read -r -p 'Client: ' CLIENTNUMBER
-	while [ ${#CLIENTNUMBER} -ne 3 ]; do
-		echo 'Invalid Client number, Client number length should be 3'
-		read -r -p 'Client: ' CLIENTNUMBER
-	done
-fi
-
 if [ "$CONNECTIONMODE" == 'abap' ] && [ ! $USESNC ]; then
 	portnumber=32$SYSTEMNR
 elif [ "$CONNECTIONMODE" == 'abap' ] && [ $USESNC ]; then
@@ -637,94 +618,12 @@ else
 fi
 
 sysfileloc=$CONFIGPATH/$containername/$intprefix/
-sudo mkdir -p "$sysfileloc"
 sudo chown "$USER" "$sysfileloc"
 if [ ! $? -eq 0 ]; then
 	echo 'Error creating the local folder.'
 	exit 1
 fi
 
-# If SNC is used, copy files required for SNC inside container mountpoint.
-# Container init script looks for the specific location (config folder/sec) and specific filenames (client.crt, client.key, server.crt etc)
-if [ $USESNC ]; then
-	# Cleanup old data, if exists
-	if [ -d "$sysfileloc"sec ]; then
-		sudo rm -rf "$sysfileloc"sec
-	fi
-	sudo mkdir -p "$sysfileloc"sec
-	sudo chown "$USER" "$sysfileloc"sec
-
-	if [ -f "$CLIENTPFX" ]; then
-		#PFX file exists. unpack it
-		openssl pkcs12 -in "$CLIENTPFX" -out "$sysfileloc"sec/client.p12 -nodes -passin pass:$CLIENTPFXPWD
-		MYCERT=$(openssl pkcs12 -info -in "$CLIENTPFX" -nodes -nokeys -clcerts -passin pass:$CLIENTPFXPWD | awk '/-----BEGIN/{a=1}/-----END/{print;a=0}a' | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
-	fi
-
-	if [ ! -f "$CLIENTPFX" ]; then
-		#CRT/KEY file go concatenated to client.p12
-		cat "$CLIENTCERT" "$CLIENTKEY" >"$sysfileloc"sec/client.p12
-	fi
-
-	if [ -n "${TRUSTEDCA[0]}" ]; then
-		# Add any CAs to be trusted
-		for i in "${TRUSTEDCA[@]}"; do
-			:
-			if [ -z "$RLINE" ]; then
-				RLINE="-r $i"
-				mkdir "$sysfileloc"sec/ca
-			else
-				RLINE+=" -r $i"
-			fi
-			cp "$i" "$sysfileloc"sec/ca/
-		done
-	fi
-	chmod +x "$SAPGENPSE"
-	sapgenpseresult=$(echo -e "\n" | "$SAPGENPSE" import_p12 -p "$sysfileloc"sec/snc.pse $RLINE "$sysfileloc"sec/client.p12 2>&1)
-	if [ ! $? -eq 0 ]; then
-		#sapgenpse failed
-		echo "Generating PSE environment failed. Failure reason:"
-		echo "$sapgenpseresult"
-		exit 1
-	fi
-
-	#Not doing anything for now, as in kvmi and kvsi modes client key is stored on disk for now
-	#if [ "$MODE" == "kvmi" ] || [ "$MODE" == "kvsi" ]; then
-	#az keyvault certificate import --vault-name "$kv" -n "$SID"-USERCERT -f "$sysfileloc"sec/client.p12
-	#Figure out name of the KV item
-	#	rm "$sysfileloc"sec/client.p12
-	#fi
-	cp "$SAPCRYPTOLIB" "$sysfileloc"sec/libsapcrypto.so
-	cp "$SERVERCERT" "$sysfileloc"sec/server.crt
-	cp "$SAPGENPSE" "$sysfileloc"sec/sapgenpse
-	chmod -R 600 "$sysfileloc"sec/*
-	chmod 700 "$sysfileloc"sec/libsapcrypto.so
-	chmod 700 "$sysfileloc"sec/sapgenpse
-	chmod 700 "$sysfileloc"sec
-	sudo chown root:root "$sysfileloc"sec
-fi
-
-
-if [ ! $USESNC ]; then
-	if [ -z $uservar ]; then
-		read -rp 'SAP Username: ' uservar
-		while [ -z "$uservar" ]; do
-			echo 'SAP Username is empty - try again'
-			read -rp 'SAP Username: ' uservar
-		done
-		uservar=$(echo "$uservar" | tr '[:upper:]' '[:lower:]')
-	fi
-
-	if [ "$uservar" == 'sap*' ]; then
-		pause 'Note: Using sap* as the connector user may create additional alerts. Press ENTER to continue.'
-	fi
-
-	#echo -n 'SAP Password: '
-	read_password passvar "SAP Password"
-	while [ -z "$passvar" ]; do
-		echo 'SAP Password empty - try again'
-		read_password passvar "SAP Password"
-	done
-fi
 if [ -z "$logwsid" ]; then
 	read -r -p 'Log Analytics Workspace ID : ' logwsid
 	while [ -z "$logwsid" ]; do
@@ -779,9 +678,6 @@ if [ $? -eq 0 ]; then
 	sudo docker container rm "$containername" >/dev/null
 fi
 sncline=""
-if [ $USESNC ]; then
-	sncline="-e SECUDIR=/sapcon-app/sapcon/config/system/sec/"
-fi
 
 if [ -n "$HTTPPROXY" ]; then
 	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
@@ -802,68 +698,6 @@ elif [ "$MODE" == "cfgf" ]; then
 fi
 echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
 
-sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.ini "$sysfileloc$sysconf"
-if [ ! $? -eq 0 ]; then
-	echo 'Error accessing the local folder.'
-	exit 1
-fi
-
-# Defining configuration file
-
-if [ "$CONNECTIONMODE" == 'abap' ]; then
-	#             '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"ashost = $ABAPSERVER"'' "$sysfileloc"$sysconf
-elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	sed -i '/\[ABAP Central Instance]/a'"mshost = $MESSAGESERVERHOST"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"msserv = $MESSAGESERVERPORT"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"group = $LOGONGROUP"'' "$sysfileloc"$sysconf
-fi
-
-sed -i '/\[ABAP Central Instance]/a'"sysnr = $SYSTEMNR"'' "$sysfileloc"$sysconf
-sed -i '/\[ABAP Central Instance]/a'"client = $CLIENTNUMBER"'' "$sysfileloc"$sysconf
-sed -i '/\[ABAP Central Instance]/a'"sysid = $SID"'' "$sysfileloc"$sysconf
-
-if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
-
-	sed -i '/\[Secrets Source]/a'"secrets = AZURE_KEY_VAULT"'' "$sysfileloc"$sysconf
-	sed -i '/\[Secrets Source]/a'"intprefix = $intprefix"'' "$sysfileloc"$sysconf
-	sed -i '/\[Secrets Source]/a'"keyvault = $kv"'' "$sysfileloc"$sysconf
-
-	if [ ! $USESNC ]; then
-		az keyvault secret set --name "$intprefix"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
-		az keyvault secret set --name "$intprefix"-ABAPUSER --value "$uservar" --description SECRET_ABAP_USER --vault-name "$kv" >/dev/null
-	fi
-	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
-	if [ ! $? -eq 0 ]; then
-		echo 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
-		exit 1
-	fi
-	az keyvault secret set --name "$intprefix"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
-elif [ "$MODE" == 'cfgf' ]; then
-	sed -i '/\[Secrets Source]/a'"secrets = DOCKER_FIXED"'' "$sysfileloc"$sysconf
-	sed -i '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf
-	sed -i '/\[Azure Credentials\]/a'"publickey = $logpubkey"'' "$sysfileloc"$sysconf
-	if [ ! $USESNC ]; then
-		sed -i '/\[ABAP Central Instance]/a'"user = $uservar"'' "$sysfileloc"$sysconf
-		sed -i '/\[ABAP Central Instance]/a'"passwd = $passvar"'' "$sysfileloc"$sysconf
-	else
-		#workaround for blank username with SNC used causing a fail during audit log collection
-		sed -i '/\[ABAP Central Instance]/a'"user = X509"'' "$sysfileloc"$sysconf
-	fi
-fi
-
-if [ $USESNC ]; then
-	sed -i '/\[ABAP Central Instance]/a'"snc_lib = \/sapcon-app\/sapcon\/config\/system\/sec\/libsapcrypto.so"'' "$sysfileloc"$sysconf
-	if [ -z "$CLIENTPFX" ]; then
-		MYCERT=$(openssl x509 -in "$CLIENTCERT" | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
-	fi
-	sed -i '/\[ABAP Central Instance]/a'"x509cert = $MYCERT"'' "$sysfileloc"$sysconf
-	PARTNERNAME=$(openssl x509 -in "$SERVERCERT" -text -noout | grep Subject: | awk -F: '{print $2}')
-	sed -i '/\[ABAP Central Instance]/a'"snc_partnername = p:$PARTNERNAME"'' "$sysfileloc"$sysconf
-fi
-
-echo 'System information and credentials Has been Updated'
-
 sudo docker cp "$SDKFILELOC" "$containername":/sapcon-app/inst/ >/dev/null
 if [ $? -eq 0 ]; then
 	echo 'SDK archive was successfully updated'
@@ -872,18 +706,5 @@ else
 	exit 1
 fi
 
-sudo docker start "$containername" >/dev/null
-if [ $? -eq 0 ]; then
-	echo '
-Azure Sentinel SAP connector was started - quick reference for future steps:
-View logs: docker logs '"$containername"'
-View logs continuously: docker logs -f '"$containername"'
-Stop the connector: docker stop '"$containername"'
-Start the connector: docker start '"$containername"'
-The process has been successfully completed, thank you!'
-else
-	echo 'Azure Sentinel Connector upgrade failed - the NetWeaver SDK could not be added to the image'
-	exit 1
-fi
 # Docker Configurations
 newgrp docker
