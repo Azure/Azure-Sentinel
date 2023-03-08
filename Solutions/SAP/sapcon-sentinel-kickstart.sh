@@ -532,10 +532,6 @@ fi
 echo "Creating group 'docker' and adding current user to 'docker' group"
 sudo usermod -aG docker "$USER"
 
-if { [ "$MODE" == 'kvmi' ] && [ -z "$kv" ]; } || { [ "$MODE" == 'kvsi' ] && [ -z "$kv" ]; }; then
-	read_value kv "KeyVault Name"
-fi
-
 if [ "$MODE" == "kvmi" ]; then
 	echo "Validating Azure managed identity"
 	az login --identity --allow-no-subscriptions >/dev/null 2>&1
@@ -623,20 +619,6 @@ if [ ! $? -eq 0 ]; then
 	echo 'Error creating the local folder.'
 	exit 1
 fi
-
-if [ -z "$logwsid" ]; then
-	read -r -p 'Log Analytics Workspace ID : ' logwsid
-	while [ -z "$logwsid" ]; do
-		echo 'Log Analytics workspace ID is empty - try again'
-		read -r -p 'Log Analytics Workspace ID : ' logwsid
-	done
-fi
-
-read_password logpubkey 'Log Analytics Public Key'
-while [ -z "$logpubkey" ]; do
-	echo 'Log Analytics Public Key empty- try again'
-	read_password logpubkey 'Log Analytics Public Key'
-done
 
 # Try to locate the SDK file in current folder
 if [ -z "$SDKFILELOC" ]; then
