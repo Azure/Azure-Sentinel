@@ -27,17 +27,6 @@ query: |
   let threshold = 5;
   let o365_attack_regex = "contacts.read|user.read|mail.read|notes.read.all|mailboxsettings.readwrite|Files.ReadWrite.All|mail.send|files.read|files.read.all";
   let o365_attack = dynamic(["contacts.read", "user.read", "mail.read", "notes.read.all", "mailboxsettings.readwrite", "Files.ReadWrite.All", "mail.send", "files.read", "files.read.all"]);
-  // The trusted_apps are sample App Client IDs. A MATCH will cause the alert to NOT fire; please modify for your environment!
-  let trusted_apps = dynamic([
-  '5523c0ac-586d-491e-bc73-fc18f9ed2c28',   // DocuSign NA1
-  '3190d40e-82d9-44ee-af78-4ce2aafd4f15',   // Zoom Video Communications
-  '0771c6f9-71c7-46d4-87a9-3b57443ee250',   // Zoom OneDrive
-  'a644e37f-d354-440f-843a-1e1ee7dfc4ef',   // Windows Defender Security Intelligence
-  '21fbe0e7-6e83-4fb0-a56f-92a67c64e37a',   // Amazon Alexa Connect
-  '30966914-6789-4d1c-9e2b-76a81a5e2a54',   // Barracuda Networks
-  '2a6082d8-9f0a-455c-a26b-7fce81edefb8',   // Favro
-  'adc8d359-f3ef-4e0a-b170-2bcf5a022728'    // ClassFlow Prod OneDrive Personal
-  ]);
   AuditLogs
   | where TimeGenerated > ago(detectionTime)
   | where LoggedByService =~ "Core Directory"
@@ -45,8 +34,9 @@ query: |
   | where OperationName =~ "Consent to application"
   | extend AppDisplayName = TargetResources.[0].displayName
   | extend AppClientId = tolower(TargetResources.[0].id)
-  | where AppClientId !in (trusted_apps) //tested and working with angela
-  | extend ConsentFull = TargetResources[0].modifiedProperties[4].newValue //improve?
+  | where AppClientId !in ((externaldata(knownAppClientId:string, knownAppDisplayName:string)[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.OAuth.KnownApplications.csv"] with (format="csv"))) // NOTE: a MATCH from this list will cause the alert to NOT fire - please modify for your environment!
+  | mv-apply ConsentFull = TargetResources[0].modifiedProperties on (
+  where ConsentFull.displayName == "ConsentAction.Permissions")
   | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope1 ", CreatedDateTime" * "]" *
   | where GrantConsentType != "AllPrincipals" // NOTE: we are ignoring if OAuth application was granted to all users via an admin - but admin due diligence should be audited occasionally
   | where ConsentFull has_any (o365_attack)  | extend GrantScopeCount = countof(tolower(GrantScope1), o365_attack_regex, 'regex')
