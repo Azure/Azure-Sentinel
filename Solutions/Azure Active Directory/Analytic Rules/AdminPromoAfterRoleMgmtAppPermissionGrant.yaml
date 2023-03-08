@@ -27,57 +27,57 @@ query: |
   let query_frequency = 1h;
   let query_period = 2h;
   AuditLogs
-  | where TimeGenerated > ago(query_frequency)
-  | where Category =~ "RoleManagement" and LoggedByService =~ "Core Directory" and AADOperationType =~ "Assign"
-  //| where OperationName in ("Add eligible member to role", "Add member to role")
-  | where isnotempty(InitiatedBy["app"])
+  | where TimeGenerated > ago(query_period)
+  | where Category =~ "ApplicationManagement" and LoggedByService =~ "Core Directory"
+  | where OperationName =~ "Add app role assignment to service principal"
   | mv-expand TargetResource = TargetResources
+  //| where tostring(TargetResource["displayName"]) == "Microsoft Graph"
   | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
-  | where tostring(modifiedProperty["displayName"]) in ("Role.DisplayName", "RoleDefinition.DisplayName")
-  | extend RoleAssignment = tostring(modifiedProperty["newValue"])
-  | where RoleAssignment contains "Admin"
+  | where tostring(modifiedProperty["displayName"]) == "AppRole.Value"
+  | extend PermissionGrant = tostring(modifiedProperty["newValue"])
+  | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
+  | mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
+      summarize modifiedProperties = make_bag(
+          pack(tostring(modifiedProperty["displayName"]),
+              pack("oldValue", trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
+                  "newValue", trim(@'[\"\s]+', tostring(modifiedProperty["newValue"])))))
+  )
   | project
-      RoleAssignment_TimeGenerated = TimeGenerated,
-      RoleAssignment_OperationName = OperationName,
-      RoleAssignment_Result = Result,
-      RoleAssignment,
-      TargetType = tostring(TargetResources[0]["type"]),
-      Target = iff(isnotempty(TargetResources[0]["displayName"]), tostring(TargetResources[0]["displayName"]), tolower(TargetResources[0]["userPrincipalName"])),
-      TargetId = tostring(TargetResources[0]["id"]),
-      RoleAssignment_InitiatedBy = InitiatedBy,
-      RoleAssignment_TargetResources = TargetResources,
-      RoleAssignment_AdditionalDetails = AdditionalDetails,
-      RoleAssignment_CorrelationId = CorrelationId,
-      AppServicePrincipalId = tostring(InitiatedBy["app"]["servicePrincipalId"])
+      PermissionGrant_TimeGenerated = TimeGenerated,
+      PermissionGrant_OperationName = OperationName,
+      PermissionGrant_Result = Result,
+      PermissionGrant,
+      AppDisplayName = tostring(modifiedProperties["ServicePrincipal.DisplayName"]["newValue"]),
+      AppServicePrincipalId = tostring(modifiedProperties["ServicePrincipal.ObjectID"]["newValue"]),
+      PermissionGrant_InitiatedBy = InitiatedBy,
+      PermissionGrant_TargetResources = TargetResources,
+      PermissionGrant_AdditionalDetails = AdditionalDetails,
+      PermissionGrant_CorrelationId = CorrelationId
   | join kind=inner (
       AuditLogs
-      | where TimeGenerated > ago(query_period)
-      | where Category == "ApplicationManagement" and LoggedByService == "Core Directory"
-      | where OperationName == "Add app role assignment to service principal"
+      | where TimeGenerated > ago(query_frequency)
+      | where Category =~ "RoleManagement" and LoggedByService =~ "Core Directory" and AADOperationType =~ "Assign"
+      //| where OperationName in ("Add eligible member to role", "Add member to role")
+      | where isnotempty(InitiatedBy["app"])
       | mv-expand TargetResource = TargetResources
-      //| where tostring(TargetResource["displayName"]) == "Microsoft Graph"
       | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
-      | where tostring(modifiedProperty["displayName"]) == "AppRole.Value"
-      | extend PermissionGrant = tostring(modifiedProperty["newValue"])
-      | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
-      | mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
-          summarize modifiedProperties = make_bag(
-              pack(tostring(modifiedProperty["displayName"]),
-                  pack("oldValue", trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
-                      "newValue", trim(@'[\"\s]+', tostring(modifiedProperty["newValue"])))))
-      )
+      | where tostring(modifiedProperty["displayName"]) in ("Role.DisplayName", "RoleDefinition.DisplayName")
+      | extend RoleAssignment = tostring(modifiedProperty["newValue"])
+      | where RoleAssignment contains "Admin"
       | project
-          PermissionGrant_TimeGenerated = TimeGenerated,
-          PermissionGrant_OperationName = OperationName,
-          PermissionGrant_Result = Result,
-          PermissionGrant,
-          AppDisplayName = tostring(modifiedProperties["ServicePrincipal.DisplayName"]["newValue"]),
-          AppServicePrincipalId = tostring(modifiedProperties["ServicePrincipal.ObjectID"]["newValue"]),
-          PermissionGrant_InitiatedBy = InitiatedBy,
-          PermissionGrant_TargetResources = TargetResources,
-          PermissionGrant_AdditionalDetails = AdditionalDetails,
-          PermissionGrant_CorrelationId = CorrelationId
-  ) on AppServicePrincipalId
+          RoleAssignment_TimeGenerated = TimeGenerated,
+          RoleAssignment_OperationName = OperationName,
+          RoleAssignment_Result = Result,
+          RoleAssignment,
+          TargetType = tostring(TargetResources[0]["type"]),
+          Target = iff(isnotempty(TargetResources[0]["displayName"]), tostring(TargetResources[0]["displayName"]), tolower(TargetResources[0]["userPrincipalName"])),
+          TargetId = tostring(TargetResources[0]["id"]),
+          RoleAssignment_InitiatedBy = InitiatedBy,
+          RoleAssignment_TargetResources = TargetResources,
+          RoleAssignment_AdditionalDetails = AdditionalDetails,
+          RoleAssignment_CorrelationId = CorrelationId,
+          AppServicePrincipalId = tostring(InitiatedBy["app"]["servicePrincipalId"])
+      ) on AppServicePrincipalId
   | where PermissionGrant_TimeGenerated < RoleAssignment_TimeGenerated
   | project PermissionGrant_TimeGenerated, PermissionGrant_OperationName, PermissionGrant_Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, PermissionGrant_InitiatedBy, PermissionGrant_TargetResources, PermissionGrant_AdditionalDetails, PermissionGrant_CorrelationId, RoleAssignment_TimeGenerated, RoleAssignment_OperationName, RoleAssignment_Result, RoleAssignment, TargetType, Target, TargetId, RoleAssignment_InitiatedBy, RoleAssignment_TargetResources, RoleAssignment_AdditionalDetails, RoleAssignment_CorrelationId
 entityMappings:
