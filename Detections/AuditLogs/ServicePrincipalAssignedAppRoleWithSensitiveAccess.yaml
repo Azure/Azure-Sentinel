@@ -27,20 +27,20 @@ query: |
     AuditLogs
     | where OperationName =~ "Add app role assignment to service principal"
     | mv-expand TargetResources[0].modifiedProperties
-    | extend TargetResources_0_modifiedProperties = columnifexists("TargetResources_0_modifiedProperties", '')
+    | extend TargetResources_0_modifiedProperties = column_ifexists("TargetResources_0_modifiedProperties", '')
     | where isnotempty(TargetResources_0_modifiedProperties)
     | where TargetResources_0_modifiedProperties.displayName =~ "AppRole.Value" or TargetResources_0_modifiedProperties.displayName =~ "DelegatedPermissionGrant.Scope"
     | extend Permissions = split((parse_json(tostring(TargetResources_0_modifiedProperties.newValue))), " ")
     | where Permissions has_any (permissions)
-    | summarize AddedPermissions=make_set(Permissions) by CorrelationId
+    | summarize AddedPermissions=make_set(Permissions,200) by CorrelationId
     | join kind=inner (AuditLogs
     | where OperationName =~ "Add app role assignment to service principal") on CorrelationId
     | extend InitiatedBy = tostring(iff(isnotempty(InitiatedBy.user.userPrincipalName),InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName))
     | extend ServicePrincipal = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[4].newValue)))
     | extend SPID = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[6].newValue)))
-    | extend InitiatedBy = pack("User", InitiatedBy, "UA", columnifexists("UserAgent",''), "IPAddress", columnifexists("IpAddress",''))
+    | extend InitiatedBy = pack("User", InitiatedBy, "UA", column_ifexists("UserAgent",''), "IPAddress", column_ifexists("IpAddress",''))
     | mv-expand kind=array AddedPermissions
-    | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), make_set(InitiatedBy), make_set(AddedPermissions) by SPID, ServicePrincipal
+    | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), make_set(InitiatedBy,200), make_set(AddedPermissions,200) by SPID, ServicePrincipal
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -50,7 +50,7 @@ entityMappings:
     fieldMappings:
       - identifier: AadUserId
         columnName: SPID
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled
 metadata:
     source:
