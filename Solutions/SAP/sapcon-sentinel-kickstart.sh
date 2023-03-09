@@ -476,10 +476,10 @@ for container in "${containers[@]}"; do
 	if [[ -n $var3 ]]; then
 		CLIENTNUMBER=$var2
 		AGENTGUID=$var3
-		MULTICLIENTS=true
+		MULTICLIENTS=1
 	else
 		AGENTGUID=$var2
-		MULTICLIENTS=false
+		MULTICLIENTS=""
 		CLIENTNUMBER=""
 	fi
 	echo "creating AGENTGUID: $AGENTGUID, SID: $SID, CLIENTNUMBER: $CLIENTNUMBER"	
