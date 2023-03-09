@@ -86,22 +86,48 @@ function install_package() {
 # abap
 # mserv
 
+containers=(
+  "DGT d6ee1cdf-b728-46f4-9f0b-31e69709afba"
+  "PZ0 000 d820db5b-ebb4-4d99-a03f-27d46914272e"
+  "PG0 000 6dbf5698-6ea6-48aa-af57-ae8550066b35"
+  "PA0 000 505b7f4d-b50c-4f7e-9a2e-6675a0dfb094"
+  "P90 000 4be294d7-ef3d-404b-8577-a022e3f2622d"
+  "P20 000 29b08227-5c70-4e18-91af-6a7b8eb9e1bc"
+  "P10 000 94ba5d6d-6170-4903-a254-b9123143a98e"
+  "DZ0 000 d5722834-d1a8-4800-8de9-5876f2b39f68"
+  "DG9 000 d8b93965-1822-4f05-a744-7676b2165e92"
+  "DG0 000 f01f2018-bba1-4aba-ae08-90e42219a01b"
+  "D20 000 d073c785-ab76-4a60-bffc-d8ab0bfcd812"
+  "D19 000 c005a8b3-ed15-4b97-9a83-b1871bc05cfd"
+  "D10 000 c803745b-ec64-43db-ae9f-9c0417349a6e"
+  "DA0 000 f78773d9-b60a-4679-805d-e4f5845bdb8a"
+  "P10 700 815dc8de-359f-4ba9-8512-a1bb6abee7bb"
+  "D10 700 a716eb31-54b7-4340-8d72-2896c626177a"
+  "PA0 9b698a72-c5a8-4869-9c53-0ce3b09fb95d"
+  "PZ0 9686913d-205c-4b84-b12a-6a162538e632"
+  "PG0 91488ed5-ed2e-48bb-8fff-9916c00d882a"
+  "P20 dcd79624-b8d6-4212-8acf-21ea05ac212b"
+  "P10 d9c308df-dec4-4460-94d1-e0ee3ef87d0f"
+  "P90 4500fcc0-22fe-4e01-aecb-221a5133d2ef"
+  "D20 e9093650-8bfd-430b-a6c0-885e4d400a5b"
+  "DZ0 f45be9fd-f1d2-4bef-9e84-e5a49cdcb3a8"
+  "D19 c66eccaf-931b-47e5-95a6-306646c64d6e"
+  "DG0 5422a744-ab6d-4410-8de9-8b9c9892c21b"
+  "DG9 c1a01153-3baf-4399-b44d-b2495ee18d09"
+  "D10 ec0a0c64-474b-47fd-8cff-49d9611969f9"
+  "DA0 ac5fb83c-31ef-46c2-8430-85116093bab9"
+)
+
+
+
 MODE="kvmi"
 CONNECTIONMODE="abap"
-CONFIGPATH="/opt"
+CONFIGPATH="/home/LocalAdmin"
 TRUSTEDCA=()
 CLOUD='public'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
-	--keymode)
-		MODE="$2"
-		shift 2
-		;;
-	--configpath)
-		CONFIGPATH="$2"
-		shift 2
-		;;
 	--connectionmode)
 		CONNECTIONMODE="$2"
 		shift 2
@@ -239,6 +265,10 @@ while [[ $# -gt 0 ]]; do
 		DEVACRPWD="$2"
 		shift 2
 		;;
+	--agentguid)
+		AGENTGUID="$2"
+		shift 2
+		;;
 	--cloud)
 		CLOUD="$2"
 		shift 2
@@ -298,137 +328,13 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
-# Parameter set validation
-if [ "$MODE" != 'kvsi' ] && [ "$MODE" != 'kvmi' ] && [ "$MODE" != 'cfgf' ]; then
-	echo 'Invalid setting for --keymode. Supported values are "kvsi", "kvmi" or "cfgf"'
-	exit 1
-fi
-
-if [ "$CONNECTIONMODE" != 'abap' ] && [ "$CONNECTIONMODE" != 'mserv' ]; then
-	echo 'Invalid setting for --connectionmode. Supported values are "abap", "mserv"'
-	exit 1
-fi
-
-if [ "$MODE" == 'kvsi' ] && { [ -z "$APPID" ] || [ -z "$APPSECRET" ] || [ -z "$TENANT" ] || [ -z "$kv" ]; }; then
-	printf 'Missing parameter values. -m kvsi requires --appid, --appsecret, --tenantid, --kvaultname parameters.\nProvide values interactively now or rerun the script with relevant switches.'
-	read_value APPID "Application ID"
-	read_value APPSECRET "Application Secret"
-	read_value TENANT "Tenant ID"
-	read_value kv "Keyvault Name"
-fi
-
-if [ $USESNC ] && { [ -z "$SAPCRYPTOLIB" ] || [ -z "$SAPGENPSE" ] || [ -z "$SERVERCERT" ] || { { [ -z "$CLIENTKEY" ] || [ -z "$CLIENTCERT" ]; } && [ -z "$CLIENTPFX" ]; }; }; then
-	echo 'Invalid parameters --use-snc requires --cryptolib, --sapgenpse, --server-cert, --client-cert, --client-key, or --client-pfx parameters'
-	exit 1
-elif [ ! $USESNC ] && { [ -n "$SAPCRYPTOLIB" ] || [ -n "$SAPGENPSE" ] || [ -n "$CLIENTCERT" ] || [ -n "$SERVERCERT" ] || [ -n "$CLIENTKEY" ] || [ -n "$CLIENTPFX" ] || [ -n "$CLIENTPFXPWD" ] || [ -n "${TRUSTEDCA[0]}" ]; }; then
-	echo 'Invalid parameters. If using --cryptolib, --sapgenpse, --client-cert, --client-key , --client-pfx, --server-cert parameters, --cacert, specify --use-snc'
-	exit 1
-fi
-
-if [ -n "$ABAPSERVER" ] && { [ -n "$MESSAGESERVERHOST" ] || [ -n "$MESSAGESERVERPORT" ] || [ -n "$LOGONGROUP" ]; }; then
-	echo 'Invalid parameters. --abapserver cannot be used in conjunction with --messageserverhost, --messageserverport or --logongroup'
-	exit 1
-fi
-
-if [ $USESNC ] && [ "$MODE" != 'cfgf' ]; then
-	echo 'SNC connectivity only supported in cfgf keymode'
-	exit 1
-fi
-
-if [ $USESNC ] && [ ! -f "$SAPCRYPTOLIB" ]; then
-	echo 'Invalid SAP Crypto lib path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ ! -f "$SAPGENPSE" ]; then
-	echo 'Invalid sapgenpse path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ -n "$CLIENTCERT" ] && [ ! -f "$CLIENTCERT" ]; then
-	echo 'Invalid client certificate path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ -n "$CLIENTKEY" ] && [ ! -f "$CLIENTKEY" ]; then
-	echo 'Invalid client pfx path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ -n "$CLIENTPFX" ] && [ ! -f "$CLIENTPFX" ]; then
-	echo 'Invalid client key path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ ! -f "$SERVERCERT" ]; then
-	echo 'Invalid server certificate path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ -n "${TRUSTEDCA[0]}" ]; then
-	for i in "${TRUSTEDCA[@]}"; do
-		:
-		if [ ! -f "$i" ]; then
-			echo 'Invalid ca file path'
-			exit 1
-		fi
-	done
-fi
 
 if [ -n "$SDKFILELOC" ] && [ ! -f "$SDKFILELOC" ]; then
 	echo 'Invalid SDK path'
 	exit 1
 fi
 
-if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'mooncake' ]; then
-	echo 'Invalid cloud name, avilable options: public, fairfax, mooncake.'
-	exit 1
-fi
-
 # End of parameter validation
-echo '
-************************************************************
-THIS INSTALLATION SCRIPT WILL USE ROOT ACCESS TO:
-
-1. DOWNLOAD, INSTALL AND CONFIGURE DOCKER IMAGE
-2. ADD THE CURRENT USER TO THE DOCKER GROUP
-3. RUN THE CONNECTOR AS A DOCKER CONTAINER ON THE HOST
-
-*************************************************************
-The Azure Sentinel SAP solution is currently in PREVIEW. 
-
-The Azure Preview Supplemental Terms include additional legal terms that apply to Azure features that are in beta, preview, or otherwise not yet released into general availability.
-
-For more information, see https://azure.microsoft.com/support/legal/preview-supplemental-terms/.
-****
-
------Microsoft continuous threat monitoring for SAP KickStart script----
-
-In order to complete the installation process, you need:
-
-- SAP version: The Azure Sentinel SAP Logs connector requires a SAP version of 7.4 or higher.
-
-- SAP system details: Make a note of your SAP system IP address, system number, system ID, and client for use during the installation.
-
-- SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SAP/CR.
-
-Configure the following SAP Log change requests to enable support for ingesting specific SAP logs into Azure Sentinel.
-- SAP Basis versions 7.5 and higher:  install NPLK900180
-- SAP Basis version 7.4:  install NPLK900179
-- To create your SAP role in any SAP version: install NPLK900163
-
-Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
-This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
-
-SAP notes required for versions earlier than SAP Basis 7.5 SP13:
-- SAP Note 2641084, named *Standardized read access for the Security Audit log data*
-- SAP Note 2173545, named *CHANGEDOCUMENT_READ_ALL*
-- SAP Note 2502336, named *RSSCD100 - read only from archive, not from database*
-
-Note: The required SAP log change requests expose custom RFC FMs that are required for the connector, and do not change any standard or custom objects.
-
-For more information see the SAP documentation.
-'
 
 #Globals
 containername=sapcon
@@ -564,129 +470,96 @@ if [ $? -eq 1 ]; then
 fi
 echo 'Latest Azure Sentinel data connector downloaded successfully.'
 
-if [ "$CONNECTIONMODE" == 'abap' ]; then
-	read_value ABAPSERVER 'ABAP Server Hostname'
-elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	read_value MESSAGESERVERHOST 'Message Server Hostname'
-	read_value MESSAGESERVERPORT 'Message Server Service Name (port)'
-	read_value LOGONGROUP 'Logon Group'
-fi
-
-read_value SYSTEMNR 'System Number'
-
-if [ -z "$SID" ]; then
-	read -r -p 'SID : ' SID
-	while [ ${#SID} -ne 3 ]; do
-		echo 'Invalid SID, SID length should be 3'
-		read -r -p 'SID: ' SID
-	done
-fi
-
-if [ "$CONNECTIONMODE" == 'abap' ] && [ ! $USESNC ]; then
-	portnumber=32$SYSTEMNR
-elif [ "$CONNECTIONMODE" == 'abap' ] && [ $USESNC ]; then
-	portnumber=48$SYSTEMNR
-elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	portnumber=$MESSAGESERVERPORT
-fi
-
-if [ "$CONNECTIONMODE" == 'abap' ]; then
-	echo 'Testing network access to ABAP server'
-	timeout 2 nc -z "$ABAPSERVER" "$portnumber" >/dev/null 2>&1
-	portcheck1=$?
-elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	echo 'Testing network access to Message server'
-	timeout 2 nc -z "$MESSAGESERVERHOST" "$portnumber" >/dev/null 2>&1
-	portcheck1=$?
-fi
-
-if [ ! $portcheck1 -eq 0 ]; then
-	echo "Port $portnumber is not accessible. Allow access and run this script again."
-	exit 1
-else
-	echo 'SAP system is reachable'
-fi
-
-if [ $MULTICLIENTS ]; then
-	intprefix="$SID-$CLIENTNUMBER"
-else
-	intprefix="$SID"
-fi
-
-sysfileloc=$CONFIGPATH/$containername/$intprefix/
-sudo chown "$USER" "$sysfileloc"
-if [ ! $? -eq 0 ]; then
-	echo 'Error creating the local folder.'
-	exit 1
-fi
-
-# Try to locate the SDK file in current folder
-if [ -z "$SDKFILELOC" ]; then
-	SDKFILELOC=$(ls -1 nwrfc*.zip | head -1)
-	#try to locate the SDK file in home dir
-	if [ -z "$SDKFILELOC" ]; then
-		SDKFILELOC=$(sudo find "$(pwd)" -name "nwrfc*.zip" -type f | head -1)
+for container in "${containers[@]}"; do
+	read -r var1 var2 var3 <<< "$container"
+	SID=$var1
+	if [[ -n $var3 ]]; then
+		CLIENTNUMBER=$var2
+		AGENTGUID=$var3
+		MULTICLIENTS=true
+	else
+		AGENTGUID=$var2
+		MULTICLIENTS=false
+		CLIENTNUMBER=""
 	fi
-fi
+	echo "creating AGENTGUID: $AGENTGUID, SID: $SID, CLIENTNUMBER: $CLIENTNUMBER"	
 
-while [ -z "$SDKFILELOC" ] || [ ! -f "$SDKFILELOC" ]; do
-	echo 'Enter the full file location path of your downloaded SAP NetWeaver SDK zip. To download the SDK use the following link:\n https://launchpad.support.sap.com/#/softwarecenter/template/products/%20_APP=00200682500000001943&_EVENT=DISPHIER&HEADER=Y&FUNCTIONBAR=N&EVENT=TREE&NE=NAVIGATE&ENR=01200314690100002214&V=MAINT&TA=ACTUAL&PAGE=SEARCH/SAP%20NW%20RFC%20SDK \nSelect SAP NW RFC SDK 7.50 -> Linux on X86_64 64BIT -> Download the latest version\nExample: /home/user/nwrfc750P_x-70002752.zip'
-	SDKFILELOC=""
-	read_value SDKFILELOC 'SDK file location'
-	SDKFILELOC="${SDKFILELOC/#\~/$HOME}"
+	if [ -z "$SID" ]; then
+		read -r -p 'SID : ' SID
+		while [ ${#SID} -ne 3 ]; do
+			echo 'Invalid SID, SID length should be 3'
+			read -r -p 'SID: ' SID
+		done
+	fi
+
+	if [ $MULTICLIENTS ]; then
+		intprefix="$SID-$CLIENTNUMBER"
+	else
+		intprefix="$SID"
+	fi
+
+	sysfileloc=$CONFIGPATH/$containername/$intprefix/
+	sudo chown "$USER" "$sysfileloc"
+	if [ ! $? -eq 0 ]; then
+		echo 'Error creating the local folder.'
+		exit 1
+	fi
+
+	# Try to locate the SDK file in current folder
+	if [ -z "$SDKFILELOC" ]; then
+		SDKFILELOC=$(ls -1 nwrfc*.zip | head -1)
+		#try to locate the SDK file in home dir
+		if [ -z "$SDKFILELOC" ]; then
+			SDKFILELOC=$(sudo find "$(pwd)" -name "nwrfc*.zip" -type f | head -1)
+		fi
+	fi
+
+	while [ -z "$SDKFILELOC" ] || [ ! -f "$SDKFILELOC" ]; do
+		echo 'Enter the full file location path of your downloaded SAP NetWeaver SDK zip. To download the SDK use the following link:\n https://launchpad.support.sap.com/#/softwarecenter/template/products/%20_APP=00200682500000001943&_EVENT=DISPHIER&HEADER=Y&FUNCTIONBAR=N&EVENT=TREE&NE=NAVIGATE&ENR=01200314690100002214&V=MAINT&TA=ACTUAL&PAGE=SEARCH/SAP%20NW%20RFC%20SDK \nSelect SAP NW RFC SDK 7.50 -> Linux on X86_64 64BIT -> Download the latest version\nExample: /home/user/nwrfc750P_x-70002752.zip'
+		SDKFILELOC=""
+		read_value SDKFILELOC 'SDK file location'
+		SDKFILELOC="${SDKFILELOC/#\~/$HOME}"
+	done
+
+	#Building the container
+	containername="$containername-$intprefix"
+
+	sudo docker inspect "$containername" >/dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		echo "Azure Sentinel SAP connector is already installed for instance $intprefix. The previous connector will be removed and replaced by the new version."
+		pause 'Press any key to update'
+		sudo docker stop "$containername" >/dev/null
+		sudo docker container rm "$containername" >/dev/null
+	fi
+	sncline=""
+
+	if [ -n "$HTTPPROXY" ]; then
+		httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
+	fi
+	cmdparams=" --label Cloud=$CLOUD"
+	# Generating SENTINEL_AGENT_GUID
+	cmdparams+=" -e SENTINEL_AGENT_GUID=$AGENTGUID "
+
+	if [ "$MODE" == "kvmi" ]; then
+		echo "Creating docker container for use with Azure Key vault and managed VM identity"
+		sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	elif [ "$MODE" == "kvsi" ]; then
+		echo "Creating docker container for use with Azure Key vault and application authentication"
+		sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
+	elif [ "$MODE" == "cfgf" ]; then
+		echo "Creating docker container for use with secrets in config file"
+		sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	fi
+	echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
+
+	sudo docker cp "$SDKFILELOC" "$containername":/sapcon-app/inst/ >/dev/null
+	if [ $? -eq 0 ]; then
+		echo 'SDK archive was successfully updated'
+	else
+		echo 'Azure Sentinel data connector upgrade failed. The NetWeaver SDK could not be added to the image'
+		exit 1
+	fi
 done
-
-#Verifying SDK version
-
-unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
-SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
-sdkok=$?
-rm -rf /tmp/nwrfcsdk
-if [ ! $sdkok -eq 0 ]; then
-	echo "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
-	echo $SDKLOADRESULT
-	echo "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
-	exit 1
-fi
-
-#Building the container
-containername="$containername-$intprefix"
-
-sudo docker inspect "$containername" >/dev/null 2>&1
-if [ $? -eq 0 ]; then
-	echo "Azure Sentinel SAP connector is already installed for instance $intprefix. The previous connector will be removed and replaced by the new version."
-	pause 'Press any key to update'
-	sudo docker stop "$containername" >/dev/null
-	sudo docker container rm "$containername" >/dev/null
-fi
-sncline=""
-
-if [ -n "$HTTPPROXY" ]; then
-	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
-fi
-cmdparams=" --label Cloud=$CLOUD"
-# Generating SENTINEL_AGENT_GUID
-cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
-
-if [ "$MODE" == "kvmi" ]; then
-	echo "Creating docker container for use with Azure Key vault and managed VM identity"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
-elif [ "$MODE" == "kvsi" ]; then
-	echo "Creating docker container for use with Azure Key vault and application authentication"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
-elif [ "$MODE" == "cfgf" ]; then
-	echo "Creating docker container for use with secrets in config file"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
-fi
-echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
-
-sudo docker cp "$SDKFILELOC" "$containername":/sapcon-app/inst/ >/dev/null
-if [ $? -eq 0 ]; then
-	echo 'SDK archive was successfully updated'
-else
-	echo 'Azure Sentinel data connector upgrade failed. The NetWeaver SDK could not be added to the image'
-	exit 1
-fi
 
 # Docker Configurations
 newgrp docker
