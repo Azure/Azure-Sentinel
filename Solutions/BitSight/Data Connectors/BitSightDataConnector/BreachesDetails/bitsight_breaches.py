@@ -151,31 +151,33 @@ class BitSight:
     ):
         """Create data to post into microsoft sentinel."""
         try:
+            is_data_exist = False
+            status_code = post_data_status_code
+            maximum_date = max_date
             if breaches_results:
-                if max_date == "0000-01-01":
+                if maximum_date == "0000-01-01":
                     for breach in breaches_results:
                         date_created = breach.get("date_created", "")
-                        if date_created and date_created > max_date:
-                            max_date = date_created
+                        if date_created and date_created > maximum_date:
+                            maximum_date = date_created
                         breach["company_name"] = company_name
                         breach["company_guid"] = company_guid
                         body.append(breach)
                 else:
                     for breach in breaches_results:
                         date_created = breach.get("date_created", "")
-                        if date_created and date_created > max_date:
-                            max_date = date_created
+                        if date_created and date_created > maximum_date:
+                            maximum_date = date_created
                             breach["company_name"] = company_name
                             breach["company_guid"] = company_guid
                             body.append(breach)
-                is_data_exist = False
                 if not body:
                     is_data_exist = True
                 data = json.dumps(body)
-                post_data_status_code = self.azuresentinel.post_data(
+                status_code = self.azuresentinel.post_data(
                     data, breaches_table_name
                 )
-            return post_data_status_code, max_date, is_data_exist
+            return status_code, maximum_date, is_data_exist
         except Exception:
             raise BitSightException()
 
@@ -193,6 +195,7 @@ class BitSight:
             )
             url = self.base_url + self.breaches_endpoint_path.format(company_guid)
             breaches_response = requests.get(url=url, headers=self.headers)
+            is_data_exist = False
             if breaches_response.status_code == 200:
                 breaches_response = breaches_response.json()
                 post_data_status_code = None
@@ -205,7 +208,6 @@ class BitSight:
                         company_guid, "0000-01-01"
                     )
                 )
-                is_data_exist = False
                 if not breaches_results:
                     is_data_exist = True
                     return is_data_exist

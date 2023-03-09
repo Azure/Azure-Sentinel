@@ -195,7 +195,6 @@ class BitSight:
             res_list = requests.get(url=url, headers=self.headers)
             status_code = None
             exception_string = "BITSIGHT API( {} ):  Response code: {}"
-            exception_string = "BITSIGHT API( {} ):  Response code: {} \nError: {}"
             if res_list.json() and res_list.status_code == 200:
                 res_list = res_list.json()
                 stats = res_list[2].get("stats")
