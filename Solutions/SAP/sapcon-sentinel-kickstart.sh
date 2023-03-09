@@ -522,7 +522,7 @@ for container in "${containers[@]}"; do
 	done
 
 	#Building the container
-	containername="$containername-$intprefix"
+	containername="sapcon-$intprefix"
 
 	sudo docker inspect "$containername" >/dev/null 2>&1
 	if [ $? -eq 0 ]; then
