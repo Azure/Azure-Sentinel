@@ -474,13 +474,13 @@ for container in "${containers[@]}"; do
 	read -r var1 var2 var3 <<< "$container"
 	SID=$var1
 	if [[ -n $var3 ]]; then
-		CLIENTNUMBER=$var2
 		AGENTGUID=$var3
+		CLIENTNUMBER=$var2
 		MULTICLIENTS=1
 	else
 		AGENTGUID=$var2
-		MULTICLIENTS=""
 		CLIENTNUMBER=""
+		MULTICLIENTS=""
 	fi
 	echo "creating AGENTGUID: $AGENTGUID, SID: $SID, CLIENTNUMBER: $CLIENTNUMBER"	
 
@@ -498,7 +498,7 @@ for container in "${containers[@]}"; do
 		intprefix="$SID"
 	fi
 
-	sysfileloc=$CONFIGPATH/$containername/$intprefix/
+	sysfileloc=$CONFIGPATH/sapcon/$intprefix/
 	sudo chown "$USER" "$sysfileloc"
 	if [ ! $? -eq 0 ]; then
 		echo 'Error creating the local folder.'
