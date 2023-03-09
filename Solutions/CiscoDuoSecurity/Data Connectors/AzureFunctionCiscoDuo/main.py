@@ -129,11 +129,19 @@ def process_auth_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
 def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> Iterable[dict]:
     limit = 1000
     logging.info('Making authentication logs request: mintime={}, maxtime={}'.format(mintime, maxtime))
-    res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
-
-    events = res['authlogs']
-    logging.info('Obtained {} auth events'.format(len(events)))
-
+    try:
+        res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
+        
+        if res.status_code == 429:
+            logging.info('429 exception occurred, trying retry after {} seconds'.format(int(res.headers["Retry-After"])))
+            time.sleep(int(res.headers["Retry-After"]))
+        else:
+            events = res['authlogs']
+            logging.info('Obtained {} auth events'.format(len(events)))
+        
+    except Exception as err:
+        print(err)
+    
     for event in events:
         yield event
 
