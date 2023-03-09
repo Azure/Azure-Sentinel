@@ -114,6 +114,10 @@ while [[ $# -gt 0 ]]; do
 		UI_AGENT="-e UI_AGENT=True"
 		shift 1
 		;;
+	--agent-name)
+		AGENTNAME="$2"
+		shift 2
+		;;
 	--preview)
 		PREVIEW=1
 		shift 1
@@ -132,6 +136,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--appid <guid>"
 		echo "--appsecret <secret>"
 		echo "--tenantid <guid>"
+		echo "--agent-name <agent_name>"
 		echo "--kvaultname <keyvaultname>"
 		echo "--noautorestart"
 		echo "--sapcryptolibpath <path to folder containing sap crypto lib and sapgenpse"
@@ -149,6 +154,7 @@ done
 # UI Agent validation
 if [ -z "$UI_AGENT" ] || 
    [ -z "$GUID" ] || 
+   [ -z "$AGENTNAME" ] || 
    [ -z "$kv" ] || 
    [ -z "$SDKFILELOC" ] || 
    ( [ "$MODE" != 'kvsi' ] && [ "$MODE" != 'kvmi' ] ) ||   
@@ -338,7 +344,7 @@ log 'Latest Microsoft Sentinel data connector downloaded successfully.'
 imagereleaseid=$(docker inspect "$dockerimage$tag" --format '{{ index .Config.Labels "com.visualstudio.msazure.image.release.releaseid"}}')
 log "Downloaded data connector version $imagereleaseid" 
 
-sysfileloc=$CONFIGPATH/$containername/$GUID/
+sysfileloc=$CONFIGPATH/$containername/$AGENTNAME/
 
 sudo mkdir -p "$sysfileloc"
 sudo chown "$USER" "$sysfileloc"
@@ -379,7 +385,7 @@ if [ ! $sdkok -eq 0 ]; then
 fi
 
 #Building the container
-containername="$containername-$GUID"
+containername="$containername-$AGENTNAME"
 cmdparams=""
 sudo docker inspect "$containername" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
@@ -419,7 +425,7 @@ fi
 
 sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams --name "$containername" $dockerimage$tagver >/dev/null
 
-log 'Created Microsoft Sentinel SAP agent '"$GUID"
+log 'Created Microsoft Sentinel SAP agent '"$AGENTNAME"
 
 sudo docker run --rm --entrypoint cat $dockerimage$tagver /sapcon-app/template/systemconfig-kickstart-blank.ini | sudo tee "$sysfileloc$sysconf" > /dev/null
 
