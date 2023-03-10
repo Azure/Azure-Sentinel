@@ -21,10 +21,10 @@ LOG_TYPE = 'GCP_IAM'
 
 # interval of script execution
 SCRIPT_EXECUTION_INTERVAL_MINUTES = 5
-# if ts of last processed file is older than "now - MAX_PERIOD_MINUTES" then script will get events from "now - MAX_PERIOD_MINUTES"
-MAX_PERIOD_MINUTES = 60 * 24 * 7
+# if ts of last processed file is older than "now - MAX_PERIOD_MINUTES" then script will get events from last time stamp +1 day
+MAX_PERIOD_MINUTES = 60 * 24 * 1
 
-LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
+LOG_ANALYTICS_URI =  os.environ.get('logAnalyticsUri')
 
 if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
     LOG_ANALYTICS_URI = 'https://' + WORKSPACE_ID + '.ods.opinsights.azure.com'
@@ -51,7 +51,7 @@ def main(mytimer: func.TimerRequest):
     sentinel = AzureSentinelConnector(log_analytics_uri=LOG_ANALYTICS_URI, workspace_id=WORKSPACE_ID, shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=3000)
     state_manager = StateManager(os.environ['AzureWebJobsStorage'])
 
-    last_ts = get_last_ts(state_manager)
+    last_ts, endtime = get_last_ts(state_manager)
 
     filt = """
         protoPayload.methodName:(
@@ -96,8 +96,9 @@ def main(mytimer: func.TimerRequest):
             "GetWorkloadIdentityPoolProvider" OR
             "ListWorkloadIdentityPoolProviders"
         ) AND
-        timestamp>="{}"
-    """.format(last_ts)
+        timestamp>="{}" AND
+    timestamp<="{}"
+""".format(last_ts, endtime)
 
 # Set the batch size
     batch_size = 3
@@ -126,6 +127,9 @@ def main(mytimer: func.TimerRequest):
     if last_max_ts:
         logging.info('Saving max last timestamp - {}'.format(last_max_ts))
         state_manager.post(last_max_ts)
+    else:
+        logging.info('No new events found')
+        state_manager.post(endtime)
             
     remove_credentials_file()
     logging.info('Script finished. Sent events number: {}'.format(sentinel.successfull_sent_events_number))
@@ -162,6 +166,7 @@ def get_last_ts(state_manager: StateManager):
     logging.info('Getting last timestamp')
     last_ts = state_manager.get()
     now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+    
     if last_ts:
         last_ts = parse_date(last_ts)
         logging.info('Last timestamp - {}'.format(last_ts.isoformat()))
@@ -169,16 +174,16 @@ def get_last_ts(state_manager: StateManager):
         last_ts = now - datetime.timedelta(minutes=SCRIPT_EXECUTION_INTERVAL_MINUTES)
         logging.info('Last timestamp is not known')
 
-    diff_seconds = (now - last_ts).days * 86400 + (now - last_ts).seconds
+    diff_seconds = (now - last_ts).total_seconds()
     if diff_seconds > MAX_PERIOD_MINUTES * 60:
         old_last_ts = last_ts
-        last_ts = now - datetime.timedelta(minutes=MAX_PERIOD_MINUTES)
-        logging.info('Last timestamp {} is older than max search period ({} minutes). Getting data for max search period (from {})'.format(old_last_ts, MAX_PERIOD_MINUTES, last_ts))
+        last_ts += datetime.timedelta(microseconds=1)
+        endtime = min(last_ts + datetime.timedelta(days=1),now - datetime.timedelta(minutes=1))
+        logging.info('Last timestamp {} is older than max search period ({} minutes). Getting data (from {} to {})'.format(old_last_ts, MAX_PERIOD_MINUTES, last_ts, endtime))
     else:
         last_ts += datetime.timedelta(microseconds=1)
-        logging.info('Getting data from {}'.format(last_ts.isoformat()))
+        endtime = now - datetime.timedelta(minutes=1)
+        logging.info('Getting data from {} to {}'.format(last_ts.isoformat(),endtime.isoformat()))
 
-    return last_ts.isoformat()
-
-
+    return last_ts.isoformat(), endtime.isoformat()
 
