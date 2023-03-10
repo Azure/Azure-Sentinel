@@ -252,7 +252,7 @@ def main(mytimer: func.TimerRequest) -> None:
             futures = [executor.submit(ProcessData, x) for x in list(range(1,20))]
         for future in as_completed(futures):
             #i = i + float(future.result())
-            #logging.info(future.result())
+            logging.info(future.result())
             print(future.result())
             #logging.info("function result for thread: {} and it took --- {} seconds ---" .format(future.result()))
         #print("Average time for all threads to run: {}".format(i/len(futures)))
