@@ -4,7 +4,6 @@ from google.cloud.logging_v2 import Client
 import datetime
 import logging
 import re
-import time
 import azure.functions as func
 from dateutil.parser import parse as parse_date
 
