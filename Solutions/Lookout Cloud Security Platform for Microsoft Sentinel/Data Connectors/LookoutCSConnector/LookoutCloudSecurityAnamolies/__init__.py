@@ -237,18 +237,20 @@ def ProcessData(param):
 
 # this function app is fired based on the Timer trigger
 # it is used to capture all the events from LookOut cloud security API   
-def main():
+def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = datetime.utcnow().isoformat()
+    if mytimer.past_due:
+     logging.info('The timer is past due!')
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
     logging.info('Starting program')
-    print("Start")
+    logging.info("Start")
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
             futures = [executor.submit(ProcessData, x) for x in list(range(1,15))]
         for future in as_completed(futures):
             logging.info(future.result())
             print(future.result())
-        print("End")
+        logging.info("End")
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
