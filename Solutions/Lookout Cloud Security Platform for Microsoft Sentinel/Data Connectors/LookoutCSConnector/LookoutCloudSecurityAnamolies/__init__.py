@@ -12,6 +12,8 @@ import logging
 from azure.storage.fileshare import ShareClient
 from azure.storage.fileshare import ShareFileClient
 from azure.core.exceptions import ResourceNotFoundError
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 jwt_api_key = os.environ['LookoutClientId']
 jwt_api_secret = os.environ['LookoutApiSecret']
@@ -27,7 +29,7 @@ Schedule = os.environ['Schedule']
 fetchDelay = os.getenv('FetchDelay',5)
 pastDays = os.getenv('PastDays',7)
 chunksize = 500
-MaxEventCount = 2000
+MaxEventCount = 10000
 token = ""
 
 
@@ -70,7 +72,7 @@ class LookOut:
         self.api_secret = jwt_api_secret
         self.base_url = baseurl
         self.jwt_token_exp_hours = 1
-        self.jwt_token = self.get_new_token()          
+        self.jwt_token = ''#self.get_new_token()          
 
     def get_new_token(self):
         url = Authurl
@@ -192,55 +194,62 @@ class Sentinel:
             logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
             self.fail_processed = self.fail_processed + chunk_count  
 
+
+def ProcessData(param):
+    start_time = time.time()
+    Lookout = LookOut()
+    sentinel = Sentinel()
+    sentinel.sharedkey = shared_key
+    sentinel.table_name= table_name
+    startTime,endTime = Lookout.generate_date()
+    logging.info("The current run Start time {}".format(startTime))
+    logging.info("The current run End time {}".format(endTime))
+    logging.info('Start: to get Anamolies')
+    results_events = []
+    results_events = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
+    logging.info("The number of Anamolies processed {} ".format(len(results_events)))
+    logging.info('End: to get Anamolies')
+    if(len(results_events)) > 0:
+     # Sort the json based on the "timestamp" key
+     sorted_data = sorted(results_events, key=lambda x: x["timeStamp"],reverse=False) 
+     # Fetch the latest timestamp
+     latest_timestamp = sorted_data[-1]["timeStamp"]       
+     logging.info("The latest timestamp {}".format(latest_timestamp)) 
+     body = json.dumps(results_events)
+     if(len(results_events) <= MaxEventCount):
+        logging.debug(body)
+        sentinel.post_data(body,len(results_events))
+        state = StateManager(connection_string) 
+        #zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+        #latestTimeStampnew = datetime.strptime(latest_timestamp,zulu_time_format) + timedelta(milliseconds=1)
+        #logging.info("The Final latest Timestamp {}".format(latestTimeStampnew)) 
+        #state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+     elif(len(results_events) > MaxEventCount):
+        sentinel.gen_chunks(sorted_data)
+    sentinel_class_vars = vars(sentinel)
+    success_processed, fail_processed = sentinel_class_vars["success_processed"],\
+                                        sentinel_class_vars["fail_processed"]
+    logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
+        .format(success_processed, fail_processed, startTime, endTime))
+    return "function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time))
+        #logging.info("Threads executed!")
+    #print("Main thread name %s",current_thread().name)
+
 # this function app is fired based on the Timer trigger
 # it is used to capture all the events from LookOut cloud security API   
-def main(mytimer: func.TimerRequest) -> None:
+def main():
     utc_timestamp = datetime.utcnow().isoformat()
-    if mytimer.past_due:
-     logging.info('The timer is past due!')
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
     logging.info('Starting program')
-    results_events = []
+    print("Start")
     try:
-        Lookout = LookOut()
-        sentinel = Sentinel()
-        sentinel.sharedkey = shared_key
-        sentinel.table_name= table_name    
-        startTime,endTime = Lookout.generate_date()  
-        logging.info("The current run Start time {}".format(startTime))
-        logging.info("The current run End time {}".format(endTime))        
-        logging.info('Start: to get Anamolies')
-        results_events = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
-        logging.info("The number of Anamolies processed {} ".format(len(results_events)))
-        logging.info('End: to get Anamolies')         
-        
-        if(len(results_events)) > 0:
-         # Sort the json based on the "timestamp" key
-         sorted_data = sorted(results_events, key=lambda x: x["timeStamp"],reverse=False) 
-         # Fetch the latest timestamp
-         latest_timestamp = sorted_data[-1]["timeStamp"]       
-         logging.info("The latest timestamp {}".format(latest_timestamp)) 
-         body = json.dumps(results_events)
-         if(len(results_events) <= MaxEventCount):
-            logging.debug(body)              
-            sentinel.post_data(body,len(results_events))
-            state = StateManager(connection_string) 
-            zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
-            latestTimeStampnew = datetime.strptime(latest_timestamp,zulu_time_format) + timedelta(milliseconds=1)
-            logging.info("The Final latest Timestamp {}".format(latestTimeStampnew)) 
-            state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
-         elif(len(results_events) > MaxEventCount):              
-            sentinel.gen_chunks(sorted_data)
-
-        sentinel_class_vars = vars(sentinel)
-        success_processed, fail_processed = sentinel_class_vars["success_processed"],\
-                                            sentinel_class_vars["fail_processed"]
-        logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
-            .format(success_processed, fail_processed, startTime, endTime))
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            futures = [executor.submit(ProcessData, x) for x in list(range(1,15))]
+        for future in as_completed(futures):
+            logging.info(future.result())
+            print(future.result())
+        print("End")
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
       raise
-    
-          
-    
