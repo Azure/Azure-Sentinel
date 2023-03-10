@@ -229,12 +229,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "workbook-source" -NotePropertyValue "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbook-source" -NotePropertyValue "[variables('workbook-source')]"
                             };
-                            $baseWorkbookStep = [PSCustomObject] @{
+							$baseWorkbookStep = [PSCustomObject] @{
                                 name       = "workbooks";
                                 label      = "Workbooks";
                                 subLabel   = [PSCustomObject] @{
-                                    preValidation  = "Configure the workbooks";
-                                    postValidation = "Done";
+                                preValidation  = "Configure the workbooks";
+                                postValidation = "Done";
                                 };
                                 bladeTitle = "Workbooks";
                                 elements   = @(
@@ -254,11 +254,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                                 uri= "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
                                               }
                                             }
-                                    }
-                                )
-                            }
-                            $baseCreateUiDefinition.parameters.steps += $baseWorkbookStep
-
+										}
+                                    )
+                                }
+                                $baseCreateUiDefinition.parameters.steps += $baseWorkbookStep
                             if(!$contentToImport.TemplateSpec)
                             {
                                 #Add formattedTimeNow parameter since workbooks exist
@@ -272,6 +271,24 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "formattedTimeNow" -Value $timeNowParameter
                             }
                         }
+						if($contentToImport.TemplateSpec) {
+                            #Getting Workbook Metadata dependencies from Github
+                            $workbookData = $null
+                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            try {
+                                Write-Host "Downloading $workbookFinalPath"
+                                $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
+                                $dependencies = $workbookData | ConvertFrom-Json | Where-Object {($_.templateRelativePath.split('.')[0].ToLower() -eq $workbookKey.ToLower())}
+                                $WorkbookDependencyCriteria = @();
+                            }
+                            catch {
+                                Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
+                                break;
+                            }
+						}
+						$workbookUIParameter = [PSCustomObject] @{ name = "workbook$workbookCounter"; type = "Microsoft.Common.Section"; label = $dependencies.title; elements = @( [PSCustomObject] @{ name = "workbook$workbookCounter-text"; type = "Microsoft.Common.TextBlock"; options = @{ text = $dependencies.description; } } ) }
+                        $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUIParameter
+
                         try {
                             $data = $rawData
                             # Serialize workbook data
