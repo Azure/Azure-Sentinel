@@ -249,7 +249,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("Start")
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(1,30))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(1,20))]
         for future in as_completed(futures):
             #i = i + float(future.result())
             #logging.info(future.result())
