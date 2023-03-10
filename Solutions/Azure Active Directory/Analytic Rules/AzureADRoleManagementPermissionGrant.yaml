@@ -26,23 +26,26 @@ tags:
   - SimuLand
 query: |
   AuditLogs
-  | where LoggedByService =~ "Core Directory"
-  | where Category =~ "ApplicationManagement"
-  | where AADOperationType =~ "Assign"
-  | where ActivityDisplayName has_any ("Add delegated permission grant","Add app role assignment to service principal")
-  | mv-expand TargetResources
-  | mv-expand TargetResources.modifiedProperties
-  | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)
-  | where displayName_ has_any ("AppRole.Value","DelegatedPermissionGrant.Scope")
-  | extend Permission = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))
-  | where Permission has "RoleManagement.ReadWrite.Directory"
-  | extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
-  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
-  | extend Target = tostring(parse_json(tostring(TargetResources.modifiedProperties[4].newValue)))
-  | extend TargetId = iif(displayName_ =~ 'DelegatedPermissionGrant.Scope',
-    tostring(parse_json(tostring(TargetResources.modifiedProperties[2].newValue))),
-    tostring(parse_json(tostring(TargetResources.modifiedProperties[3].newValue))))
-  | summarize by bin(TimeGenerated, 1h), OperationName, Initiator, Target, TargetId, Result
+  | where Category == "ApplicationManagement" and LoggedByService == "Core Directory" and OperationName in ("Add delegated permission grant", "Add app role assignment to service principal")
+  | mv-expand TargetResource = TargetResources
+  //| where tostring(TargetResource["displayName"]) == "Microsoft Graph"
+  | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
+  | where tostring(modifiedProperty["displayName"]) in ("AppRole.Value", "DelegatedPermissionGrant.Scope")
+  | extend PermissionGrant = trim(@'[\"\s]+', tostring(modifiedProperty["newValue"]))
+  | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
+  | mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
+      summarize modifiedProperties = make_bag(
+          pack(tostring(modifiedProperty["displayName"]),
+              pack("oldValue", trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
+                  "newValue", trim(@'[\"\s]+', tostring(modifiedProperty["newValue"])))))
+  )
+  | extend
+      //AppDisplayName for operation "Add delegated permission grant" will be in operation "Consent to application" (usually same CorrelationId)
+      AppDisplayName = tostring(modifiedProperties["ServicePrincipal.DisplayName"]["newValue"]),
+      AppServicePrincipalId = tostring(modifiedProperties["ServicePrincipal.ObjectID"]["newValue"]),
+      Initiator = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["displayName"]), tostring(InitiatedBy["user"]["userPrincipalName"])),
+      InitiatorId = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["servicePrincipalId"]), tostring(InitiatedBy["user"]["id"]))
+  | project TimeGenerated, OperationName, Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, Initiator, InitiatorId, InitiatedBy, TargetResources, AdditionalDetails, CorrelationId
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -51,6 +54,6 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: Target
-version: 1.0.2
+        columnName: AppDisplayName
+version: 1.0.3
 kind: Scheduled
