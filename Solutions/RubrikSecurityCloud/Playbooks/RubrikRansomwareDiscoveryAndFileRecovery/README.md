@@ -36,3 +36,4 @@ Once deployment is complete, authorize each connection.
 4. Sign in
 5. Click Save
 6. Repeat steps for other connections
+

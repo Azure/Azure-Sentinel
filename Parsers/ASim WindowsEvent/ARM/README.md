@@ -14,3 +14,4 @@ The template deploys the following parsers:
  - vimProcessTerminateMicrosoftWindowsEvents
  - vimNetworkSessionMicrosoftWindowsEventFirewall
  - vimFileEventMicrosoftWindowsEvents
+
