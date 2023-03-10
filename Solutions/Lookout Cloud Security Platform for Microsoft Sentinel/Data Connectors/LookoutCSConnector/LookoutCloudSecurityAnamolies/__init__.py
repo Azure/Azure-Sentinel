@@ -231,8 +231,8 @@ def ProcessData(param):
                                         sentinel_class_vars["fail_processed"]
     logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
         .format(success_processed, fail_processed, startTime, endTime))
-    print("function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time)))
     logging.info("function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time)))
+    #print("function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time)))
     return time.time() - start_time
         #logging.info("Threads executed!")
     #print("Main thread name %s",current_thread().name)
@@ -252,10 +252,11 @@ def main(mytimer: func.TimerRequest) -> None:
             futures = [executor.submit(ProcessData, x) for x in list(range(1,50))]
         for future in as_completed(futures):
             i = i + float(future.result())
-            logging.info(future.result())
+            #logging.info(future.result())
+            logging.info("function result for thread: {} and it took --- {} seconds ---" .format(future.result()))
             print(future.result())
-        logging.info("Average time for all threads to run: {}".format(i/len(futures)))
-        print(i/len(futures))
+        #print("Average time for all threads to run: {}".format(i/len(futures)))
+        print(i)
         print("End")
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
