@@ -231,13 +231,16 @@ def ProcessData(param):
                                         sentinel_class_vars["fail_processed"]
     logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
         .format(success_processed, fail_processed, startTime, endTime))
-    return "function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time))
+    print("function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time)))
+    logging.info("function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time)))
+    return time.time() - start_time
         #logging.info("Threads executed!")
     #print("Main thread name %s",current_thread().name)
 
 # this function app is fired based on the Timer trigger
 # it is used to capture all the events from LookOut cloud security API   
 def main(mytimer: func.TimerRequest) -> None:
+    i = 0
     utc_timestamp = datetime.utcnow().isoformat()
     if mytimer.past_due:
      logging.info('The timer is past due!')
@@ -246,11 +249,14 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("Start")
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(1,15))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(1,50))]
         for future in as_completed(futures):
+            i = i + float(future.result())
             logging.info(future.result())
             print(future.result())
-        logging.info("End")
+        logging.info("Average time for all threads to run: {}".format(i/len(futures)))
+        print(i/len(futures))
+        print("End")
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
