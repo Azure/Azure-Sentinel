@@ -2,7 +2,7 @@
 
 ## Introduction
 
-GCP Sentinel connector is a platform for ingesting GCP service logs into Azure Sentinel. Currently supported logs include: Audit logs.
+GCP Sentinel connector is a platform for ingesting GCP service logs into Azure Sentinel. Currently supported logs: Audit logs.
 
 This connector requires that each GCP service will publish its logs to a pub/sub. In addition you must configure workload identity pool and workload identity provider with permissions for the connector to receive an access token as well as a service account with permissions for the connector to read the logs from the pub/sub subscription.
 
@@ -31,21 +31,22 @@ At a high level, these scripts do the following:
 Go to Terraform/sentinel_resource_creation folder, copy the GCPInitialAuthenticationSetup.tf script and the relevant script for configuring logs to pub/sub and paste it in the [GCP CloudShell](https://cloud.google.com/shell/) one by one, save them in *tf* format.
 
 Then run the following from GCP CloudShell:
-```
-gcloud config set project {your project Id}
-```
-Select `authorize` in the pop-up window.
+1. Run:
+    ```
+    gcloud config set project {your project Id}
+    ```
+    Select `authorize` in the pop-up window.
 
-Run:
-```
-terraform init
-```
-Choose the script you want to run one by one and run:
-```
-terraform apply
-```
-Follow the prompts to complete the configuration.
-
+2. Run:
+    ```
+    terraform init
+    ```
+3. Choose the script you want to run one by one and run:
+    ```
+    terraform apply
+    ```
+    Follow the prompts to complete the configuration.
+    
 When the scripts complete, you must complete the Azure Sentinel data connector configuration in the Azure portal.
 
 ## Advanced usage
