@@ -1,7 +1,7 @@
 # IronNet_UpdateSentinelIncidents
 author: IronNet
 
-This playbook is used to keep IronDefense and Azure Sentinel in sync by
+This playbook is used to keep IronDefense and Microsoft Sentinel in sync by
 triggering on any new IronDefense alert notifications that is added to a
 Sentinel incident and updating the incident's status and classification based on
 the IronDefense alert.
