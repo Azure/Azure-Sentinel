@@ -213,8 +213,8 @@ def ProcessData(param):
      # Sort the json based on the "timestamp" key
      sorted_data = sorted(results_events, key=lambda x: x["timeStamp"],reverse=False) 
      # Fetch the latest timestamp
-     latest_timestamp = sorted_data[-1]["timeStamp"]       
-     logging.info("The latest timestamp {}".format(latest_timestamp)) 
+     latest_timestamp = sorted_data[-1]["timeStamp"]
+     logging.info("The latest timestamp {}".format(latest_timestamp))
      body = json.dumps(results_events)
      if(len(results_events) <= MaxEventCount):
         logging.debug(body)
@@ -249,7 +249,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("Start")
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(1,20))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(1,25))]
         for future in as_completed(futures):
             #i = i + float(future.result())
             logging.info(future.result())
