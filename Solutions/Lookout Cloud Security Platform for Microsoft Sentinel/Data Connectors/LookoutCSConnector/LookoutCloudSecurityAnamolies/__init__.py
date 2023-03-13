@@ -157,9 +157,9 @@ class Sentinel:
             state = StateManager(connection_string) 
             latestTimeStamp = chunk[-1]["timeStamp"]
             zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
-            latestTimeStampnew = datetime.strptime(latestTimeStamp,zulu_time_format) + timedelta(milliseconds=1)
-            logging.info("Chunk Timestamp {}".format(latestTimeStampnew)) 
-            state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+            #latestTimeStampnew = datetime.strptime(latestTimeStamp,zulu_time_format) + timedelta(milliseconds=1)
+            #logging.info("Chunk Timestamp {}".format(latestTimeStampnew)) 
+            #state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
 
 
     def build_signature(self, date, content_length, method, content_type, resource):
