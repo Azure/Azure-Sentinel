@@ -3,7 +3,8 @@ name: DEV-0586 Actor IOC - January 2022
 description: | 
   'Identifies a match across IOC's related to an actor tracked by Microsoft as DEV-0586
    Reference: https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/'
-severity: High 
+severity: High
+status: Available
 requiredDataConnectors: 
   - connectorId: CiscoASA
     dataTypes: 
@@ -41,7 +42,7 @@ query:  |
   | where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or ( InitiatingProcessCommandLine has ('127.0.0.1\\ADMIN$') and InitiatingProcessCommandLine has_any (Command_Line))
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256
   | extend Account = AccountName, Computer = DeviceName,  CommandLine = InitiatingProcessCommandLine, FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), "InitiatingProcessSHA256", SHA256 in (sha256Hashes), "SHA256", "No Match")
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = case(FileHash == "InitiatingProcessSHA256", InitiatingProcessSHA256, FileHash == "SHA256", SHA256, "No Match")
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = case(FileHash == "InitiatingProcessSHA256", InitiatingProcessSHA256, FileHash == "SHA256", SHA256, "No Match"), AlgorithmCustomEntity = "SHA256"
   ),
   ( SecurityEvent
   | where EventID == 4688
@@ -52,13 +53,13 @@ query:  |
   ( CommonSecurityLog
   | where FileHash in (sha256Hashes)
   | project TimeGenerated, Message, SourceUserID, FileHash, Type
-  | extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID
+  | extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID, AlgorithmCustomEntity = "SHA256"
   ),
   ( imFileEvent
   | where Hash in~ (sha256Hashes) or  ( ActingProcessCommandLine has ('127.0.0.1\\ADMIN$') and ActingProcessCommandLine has_any (Command_Line))
   | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash, AlgorithmCustomEntity = "SHA256"
   ),
   (Event
   | where Source == "Microsoft-Windows-Sysmon"
@@ -67,11 +68,11 @@ query:  |
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"])
   | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
-  | extend Hashes = column_ifexists("Hashes", ""), CommandLine = column_ifexists("CommandLine", "")
-  | where (Hashes has_any (sha256Hashes) ) or ( CommandLine has ('127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line)) 
-  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
+  | extend FileHash = column_ifexists("Hashes", ""), CommandLine = column_ifexists("CommandLine", "")
+  | where (FileHash has_any (sha256Hashes) ) or ( CommandLine has ('127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line)) 
+  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, tostring(FileHash), CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = Hashes
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = FileHash, AlgorithmCustomEntity = "SHA256"
   )
   )
 entityMappings:
@@ -90,8 +91,8 @@ entityMappings:
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: FileHashAlgo
+        columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.1
+version: 1.0.3
 kind: Scheduled
