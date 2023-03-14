@@ -58,7 +58,7 @@ Possible remediations include requiring a password reset, or temporarily locking
       3) [Lookup risky user and save results](#lookup_risky_user_and_save_results)
 3) [Deployment](#deployment)
    1) [Prerequisites](#prerequisites)
-   2) [Deployment from Azure Marketplace](#deployment_azure_marketplace)
+   2) [Deployment using Azure Marketplace](#deployment_azure_marketplace)
    3) [Deployment using "Deploy a custom template" service](#deployment_custom_template)
       1) [Deploy the Solution](#deployment_custom_template_solution)
       2) [Deploy Playbooks (Logic Apps) one by one](#deployment_custom_template_playbooks)
@@ -326,8 +326,8 @@ There is several ways you can deploy this Solution:
 
 1) Open Azure [Marketplace](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/id/recordedfuture1605638642586.recorded_future_identity_solution)
 2) Search for "Recorded Future Identity" and open the Solution.
-2) Select Create
-3) Go through installation process.
+3) Select Create
+4) Go through installation process.
 
 Parameters for deployment:
 
