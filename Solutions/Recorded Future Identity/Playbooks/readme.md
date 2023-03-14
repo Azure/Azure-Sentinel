@@ -58,8 +58,7 @@ Possible remediations include requiring a password reset, or temporarily locking
       3) [Lookup risky user and save results](#lookup_risky_user_and_save_results)
 3) [Deployment](#deployment)
    1) [Prerequisites](#prerequisites)
-   2) [Deployment using Microsoft Sentinel Content Hub](#deployment_content_hub)
-   3) [Deployment using "Deploy a custom template" service](#deployment_custom_template)
+   2) [Deployment using "Deploy a custom template" service](#deployment_custom_template)
       1) [Deploy the Solution](#deployment_custom_template_solution)
       2) [Deploy Playbooks (Logic Apps) one by one](#deployment_custom_template_playbooks)
          1) [RecordedFutureIdentity-add-AAD-security-group-user](#deployment_custom_template_playbooks_add_AAD_security_group_user)
@@ -301,10 +300,9 @@ Another way to cover this case - you can add a corresponding check to RecordedFu
 ## Deployment
 
 There is several ways you can deploy this Solution:
-- Using [Microsoft Sentinel](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/microsoft.securityinsightsarg%2Fsentinel) Content Hub
 - Using ["Deploy a Custom template"](https://portal.azure.com/#create/Microsoft.Template)
   - Deploy the Solution (one step to deploy all resources in the Solution)
-  - Deploy each playbook one by one
+- Deploy each playbook one by one
   
 **Important:**
 - **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
@@ -321,68 +319,10 @@ There is several ways you can deploy this Solution:
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
 - For `Recorded Future Identity` Connections you will need `Recorded Future Identity API` token. To obtain one - check out [this section](#how_to_obtain_Recorded_Future_API_token).
 
-<a id="deployment_content_hub"></a>
-
-### Deployment using [Microsoft Sentinel](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/microsoft.securityinsightsarg%2Fsentinel) Content Hub
-
-1) Open Azure [Microsoft Sentinel](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/microsoft.securityinsightsarg%2Fsentinel) service (you can use Home page to search for the service, or just [click on the link](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/microsoft.securityinsightsarg%2Fsentinel))
-2) Select your Workspace
-
-<img src="./images/microsoft_sentinel_1.png" alt="Microsoft Sentinel Content Hub Installation #1" width="60%"/>
-
-3) Open `Content Hub`
-4) Search for "Recorded Future Identity"
-
-<img src="./images/microsoft_sentinel_2.png" alt="Microsoft Sentinel Content Hub Installation  #2" width="60%"/>
- 
-6) Select the Solution you are interested in.
-7) Click "Install" to install the Solution.
-
-<img src="./images/microsoft_sentinel_3.png" alt="Microsoft Sentinel Content Hub Installation  #3" width="60%"/>
-
-8) Go through installation process.
-
-Parameters for deployment:
-
-| Parameter                                                    | Description                                                                                                                                                            |
-|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Subscription**                                             | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
-| **Resource group**                                           | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Workspace**                                                | Log Analytics Workspace name.                                                                                                                                          |
-| **Playbook Name for "Add ADD security group user" playbook** | Playbook name to use for "RecordedFutureIdentity-add-AAD-security-group-user" playbook.                                                                                |
-| **Playbook Name for "Confirm AAD risky user" playbook**      | Playbook name to use for "RecordedFutureIdentity-confirm-AAD-risky-user" playbook.                                                                                     |
-| **Playbook Name for "Lookup and save user" playbook**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
-| **Playbook Name for "Search workforce user" playbook**       | Playbook name to use for "RecordedFutureIdentity-search-workforce-user" playbook.                                                                                      |
-| **Playbook Name for "Search external user" playbook**        | Playbook name to use for "RecordedFutureIdentity-search-external-user" playbook.                                                                                       |
-
-<br/>
-
-
-<img src="./images/microsoft_sentinel_4.png" alt="Microsoft Sentinel Content Hub Installation  #4" width="60%"/>
-
-<img src="./images/microsoft_sentinel_5.png" alt="Microsoft Sentinel Content Hub Installation  #5" width="60%"/>
-
-<img src="./images/microsoft_sentinel_6.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
-
-<br/>
-
-At the end it should look like this:
-
-<img src="./images/microsoft_sentinel_7.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
-
-<img src="./images/microsoft_sentinel_8.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
-
-
-<br/>
-
-<br/>
-
 <a id="deployment_custom_template"></a>
-
 ### Deployment using "Deploy a custom template" service
 
 You can deploy resources (Solution, Playbooks, etc) from templates using `Deploy a custom template` service.
-
 
 <br/>
 
@@ -393,12 +333,11 @@ You can deploy resources (Solution, Playbooks, etc) from templates using `Deploy
 
 <br/>
 
-**! If you decided deploy the Solution using `Deploy a custom template` service (and not using `Microsoft Sentinel Content Hub`) - THE EASIEST WAY TO DEPLOY templates of the current Solution - just by using corresponding `Deploy to Azure` ![Deploy to Azure](https://aka.ms/deploytoazurebutton) and `Deploy to Azure Gov` ![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton) buttons in the next sections.**
-
+**! If you decided deploy the Solution using `Deploy a custom template` service - THE EASIEST WAY TO DEPLOY templates of the current Solution - just by using corresponding `Deploy to Azure` ![Deploy to Azure](https://aka.ms/deploytoazurebutton) button or `Deploy to Azure Gov` ![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton) buttons in the next sections.**
 
 <br/>
 
-You can find `Deploy a custom template` service using search on Home page.
+You can find `Deploy a custom template` service using search on [Azure portal home page](https://portal.azure.com).
 
 Here is how icons for this service looks: 
 
@@ -429,12 +368,11 @@ There you can paste any template to deploy:
 - or use content of [./RecordedFutureIdentity-add-AAD-security-group-user.json](./RecordedFutureIdentity-add-AAD-security-group-user.json) file to deploy ONLY `RecordedFutureIdentity-add-AAD-security-group-user` playbook.
 
 
-After you have paste your template to deploy - click `Save` button:
+After you paste your template to deploy - click `Save` button:
 
 <img src="./images/deploy_custom_template_service_3.png" alt="Deploy a Custom Template Installation #3" width="60%"/>
 
-
-Regarding next steps specific specific parameters descriptions - check out a corresponding section below for your specific template deployment (as each template have its own deployment parameters).
+Regarding next steps specific parameters descriptions - check out a corresponding section below for your specific template deployment (as each template have its own deployment parameters).
 
 But in general, next steps will look like this:
 
@@ -617,15 +555,7 @@ After deployment - initial set up for each deployed Logic App (playbook) include
 
 ### How to find the playbooks (Logic Apps) after deployment
 
-One way to find your Playbooks (Logic Apps) after deployment - you can search for `Logic Apps` service from the Home page and find recently deployed Logic Apps there.
-
-Another way if you deploy the Solution from `Microsoft Sentinel Content Hub` - click on the Logic App resource as shown on the screenshot below.
-
-<img src="./images/after_solution_deployed_1.png" alt="Screenshot after Solution deployment #1" width="60%"/>
-<img src="./images/after_solution_deployed_2.png" alt="Screenshot after Solution deployment #2" width="60%"/>
-
-In similar way you will find deployed Logic App if you deploy each playbook individually using `Deploy a custom template` service.
-
+Find your Playbooks (Logic Apps) after deployment - you can search for `Logic Apps` from the Azure Portal page and find deployed Logic Apps there.
 
 <a id="configuration_connections"></a>
 
