@@ -1820,7 +1820,7 @@
         "category": "Samples",
         "functionAlias": "ExchangeConfiguration",
 		"functionParameters": "SpecificSectionList:string = \"\", SpecificConfigurationDate:string = \"lastdate\", Target:string = \"On-Premises\", SpecificConfigurationEnv:string = \"All\"",
-        "query": "\nlet _SpecificSectionList = split(SpecificSectionList,',');\r\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\r\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\r\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\r\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\r\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \r\n    | where TimeGenerated > _targetDate\r\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\r\n    | where _target == 'All' or Source == _target\r\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n    | where ScopedEnvironment in (_configurationEnv)\r\n    | extend EntryDate = todatetime(EntryDate_s)\r\n    | project-away EntryDate_s);\r\nlet findConfigDate = baseRequest\r\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\r\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\r\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\r\n    | top-nested of Env by Ignore0=max(1), \r\n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \r\n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \r\n    | project GenerationInstanceID_g;\r\nlet ParseExchangeConfig = () { baseRequest \r\n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\r\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\r\n | extend TimeGenerated = EntryDate\r\n | extend Identity = Identity_Name_s\r\n | extend CmdletResultValue = parse_json(rawData_s)\r\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\r\n | project-away TenantId,SourceSystem,Type,EntryDate\r\n};\r\nParseExchangeConfig",
+        "query": "\nlet _SpecificSectionList = split(SpecificSectionList,',');\r\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\r\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\r\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\r\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\r\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \r\n    | where TimeGenerated > _targetDate\r\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\r\n    | where _target == 'All' or Source == _target\r\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n    | where ScopedEnvironment in (_configurationEnv)\r\n    | extend EntryDate = todatetime(EntryDate_s)\r\n    | project-away EntryDate_s);\r\nlet findConfigDate = baseRequest\r\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\r\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\r\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\r\n    | top-nested of Env by Ignore0=max(1), \r\n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \r\n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \r\n    | project GenerationInstanceID_g;\r\nlet ParseExchangeConfig = () { baseRequest \r\n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\r\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\r\n | extend TimeGenerated = EntryDate\r\n | extend Identity = IdentityString_s\r\n | extend CmdletResultValue = parse_json(rawData_s)\r\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\r\n | project-away TenantId,SourceSystem,Type,EntryDate\r\n};\r\nParseExchangeConfig",
         "version": 1
       }
     },
@@ -1895,15 +1895,15 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "ExchangeEnvironmentList",
+                "displayName": "ESI_ExchConfigAvailableEnvironments",
                 "category": "Samples",
-                "functionAlias": "ExchangeEnvironmentList",
+                "functionAlias": "ESI_ExchConfigAvailableEnvironments",
                 "query": "\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\r\nlet ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange*\r\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\r\n    | where _target == 'All' or Source == _target;\r\nScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s",
                 "version": 1,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "ExchangeEnvironmentList"
+                    "value": "ESI_ExchConfigAvailableEnvironments"
                   }
                 ]
               }
@@ -1948,9 +1948,9 @@
       "location": "[parameters('workspace-location')]",
       "properties": {
         "eTag": "*",
-        "displayName": "ExchangeEnvironmentList",
+        "displayName": "ESI_ExchConfigAvailableEnvironments",
         "category": "Samples",
-        "functionAlias": "ExchangeEnvironmentList",
+        "functionAlias": "ESI_ExchConfigAvailableEnvironments",
         "query": "\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\r\nlet ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange*\r\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\r\n    | where _target == 'All' or Source == _target;\r\nScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s",
         "version": 1
       }
@@ -2168,19 +2168,11 @@
                   "operator": "AND",
                   "criteria": [
                     {
-                      "contentId": "ESIExchangeOnlineConfig_CL",
+                      "contentId": "ESIExchangeConfig_CL",
                       "kind": "DataType"
                     },
                     {
                       "contentId": "ESI-ExchangeOnPremisesCollector",
-                      "kind": "DataConnector"
-                    },
-                    {
-                      "contentId": "ESI-ExchangeAdminAuditLogEvents",
-                      "kind": "DataConnector"
-                    },
-                    {
-                      "contentId": "ESI-ExchangeOnlineCollector",
                       "kind": "DataConnector"
                     }
                   ]
@@ -2271,7 +2263,7 @@
                   "operator": "AND",
                   "criteria": [
                     {
-                      "contentId": "ESIExchangeOnlineConfig_CL",
+                      "contentId": "ESIExchangeConfig_CL",
                       "kind": "DataType"
                     },
                     {
@@ -2280,10 +2272,6 @@
                     },
                     {
                       "contentId": "ESI-ExchangeAdminAuditLogEvents",
-                      "kind": "DataConnector"
-                    },
-                    {
-                      "contentId": "ESI-ExchangeOnlineCollector",
                       "kind": "DataConnector"
                     }
                   ]
@@ -2424,7 +2412,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName5'))]"
       ],
       "properties": {
-        "description": "Microsoft Exchange Security Review - OnlineWorkbook Workbook with template version 2.0.0",
+        "description": "Microsoft Exchange Security Review - Online Workbook with template version 2.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion5')]",
@@ -2481,14 +2469,6 @@
                       "kind": "DataType"
                     },
                     {
-                      "contentId": "ESI-ExchangeOnPremisesCollector",
-                      "kind": "DataConnector"
-                    },
-                    {
-                      "contentId": "ESI-ExchangeAdminAuditLogEvents",
-                      "kind": "DataConnector"
-                    },
-                    {
                       "contentId": "ESI-ExchangeOnlineCollector",
                       "kind": "DataConnector"
                     }
@@ -2527,7 +2507,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName6'))]"
       ],
       "properties": {
-        "description": "Microsoft Exchange Security ReviewWorkbook Workbook with template version 2.0.0",
+        "description": "Microsoft Exchange Security Review Workbook with template version 2.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion6')]",
@@ -2580,19 +2560,11 @@
                   "operator": "AND",
                   "criteria": [
                     {
-                      "contentId": "ESIExchangeOnlineConfig_CL",
+                      "contentId": "ESIExchangeConfig_CL",
                       "kind": "DataType"
                     },
                     {
                       "contentId": "ESI-ExchangeOnPremisesCollector",
-                      "kind": "DataConnector"
-                    },
-                    {
-                      "contentId": "ESI-ExchangeAdminAuditLogEvents",
-                      "kind": "DataConnector"
-                    },
-                    {
-                      "contentId": "ESI-ExchangeOnlineCollector",
                       "kind": "DataConnector"
                     }
                   ]
