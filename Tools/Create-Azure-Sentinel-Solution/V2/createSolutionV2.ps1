@@ -352,9 +352,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     $dataConnectorObject | Add-Member -MemberType NoteProperty -Name "kind" -Value "DataConnector"
                                     $WorkbookDependencyCriteria += $dataConnectorObject
                                 }
+                                if($null -ne $dataConnectorObject -or $null -ne $dataTypeObject){
                                 $workbookDependencies = [PSCustomObject]@{
                                     operator = "AND";
                                 };
+                            }
 
                                 if($WorkbookDependencyCriteria.Count -gt 0)
                                 {
@@ -428,8 +430,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
-                                    dependencies = $workbookDependencies;
                                 }
+                            }
+                            if($null -ne $workbookDependencies)
+                            {
+                                $workbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $workbookDependencies
                             }
 
                             if($workbookDescriptionText -ne "")
@@ -1775,7 +1780,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     properties = [PSCustomObject]@{
                                         description = "$($solutionName) Hunting Query $huntingQueryCounter with template";
-                                        displayName = "$($solutionName) Hunting Query template";
+                                        displayName = "$($solutionName) HQ template";
                                     }
                                 }
 
@@ -2062,7 +2067,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     properties = [PSCustomObject]@{
                                         description = "$($solutionName) Analytics Rule $analyticRuleCounter with template";
-                                        displayName = "$($solutionName) Analytics Rule template";
+                                        displayName = "$($solutionName) AR template";
                                     }
                                 }
 
