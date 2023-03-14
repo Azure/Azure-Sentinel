@@ -132,8 +132,8 @@ def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> It
     try:
         res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
     except Exception as err:
-        logging.info('Error while getting authentication logs, {err}')
-        if err.status_code == 429:
+        logging.info('Error while getting authentication logs- {}'.format(err))
+        if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
             res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
@@ -157,7 +157,8 @@ def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> It
                 response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
                 logging.info('Response recieved {}'.format(response))
             except Exception as ex:
-                if ex.status_code == 429:
+                logging.info('Error in while loop while getting authentication logs- {}'.format(ex))
+                if ex.status == 429:
                     logging.info('429 exception occurred, trying retry after 60 seconds')
                     time.sleep(60)
                     response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
@@ -205,8 +206,8 @@ def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     try:
         events = admin_api.get_administrator_log(mintime)
     except Exception as err:
-        logging.info('Error while getting administrator logs, {err}')
-        if err.status_code == 429:
+        logging.info('Error while getting administrator logs- {}'.format(err))
+        if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
             events = admin_api.get_administrator_log(mintime)
@@ -223,8 +224,8 @@ def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
             try:
                 events = admin_api.get_administrator_log(mintime)
             except Exception as ex:
-                logging.info('Error while getting administrator logs, {err}')
-                if ex.status_code == 429:
+                logging.info('Error while getting administrator logs- {}'.format(ex))
+                if ex.status == 429:
                     logging.info('429 exception occurred, trying retry after 60 seconds')
                     time.sleep(60)
                     events = admin_api.get_administrator_log(mintime)
@@ -270,8 +271,8 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     try:
         events = admin_api.get_telephony_log(mintime)
     except Exception as err:
-        logging.info('Error while getting telephony logs, {err}')
-        if err.status_code == 429:
+        logging.info('Error while getting telephony logs - {}'.format(err))
+        if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
             events = admin_api.get_telephony_log(mintime)
@@ -287,9 +288,9 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
             logging.info('Making telephony logs request: mintime={}'.format(mintime))
             try:
                 events = admin_api.get_telephony_log(mintime)
-            except Exception as ex:
-                logging.info('Error while getting telephony logs, {err}')
-                if ex.status_code == 429:
+            except Exception as ex:                
+                logging.info('Error while getting telephony logs - {}'.format(ex))
+                if ex.status == 429:
                     logging.info('429 exception occurred, trying retry after 60 seconds')
                     time.sleep(60)
                     events = admin_api.get_telephony_log(mintime)
@@ -336,8 +337,8 @@ def get_offline_enrollment_logs(admin_api: duo_client.Admin, mintime: int) -> It
     try:
         events = make_offline_enrollment_logs_request(admin_api, mintime)
     except Exception as err:
-        logging.info('Error while getting offline_enrollment logs, {err}')
-        if err.status_code == 429:
+        logging.info('Error while getting offline_enrollment logs- {}'.format(err))
+        if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
             events = make_offline_enrollment_logs_request(admin_api, mintime)
@@ -354,8 +355,8 @@ def get_offline_enrollment_logs(admin_api: duo_client.Admin, mintime: int) -> It
             try:
                 events = make_offline_enrollment_logs_request(admin_api, mintime)
             except Exception as ex:
-                logging.info('Error while getting offline_enrollment logs, {err}')
-                if ex.status_code == 429:
+                logging.info('Error while getting offline_enrollment logs - {}'.format(ex))
+                if ex.status == 429:
                     logging.info('429 exception occurred, trying retry after 60 seconds')
                     time.sleep(60)
                     events = make_offline_enrollment_logs_request(admin_api, mintime)
