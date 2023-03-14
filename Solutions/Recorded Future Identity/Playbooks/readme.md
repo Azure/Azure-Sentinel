@@ -58,7 +58,8 @@ Possible remediations include requiring a password reset, or temporarily locking
       3) [Lookup risky user and save results](#lookup_risky_user_and_save_results)
 3) [Deployment](#deployment)
    1) [Prerequisites](#prerequisites)
-   2) [Deployment using "Deploy a custom template" service](#deployment_custom_template)
+   2) [Deployment from Azure Marketplace](#deployment_azure_marketplace)
+   3) [Deployment using "Deploy a custom template" service](#deployment_custom_template)
       1) [Deploy the Solution](#deployment_custom_template_solution)
       2) [Deploy Playbooks (Logic Apps) one by one](#deployment_custom_template_playbooks)
          1) [RecordedFutureIdentity-add-AAD-security-group-user](#deployment_custom_template_playbooks_add_AAD_security_group_user)
@@ -300,9 +301,10 @@ Another way to cover this case - you can add a corresponding check to RecordedFu
 ## Deployment
 
 There is several ways you can deploy this Solution:
+- Deployment of complete Solution from Azure Marketplace
 - Using ["Deploy a Custom template"](https://portal.azure.com/#create/Microsoft.Template)
   - Deploy the Solution (one step to deploy all resources in the Solution)
-- Deploy each playbook one by one
+  - Deploy each playbook one by one
   
 **Important:**
 - **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
@@ -318,6 +320,37 @@ There is several ways you can deploy this Solution:
 - A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these playbooks will be created automatically if they don’t already exist.
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
 - For `Recorded Future Identity` Connections you will need `Recorded Future Identity API` token. To obtain one - check out [this section](#how_to_obtain_Recorded_Future_API_token).
+
+<a id="deployment_azure_marketplace"></a>
+### Deployment using [Azure Marketplace](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/)
+
+1) Open Azure [Marketplace](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/id/recordedfuture1605638642586.recorded_future_identity_solution)
+2) Search for "Recorded Future Identity" and open the Solution.
+2) Select Create
+3) Go through installation process.
+
+Parameters for deployment:
+
+| Parameter                                                    | Description                                                                                                                                                            |
+|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Subscription**                                             | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
+| **Resource group**                                           | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
+| **Workspace**                                                | Log Analytics Workspace name.                                                                                                                                          |
+| **Playbook Name for "Add ADD security group user" playbook** | Playbook name to use for "RecordedFutureIdentity-add-AAD-security-group-user" playbook.                                                                                |
+| **Playbook Name for "Confirm AAD risky user" playbook**      | Playbook name to use for "RecordedFutureIdentity-confirm-AAD-risky-user" playbook.                                                                                     |
+| **Playbook Name for "Lookup and save user" playbook**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
+| **Playbook Name for "Search workforce user" playbook**       | Playbook name to use for "RecordedFutureIdentity-search-workforce-user" playbook.                                                                                      |
+| **Playbook Name for "Search external user" playbook**        | Playbook name to use for "RecordedFutureIdentity-search-external-user" playbook.                                                                                       |
+<br/>
+<img src="./images/microsoft_sentinel_4.png" alt="Microsoft Sentinel Content Hub Installation  #4" width="60%"/>
+<img src="./images/microsoft_sentinel_5.png" alt="Microsoft Sentinel Content Hub Installation  #5" width="60%"/>
+<img src="./images/microsoft_sentinel_6.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
+<br/>
+At the end it should look like this:
+<img src="./images/microsoft_sentinel_7.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
+<img src="./images/microsoft_sentinel_8.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
+<br/>
+<br/>
 
 <a id="deployment_custom_template"></a>
 ### Deployment using "Deploy a custom template" service
