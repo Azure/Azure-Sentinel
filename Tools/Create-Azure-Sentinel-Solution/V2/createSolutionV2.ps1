@@ -1780,8 +1780,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     properties = [PSCustomObject]@{
                                         description = "$($solutionName) Hunting Query $huntingQueryCounter with template";
-                                        displayName = "$($solutionName) HQ template";
+                                        displayName = "$($solutionName) Hunting Query template";
                                     }
+                                }
+                                if($baseAnalyticRuleTemplateSpec.properties.displayName.length -ge 64){
+                                    $baseAnalyticRuleTemplateSpec.properties.displayName = "$($solutionName) HQ template";
                                 }
 
                                 $baseMainTemplate.resources += $baseHuntingQueryTemplateSpec
@@ -2067,8 +2070,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     properties = [PSCustomObject]@{
                                         description = "$($solutionName) Analytics Rule $analyticRuleCounter with template";
-                                        displayName = "$($solutionName) AR template";
+                                        displayName = "$($solutionName) Analytics Rule template";
                                     }
+                                }
+                                if($baseAnalyticRuleTemplateSpec.properties.displayName.length -ge 64){
+                                    $baseAnalyticRuleTemplateSpec.properties.displayName = "$($solutionName) AR template";
                                 }
 
                                 $newAnalyticRule.name = "[variables('AnalyticRulecontentId$analyticRuleCounter')]"
