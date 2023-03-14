@@ -341,14 +341,23 @@ Parameters for deployment:
 | **Playbook Name for "Lookup and save user" playbook**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
 | **Playbook Name for "Search workforce user" playbook**       | Playbook name to use for "RecordedFutureIdentity-search-workforce-user" playbook.                                                                                      |
 | **Playbook Name for "Search external user" playbook**        | Playbook name to use for "RecordedFutureIdentity-search-external-user" playbook.                                                                                       |
+
 <br/>
+
 <img src="./images/microsoft_sentinel_4.png" alt="Microsoft Sentinel Content Hub Installation  #4" width="60%"/>
+
 <img src="./images/microsoft_sentinel_5.png" alt="Microsoft Sentinel Content Hub Installation  #5" width="60%"/>
+
 <img src="./images/microsoft_sentinel_6.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
+
 <br/>
+
 At the end it should look like this:
+
 <img src="./images/microsoft_sentinel_7.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
+
 <img src="./images/microsoft_sentinel_8.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
+
 <br/>
 <br/>
 
