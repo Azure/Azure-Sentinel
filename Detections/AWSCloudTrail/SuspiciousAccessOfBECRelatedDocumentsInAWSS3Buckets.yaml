@@ -19,43 +19,30 @@ relevantTechniques:
 eventGroupingSettings:
   aggregationKind: SingleAlert
 query: |
-  let BEC_Keywords = dynamic(['invoice','invoices','payment','payroll','paycheck','transfer','bank statement','bank details','wire','closing','funds','bank account','account details','iban','ACH','remit','remittance','purchase','deposit','pro-forma','bank',"platnosc","PO#","Zahlung","Rechnung","Paiement", "virement bancaire","Bankuberweisung","virement","hacked","phishing","payrollhelpdesk","direct deposit"]);
-  // Adjust these thresholds based on your environment
-  let threshold = 10;
-  let deviation = 2;
-  // Create a baseline of activity
-  let baseline_events = (
-  AWSCloudTrail
-  | where TimeGenerated between (ago(14d)..ago(1d))
-  // Remove anonymous access due to noise, monitor for this seperately
+  let BEC_Keywords = dynamic(['invoice','invoices','payment','payroll','paycheck','transfer','bank statement','bank details','wire','closing','funds','bank account','account details','iban','ACH','remit','remittance','purchase','deposit','pro-forma','bank',"platnosc","PO#","Zahlung","Rechnung","Paiement", "virement bancaire","Banküberweisung","virement","hacked","phishing","payrollhelpdesk","direct deposit"]);
+  // Adjust this threshold based on your environment
+  let sensitivity = 2.5;
+  let Events = materialize(AWSCloudTrail
+  | where TimeGenerated between (ago(14d)..ago(0d))
   | where UserIdentityAccountId != "anonymous"
-  | where EventSource startswith "s3.a"
+  | where EventSource startswith "s3."
   | where EventName =~ "GetObject"
-  | extend FilePath = parse_json(RequestParameters).key
+  | extend FilePath = tostring(parse_json(RequestParameters).key)
   | where FilePath has_any(BEC_Keywords)
-  // Look for unique files accessed
-  | summarize baseline_file_count=dcount(tostring(FilePath)) by UserIdentityPrincipalid, bin(TimeGenerated, 1d)
-  | summarize baseline_count = avg(baseline_file_count) by UserIdentityPrincipalid);
-  let current_events = materialize(AWSCloudTrail
-  | where TimeGenerated > ago(1d)
-  // Remove anonymous access due to noise, monitor for this seperately
-  | where UserIdentityAccountId != "anonymous"
-  | where EventSource startswith "s3.a"
-  | where EventName =~ "GetObject"
-  | extend FilePath = parse_json(RequestParameters).key
-  | where FilePath has_any(BEC_Keywords));
-  current_events
-  | summarize number_of_files_accessed = dcount(tostring(FilePath)), files_accessed=make_set(tostring(FilePath), maxSize=1000) by UserIdentityPrincipalid, bin(TimeGenerated, 1d)
-  // Look for situations where volume of files accessed is significantly above baseline activity
-  | where number_of_files_accessed > threshold
-  | join kind=inner baseline_events on UserIdentityPrincipalid
-  | where number_of_files_accessed > (baseline_count*deviation)
-  | join kind=leftouter current_events on UserIdentityPrincipalid
-  | project-reorder TimeGenerated, UserIdentityType, UserIdentityPrincipalid, UserIdentityUserName, FilePath, EventName, UserAgent, SourceIpAddress, number_of_files_accessed, baseline_count, files_accessed
+  );
+  Events
+  | summarize dcount(FilePath) by UserIdentityPrincipalid, bin(startofday(TimeGenerated), 1d)
+  | summarize CountOfDocs = make_list(dcount_FilePath, 10000), TimeStamp = make_list(TimeGenerated, 10000) by UserIdentityPrincipalid
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfDocs, sensitivity, -1, 'linefit')
+  | mv-expand CountOfDocs to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double),Score to typeof(double), Baseline to typeof(long)
+  | where Anomalies > 0
+  | project TimeStamp, CountOfDocs, Baseline, Score, Anomalies, UserIdentityPrincipalid
+  | join kind=inner(Events | extend TimeStamp = startofday(TimeGenerated)) on TimeStamp, UserIdentityPrincipalid
+  | project-reorder TimeGenerated, UserIdentityType, UserIdentityPrincipalid, UserIdentityUserName, FilePath, EventName, UserAgent, SourceIpAddress, CountOfDocs, Baseline, Score
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Name
         columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
@@ -65,7 +52,15 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: FilePath
+customDetails:
+  UserType: UserIdentityType
+  Event: EventName
+  Product: EventProduct
+  UserAgent: UserAgent
 alertDetailsOverride:
-  alertDisplayNameFormat: Suspicious access of {{number_of_files_accessed}} BEC related documents in AWS S3 buckets by {{UserIdentityUserName}} 
+  alertDisplayNameFormat: Suspicious access of {{number_of_files_accessed}} BEC related documents in AWS S3 buckets by {{UserIdentityUserName}}
+   alertDescriptionFormat: |
+    This query looks for users (in this case {{UserIdentityUserName}}) with suspicious spikes in the number of files accessed (in this case {{number_of_files_accessed}})that relate to topics commonly accessed as part of Business Email Compromise (BEC) attacks. The query looks for access to files in AWS S3 storage that relate to topics such as invoices or payments, and then looks for users accessing these files in significantly higher numbers than in the previous 14 days. Incidents raised by this analytic should be investigated to see if the user accessing these files should be accessing them, and if the volume they accessed them at was related to a legitimate business need. 
+    This query contains thresholds to reduce the chance of false positives, these can be adjusted to suit individual environments. In addition false positives could be generated by legitimate, scheduled actions that occur less often than every 14 days, additional exclusions can be added for these actions on username or IP address entities.
 version: 1.0.0
 kind: Scheduled
