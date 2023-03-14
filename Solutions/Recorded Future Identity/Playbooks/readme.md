@@ -324,10 +324,11 @@ There is several ways you can deploy this Solution:
 <a id="deployment_azure_marketplace"></a>
 ### Deployment using [Azure Marketplace](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/)
 
-1) Open Azure [Marketplace](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/id/recordedfuture1605638642586.recorded_future_identity_solution)
-2) Search for "Recorded Future Identity" and open the Solution.
-3) Select Create
-4) Go through installation process.
+1) Open Recorded Future Identity Solution page in Azure Marketplace in one of two ways:
+   1) Use the direct link to [Recorded Future Identity Solution](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/id/recordedfuture1605638642586.recorded_future_identity_solution).
+   1) Open [Azure Marketplace](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/). Search for "Recorded Future Identity Solution".
+1) On the Recorded Future Identity Solution page click "Create".
+1) Follow the installation process as described below.
 
 Parameters for deployment:
 
