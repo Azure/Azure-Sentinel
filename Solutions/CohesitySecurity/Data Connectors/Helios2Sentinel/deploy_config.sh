@@ -15,7 +15,7 @@ az deployment group create \
     --name ExampleDeployment \
     --resource-group "$resourcegroup" \
     --template-file ./azuredeploy.json \
-    --parameters ApiKey="$apiKey" \
+    --parameters ApiKey="$api_key" \
     --parameters ClientId="$ClientId" \
     --parameters ClientKey="$ClientKey" \
     --parameters StartDaysAgo="$StartDaysAgo" \
