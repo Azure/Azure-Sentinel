@@ -223,14 +223,15 @@ def ProcessData(param):
     logging.info('Start: to get Anamolies')
     parameters = range(3)
     apistart = time.time()
-    with Pool(processes=1) as pool:
-        results = pool.map(GetAPIData, parameters)
-        pool.close()
-        pool.join()
+    with ThreadPoolExecutor(max_workers=1) as executor:
+            #futures = [executor.submit(ProcessData, x) for x in list(range(4))]
+            futures = [executor.submit(GetAPIData, x) for x in list(range(3))]
         #results_events.append(results)
     print("Time took to get the 30k events data in %s",time.time() - apistart)
-    for x in range(len(results)):
-        results_events.extend(results[x])
+    for future in as_completed(futures):
+            results_events.extend(future.result())
+    #for x in range(len(results)):
+        #results_events.extend(results[x])
     #newdata = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
     logging.info("The number of Anamolies processed {} ".format(len(results_events)))
     logging.info('End: to get Anamolies')
@@ -272,7 +273,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("Start")
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(1,25))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(1,20))]
         for future in as_completed(futures):
             #i = i + float(future.result())
             logging.info(future.result())
