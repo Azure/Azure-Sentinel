@@ -199,7 +199,7 @@ def GetAPIData(num):
     try:
         Lookout = LookOut()
         #global results_events
-        time.sleep(1)
+        time.sleep(0.5)
         logging.info("""thread worker function""")
         startTime,endTime = Lookout.generate_date()
         newresults = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
