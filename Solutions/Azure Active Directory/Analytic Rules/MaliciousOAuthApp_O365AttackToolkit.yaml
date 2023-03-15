@@ -2,7 +2,7 @@ id: f948a32f-226c-4116-bddd-d95e91d97eb9
 name: Suspicious application consent similar to O365 Attack Toolkit
 description: |
   'This will alert when a user consents to provide a previously-unknown Azure application with the same OAuth permissions used by the MDSec O365 Attack Toolkit (https://github.com/mdsecactivebreach/o365-attack-toolkit).
-  The default permissions/scope for the MDSec O365 Attack toolkit are contacts.read, user.read, mail.read, notes.read.all, mailboxsettings.readwrite, and files.readwrite.all.
+  The default permissions/scope for the MDSec O365 Attack toolkit change sometimes but often include contacts.read, user.read, mail.read, notes.read.all, mailboxsettings.readwrite, files.readwrite.all, mail.send, files.read, and files.read.all.
   Consent to applications with these permissions should be rare, especially as the knownApplications list is expanded, especially as the knownApplications list is expanded. Public contributions to expand this filter are welcome!
   For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.'
 severity: High
@@ -24,19 +24,23 @@ relevantTechniques:
 query: |
   let detectionTime = 1d;
   let joinLookback = 14d;
+  let threshold = 5;
+  let o365_attack_regex = "contacts.read|user.read|mail.read|notes.read.all|mailboxsettings.readwrite|Files.ReadWrite.All|mail.send|files.read|files.read.all";
+  let o365_attack = dynamic(["contacts.read", "user.read", "mail.read", "notes.read.all", "mailboxsettings.readwrite", "Files.ReadWrite.All", "mail.send", "files.read", "files.read.all"]);
   AuditLogs
   | where TimeGenerated > ago(detectionTime)
   | where LoggedByService =~ "Core Directory"
   | where Category =~ "ApplicationManagement"
   | where OperationName =~ "Consent to application"
-  | where TargetResources has "mailboxsettings"
   | extend AppDisplayName = TargetResources.[0].displayName
   | extend AppClientId = tolower(TargetResources.[0].id)
-  | where AppClientId !in ((externaldata(knownAppClientId:string, knownAppDisplayName:string)[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.OAuth.KnownApplications.csv"] with (format="csv")))
-  | extend ConsentFull = TargetResources[0].modifiedProperties[4].newValue
-  | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope1 "]" *
-  | where ConsentFull contains "contacts.read" and ConsentFull contains "user.read" and ConsentFull contains "mail.read" and ConsentFull contains "notes.read.all" and ConsentFull contains "mailboxsettings.readwrite" and ConsentFull contains "Files.ReadWrite.All"
+  | where AppClientId !in ((externaldata(knownAppClientId:string, knownAppDisplayName:string)[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.OAuth.KnownApplications.csv"] with (format="csv"))) // NOTE: a MATCH from this list will cause the alert to NOT fire - please modify for your environment!
+  | mv-apply ConsentFull = TargetResources[0].modifiedProperties on (
+  where ConsentFull.displayName == "ConsentAction.Permissions")
+  | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope1 ", CreatedDateTime" * "]" *
   | where GrantConsentType != "AllPrincipals" // NOTE: we are ignoring if OAuth application was granted to all users via an admin - but admin due diligence should be audited occasionally
+  | where ConsentFull has_any (o365_attack)  | extend GrantScopeCount = countof(tolower(GrantScope1), o365_attack_regex, 'regex')
+  | where GrantScopeCount > threshold
   | extend GrantIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
   | extend GrantInitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
   | extend GrantUserAgent = iff(AdditionalDetails[0].key =~ "User-Agent", tostring(AdditionalDetails[0].value), "")
@@ -49,8 +53,7 @@ query: |
   | extend AppClientId = tolower(TargetResources[0].id)
   | extend AppReplyURLs = iff(TargetResources[0].modifiedProperties[1].newValue has "AddressType", TargetResources[0].modifiedProperties[1].newValue, "")
   | distinct AppClientId, tostring(AppReplyURLs)
-  )
-  on AppClientId
+  ) on AppClientId
   | join kind = innerunique (AuditLogs
   | where TimeGenerated > ago(joinLookback)
   | where LoggedByService =~ "Core Directory"
@@ -71,5 +74,9 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AppDisplayName
+version: 1.1.0
 kind: Scheduled
