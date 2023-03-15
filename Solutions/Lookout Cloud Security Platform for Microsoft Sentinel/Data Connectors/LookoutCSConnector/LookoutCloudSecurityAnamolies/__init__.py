@@ -268,7 +268,7 @@ def ProcessData(param):
         #logging.info("Threads executed!")
     #print("Main thread name %s",current_thread().name)
     #time.sleep(0.5)
-    return "function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time))
+    return "function result for thread: {} and it took --- {} seconds --- to send --- {} events" .format(param,(time.time() - start_time), "30k" if len(futures) == 3 else "<30k")
         #logging.info("Threads executed!")
     #print("Main thread name %s",current_thread().name)
 
