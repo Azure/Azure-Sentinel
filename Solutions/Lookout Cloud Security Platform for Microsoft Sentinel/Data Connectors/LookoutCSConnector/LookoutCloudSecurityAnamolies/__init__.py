@@ -204,35 +204,18 @@ def GetAPIData(num):
         startTime,endTime = Lookout.generate_date()
         newresults = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
         #results_events.append([newresults])
+        ProcessToLA(num,newresults)
         return list(newresults)
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
       raise
 
-def ProcessData(param):
+def ProcessToLA(param,results_events):
     start_time = time.time()
     #global results_events
     Lookout = LookOut()
     sentinel = Sentinel()
-    sentinel.sharedkey = shared_key
-    sentinel.table_name= table_name
-    startTime,endTime = Lookout.generate_date()
-    logging.info("The current run Start time {}".format(startTime))
-    logging.info("The current run End time {}".format(endTime))
-    logging.info('Start: to get Anamolies')
-    parameters = range(3)
-    apistart = time.time()
-    with ThreadPoolExecutor(max_workers=1) as executor:
-            #futures = [executor.submit(ProcessData, x) for x in list(range(4))]
-            futures = [executor.submit(GetAPIData, x) for x in list(range(3))]
-        #results_events.append(results)
-    print("Time took to get the 30k events data in %s",time.time() - apistart)
-    for future in as_completed(futures):
-            results_events.extend(future.result())
-    #for x in range(len(results)):
-        #results_events.extend(results[x])
-    #newdata = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
     logging.info("The number of Anamolies processed {} ".format(len(results_events)))
     logging.info('End: to get Anamolies')
     if(len(results_events)) > 0:
@@ -256,7 +239,35 @@ def ProcessData(param):
     success_processed, fail_processed = sentinel_class_vars["success_processed"],\
                                         sentinel_class_vars["fail_processed"]
     logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
-        .format(success_processed, fail_processed, startTime, endTime))
+        .format(success_processed, fail_processed, start_time, time.time()))
+
+def ProcessData(param):
+    start_time = time.time()
+    #global results_events
+    Lookout = LookOut()
+    sentinel = Sentinel()
+    sentinel.sharedkey = shared_key
+    sentinel.table_name= table_name
+    startTime,endTime = Lookout.generate_date()
+    logging.info("The current run Start time {}".format(startTime))
+    logging.info("The current run End time {}".format(endTime))
+    logging.info('Start: to get Anamolies')
+    #parameters = range(3)
+    apistart = time.time()
+    with ThreadPoolExecutor(max_workers=1) as executor:
+            #futures = [executor.submit(ProcessData, x) for x in list(range(4))]
+            futures = [executor.submit(GetAPIData, x) for x in list(range(1,4))]
+        #results_events.append(results)
+    print("Time took to get the 30k events data in %s",time.time() - apistart)
+    #for future in as_completed(futures):
+        #print(sum(future.result()))
+    #for x in range(len(results)):
+        #dat = results_events[x]
+        #results_events.extend(results[x])
+    #newdata = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
+        #logging.info("Threads executed!")
+    #print("Main thread name %s",current_thread().name)
+    #time.sleep(0.5)
     return "function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time))
         #logging.info("Threads executed!")
     #print("Main thread name %s",current_thread().name)
@@ -271,12 +282,12 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
     logging.info('Starting program')
     logging.info("Start")
+    processes = []
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(1,20))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(20))]
+            processes.append(futures)
         for future in as_completed(futures):
-            #i = i + float(future.result())
-            logging.info(future.result())
             print(future.result())
             #logging.info("function result for thread: {} and it took --- {} seconds ---" .format(future.result()))
         #print("Average time for all threads to run: {}".format(i/len(futures)))
