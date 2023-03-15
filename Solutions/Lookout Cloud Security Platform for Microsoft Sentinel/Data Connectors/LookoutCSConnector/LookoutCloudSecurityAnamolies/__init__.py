@@ -13,6 +13,7 @@ from azure.storage.fileshare import ShareClient
 from azure.storage.fileshare import ShareFileClient
 from azure.core.exceptions import ResourceNotFoundError
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from multiprocessing.pool import Pool
 import time
 
 jwt_api_key = os.environ['LookoutClientId']
@@ -31,6 +32,7 @@ pastDays = os.getenv('PastDays',7)
 chunksize = 500
 MaxEventCount = 10000
 token = ""
+threads,results_events,data = [], [], []
 
 
 logging.info("The Past days were taken as {}".format(pastDays))
@@ -193,10 +195,24 @@ class Sentinel:
         else:
             logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
             self.fail_processed = self.fail_processed + chunk_count  
-
+def GetAPIData(num):
+    try:
+        Lookout = LookOut()
+        #global results_events
+        time.sleep(1)
+        logging.info("""thread worker function""")
+        startTime,endTime = Lookout.generate_date()
+        newresults = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
+        #results_events.append([newresults])
+        return list(newresults)
+    except Exception as err:
+      logging.error("Something wrong. Exception error text: {}".format(err))
+      logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
+      raise
 
 def ProcessData(param):
     start_time = time.time()
+    #global results_events
     Lookout = LookOut()
     sentinel = Sentinel()
     sentinel.sharedkey = shared_key
@@ -205,16 +221,25 @@ def ProcessData(param):
     logging.info("The current run Start time {}".format(startTime))
     logging.info("The current run End time {}".format(endTime))
     logging.info('Start: to get Anamolies')
-    results_events = []
-    results_events = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
+    parameters = range(3)
+    apistart = time.time()
+    with Pool(processes=1) as pool:
+        results = pool.map(GetAPIData, parameters)
+        pool.close()
+        pool.join()
+        #results_events.append(results)
+    print("Time took to get the 30k events data in %s",time.time() - apistart)
+    for x in range(len(results)):
+        results_events.extend(results[x])
+    #newdata = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
     logging.info("The number of Anamolies processed {} ".format(len(results_events)))
     logging.info('End: to get Anamolies')
     if(len(results_events)) > 0:
      # Sort the json based on the "timestamp" key
      sorted_data = sorted(results_events, key=lambda x: x["timeStamp"],reverse=False) 
      # Fetch the latest timestamp
-     latest_timestamp = sorted_data[-1]["timeStamp"]
-     logging.info("The latest timestamp {}".format(latest_timestamp))
+     latest_timestamp = sorted_data[-1]["timeStamp"]       
+     logging.info("The latest timestamp {}".format(latest_timestamp)) 
      body = json.dumps(results_events)
      if(len(results_events) <= MaxEventCount):
         logging.debug(body)
@@ -231,8 +256,6 @@ def ProcessData(param):
                                         sentinel_class_vars["fail_processed"]
     logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
         .format(success_processed, fail_processed, startTime, endTime))
-    #logging.info("function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time)))
-    #print("function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time)))
     return "function result for thread: {} and it took --- {} seconds ---" .format(param,(time.time() - start_time))
         #logging.info("Threads executed!")
     #print("Main thread name %s",current_thread().name)
