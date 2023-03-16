@@ -284,8 +284,8 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("Start")
     processes = []
     try:
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(26))]
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(ProcessData, x) for x in list(range(40))]
             processes.append(futures)
         for future in as_completed(futures):
             print(future.result())
