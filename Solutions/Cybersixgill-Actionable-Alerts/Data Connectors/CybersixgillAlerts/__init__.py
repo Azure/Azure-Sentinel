@@ -17,6 +17,7 @@ shared_key = environ['WorkspaceKey']
 connection_string = environ['AzureWebJobsStorage']
 client_id = environ['ClientID']
 client_secret = environ['ClientSecret']
+organization_id = environ['OrganizationID']
 logAnalyticsUri = environ.get('logAnalyticsUri')
 CHANNEL_ID = "cea9a52effad4bc5e905a5a653f5cf9b"
 LAST_X_DAYS = 90
@@ -66,7 +67,8 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("Going in")
     while True:
         actionable_alerts = actionable_alerts_client.get_actionable_alerts_bulk(
-            from_date=from_date_time, limit=PAGE_SIZE, offset=start, sort_order="asc"
+            from_date=from_date_time, limit=PAGE_SIZE, offset=start, sort_order="asc",
+            organization_id=organization_id
         )
         logging.info(f"start={start}, offset={PAGE_SIZE}")
         logging.info(actionable_alerts)
@@ -86,7 +88,7 @@ def main(mytimer: func.TimerRequest) -> None:
                     "user": "",
                 }
             # Sub alerts logic
-            alert_info = actionable_alerts_client.get_actionable_alert(alert_id)
+            alert_info = actionable_alerts_client.get_actionable_alert(alert_id, organization_id=organization_id)
             # Merging assets to a single list 
             if "matched_assets" in alert_info and isinstance(alert_info["matched_assets"], dict):
                 assets = []
