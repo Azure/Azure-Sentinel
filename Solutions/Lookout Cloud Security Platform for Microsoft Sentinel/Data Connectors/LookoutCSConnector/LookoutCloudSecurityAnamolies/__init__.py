@@ -285,7 +285,7 @@ def main(mytimer: func.TimerRequest) -> None:
     processes = []
     try:
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(40))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(30))]
             processes.append(futures)
         for future in as_completed(futures):
             print(future.result())
