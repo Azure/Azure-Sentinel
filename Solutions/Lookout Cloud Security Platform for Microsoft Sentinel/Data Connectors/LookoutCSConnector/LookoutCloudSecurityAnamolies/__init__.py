@@ -277,30 +277,29 @@ def ProcessData(param):
 # this function app is fired based on the Timer trigger
 # it is used to capture all the events from LookOut cloud security API   
 def main(mytimer: func.TimerRequest) -> None:
-    i = 0
-    cpu_num = os.cpu_count()
     utc_timestamp = datetime.utcnow().isoformat()
-    if mytimer.past_due:
-     logging.info('The timer is past due!')
+    cpu_num = os.cpu_count()
+    print("Number of CPUs available: ",cpu_num)
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
     logging.info('Starting program')
-    logging.info('CPU Count %s',cpu_num)
-    logging.info("Start")
+    print("Start")
     processes = []
     try:
         #with ThreadPoolExecutor(max_workers=1) as executor:
             #futures = [executor.submit(ProcessData, x) for x in list(range(1))]
             #processes.append(futures)
         t1 = time.time()
-        with PE(max_workers=cpu_num) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(30))]
-            processes.append(futures)
+        pool = Pool(cpu_num)
+        with pool as executor:
+            results = executor.map(ProcessData, range(50), chunksize=1)
+            processes.append(results)
             t2 = time.time()
-        for future in as_completed(futures):
-            print(future.result())
-            logging.info("{}" .format(future.result()))
-        #print("Average time for all threads to run: {}".format(i/len(futures)))
-        #print(i)
+        pool.close()
+        pool.join()
+        logging.info('Multiprocessing time using map: {}'.format(t2 - t1))
+        for future in processes[0]:
+            logging.info(future)
+            print(future)
         print("End")
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
