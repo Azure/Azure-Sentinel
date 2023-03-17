@@ -1,0 +1,513 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\nThis is a [domain solution](https://nam06.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdocs.microsoft.com%2Fazure%2Fsentinel%2Fsentinel-solutions-catalog%23domain-solutions&data=05%7C01%7Ckavishbakshi%40microsoft.com%7Cbe2a496082b24caa4b8c08da9cefacca%7C72f988bf86f141af91ab2d7cd011db47%7C1%7C0%7C637994850502413731%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=OJegu%2B2EqD7rmYmK9pm9QniD6YWp5ooloZ6tHzcwVi0%3D&reserved=0) and does not include any data connectors. The content in this solution requires one of the product solutions below , as well as any other connector or data source normalized to the [ASIM](https://aka.ms/AboutASIM).\n\n**Prerequisite :-**\n\n Install one or more of the listed solutions, or develop your custom ASIM parsers to unlock the value provided by this solution.\n 1. Windows Server DNS \n 2. Azure Firewall \n 3. Cisco Umbrella \n 4. Corelight Zeek \n 5. Google Cloud Platform DNS \n 6. Infoblox NIOS \n 7. ISC Bind \n 8. Vectra AI \n 9. Zscaler Internet Access \n\n**Underlying Microsoft Technologies used:** \n\nThis solution takes a dependency on the following technologies, and some of these dependencies either may be in Preview state or might result in additional ingestion or operational costs: \n 1. Product solutions as described above \n 2. Logic app for data summarization\n\n**Recommendation :-**\n\nIt is highly recommended to use the **Summarize DNS Data** logic app playbook provided with this solution as it will significantly improve the performance of the Workbook, Analytic rules & Hunting queries.\n\n**Workbooks:** 1, **Analytic Rules:** 9, **Hunting Queries:** 11, **Watchlists:** 2, **Playbooks:** 1\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This Microsoft Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Microsoft Sentinel and combine them into unified interactive experiences."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS Essentials Workbook",
+            "elements": [
+                {
+                    "name": "workbook1-text",
+                    "type": "Microsoft.Common.TextBlock",
+                    "options": {
+                      "text": "This workbook is included as part of DNS Essentials solution and gives a summary of analyzed DNS traffic, helps with threat analysis and investigating suspicious Domains and IPs. DNS Essentials solution also includes playbooks to periodically summarize the logs thus enhancing user experience and improving data search. For the effective usage of workbook, we highly recommend to enable the summarization playbook that is provided with this solution."
+                    }
+                }
+              ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Detect DNS request to known Domain IOCs (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule identifies known Domain IOCs in the [DNS query](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-dns#query) logs. It evaluates DNS logs against 100+ known IOC's from the available Watchlist which helps to detect DNS traffic from any known compromised domains. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule makes use of series decompose anomaly method to generate an alert when client requests excessive amount of DNS queries to non-existent domains. This helps in identifying possible C2 communications. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Detect excessive NXDOMAIN DNS queries - Static threshold based (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule generates an alert when the configured threshold for DNS queries to non-existent domains is breached. This helps in identifying possible C2 communications. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Detect DNS queries reporting multiple errors from different client - Anomaly Based (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule makes use of series decompose anomaly method to generate an alert when multiple client report errors for the same DNS query. This rule montiors DNS traffic over a period of 14 days to detect possible similar C2 communication. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Detect DNS queries reporting multiple errors from different client - Static threshold based (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule creates an alert when multiple client report errors for the same DNS query. This rule monitors DNS traffic to detect  possible similar C2 communication. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Anomaly based (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule makes use of series decompose anomaly method to detect clients with high NXDomain response count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address DNS activity is seen as an outlier after comparing with the baseline which represents repetitive pattern. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule Identifies clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period). It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "Rare client observed with high reverse DNS lookup count - Anomaly based (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule makes use of series decompose anomaly method to Identify clients with a high reverse DNS counts. This helps in detecting possible initial phase of an attack like discovery and reconnaissance. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic9",
+            "type": "Microsoft.Common.Section",
+            "label": "Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "analytic9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule Identifies clients with high reverse DNS counts which could be carrying out reconnaissance or discovery activity. This helps in detecting possible initial phase of an attack like discovery and reconnaissance. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view."
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "[Anomaly] Anomalous Increase in DNS activity by clients (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Checks for anomalous increase in DNS activity per client in last 24hour as compared to last 14 days. Please note- To enhance performance, this query uses summarized data if available."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "Connection to Unpopular Website Detected (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query lists DNS queries not found in top 1 million query list in past 14 days. Please note- To enhance performance, this query uses summarized data if available."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "CVE-2020-1350 (SIGRED) exploitation pattern (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects the exploitation pattern of CVE-2020-1350 (SIGRED) vulnerability. This query utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "Top 25 DNS queries with most failures in last 24 hours (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query searches for DNS queries that resulted in errors. This query utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "Detect DNS request to known Domain IOCs (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule identifies known Domain IOCs (present in watchlist) in the DNS query logs. To tune the query to your environment configure it using the 'DNS_Solution_Domain_IOCs' watchlist."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Top 25 Domains with large number of Subdomains (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Large number of subdomains for a domain may be indicator of suspicious domain. This query lists top 25 Domains with most Subdomains."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery7",
+            "type": "Microsoft.Common.Section",
+            "label": "Increase in DNS Requests by client than the daily average count (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Checking for a threefold increase or more of Full Name lookup per client IP for today vs the daily average for the previous week."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery8",
+            "type": "Microsoft.Common.Section",
+            "label": "Possible DNS Tunneling or Data Exfilteration Activity (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Typical domain name lengths are short whereas domain name query used for data exfiltration or tunneling can often be very large in size. The hunting query looks for DNS queries that are more than 150 characters in length."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery9",
+            "type": "Microsoft.Common.Section",
+            "label": "Potential beaconing activity (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies beaconing patterns from DNS logs based on recurrent frequency patterns. Such potential outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery10",
+            "type": "Microsoft.Common.Section",
+            "label": "Top 25 Sources(Clients) with high number of errors in last 24hours (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query searches for top 25 clients with most number of errors. This query utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery11",
+            "type": "Microsoft.Common.Section",
+            "label": "Unexpected top level domains (ASIM DNS Solution)",
+            "elements": [
+              {
+                "name": "huntingquery11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query looks for Top Level Domains with length greater than 4. This query utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source which supports ASIM DNS schema."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "watchlists",
+        "label": "Watchlists",
+        "subLabel": {
+          "preValidation": "Configure the watchlists",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Watchlists",
+        "elements": [
+          {
+            "name": "watchlists-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "Microsoft Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Microsoft Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Microsoft Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.",
+              "link": {
+                "label": "Learn more",
+                "uri": "https://aka.ms/sentinelwatchlists"
+              }
+            }
+          },
+          {
+            "name": "watchlist1",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS_Solution_Monitoring_Configuration",
+            "elements": [
+              {
+                "name": "watchlist1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Configure the DNS Essentials solution monitoring conditions here. Change rule based or anomaly threshold value to suit your environment"
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist2",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS_Solution_Domain_IOCs",
+            "elements": [
+              {
+                "name": "watchlist2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Contain a list of data feeds for Domain IOCs. Add new or enable/disable existing Domain IOCs to meet your environment needs."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "playbooks",
+        "label": "Playbooks",
+        "subLabel": {
+          "preValidation": "Configure the playbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Playbooks",
+        "elements": [
+          {
+            "name": "playbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the 'Summarize DNS Data' Playbook templates. It is 'highly recommended' to use the 'Summarize DNS data' logic app playbook provided with this solution as it will significantly improve the performance of the Workbook, Analytic rules & Hunting queries. After installing the solution, this will be deployed under Playbook Templates in the Automation blade of Microsoft Sentinel. It can be configured and managed from the Manage solution view in Content Hub. This playbook will create two custom data summarization tables - DNS_Summarized_Logs_ip_CL and DNS_Summarized_Logs_sourceInfo_CL"
+            }
+          },
+          {
+            "name": "playbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}
