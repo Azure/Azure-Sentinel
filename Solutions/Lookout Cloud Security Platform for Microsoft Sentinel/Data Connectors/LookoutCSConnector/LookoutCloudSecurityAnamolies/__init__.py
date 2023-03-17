@@ -13,6 +13,7 @@ from azure.storage.fileshare import ShareClient
 from azure.storage.fileshare import ShareFileClient
 from azure.core.exceptions import ResourceNotFoundError
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor as PE
 from multiprocessing.pool import Pool
 import time
 
@@ -243,6 +244,7 @@ def ProcessToLA(param,results_events):
 
 def ProcessData(param):
     start_time = time.time()
+    cpu_num = os.cpu_count()
     #global results_events
     Lookout = LookOut()
     sentinel = Sentinel()
@@ -254,7 +256,7 @@ def ProcessData(param):
     logging.info('Start: to get Anamolies')
     #parameters = range(3)
     apistart = time.time()
-    with ThreadPoolExecutor(max_workers=1) as executor:
+    with ThreadPoolExecutor(max_workers=cpu_num) as executor:
             #futures = [executor.submit(ProcessData, x) for x in list(range(4))]
             futures = [executor.submit(GetAPIData, x) for x in list(range(1,4))]
         #results_events.append(results)
@@ -276,6 +278,7 @@ def ProcessData(param):
 # it is used to capture all the events from LookOut cloud security API   
 def main(mytimer: func.TimerRequest) -> None:
     i = 0
+    cpu_num = os.cpu_count()
     utc_timestamp = datetime.utcnow().isoformat()
     if mytimer.past_due:
      logging.info('The timer is past due!')
@@ -284,9 +287,14 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("Start")
     processes = []
     try:
-        with ThreadPoolExecutor(max_workers=1) as executor:
+        #with ThreadPoolExecutor(max_workers=1) as executor:
+            #futures = [executor.submit(ProcessData, x) for x in list(range(1))]
+            #processes.append(futures)
+        t1 = time.time()
+        with PE(max_workers=cpu_num) as executor:
             futures = [executor.submit(ProcessData, x) for x in list(range(30))]
             processes.append(futures)
+            t2 = time.time()
         for future in as_completed(futures):
             print(future.result())
             logging.info("{}" .format(future.result()))
