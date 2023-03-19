@@ -13,6 +13,13 @@ namespace Kqlvalidations.Tests
         
         public List<string> GetFilesNames()
         {
+            
+            return GetDirectoryPaths().Aggregate(new List<string>(), (accumulator, directoryPath) =>
+            {
+                var files = Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories).ToList();
+                return accumulator.Concat(files).ToList();
+            });
+
             int prNumber = 7574;// int.Parse(System.Environment.GetEnvironmentVariable("PRNUM"));
             var client = new GitHubClient(new ProductHeaderValue("MyAmazingApp"));
             var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;

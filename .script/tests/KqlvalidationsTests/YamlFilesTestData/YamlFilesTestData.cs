@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -14,6 +15,7 @@ namespace Kqlvalidations.Tests
                 if (!fileNamesToIgnore?.Any(fileNameToIgnore => filePath.EndsWith(fileNameToIgnore)) ?? true)
                 {
                     var fileName = Path.GetFileName(filePath);
+                    Console.WriteLine(fileName);
                     Add(fileName, Utils.EncodeToBase64(filePath));
                 }
             });
