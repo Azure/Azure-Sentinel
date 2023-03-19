@@ -1,7 +1,7 @@
-id: 25c86f99-0a91-4b7f-88f3-599a008e5ab8
-name: API - Account Takeover
+id: 2c59e609-e0a0-4e8e-adc5-ab4224be8a36
+name: API - Anomaly Detection
 description: |
-  '42Crunch API protection against account takeover'
+  '42Crunch API protection anomaly detection'
 severity: Low
 requiredDataConnectors:
   - connectorId: 42CrunchAPIProtection
@@ -15,18 +15,19 @@ eventGroupingSettings:
   aggregationKind: SingleAlert
 status: Available
 tactics:
-  - CredentialAccess
-  - Discovery
+  - DefenseEvasion
 relevantTechniques:
-  - T1110
-  - T1087
 query: |
-  let firstRec = apifirewall_log_1_CL 
+  let infoRec = apifirewall_log_1_CL
   | where TimeGenerated >= ago(5m) 
   | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
-  | where Instance_Name_s == "Instance_1" and (URI_Path_s has "/api/register" or URI_Path_s has "/api/reset") and Status_d == 403;
-  let recCount = iff((toscalar(firstRec | count) >= 20), 1, 0);
-  firstRec | take recCount
+  | where Instance_Name_s == "Instance_4" and URI_Path_s has "/api/users/info" and Status_d == 200;
+  let timestamp = toscalar(infoRec | top 1 by Timestamp_t desc | summarize by Timestamp_t);
+  let activityRec = apifirewall_log_1_CL
+    | where Timestamp_t < timestamp and TimeGenerated >= ago(5m)
+    | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+    | where Instance_Name_s == "Instance_4" and URI_Path_s has "/api/users/activity" and Status_d == 200;
+  activityRec
 customDetails:
 entityMappings:
   - entityType: IP
