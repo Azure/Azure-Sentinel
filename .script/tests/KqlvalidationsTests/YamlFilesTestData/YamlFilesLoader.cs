@@ -1,5 +1,4 @@
 ﻿using Octokit;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -20,16 +19,9 @@ namespace Kqlvalidations.Tests
             var prFilesListModified = new List<string>();
             foreach (var file in prFiles)
             {
-                var modifiedFile = file.FileName.Replace("/", "\\"); 
-                string rootDirectory = Environment.GetEnvironmentVariable("ROOT_DIRECTORY");
-                if (string.IsNullOrEmpty(rootDirectory))
-                {
-                    Console.WriteLine("Error: ROOT_DIRECTORY environment variable is not set.");
-                    return null;
-                }
-                Console.WriteLine($"{rootDirectory} {modifiedFile}");
-                modifiedFile = Path.Combine(rootDirectory, "Azure Sentinel", modifiedFile);
-                prFilesListModified.Add(modifiedFile);
+                var modifiedFile = "/home/vsts/work/1/s/" + file.FileName;
+                //var modifiedFile = "C:\\Azure Sentinel\\" + file.FileName;
+                prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
             }
 
             return GetDirectoryPaths()
