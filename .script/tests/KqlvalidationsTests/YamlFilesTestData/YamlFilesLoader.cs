@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using Octokit;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -12,7 +13,7 @@ namespace Kqlvalidations.Tests
         
         public List<string> GetFilesNames()
         {
-            var prNumber = int.Parse(System.Environment.GetEnvironmentVariable("PRNUM"));
+            int prNumber = int.Parse(System.Environment.GetEnvironmentVariable("PRNUM"));
             var client = new GitHubClient(new ProductHeaderValue("MyAmazingApp"));
             var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
             var prFilesListModified = new List<string>();
