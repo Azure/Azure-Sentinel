@@ -10,7 +10,7 @@ namespace Kqlvalidations.Tests
     {
         protected override List<string> GetDirectoryPaths()
         {
-            Console.WriteLine("PR number printed "+Environment.GetEnvironmentVariable("PRNumber"));
+            Console.WriteLine("PR number printed "+Environment.GetEnvironmentVariable("FOO"));
             var basePath = Utils.GetTestDirectory(TestFolderDepth);
             var detectionsDir = new List<string> { Path.Combine(basePath, "Hunting Queries") };
             var solutionDirectories = Path.Combine(basePath, "Solutions");
