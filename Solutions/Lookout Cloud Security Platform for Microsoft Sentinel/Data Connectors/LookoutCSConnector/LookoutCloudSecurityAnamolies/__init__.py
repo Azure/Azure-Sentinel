@@ -256,11 +256,14 @@ def ProcessData(param):
     logging.info('Start: to get Anamolies')
     #parameters = range(3)
     apistart = time.time()
-    with ThreadPoolExecutor(max_workers=cpu_num) as executor:
+    #with ThreadPoolExecutor(max_workers=cpu_num) as executor:
             #futures = [executor.submit(ProcessData, x) for x in list(range(4))]
-            futures = [executor.submit(GetAPIData, x) for x in list(range(1,4))]
+            #futures = [executor.submit(GetAPIData, x) for x in list(range(1,4))]
+    with ThreadPoolExecutor(cpu_num*2) as pool:
+      futures = [x for x in pool.map(GetAPIData, range(1,4))]
+      logging.info(time.time() - apistart)
         #results_events.append(results)
-    print("Time took to get the 30k events data in %s",time.time() - apistart)
+    logging.info("Time took to get the 30k events data in %s",time.time() - apistart)
     #for future in as_completed(futures):
         #print(sum(future.result()))
     #for x in range(len(results)):
@@ -285,21 +288,21 @@ def main(mytimer: func.TimerRequest) -> None:
     print("Start")
     processes = []
     try:
-        #with ThreadPoolExecutor(max_workers=1) as executor:
-            #futures = [executor.submit(ProcessData, x) for x in list(range(1))]
-            #processes.append(futures)
-        t1 = time.time()
-        pool = Pool(cpu_num)
-        with pool as executor:
-            results = executor.map(ProcessData, range(50), chunksize=1)
-            processes.append(results)
-            t2 = time.time()
-        pool.close()
-        pool.join()
-        logging.info('Multiprocessing time using map: {}'.format(t2 - t1))
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            futures = [executor.submit(ProcessData, x) for x in list(range(100))]
+            processes.append(futures)
+        #t1 = time.time()
+        #pool = Pool(cpu_num)
+        #with pool as executor:
+            #results = executor.map(ProcessData, range(50), chunksize=1)
+            #processes.append(results)
+            #t2 = time.time()
+        #pool.close()
+        #pool.join()
+        #logging.info('Multiprocessing time using map: {}'.format(t2 - t1))
         for future in processes[0]:
-            logging.info(future)
-            print(future)
+            logging.info(future.result())
+            print(future.result())
         print("End")
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
