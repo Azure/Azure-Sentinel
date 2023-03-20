@@ -300,6 +300,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 print('Could not set affinity')
         n = max(len(os.sched_getaffinity(0)), 96)
         print('Using', n, 'processes for the pool')
+        logging.info('Using', n, 'processes for the pool')
         t1 = time.time()
         pool = mp.Pool(n)
         with pool as executor:
