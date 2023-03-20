@@ -164,7 +164,7 @@ def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> It
                     response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
             
             if(response is not None): 
-                events = res['authlogs']
+                events = response['authlogs']
                 logging.info('Obtained {} auth events'.format(len(events)))
 
                 for event in events:
