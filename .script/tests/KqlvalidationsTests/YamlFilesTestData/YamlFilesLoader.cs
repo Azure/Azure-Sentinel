@@ -1,4 +1,5 @@
 ﻿using Octokit;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,6 +23,7 @@ namespace Kqlvalidations.Tests
             {
                 var modifiedFile = Path.Combine(basePath, file.FileName);
                 prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
+                Console.WriteLine(modifiedFile.Replace("/", "\\"));
             }
 
             return GetDirectoryPaths()
