@@ -64,6 +64,11 @@
     "_huntingQuerycontentId1": "[variables('huntingQuerycontentId1')]",
     "huntingQueryId1": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('_huntingQuerycontentId1'))]",
     "huntingQueryTemplateSpecName1": "[concat(parameters('workspace'),'-hq-',uniquestring(variables('_huntingQuerycontentId1')))]",
+    "huntingQueryVersion2": "1.0.2",
+    "huntingQuerycontentId2": "2f8522fc-7807-4f0a-b53d-458296edab8d",
+    "_huntingQuerycontentId2": "[variables('huntingQuerycontentId2')]",
+    "huntingQueryId2": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('_huntingQuerycontentId2'))]",
+    "huntingQueryTemplateSpecName2": "[concat(parameters('workspace'),'-hq-',uniquestring(variables('_huntingQuerycontentId2')))]",
     "workbookVersion1": "1.2.0",
     "workbookContentId1": "PaloAltoOverviewWorkbook",
     "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
@@ -613,6 +618,98 @@
     {
       "type": "Microsoft.Resources/templateSpecs",
       "apiVersion": "2021-05-01",
+      "name": "[variables('huntingQueryTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "HuntingQuery"
+      },
+      "properties": {
+        "description": "PaloAlto-PAN-OS Hunting Query 2 with template",
+        "displayName": "PaloAlto-PAN-OS Hunting Query template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('huntingQueryTemplateSpecName2'),'/',variables('huntingQueryVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "HuntingQuery"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName2'))]"
+      ],
+      "properties": {
+        "description": "Palo Alto - potential beaconing detected_HuntingQueries Hunting Query with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryVersion2')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2020-08-01",
+              "name": "PaloAlto-PAN-OS_Hunting_Query_2",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Palo Alto - potential beaconing detected",
+                "category": "Hunting Queries",
+                "query": "let starttime = 2d;\nlet endtime = 1d;\nlet TimeDeltaThreshold = 25;\nlet TotalEventsThreshold = 30;\nlet MostFrequentTimeDeltaThreshold = 25;\nlet PercentBeaconThreshold = 80;\nCommonSecurityLog\n| where DeviceVendor == \"Palo Alto Networks\" and Activity == \"TRAFFIC\"\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where ipv4_is_private(DestinationIP)== false\n| project TimeGenerated, DeviceName, SourceUserID, SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes\n| sort by SourceIP asc,TimeGenerated asc, DestinationIP asc, DestinationPort asc\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(SourceIP, 1)\n| extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated)\n| where SourceIP == nextSourceIP\n//Whitelisting criteria/ threshold criteria\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| summarize count(), sum(ReceivedBytes), sum(SentBytes)\nby TimeDeltainSeconds, bin(TimeGenerated, 1h), DeviceName, SourceUserID, SourceIP, DestinationIP, DestinationPort\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SentBytes), TotalReceivedBytes = sum(sum_ReceivedBytes)\nby bin(TimeGenerated, 1h), DeviceName, SourceUserID, SourceIP, DestinationIP, DestinationPort\n| where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP, AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Identifies beaconing patterns from Palo Alto Network traffic logs based on recurrent timedelta patterns.\nThe query leverages various KQL functions to calculate time deltas and then compares it with total events observed in a day to find percentage of beaconing.\nThis outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.\nReference Blog:\nhttp://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/\nhttps://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/detect-network-beaconing-via-intra-request-time-delta-patterns/ba-p/779586"
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "CommandAndControl"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1071,T1571"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(variables('huntingQueryId2'),'/'))))]",
+              "properties": {
+                "description": "PaloAlto-PAN-OS Hunting Query 2",
+                "parentId": "[variables('huntingQueryId2')]",
+                "contentId": "[variables('_huntingQuerycontentId2')]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "PaloAlto-PAN-OS",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
       "name": "[variables('workbookTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -855,10 +952,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -873,13 +970,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SourceIP"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -970,10 +1067,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -981,34 +1078,33 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "AccountCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "HostCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "FileHash",
                     "fieldMappings": [
                       {
                         "identifier": "Value",
@@ -1018,7 +1114,8 @@
                         "identifier": "Algorithm",
                         "columnName": "FileHashType"
                       }
-                    ]
+                    ],
+                    "entityType": "FileHash"
                   }
                 ]
               }
@@ -1109,10 +1206,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1124,31 +1221,31 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "AccountCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "HostCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1239,10 +1336,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "PaloAltoNetworks",
                     "dataTypes": [
                       "CommonSecurityLog"
-                    ],
-                    "connectorId": "PaloAltoNetworks"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1253,31 +1350,31 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "AccountCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "HostCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3524,7 +3621,7 @@
           ],
           "metadata": {
             "comments": "This PaloAlto custom connector uses PAN-OS API to perform different actions on the PAN-OS VM",
-            "lastUpdateTime": "2023-03-17T19:37:48.864Z",
+            "lastUpdateTime": "2023-03-20T13:16:46.704Z",
             "releaseNotes": {
               "version": "1.0",
               "title": "[variables('blanks')]",
@@ -3760,7 +3857,7 @@
           ],
           "metadata": {
             "comments": "This PaloAlto custom connector uses PAN-OS API to perform different actions on the PAN-OS VM",
-            "lastUpdateTime": "2023-03-17T19:37:48.916Z",
+            "lastUpdateTime": "2023-03-20T13:16:46.734Z",
             "releaseNotes": {
               "version": "1.0",
               "title": "[variables('blanks')]",
@@ -9426,6 +9523,11 @@
               "kind": "HuntingQuery",
               "contentId": "[variables('_huntingQuerycontentId1')]",
               "version": "[variables('huntingQueryVersion1')]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('_huntingQuerycontentId2')]",
+              "version": "[variables('huntingQueryVersion2')]"
             },
             {
               "kind": "Workbook",
