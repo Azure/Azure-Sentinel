@@ -15,6 +15,7 @@ from azure.core.exceptions import ResourceNotFoundError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import ProcessPoolExecutor as PE
 from multiprocessing.pool import Pool
+import multiprocessing as mp
 import time
 
 jwt_api_key = os.environ['LookoutClientId']
@@ -288,18 +289,26 @@ def main(mytimer: func.TimerRequest) -> None:
     print("Start")
     processes = []
     try:
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(100))]
-            processes.append(futures)
-        #t1 = time.time()
-        #pool = Pool(cpu_num)
-        #with pool as executor:
-            #results = executor.map(ProcessData, range(50), chunksize=1)
-            #processes.append(results)
-            #t2 = time.time()
-        #pool.close()
-        #pool.join()
-        #logging.info('Multiprocessing time using map: {}'.format(t2 - t1))
+        #with ThreadPoolExecutor(max_workers=1) as executor:
+            #futures = [executor.submit(ProcessData, x) for x in list(range(100))]
+            #processes.append(futures)
+        cpu_count = mp.cpu_count() 
+        if len(os.sched_getaffinity(0)) < cpu_count:
+            try:
+                os.sched_setaffinity(0, range(cpu_count))
+            except OSError:
+                print('Could not set affinity')
+        n = max(len(os.sched_getaffinity(0)), 96)
+        print('Using', n, 'processes for the pool')
+        t1 = time.time()
+        pool = mp.Pool(n)
+        with pool as executor:
+            results = executor.map(ProcessData, range(100), chunksize=1)
+            processes.append(results)
+            t2 = time.time()
+        pool.close()
+        pool.join()
+        print(f'Multiprocessing time using map: {t2 - t1}, chunksize: {chunksize}', results[-1])
         for future in processes[0]:
             logging.info(future.result())
             print(future.result())
