@@ -302,7 +302,7 @@ def main(mytimer: func.TimerRequest) -> None:
         #print('Using', n, 'processes for the pool')
         logging.info("Using {} processes for the pool" .format(n))
         t1 = time.time()
-        pool = Pool(cpu_count)
+        pool = Pool(n)
         with pool as executor:
             results = executor.map(ProcessData, range(100), chunksize=1)
             processes.append(results)
