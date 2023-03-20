@@ -299,8 +299,8 @@ def main(mytimer: func.TimerRequest) -> None:
             except OSError:
                 print('Could not set affinity')
         n = max(len(os.sched_getaffinity(0)), 96)
-        print('Using', n, 'processes for the pool')
-        logging.info('Using', n, 'processes for the pool')
+        #print('Using', n, 'processes for the pool')
+        logging.info("Using {} processes for the pool" .format(n))
         t1 = time.time()
         pool = Pool(cpu_count)
         with pool as executor:
