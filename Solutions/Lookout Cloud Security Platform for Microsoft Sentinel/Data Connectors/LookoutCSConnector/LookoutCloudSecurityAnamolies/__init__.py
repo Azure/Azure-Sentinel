@@ -255,14 +255,15 @@ def ProcessData(param):
     logging.info("The current run Start time {}".format(startTime))
     logging.info("The current run End time {}".format(endTime))
     logging.info('Start: to get Anamolies')
+    processes = []
     #parameters = range(3)
     apistart = time.time()
     #with ThreadPoolExecutor(max_workers=cpu_num) as executor:
             #futures = [executor.submit(ProcessData, x) for x in list(range(4))]
             #futures = [executor.submit(GetAPIData, x) for x in list(range(1,4))]
-    with ThreadPoolExecutor(cpu_num*2) as pool:
-      futures = [x for x in pool.map(GetAPIData, range(1,4))]
-      logging.info(time.time() - apistart)
+    with ThreadPoolExecutor(cpu_num-1) as process_pool_executor:
+        futures = [process_pool_executor.submit(GetAPIData, x) for x in list(range(1,4))]
+        processes.append(futures)
         #results_events.append(results)
     logging.info("Time took to get the 30k events data in %s",time.time() - apistart)
     #for future in as_completed(futures):
@@ -293,23 +294,20 @@ def main(mytimer: func.TimerRequest) -> None:
             #futures = [executor.submit(ProcessData, x) for x in list(range(100))]
             #processes.append(futures)
         cpu_count = mp.cpu_count() 
-        if len(os.sched_getaffinity(0)) < cpu_count:
-            try:
-                os.sched_setaffinity(0, range(cpu_count))
-            except OSError:
-                print('Could not set affinity')
-        n = max(len(os.sched_getaffinity(0)), 96)
-        #print('Using', n, 'processes for the pool')
-        logging.info("Using {} processes for the pool" .format(n))
+
         t1 = time.time()
-        pool = Pool(n)
-        with pool as executor:
-            results = executor.map(ProcessData, range(100), chunksize=1)
-            processes.append(results)
-            t2 = time.time()
-        pool.close()
-        pool.join()
-        print(f'Multiprocessing time using map: {t2 - t1}, chunksize: {chunksize}', results[-1])
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = [executor.submit(ProcessData, x) for x in list(range(100))]
+            processes.append(futures)
+
+        #pool = Pool(n)
+        #with pool as executor:
+            #results = executor.map(ProcessData, range(100), chunksize=1)
+            #processes.append(results)
+            #t2 = time.time()
+        #pool.close()
+        #pool.join()
+        #print(f'Multiprocessing time using map: {t2 - t1}, chunksize: {chunksize}', results[-1])
         for future in processes[0]:
             logging.info(future.result())
             print(future.result())
