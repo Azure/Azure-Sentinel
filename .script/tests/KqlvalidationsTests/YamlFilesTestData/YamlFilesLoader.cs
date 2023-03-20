@@ -14,12 +14,12 @@ namespace Kqlvalidations.Tests
         
         public List<string> GetFilesNames()
         {
-            var directoryPaths = GetDirectoryPaths();
-            return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
-            {
-                var files = Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories).ToList();
-                return accumulator.Concat(files).ToList();
-            });
+            //var directoryPaths = GetDirectoryPaths();
+            //return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
+            //{
+            //    var files = Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories).ToList();
+            //    return accumulator.Concat(files).ToList();
+            //});
 
             int prNumber = int.Parse(System.Environment.GetEnvironmentVariable("PRNUM"));
             var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
@@ -29,8 +29,9 @@ namespace Kqlvalidations.Tests
             foreach (var file in prFiles)
             {
                 var modifiedFile = Path.Combine(basePath, file.FileName);
-                prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
-                Console.WriteLine(modifiedFile.Replace("/", "\\"));
+                prFilesListModified.Add(modifiedFile);
+                //prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
+                
             }
 
             return GetDirectoryPaths()
