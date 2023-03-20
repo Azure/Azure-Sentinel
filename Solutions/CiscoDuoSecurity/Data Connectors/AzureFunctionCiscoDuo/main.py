@@ -212,7 +212,7 @@ def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
             time.sleep(60)
             events = admin_api.get_administrator_log(mintime)
 
-    if(event is not None):
+    if(events is not None):
         logging.info('Obtained {} admin events'.format(len(events)))
         for event in events:
             mintime = event['timestamp']
