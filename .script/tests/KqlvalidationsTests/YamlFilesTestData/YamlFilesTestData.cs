@@ -15,7 +15,7 @@ namespace Kqlvalidations.Tests
                 if (!fileNamesToIgnore?.Any(fileNameToIgnore => filePath.EndsWith(fileNameToIgnore)) ?? true)
                 {
                     var fileName = Path.GetFileName(filePath);
-                    Console.WriteLine(fileName);
+                    Console.WriteLine(filePath);
                     Add(fileName, Utils.EncodeToBase64(filePath));
                 }
             });
