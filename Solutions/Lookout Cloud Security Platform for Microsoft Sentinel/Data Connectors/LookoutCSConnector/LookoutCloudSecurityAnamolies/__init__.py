@@ -277,7 +277,7 @@ def ProcessData(param):
     apistart = time.time()
     processes = []
     with ThreadPoolExecutor(cpu_num-1) as process_pool_executor:
-        futures = [process_pool_executor.submit(ProcessApiLA, x) for x in list(range(1,2))]
+        futures = [process_pool_executor.submit(ProcessApiLA, param) for x in list(range(1,2))]
         #processes.append(futures)
 
     #with mp.Pool(cpu_num*2) as pool:
@@ -319,7 +319,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
         t1 = time.time()
         with ThreadPoolExecutor(max_workers=None) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(50))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(100))]
             processes.append(futures)
 
         #pool = Pool(n)
