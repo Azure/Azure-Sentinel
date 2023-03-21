@@ -14,14 +14,7 @@ namespace Kqlvalidations.Tests
         
         public List<string> GetFilesNames()
         {
-            //var directoryPaths = GetDirectoryPaths();
-            //return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
-            //{
-            //    var files = Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories).ToList();
-            //    return accumulator.Concat(files).ToList();
-            //});
-
-            int prNumber = int.Parse(System.Environment.GetEnvironmentVariable("PRNUM"));
+            int prNumber = 7574;//int.Parse(System.Environment.GetEnvironmentVariable("PRNUM"));
             var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
             var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
             var prFilesListModified = new List<string>();
@@ -29,8 +22,8 @@ namespace Kqlvalidations.Tests
             foreach (var file in prFiles)
             {
                 var modifiedFile = Path.Combine(basePath, file.FileName);
-                prFilesListModified.Add(modifiedFile);
-                //prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
+                //prFilesListModified.Add(modifiedFile);
+                prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
                 
             }
 
