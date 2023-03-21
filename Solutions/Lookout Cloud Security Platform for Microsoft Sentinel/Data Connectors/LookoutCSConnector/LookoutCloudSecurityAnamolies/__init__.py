@@ -276,7 +276,7 @@ def ProcessData(param):
     parameters = range(3)
     apistart = time.time()
     processes = []
-    with ThreadPoolExecutor(cpu_num-1) as process_pool_executor:
+    with ThreadPoolExecutor(cpu_num) as process_pool_executor:
         futures = [process_pool_executor.submit(ProcessApiLA, param) for x in list(range(1,2))]
         #processes.append(futures)
 
