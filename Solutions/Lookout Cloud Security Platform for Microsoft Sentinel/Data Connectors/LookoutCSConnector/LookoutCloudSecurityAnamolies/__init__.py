@@ -319,7 +319,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
         t1 = time.time()
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(50))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(40))]
             processes.append(futures)
 
         #pool = Pool(n)
