@@ -318,7 +318,7 @@ def main(mytimer: func.TimerRequest) -> None:
         cpu_count = mp.cpu_count() 
 
         t1 = time.time()
-        with ThreadPoolExecutor(max_workers=None) as executor:
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = [executor.submit(ProcessData, x) for x in list(range(50))]
             processes.append(futures)
 
