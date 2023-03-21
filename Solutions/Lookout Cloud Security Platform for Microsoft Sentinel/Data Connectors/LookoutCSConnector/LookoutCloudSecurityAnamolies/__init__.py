@@ -217,7 +217,7 @@ def ProcessApiLA(param):
     try:
         startapitime = time.time()
         results = GetAPIData(param)
-        print("Api time took to get the {}k events data in {} seconds".format(len(results),time.time() - startapitime))
+        logging.info("Api time took to get the {}k events data in {} seconds".format(len(results),time.time() - startapitime))
         apitime = time.time() -startapitime
         startlatime = time.time()
         ProcessToLA(param,results)
