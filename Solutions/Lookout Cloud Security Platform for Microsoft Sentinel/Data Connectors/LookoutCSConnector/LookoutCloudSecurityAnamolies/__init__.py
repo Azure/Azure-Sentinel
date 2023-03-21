@@ -31,7 +31,7 @@ table_name = "LookoutCloudSecurity"
 Schedule = os.environ['Schedule']
 fetchDelay = os.getenv('FetchDelay',5)
 pastDays = os.getenv('PastDays',7)
-chunksize = 500
+chunksize = 20000
 MaxEventCount = 10000
 token = ""
 threads,results_events,data = [], [], []
@@ -206,11 +206,27 @@ def GetAPIData(num):
         startTime,endTime = Lookout.generate_date()
         newresults = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
         #results_events.append([newresults])
-        ProcessToLA(num,newresults)
+        #ProcessToLA(num,newresults)
         return list(newresults)
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
+      raise
+
+def ProcessApiLA(param):
+    try:
+        startapitime = time.time()
+        results = GetAPIData(param)
+        print("Api time took to get the {}k events data in {} seconds".format(len(results),time.time() - startapitime))
+        apitime = time.time() -startapitime
+        startlatime = time.time()
+        ProcessToLA(param,results)
+        latime = time.time() -startlatime
+        logging.info("Data to send it to LA for {}k events took {} seconds".format(len(results),time.time() - startlatime))
+        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and Total time it took to process {}" .format(param,apitime,len(results),latime,apitime + latime)
+    except Exception as err:
+      logging.error("Something wrong. Exception error text: {}".format(err))
+      #logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
       raise
 
 def ProcessToLA(param,results_events):
@@ -244,7 +260,9 @@ def ProcessToLA(param,results_events):
         .format(success_processed, fail_processed, start_time, time.time()))
 
 def ProcessData(param):
+    #import concurrent.futures as cf
     start_time = time.time()
+    MAX_THREADS = 2
     cpu_num = os.cpu_count()
     #global results_events
     Lookout = LookOut()
@@ -255,17 +273,20 @@ def ProcessData(param):
     logging.info("The current run Start time {}".format(startTime))
     logging.info("The current run End time {}".format(endTime))
     logging.info('Start: to get Anamolies')
-    processes = []
-    #parameters = range(3)
+    parameters = range(3)
     apistart = time.time()
-    #with ThreadPoolExecutor(max_workers=cpu_num) as executor:
-            #futures = [executor.submit(ProcessData, x) for x in list(range(4))]
-            #futures = [executor.submit(GetAPIData, x) for x in list(range(1,4))]
+    processes = []
     with ThreadPoolExecutor(cpu_num-1) as process_pool_executor:
-        futures = [process_pool_executor.submit(GetAPIData, x) for x in list(range(1,4))]
-        processes.append(futures)
+        futures = [process_pool_executor.submit(ProcessApiLA, x) for x in list(range(1,2))]
+        #processes.append(futures)
+
+    #with mp.Pool(cpu_num*2) as pool:
+      #futures = [x for x in pool.map(GetAPIData, range(1,4))]
+      #print(time.time() - apistart)
         #results_events.append(results)
-    logging.info("Time took to get the 30k events data in %s",time.time() - apistart)
+    #print("Time took to get the 30k events data in %s",time.time() - apistart)
+    for future in as_completed(futures):
+        processes.append(future.result())
     #for future in as_completed(futures):
         #print(sum(future.result()))
     #for x in range(len(results)):
@@ -275,7 +296,8 @@ def ProcessData(param):
         #logging.info("Threads executed!")
     #print("Main thread name %s",current_thread().name)
     #time.sleep(0.5)
-    return "function result for thread: {} and it took --- {} seconds --- to send --- {} events" .format(param,(time.time() - start_time), "30k" if len(futures) == 3 else "<30k")
+    #"function result for thread: {} and it took --- {} seconds --- to send --- {} events" .format(param,(time.time() - start_time), "30k" if len(futures) == 3 else "<30k")
+    return processes
         #logging.info("Threads executed!")
     #print("Main thread name %s",current_thread().name)
 
@@ -297,7 +319,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
         t1 = time.time()
         with ThreadPoolExecutor(max_workers=None) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(100))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(50))]
             processes.append(futures)
 
         #pool = Pool(n)
