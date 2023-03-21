@@ -37,11 +37,20 @@ query: |
   | mv-expand TargetResources
   | extend modifiedProperties = parse_json(TargetResources).modifiedProperties
   | mv-expand modifiedProperties
-  | extend targetDisplayName = tostring(parse_json(modifiedProperties).displayName), NewDomainValue=tostring(parse_json(modifiedProperties).newValue)
+  | mv-apply Property = modifiedProperties on 
+    (
+        where Property.displayName =~ "LiveType"
+        | extend targetDisplayName = tostring(Property.displayName),
+                 NewDomainValue = tostring(Property.newValue)
+    )
   | where NewDomainValue has "Federated"
   )
   )
-  | extend UserAgent = iff(AdditionalDetails.key == "User-Agent",tostring(AdditionalDetails.value),"")
+  | mv-apply AdditionalDetail = AdditionalDetails on 
+    (
+        where AdditionalDetail.key =~ "User-Agent"
+        | extend UserAgent = tostring(AdditionalDetail.value)
+    )
   | extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
   | extend InitiatingIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
   | project-reorder TimeGenerated, OperationName, InitiatingUserOrApp, AADOperationType, targetDisplayName, Result, InitiatingIpAddress, UserAgent, CorrelationId, TenantId, AADTenantId
