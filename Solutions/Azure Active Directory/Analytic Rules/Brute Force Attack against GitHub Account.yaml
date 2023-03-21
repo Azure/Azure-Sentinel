@@ -32,19 +32,11 @@ query: |
   | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime)) 
   | where AppDisplayName =~ "GitHub.com"
   | where ResultType != 0
-  | summarize FailedLoginsCountInBinTime = count() by UserPrincipalName, bin(TimeGenerated, BinTime), Type    
-  | summarize ListOfCount = make_list(FailedLoginsCountInBinTime,10000), 
-              TimeStamp = make_list(TimeGenerated,1000) by UserPrincipalName, Type              
-  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(ListOfCount, sensitivity, -1, 'linefit')
-  | mv-expand ListOfCount to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)  
+  | make-series FailedLogins = count() on TimeGenerated from ago(LearningPeriod) to ago(EndRunTime) step BinTime by UserPrincipalName, Type
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(FailedLogins, sensitivity, -1, 'linefit')
+  | mv-expand FailedLogins to typeof(double), TimeGenerated to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)  
+  | where TimeGenerated >= ago(RunTime)
   | where Anomalies > 0
-  | join kind=innerunique ( 
-    table(tableName) 
-    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime)) 
-    | where AppDisplayName =~ "GitHub.com"
-    | where ResultType != 0 
-    | summarize FailedLoginsCountInRunTime = count() by User = Identity, UserPrincipalName, bin(TimeGenerated, BinTime), Type
-  ) on UserPrincipalName 
   | extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
   };
   let aadSignin = aadFunc("SigninLogs");
