@@ -494,7 +494,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
 
                         $fileName = Split-path -Parent $file | Split-Path -leaf
-						if($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger")
+						if($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger" -or $fileName.ToLower() -eq "entity-trigger")
 						{ 
 						$parentPath = Split-Path $file -Parent; $fileName = (Split-Path $parentPath -Parent | Split-Path -leaf) + "-" + $fileName; 
 						}
