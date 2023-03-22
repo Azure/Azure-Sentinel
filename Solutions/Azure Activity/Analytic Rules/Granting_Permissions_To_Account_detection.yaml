@@ -1,7 +1,7 @@
 id: b2c15736-b9eb-4dae-8b02-3016b6a45a32
 name: Suspicious granting of permissions to an account
 description: |
-  'Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.'
+  'Identifies IPs from which users grant access to other users on Azure resources and alerts when a previously unseen source IP address is used.'
 severity: Medium
 status: Available 
 requiredDataConnectors:
@@ -24,7 +24,7 @@ relevantTechniques:
 query: |
   let starttime = 14d;
   let endtime = 1d;
-  // The number of operations below which an IP address is considered an unusual source of role assignment operations
+  // The number of operations above which an IP address is considered an unusual source of role assignment operations
   let alertOperationThreshold = 5;
   let AzureBuiltInRole = externaldata(Role:string,RoleDescription:string,ID:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/AzureBuiltInRole.csv"] with (format="csv", ignoreFirstRecord=True);
   let createRoleAssignmentActivity = AzureActivity
@@ -33,37 +33,45 @@ query: |
   | where TimeGenerated between (ago(starttime) .. ago(endtime))
   | summarize count() by CallerIpAddress, Caller
   | where count_ >= alertOperationThreshold
+  // Returns all the records from the right side that don't have matches from the left.
   | join kind = rightanti ( 
   createRoleAssignmentActivity
   | where TimeGenerated > ago(endtime)
-  | extend PrincipalId = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalId)
-  | extend PrincipalType = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalType)
-  | extend Scope = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).Scope)
-  | extend RoleAddedDetails = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).requestbody)).Properties)).RoleDefinitionId) 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), 
-  OperationIds = make_set(OperationId), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  
+  | extend PrincipalId = tostring(iff(Properties_d has_cs 'PrincipalId',parse_json(tostring(parse_json(Properties_d).requestbody)).Properties.PrincipalId,parse_json(tostring(parse_json(Properties_d).requestbody)).properties.principalId))
+  | extend PrincipalType = tostring(iff(Properties_d has_cs 'PrincipalType',parse_json(tostring(parse_json(Properties_d).requestbody)).Properties.PrincipalType,parse_json(tostring(parse_json(Properties_d).requestbody)).properties.principalType))
+  | extend Scope = tostring(iff(Properties_d has_cs 'Scope',parse_json(tostring(parse_json(Properties_d).requestbody)).Properties.Scope,parse_json(tostring(parse_json(Properties_d).requestbody)).properties.scope))
+  | extend RoleAddedDetails = tostring(iff(Properties_d has_cs 'RoleDefinitionId',parse_json(tostring(parse_json(Properties_d).requestbody)).Properties.RoleDefinitionId,parse_json(tostring(parse_json(Properties_d).requestbody)).properties.roleDefinitionId))
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  
   by ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup, PrincipalId, PrincipalType, Scope, RoleAddedDetails
   ) on CallerIpAddress, Caller
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress;
   let RoleAssignedActivitywithRoleDetails = RoleAssignedActivity
   | extend RoleAssignedID = tostring(split(RoleAddedDetails, "/")[-1])
+  // Returns all matching records from left and right sides.
   | join kind = inner (AzureBuiltInRole 
   ) on $left.RoleAssignedID == $right.ID;
-  RoleAssignedActivitywithRoleDetails
+  let CountbyCallernIP = RoleAssignedActivitywithRoleDetails | summarize AssignmentCountbyCaller = count() by Caller, CallerIpAddress;
+  let RoleAssignedActivityWithCount = RoleAssignedActivitywithRoleDetails | join kind = inner (CountbyCallernIP | project Caller, AssignmentCountbyCaller) on Caller;
+  RoleAssignedActivityWithCount
   | summarize arg_max(StartTimeUtc, *) by PrincipalId, RoleAssignedID
+  // 	Returns all the records from the left side and only matching records from the right side.
   | join kind = leftouter( IdentityInfo
   | summarize arg_max(TimeGenerated, *) by AccountObjectId
   ) on $left.PrincipalId == $right.AccountObjectId
-  | project ActivityTimeStamp, OperationNameValue, Caller, CallerIpAddress, PrincipalId, RoleAssignedID, RoleAddedDetails, Role, RoleDescription, AccountUPN, AccountCreationTime, GroupMembership, UserType, ActivityStatusValue, 
-  ResourceGroup, PrincipalType, Scope, CorrelationId, timestamp, AccountCustomEntity, IPCustomEntity
+  // Check if assignment count is greater than the threshold.
+  | where AssignmentCountbyCaller >= alertOperationThreshold
+  | project ActivityTimeStamp, OperationNameValue, Caller, CallerIpAddress, PrincipalId, RoleAssignedID, RoleAddedDetails, Role, RoleDescription, AccountUPN, AccountCreationTime, GroupMembership, UserType, ActivityStatusValue, ResourceGroup, PrincipalType, Scope, CorrelationId, timestamp, AccountCustomEntity, IPCustomEntity, AssignmentCountbyCaller
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: CallerIpAddress
 version: 2.0.0
 kind: Scheduled
