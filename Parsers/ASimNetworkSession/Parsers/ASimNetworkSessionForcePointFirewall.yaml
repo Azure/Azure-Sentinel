@@ -217,8 +217,8 @@ ParserQuery: |
       CommonSecurityLog
             | where not(disabled)
             | where DeviceVendor=="FORCEPOINT" and DeviceProduct=="Firewall"
-            | where DeviceFacility in~ ("Inspection","Packet Filtering","File Filtering","File Reputation","IPsec VPN","Anti-Malware")
-            | extend NetworkProtocol = _ASIM_LookupNetworkProtocol(Protocol)
+            | where DeviceFacility in~ ("Inspection","Packet Filtering","File Filtering","IPsec VPN","Protocol Agent")
+            | extend NetworkProtocol = _ASIM_LookupNetworkProtocol(Protocol)            
             | lookup ActionLookup on DeviceAction
             | lookup DeviceEventClassIDLookup on DeviceEventClassID
             | lookup MessageLookup on Message
@@ -234,7 +234,7 @@ ParserQuery: |
                     EventSchemaVersion = "0.2.6",
                     EventVendor = "FORCEPOINT",
                     EventProduct = "Firewall"
-            | parse AdditionalExtensions with * "requestURL=" requestURL
+            | parse AdditionalExtensions with * "requestURL=" requestURL            
             | project-rename
                     EventOriginalType = DeviceEventClassID,
                     DstPortNumber = DestinationPort,
@@ -261,19 +261,19 @@ ParserQuery: |
             | extend
                     EventStartTime = todatetime(ReceiptTime),
                     EventEndTime = todatetime(ReceiptTime),
-                    boolHasIP = iif(indexof_regex(requestURL,@"(\d+.\d+.\d+.\d+)") == -1, false, true),
-                    boolHasPort = iif(requestURL has ':', true, false)
+                    extractedIP = extract(@"(\d+.\d+.\d+.\d+)",0,requestURL),
+                    extractedPort = iff(requestURL has ':', toint(split(requestURL,':')[-1]), int(null))
             | extend 
                      NetworkRuleName = case(isnotempty(DeviceCustomString2), strcat(DeviceCustomString1,',',DeviceCustomString2),
                                             DeviceCustomString1),
                      DstDomain = case(
-                                    boolHasPort and not(boolHasIP), tostring(split(requestURL,':',0)[0]),
-                                    not(boolHasIP), requestURL,
+                                    isempty(extractedIP) and isnotempty(extractedPort), tostring(split(requestURL,':',0)[0]),
+                                    isempty(extractedPort), requestURL,
                                     ""
                                 ),
                      DstIpAddr = case(
                                     isnotempty(DstIpAddr), DstIpAddr,
-                                    not(boolHasIP), requestURL,
+                                    isnotempty(extractedIP), requestURL,
                                     ""
                                 )
             | extend
@@ -289,7 +289,7 @@ ParserQuery: |
                                     isnotempty(DstPortNumber), DstPortNumber,
                                     ApplicationProtocol startswith "TCP", toint(split(ApplicationProtocol,'/')[1]),
                                     ApplicationProtocol startswith "UDP", toint(split(ApplicationProtocol,'/')[1]),
-                                    boolHasPort, toint(split(requestURL,':',0)[1]),
+                                    isnotempty(extractedPort), extractedPort,
                                     int(null)
                             ),
                      AdditionalFields = pack("RequestMethod",iff(isnotempty(RequestMethod) and RequestMethod != "UNKNOWN", RequestMethod, ""),
@@ -310,6 +310,6 @@ ParserQuery: |
                     Dst = DstIpAddr,
                     Src = SrcIpAddr,
                     DvcInterface = DvcInboundInterface
-            | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, Remote*, ReportReferenceLink, Request*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, ExtID, EventOutcome, FieldDevice*, Reason, ApplicationProtocol, Activity, requestURL, boolHas*, Computer
+            | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, Remote*, ReportReferenceLink, Request*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, ExtID, EventOutcome, FieldDevice*, Reason, ApplicationProtocol, Activity, requestURL, extracted*, Computer
         };
         parser(disabled=disabled)
