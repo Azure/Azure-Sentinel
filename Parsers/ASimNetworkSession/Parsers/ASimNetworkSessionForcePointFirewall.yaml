@@ -282,42 +282,33 @@ ParserQuery: |
                     DvcOutboundInterface = DeviceOutboundInterface,
                     DvcIpAddr = DeviceAddress,
                     EventOriginalSeverity = LogSeverity,
-                    ThreatId = DeviceCustomString3        
-            | invoke _ASIM_ResolveDvcFQDN('Computer')            
+                    ThreatId = DeviceCustomString3,
+                    ThreatCategory = DeviceEventCategory
+            | invoke _ASIM_ResolveDvcFQDN('Computer')
             | extend
                     EventStartTime = todatetime(ReceiptTime),
                     EventEndTime = todatetime(ReceiptTime),
-                    extractedIP = extract(@"^(\d+.\d+.\d+.\d+)",0,requestURL),
-                    extractedPort = iff(requestURL has ':', toint(split(requestURL,':')[-1]), int(null)),
+                    ipv6_parts = extract_all (@'^\[(.+)\](?:\:(\d+))?$',requestURL)[0],
+                    ipv4_parts = extract_all (@'^(\d+\.\d+\.\d+\.\d+)(?:\:(\d+))?$',requestURL)[0],
+                    host_parts = extract_all (@'^([^\\\d:]+)(?:\:(\d+))?$',requestURL)[0],
                     EventSeverity = case(isnotempty(ThreatName), CalculatedThreatSeverity, //If the MessageCode is above 70035, ThreatName gets populated. In that case, Severity is determined based on the Log Severity provided by the source.
                                         EventSeverity)
             | extend 
                      NetworkRuleName = case(isnotempty(DeviceCustomString2), strcat(DeviceCustomString1,',',DeviceCustomString2),
                                             DeviceCustomString1),
-                     DstDomain = case(
-                                    isempty(extractedIP) and isnotempty(extractedPort), tostring(split(requestURL,':',0)[0]),
-                                    isempty(extractedIP) and isempty(extractedPort), requestURL,
-                                    ""
-                                ),
-                     DstIpAddr = case(
-                                    isnotempty(DstIpAddr), DstIpAddr,
-                                    isnotempty(extractedIP), requestURL,
-                                    ""
-                                )
+                     DstDomainPart = tostring(host_parts[0]),
+                     DstIpAddr = coalesce(DstIpAddr, ipv4_parts[0],ipv6_parts[0]),
+                     DstPortNumber = coalesce(DstPortNumber, host_parts[1], ipv4_parts[1],ipv6_parts[1])
+            | invoke _ASIM_ResolveDstFQDN('DstDomainPart')
             | extend
                      DvcIdType = case(
                                     isnotempty(DvcId), "ForcepointId",
                                     ""
                                 ),
-                     DstDomainType = case(
-                                    isnotempty(DstDomain), "FQDN",
-                                    ""  
-                                ),
                      DstPortNumber = case(
                                     isnotempty(DstPortNumber), DstPortNumber,
                                     ApplicationProtocol startswith "TCP", toint(split(ApplicationProtocol,'/')[1]),
                                     ApplicationProtocol startswith "UDP", toint(split(ApplicationProtocol,'/')[1]),
-                                    isnotempty(extractedPort), extractedPort,
                                     int(null)
                             ),
                      AdditionalFields = pack("RequestMethod",iff(isnotempty(RequestMethod) and RequestMethod != "UNKNOWN", RequestMethod, ""),
@@ -325,7 +316,7 @@ ParserQuery: |
                                              "VirusId",DeviceCustomString4),
                      DstAppName = case(DestinationServiceName in~ ("Generic-Web-HTTP","Application-Unknown","Unknown-Encrypted-Application"), "",
                                         DestinationServiceName),
-                     DvcIpAddr = coalesce(DvcIpAddr,DeviceName)
+                     DvcIpAddr = coalesce(DvcIpAddr,DeviceName)                     
             | extend
                     EventSeverity = case(isnotempty(EventSeverity),EventSeverity,
                                          isnotempty(ThreatName), "High",
@@ -335,7 +326,8 @@ ParserQuery: |
                     Rule = NetworkRuleName,
                     Dst = DstIpAddr,
                     Src = SrcIpAddr,
-                    DvcInterface = DvcInboundInterface
-            | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, Remote*, ReportReferenceLink, Request*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, ExtID, EventOutcome, FieldDevice*, Reason, ApplicationProtocol, Activity, requestURL, extracted*, Computer, MessageCode, CalculatedThreatSeverity
+                    DvcInterface = DvcInboundInterface,
+                    Hostname = DstHostname
+            | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, Remote*, ReportReferenceLink, Request*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, ExtID, EventOutcome, FieldDevice*, Reason, ApplicationProtocol, Activity, requestURL, Computer, MessageCode, DstDomainPart, host_parts, ipv4_parts, ipv6_parts, CalculatedThreatSeverity
         };
         parser(disabled=disabled)
