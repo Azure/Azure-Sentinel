@@ -158,9 +158,9 @@ class Sentinel:
             body = json.dumps(chunk)
             logging.debug(body)
             self.post_data(body, len(chunk))
-            state = StateManager(connection_string) 
-            latestTimeStamp = chunk[-1]["timeStamp"]
-            zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+            #state = StateManager(connection_string) 
+            #latestTimeStamp = chunk[-1]["timeStamp"]
+            #zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
             #latestTimeStampnew = datetime.strptime(latestTimeStamp,zulu_time_format) + timedelta(milliseconds=1)
             #logging.info("Chunk Timestamp {}".format(latestTimeStampnew)) 
             #state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
@@ -223,7 +223,10 @@ def ProcessApiLA(param):
         ProcessToLA(param,results)
         latime = time.time() -startlatime
         logging.info("Data to send it to LA for {}k events took {} seconds".format(len(results),time.time() - startlatime))
-        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and Total time it took to process {}" .format(param,apitime,len(results),latime,apitime + latime)
+        sorted_data = sorted(results, key=lambda x: x["timeStamp"],reverse=False) 
+        # Fetch the latest timestamp
+        latest_timestamp = sorted_data[-1]["timeStamp"]
+        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and Total time it took to process {}" .format(param,apitime,len(results),latime,apitime + latime),latest_timestamp
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       #logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
@@ -246,11 +249,7 @@ def ProcessToLA(param,results_events):
      if(len(results_events) <= MaxEventCount):
         logging.debug(body)
         sentinel.post_data(body,len(results_events))
-        state = StateManager(connection_string) 
-        #zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
-        #latestTimeStampnew = datetime.strptime(latest_timestamp,zulu_time_format) + timedelta(milliseconds=1)
-        #logging.info("The Final latest Timestamp {}".format(latestTimeStampnew)) 
-        #state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+
      elif(len(results_events) > MaxEventCount):
         sentinel.gen_chunks(sorted_data)
     sentinel_class_vars = vars(sentinel)
@@ -258,6 +257,18 @@ def ProcessToLA(param,results_events):
                                         sentinel_class_vars["fail_processed"]
     logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
         .format(success_processed, fail_processed, start_time, time.time()))
+    
+def updateFileshareTimestamp(data):
+    state = StateManager(connection_string)
+    # Sort the json based on the "timestamp" key
+    sorted_data = sorted(data, key=lambda x: x,reverse=False) 
+    # Fetch the latest timestamp
+    latest_timestamp = sorted_data[-1]       
+    logging.info("The latest timestamp {}".format(latest_timestamp)) 
+    zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+    latestTimeStampnew = datetime.strptime(latest_timestamp,zulu_time_format) + timedelta(milliseconds=1)
+    logging.info("The Final latest Timestamp {}".format(latestTimeStampnew)) 
+    state.post(latestTimeStampnew.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
 
 def ProcessData(param):
     #import concurrent.futures as cf
@@ -278,28 +289,12 @@ def ProcessData(param):
     processes = []
     with ThreadPoolExecutor(cpu_num) as process_pool_executor:
         futures = [process_pool_executor.submit(ProcessApiLA, param) for x in list(range(1,2))]
-        #processes.append(futures)
 
-    #with mp.Pool(cpu_num*2) as pool:
-      #futures = [x for x in pool.map(GetAPIData, range(1,4))]
-      #print(time.time() - apistart)
-        #results_events.append(results)
-    #print("Time took to get the 30k events data in %s",time.time() - apistart)
     for future in as_completed(futures):
         processes.append(future.result())
-    #for future in as_completed(futures):
-        #print(sum(future.result()))
-    #for x in range(len(results)):
-        #dat = results_events[x]
-        #results_events.extend(results[x])
-    #newdata = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
-        #logging.info("Threads executed!")
-    #print("Main thread name %s",current_thread().name)
-    #time.sleep(0.5)
-    #"function result for thread: {} and it took --- {} seconds --- to send --- {} events" .format(param,(time.time() - start_time), "30k" if len(futures) == 3 else "<30k")
+    
     return processes
-        #logging.info("Threads executed!")
-    #print("Main thread name %s",current_thread().name)
+
 
 # this function app is fired based on the Timer trigger
 # it is used to capture all the events from LookOut cloud security API   
@@ -311,6 +306,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info('Starting program')
     print("Start")
     processes = []
+    fileSharedata = []
     try:
         #with ThreadPoolExecutor(max_workers=1) as executor:
             #futures = [executor.submit(ProcessData, x) for x in list(range(100))]
@@ -319,7 +315,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
         t1 = time.time()
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(ProcessData, x) for x in list(range(40))]
+            futures = [executor.submit(ProcessData, x) for x in list(range(150))]
             processes.append(futures)
 
         #pool = Pool(n)
@@ -331,9 +327,10 @@ def main(mytimer: func.TimerRequest) -> None:
         #pool.join()
         #print(f'Multiprocessing time using map: {t2 - t1}, chunksize: {chunksize}', results[-1])
         for future in processes[0]:
-            logging.info(future.result())
-            print(future.result())
-        print("End")
+            if future._state == 'FINISHED':
+                logging.info(future.result())
+                fileSharedata.append(future.result()[0][1])
+        updateFileshareTimestamp(fileSharedata)
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
