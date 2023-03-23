@@ -132,7 +132,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 "additional_info", {}
             ).get("organization_name")
             content = alert_info.get("es_item", {}).get("highlight", {}).get("content")
-            content = content[0] if isinstance(content, list) else content
+            content = content[0] if isinstance(content, list) and content else content
             existing_content = str(actionable_alert["content"])
             logging.info(f"creating alert with id={alert_id}")
             actionable_alert["_time"] = actionable_alert["date"]
