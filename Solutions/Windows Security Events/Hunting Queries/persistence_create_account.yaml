@@ -20,7 +20,6 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-
   SecurityEvent
   | where EventID==4688
   | project TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName, 
@@ -31,8 +30,13 @@ query: |
   | where FileName in~ ("net.exe", "net1.exe")
   | parse kind=regex flags=iU ProcessCommandLine with * "user " CreatedUser " " * "/ad"
   | where not(FileName =~ "net1.exe" and InitiatingProcessFileName =~ "net.exe" and replace("net", "net1", InitiatingProcessCommandLine) =~ ProcessCommandLine)
-  | extend CreatedOnLocalMachine=(ProcessCommandLine !contains "/do")
-  | where ProcessCommandLine contains "/add" or (CreatedOnLocalMachine == 0 and ProcessCommandLine !contains "/domain")
+  | extend CreatedOnLocalMachine=(ProcessCommandLine !has "/do")
+  | where ProcessCommandLine has "/add" or (CreatedOnLocalMachine == 0 and ProcessCommandLine !has "/domain")
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), MachineCount=dcount(ComputerName) by CreatedUser, CreatedOnLocalMachine, InitiatingProcessFileName, FileName, ProcessCommandLine, InitiatingProcessCommandLine
   | extend timestamp = StartTimeUtc, AccountCustomEntity = CreatedUser
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
   
