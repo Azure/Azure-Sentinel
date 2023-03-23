@@ -223,9 +223,9 @@ def ProcessApiLA(param):
         ProcessToLA(param,results)
         latime = time.time() -startlatime
         logging.info("Data to send it to LA for {}k events took {} seconds".format(len(results),time.time() - startlatime))
-        sorted_data = sorted(results, key=lambda x: x["timeStamp"],reverse=False) 
+        results.sort(key=lambda x: x["timeStamp"],reverse=False) 
         # Fetch the latest timestamp
-        latest_timestamp = sorted_data[-1]["timeStamp"]
+        latest_timestamp = results[-1]["timeStamp"]
         return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and Total time it took to process {}" .format(param,apitime,len(results),latime,apitime + latime),latest_timestamp
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
@@ -258,12 +258,8 @@ def ProcessToLA(param,results_events):
     logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
         .format(success_processed, fail_processed, start_time, time.time()))
     
-def updateFileshareTimestamp(data):
-    state = StateManager(connection_string)
-    # Sort the json based on the "timestamp" key
-    sorted_data = sorted(data, key=lambda x: x,reverse=False) 
-    # Fetch the latest timestamp
-    latest_timestamp = sorted_data[-1]       
+def updateFileshareTimestamp(latest_timestamp):
+    state = StateManager(connection_string)       
     logging.info("The latest timestamp {}".format(latest_timestamp)) 
     zulu_time_format = "%Y-%m-%dT%H:%M:%S.%fZ"
     latestTimeStampnew = datetime.strptime(latest_timestamp,zulu_time_format) + timedelta(milliseconds=1)
@@ -330,7 +326,8 @@ def main(mytimer: func.TimerRequest) -> None:
             if future._state == 'FINISHED':
                 logging.info(future.result())
                 fileSharedata.append(future.result()[0][1])
-        updateFileshareTimestamp(fileSharedata)
+        latesttimestamp = fileSharedata.sort(key=lambda x: x,reverse=False)
+        updateFileshareTimestamp(latesttimestamp[-1])
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
