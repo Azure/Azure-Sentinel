@@ -20,6 +20,8 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
+    // We can use this configuration TimeDeltaInMinutes if you want to chnage the time window that we try to match the alerts
+    let TimeDeltaInMinutes = 10;
     let Alert1 = 
     SecurityAlert
     | where TimeGenerated > ago(1d)
@@ -70,27 +72,39 @@ query: |
     | extend Alert2Time = TimeGenerated
     | extend Alert2 = AlertName
     | extend Alert2Severity = AlertSeverity
-    | extend CurrentLocation = strcat(tostring(parse_json(tostring(parse_json(Entities)[2].Location)).CountryCode), "|", tostring(parse_json(tostring(parse_json(Entities)[2].Location)).State), "|", tostring(parse_json(tostring(parse_json(Entities)[2].Location)).City))
-    | extend PreviousLocation = strcat(tostring(parse_json(tostring(parse_json(Entities)[3].Location)).CountryCode), "|", tostring(parse_json(tostring(parse_json(Entities)[3].Location)).State), "|", tostring(parse_json(tostring(parse_json(Entities)[3].Location)).City))
-    | extend CurrentIPAddress = tostring(parse_json(Entities)[2].Address)
-    | extend PreviousIPAddress = tostring(parse_json(Entities)[3].Address)
+    | extend CurrentLocation = tostring(parse_json(ExtendedProperties).["Current Location"])
+    | extend PreviousLocation = tostring(parse_json(ExtendedProperties).["Previous Location"])
+    | extend CurrentIPAddress = tostring(parse_json(ExtendedProperties).["Current IP Address"])
+    | extend PreviousIPAddress = tostring(parse_json(ExtendedProperties).["Previous IP Address"])
     | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert2, Alert2Severity, Alert2Time, CurrentIPAddress, PreviousIPAddress, CurrentLocation, PreviousLocation, UserAccount, UserName
     ;
     Alert1
     | join kind=inner Alert2 on UserAccount
-    | where abs(datetime_diff('minute', Alert1Time, Alert2Time)) <=10
+    | where abs(datetime_diff('minute', Alert1Time, Alert2Time)) <= TimeDeltaInMinutes
     | extend TimeDelta = Alert1Time - Alert2Time
     | project UserAccount, Alert1, Alert1Time, Alert1Severity, Alert2, Alert2Time, Alert2Severity, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress, UserName
-    | extend AccountCustomEntity = UserAccount
-    | extend IPCustomEntity = CurrentIPAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: UPNSuffix
+        columnName: UserAccount
+      - identifier: Name
+        columnName: UserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.3
+        columnName: CurrentIPAddress
+customDetails:
+    Alert1: Alert1
+    Alert1Time: Alert1Time
+    Alert1Severity: Alert1Severity
+    Alert2: Alert2
+    Alert2Time: Alert2Time
+    Alert2Severity: Alert2Severity
+    TimeDelta: TimeDelta
+    CurrentLocation: CurrentLocation
+    PreviousLocation: PreviousLocation
+    CurrentIPAddress: CurrentIPAddress
+    PreviousIPAddress: PreviousIPAddress
+version: 1.0.4
 kind: Scheduled
