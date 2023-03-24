@@ -220,15 +220,15 @@ def ProcessApiLA(param):
         print("Api time took to get the {}k events data in {} seconds".format(len(results),time.time() - startapitime))
         apitime = time.time() -startapitime
         sorttime = time.time()
-        results.sort(key=lambda x: x["timeStamp"],reverse=False) 
+        #results.sort(key=lambda x: x["timeStamp"],reverse=False) 
         sortendtime = time.time() -sorttime
         startlatime = time.time()
         ProcessToLA(param,results)
         latime = time.time() -startlatime
         logging.info("Data to send it to LA for {}k events took {} seconds".format(len(results),time.time() - startlatime))
         # Fetch the latest timestamp
-        latest_timestamp = results[-1]["timeStamp"]
-        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and for sort time it took - {} and Total time it took to process {}" .format(param,apitime,len(results),latime,sortendtime,apitime + latime),latest_timestamp
+        #latest_timestamp = results[-1]["timeStamp"]
+        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and for sort time it took - {} and Total time it took to process {}" .format(param,apitime,len(results),latime,sortendtime,apitime + latime)
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       #logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
@@ -327,7 +327,7 @@ def main(mytimer: func.TimerRequest) -> None:
         for future in processes[0]:
             #if future._state == 'FINISHED':
             logging.info(future.result())
-            fileSharedata.append(future.result()[0][1])
+            #fileSharedata.append(future.result()[0][1])
         #fileSharedata.sort(key=lambda x: x,reverse=False)
         #updateFileshareTimestamp(fileSharedata[-1])
     except Exception as err:
