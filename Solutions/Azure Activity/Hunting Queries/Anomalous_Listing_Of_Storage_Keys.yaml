@@ -18,7 +18,6 @@ tactics:
 relevantTechniques:
   - T1087
 query: |
-
   AzureActivity
   | where OperationNameValue =~ "microsoft.storage/storageaccounts/listkeys/action"
   | where ActivityStatusValue =~ "Succeeded" 
@@ -28,18 +27,19 @@ query: |
       | where ActivityStatusValue =~ "Succeeded" 
       | project ExpectedIpAddress=CallerIpAddress, Caller 
       | evaluate autocluster()
-  ) on Caller 
+  ) on Caller
   | where CallerIpAddress != ExpectedIpAddress
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResourceIds = make_set(ResourceId), ResourceIdCount = dcount(ResourceId) by OperationNameValue, Caller, CallerIpAddress
-  | extend timestamp = StartTime, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
-
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResourceIds = make_set(ResourceId,100), ResourceIdCount = dcount(ResourceId) by OperationNameValue, Caller, CallerIpAddress
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 2.0.0
+        columnName: CallerIpAddress
+version: 2.0.1
