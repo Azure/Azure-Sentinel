@@ -15,7 +15,6 @@ from shared_code.trace_utils.trace import trace_manager
 logger = get_customized_json_logger()
 
 # limit 30 MB per api call.
-# link: https://docs.microsoft.com/zh-tw/azure/azure-monitor/logs/data-collector-api#data-limits
 LOG_SIZE_LIMIT = 25 * 1024 * 1024
 
 
@@ -47,7 +46,6 @@ class LogAnalytics:
         authorization = "SharedKey {}:{}".format(self.workspace_id, encoded_hash)
         return authorization
 
-    # Required Function to create and invoke an API POST request to the Azure Log Analytics Data Collector API. Reference: https://docs.microsoft.com/azure/azure-functions/functions-reference-python#environment-variables
     @retry(tries=3, delay=60)
     def post_data(self, data):
         body = json.dumps(data, sort_keys=True)
