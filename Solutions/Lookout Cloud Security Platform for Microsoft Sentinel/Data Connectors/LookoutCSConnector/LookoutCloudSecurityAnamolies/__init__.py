@@ -217,16 +217,18 @@ def ProcessApiLA(param):
     try:
         startapitime = time.time()
         results = GetAPIData(param)
-        logging.info("Api time took to get the {}k events data in {} seconds".format(len(results),time.time() - startapitime))
+        print("Api time took to get the {}k events data in {} seconds".format(len(results),time.time() - startapitime))
         apitime = time.time() -startapitime
+        sorttime = time.time()
+        results.sort(key=lambda x: x["timeStamp"],reverse=False) 
+        sortendtime = time.time() -sorttime
         startlatime = time.time()
         ProcessToLA(param,results)
         latime = time.time() -startlatime
         logging.info("Data to send it to LA for {}k events took {} seconds".format(len(results),time.time() - startlatime))
-        results.sort(key=lambda x: x["timeStamp"],reverse=False) 
         # Fetch the latest timestamp
         latest_timestamp = results[-1]["timeStamp"]
-        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and Total time it took to process {}" .format(param,apitime,len(results),latime,apitime + latime),latest_timestamp
+        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and for sort time it took - {} and Total time it took to process {}" .format(param,apitime,len(results),latime,sortendtime,apitime + latime),latest_timestamp
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       #logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
@@ -241,17 +243,17 @@ def ProcessToLA(param,results_events):
     logging.info('End: to get Anamolies')
     if(len(results_events)) > 0:
      # Sort the json based on the "timestamp" key
-     sorted_data = sorted(results_events, key=lambda x: x["timeStamp"],reverse=False) 
+     #sorted_data = sorted(results_events, key=lambda x: x["timeStamp"],reverse=False) 
      # Fetch the latest timestamp
-     latest_timestamp = sorted_data[-1]["timeStamp"]       
-     logging.info("The latest timestamp {}".format(latest_timestamp)) 
+     #latest_timestamp = sorted_data[-1]["timeStamp"]       
+     #logging.info("The latest timestamp {}".format(latest_timestamp)) 
      body = json.dumps(results_events)
      if(len(results_events) <= MaxEventCount):
         logging.debug(body)
         sentinel.post_data(body,len(results_events))
 
      elif(len(results_events) > MaxEventCount):
-        sentinel.gen_chunks(sorted_data)
+        sentinel.gen_chunks(results_events)
     sentinel_class_vars = vars(sentinel)
     success_processed, fail_processed = sentinel_class_vars["success_processed"],\
                                         sentinel_class_vars["fail_processed"]
