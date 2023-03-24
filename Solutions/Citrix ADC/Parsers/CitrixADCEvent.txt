@@ -8,14 +8,35 @@
 let EventData = Syslog
 | where Computer in ("Computer1","Computer2");
 let NotFound = EventData
-| where SyslogMessage  contains "NotFound"
+| where SyslogMessage  has_any ("NotFound", "SSLVPN HTTPREQUEST")
 | parse SyslogMessage with * "SessionId: " SessionId" - " *
 | parse SyslogMessage with * "User " User" :" *
 | parse SyslogMessage with * "Group(s) " Group" :" *
 | parse SyslogMessage with * "Vserver " Vserver" -" *;
 let Found = EventData
-| where SyslogMessage  contains "Access Allowed"
-| parse-kv SyslogMessage as (User:string, Client_ip:string, Nat_ip:string, Vserver:string, Destination:string, Start_time:string, End_time:string, Duration:string, Total_bytes_send:int, Total_bytes_recv:int, Total_compressedbytes_send:int, Total_compressedbytes_recv:int, Compression_ratio_send:string, Compression_ratio_recv:string, Access:string) with (pair_delimiter=' - ', kv_delimiter=' ')
-| parse SyslogMessage with * 'Group(s) "' Group'"';
-let data = union Found, NotFound;
+| where SyslogMessage  has_any ("Access Allowed", "SSLVPN TCPCONNSTAT", "SSLVPN UDPFLOWSTAT", "SSLVPN LOGOUT", "SSLVPN LOGIN", "SSLVPN ICASTART")
+| parse-kv SyslogMessage as (User:string, Client_ip:string, Nat_ip:string, Vserver:string, Source:string, Destination:string, Start_time:string, End_time:string, Duration:string, Http_resources_accessed:int, NonHttp_services_accessed:int, Total_TCP_connections:int, Total_UDP_flows:int, Total_policies_allowed:int,  Total_policies_denied:int, Total_bytes_send:int, Total_bytes_recv:int, Total_compressedbytes_send:int, Total_compressedbytes_recv:int, Compression_ratio_send:string, Compression_ratio_recv:string, LogoutMethod:string, Access:string, applicationName:string, startTime:string, connectionId:string) with (pair_delimiter=' - ', kv_delimiter=' ')
+| parse SyslogMessage with * 'Group(s) "' Group'"'
+| parse SyslogMessage with * 'domainname ' DomainName':';
+let AAATM = EventData
+| where SyslogMessage has_any ("AAATM Message", "SSLVPN Message", "AAA Message")
+| parse SyslogMessage with * '"' Message '"';
+let EXTRACTED_GROUPS = EventData
+| where SyslogMessage contains "AAA EXTRACTED_GROUPS"
+| parse SyslogMessage with * '"' Extracted_groups '"';
+let CMD_EXECUTED = EventData
+| where SyslogMessage has_any ("CLI CMD_EXECUTED", "GUI CMD_EXECUTED")
+| parse SyslogMessage with * 'User ' User ' - '*
+| parse SyslogMessage with * 'Remote_ip ' RemoteIP ' - '*
+| parse SyslogMessage with * 'Command "' Command '" -'*
+| parse SyslogMessage with * 'Status "' Status '"';
+let TRAP_SENT = EventData
+| where SyslogMessage contains "SNMP TRAP_SENT"
+| parse SyslogMessage with * 'entityName = "' EntityName '"'*
+| parse SyslogMessage with * 'nsPartitionName  = ' nsPartitionName ')';
+let MONITORDOWN = EventData
+| where SyslogMessage contains "EVENT MONITORDOWN"
+| parse SyslogMessage with * "Monitor " Monitor " "*
+| parse SyslogMessage with * 'State ' State;
+let data = union Found, NotFound, AAATM, EXTRACTED_GROUPS, CMD_EXECUTED, TRAP_SENT, MONITORDOWN;
 data
