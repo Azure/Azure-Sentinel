@@ -220,15 +220,15 @@ def ProcessApiLA(param):
         print("Api time took to get the {}k events data in {} seconds".format(len(results),time.time() - startapitime))
         apitime = time.time() -startapitime
         sorttime = time.time()
-        #results.sort(key=lambda x: x["timeStamp"],reverse=False) 
+        results.sort(key=lambda x: x["timeStamp"],reverse=False) 
         sortendtime = time.time() -sorttime
         startlatime = time.time()
         ProcessToLA(param,results)
         latime = time.time() -startlatime
         logging.info("Data to send it to LA for {}k events took {} seconds".format(len(results),time.time() - startlatime))
         # Fetch the latest timestamp
-        #latest_timestamp = results[-1]["timeStamp"]
-        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and for sort time it took - {} and Total time it took to process {}" .format(param,apitime,len(results),latime,sortendtime,apitime + latime)
+        latest_timestamp = results[-1]["timeStamp"]
+        return "function result for thread: {} and it took api time --- {} seconds --- to send --- {} events and it took la time {} and for sort time it took - {} and Total time it took to process {}" .format(param,apitime,len(results),latime,sortendtime,apitime + latime),latest_timestamp
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       #logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
@@ -285,7 +285,7 @@ def ProcessData(param):
     parameters = range(3)
     apistart = time.time()
     processes = []
-    with ThreadPoolExecutor(cpu_num) as process_pool_executor:
+    with ThreadPoolExecutor(cpu_num-1) as process_pool_executor:
         futures = [process_pool_executor.submit(ProcessApiLA, param) for x in list(range(1,2))]
 
     for future in as_completed(futures):
@@ -312,7 +312,7 @@ def main(mytimer: func.TimerRequest) -> None:
         cpu_count = mp.cpu_count() 
 
         t1 = time.time()
-        with ThreadPoolExecutor(max_workers=1) as executor:
+        with ThreadPoolExecutor(max_workers=None) as executor:
             futures = [executor.submit(ProcessData, x) for x in list(range(150))]
             processes.append(futures)
 
@@ -325,11 +325,11 @@ def main(mytimer: func.TimerRequest) -> None:
         #pool.join()
         #print(f'Multiprocessing time using map: {t2 - t1}, chunksize: {chunksize}', results[-1])
         for future in processes[0]:
-            #if future._state == 'FINISHED':
-            logging.info(future.result())
-            #fileSharedata.append(future.result()[0][1])
-        #fileSharedata.sort(key=lambda x: x,reverse=False)
-        #updateFileshareTimestamp(fileSharedata[-1])
+            if future._state == 'FINISHED':
+                logging.info(future.result())
+                fileSharedata.append(future.result()[0][1])
+        fileSharedata.sort(key=lambda x: x,reverse=False)
+        updateFileshareTimestamp(fileSharedata[-1])
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
