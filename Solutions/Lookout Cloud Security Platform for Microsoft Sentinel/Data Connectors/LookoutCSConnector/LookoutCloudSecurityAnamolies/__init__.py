@@ -325,11 +325,11 @@ def main(mytimer: func.TimerRequest) -> None:
         #pool.join()
         #print(f'Multiprocessing time using map: {t2 - t1}, chunksize: {chunksize}', results[-1])
         for future in processes[0]:
-            if future._state == 'FINISHED':
-                logging.info(future.result())
-                fileSharedata.append(future.result()[0][1])
-        fileSharedata.sort(key=lambda x: x,reverse=False)
-        updateFileshareTimestamp(fileSharedata[-1])
+            #if future._state == 'FINISHED':
+            logging.info(future.result())
+            fileSharedata.append(future.result()[0][1])
+        #fileSharedata.sort(key=lambda x: x,reverse=False)
+        #updateFileshareTimestamp(fileSharedata[-1])
     except Exception as err:
       logging.error("Something wrong. Exception error text: {}".format(err))
       logging.error( "Error: LookOut Cloud Security events data connector execution failed with an internal server error.")
