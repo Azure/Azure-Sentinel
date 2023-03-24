@@ -37,10 +37,19 @@ query: |
   | join kind = rightanti ( 
   createRoleAssignmentActivity
   | where TimeGenerated > ago(endtime)
-  | extend PrincipalId = tostring(iff(Properties_d has_cs 'PrincipalId',parse_json(tostring(parse_json(Properties_d).requestbody)).Properties.PrincipalId,parse_json(tostring(parse_json(Properties_d).requestbody)).properties.principalId))
-  | extend PrincipalType = tostring(iff(Properties_d has_cs 'PrincipalType',parse_json(tostring(parse_json(Properties_d).requestbody)).Properties.PrincipalType,parse_json(tostring(parse_json(Properties_d).requestbody)).properties.principalType))
-  | extend Scope = tostring(iff(Properties_d has_cs 'Scope',parse_json(tostring(parse_json(Properties_d).requestbody)).Properties.Scope,parse_json(tostring(parse_json(Properties_d).requestbody)).properties.scope))
-  | extend RoleAddedDetails = tostring(iff(Properties_d has_cs 'RoleDefinitionId',parse_json(tostring(parse_json(Properties_d).requestbody)).Properties.RoleDefinitionId,parse_json(tostring(parse_json(Properties_d).requestbody)).properties.roleDefinitionId))
+  | extend parsed_property = tostring(parse_json(Properties_d).requestbody)
+  | extend PrincipalId = case(Properties_d has_cs 'PrincipalId',parse_json(parsed_property).Properties.PrincipalId,
+  Properties_d has_cs 'principalId',parse_json(parsed_property).properties.principalId,
+  "")
+  | extend PrincipalType = case(Properties_d has_cs 'PrincipalType',parse_json(parsed_property).Properties.PrincipalType,
+  Properties_d has_cs 'principalType',parse_json(parsed_property).properties.principalType,
+  "")
+  | extend Scope = case(Properties_d has_cs 'Scope',parse_json(parsed_property).Properties.Scope,
+  Properties_d has_cs 'scope',parse_json(parsed_property).properties.scope,
+  "")
+  | extend RoleAddedDetails = case(Properties_d has_cs 'RoleDefinitionId',parse_json(parsed_property).Properties.RoleDefinitionId,
+  Properties_d has_cs 'roleDefinitionId',parse_json(parsed_property).properties.roleDefinitionId,
+  "")
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  
   by ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup, PrincipalId, PrincipalType, Scope, RoleAddedDetails
   ) on CallerIpAddress, Caller
@@ -50,8 +59,8 @@ query: |
   // Returns all matching records from left and right sides.
   | join kind = inner (AzureBuiltInRole 
   ) on $left.RoleAssignedID == $right.ID;
-  let CountbyCallernIP = RoleAssignedActivitywithRoleDetails | summarize AssignmentCountbyCaller = count() by Caller, CallerIpAddress;
-  let RoleAssignedActivityWithCount = RoleAssignedActivitywithRoleDetails | join kind = inner (CountbyCallernIP | project Caller, AssignmentCountbyCaller) on Caller;
+  let CallerIPCountSummary = RoleAssignedActivitywithRoleDetails | summarize AssignmentCountbyCaller = count() by Caller, CallerIpAddress;
+  let RoleAssignedActivityWithCount = RoleAssignedActivitywithRoleDetails | join kind = inner (CallerIPCountSummary | project Caller, AssignmentCountbyCaller) on Caller;
   RoleAssignedActivityWithCount
   | summarize arg_max(StartTimeUtc, *) by PrincipalId, RoleAssignedID
   // 	Returns all the records from the left side and only matching records from the right side.
