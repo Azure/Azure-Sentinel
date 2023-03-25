@@ -25,27 +25,27 @@ ParserParams:
 ParserQuery: |
    let ApplicationProtocolLookup=datatable(ApplicationProtocol:string,NetworkApplicationProtocol:string)
       [
-            "HTTPS","HTTPS", // Bare Minimum
-            "HTTP-Over-QUIC","HTTP", // Bare Minimum
-            "HTTP","HTTP", // Bare Minimum
-            "DNS Over TLS","DNS", // Bare Minimum
-            "HTTP proxy","HTTP", // Bare Minimum
+            "HTTPS","HTTPS",
+            "HTTP-Over-QUIC","HTTP",
+            "HTTP","HTTP",
+            "DNS Over TLS","DNS",
+            "HTTP proxy","HTTP",
             "IMAPS","IMAPS",
-            "SMTP","SMTP", // Bare Minimum
+            "SMTP","SMTP",
             "IMAP","IMAP",
             "POP3S","POP3",
-            "SMTP Submission Service","SMTP", // Bare Minimum
+            "SMTP Submission Service","SMTP",
             "X11","X11",
             "RTSP","RTSP",
-            "Telnet","TELNET", // Bare Minimum
+            "Telnet","TELNET",
             "NNTP","NNTP",
             "ISAKMP","ISAKMP","ISAKMP","ISAKMP",
             "POP3","POP3",
             "BGP","BGP",
-            "FTP","FTP", // Bare Minimum
+            "FTP","FTP",
             "RIP","RIP",
-            "Squid HTTP proxy","HTTP", // Bare Minimum
-            "TFTP","TFTP", // Bare Minimum
+            "Squid HTTP proxy","HTTP",
+            "TFTP","TFTP",
             "QOTD","QOTD",
             "SCCP","SCCP",
             "Modbus","MODBUS",
@@ -61,7 +61,7 @@ ParserQuery: |
             "FTPS (Control)","FTPS",
             "ICCP","ICCP",
             "IRCS","IRC",
-            "Telnets","TELNET", // Bare Minimum
+            "Telnets","TELNET",
             "Finger","FINGER",
             "ESP","ESP",
             "Rlogin","RLP",
@@ -157,20 +157,6 @@ ParserQuery: |
             "PIM","PIM",
             "RVD","RVD",
       ];
-    let LogSeverityLookup=datatable(LogSeverity:string,CalculatedThreatSeverity:string)
-    [
-          "0","Informational",          
-          "1","Informational", 
-          "2","Low",          
-          "3","Low",
-          "4","Low",          
-          "5","Medium",
-          "6","Medium",          
-          "7","Medium",
-          "8","High",
-          "9","High",          
-          "10","High"
-    ];
     let ActionLookup=datatable(DeviceAction:string,DvcAction_ActionLookup:string,EventResult_ActionLookup:string,EventSeverity_ActionLookup:string)
     [
               "Allow","Allow","Success","Informational",          
@@ -187,8 +173,6 @@ ParserQuery: |
     ];
     let DeviceEventClassIDLookup=datatable(DeviceEventClassID:string,EventSubType:string,DvcAction_DeviceEventClassIDLookup:string,EventResult_DeviceEventClassIDLookup:string,EventSeverity_DeviceEventClassIDLookup:string) //Add more codes if needed
     [
-              "70011","Start","Allow","Success","Informational", // VPN-KeepAlive-Established
-              "70013","","Deny","Failure","Low", // VPN-KeepAlive-Cannot-Establish
               "70018","Start","Allow","Success","Informational", // Connection_Allowed
               "70019","End","Deny","Failure","Low", // Connection_Discarded
               "70021","End","Reset","Failure","Low", // Connection_Closed
@@ -229,30 +213,51 @@ ParserQuery: |
             "TCP state violation: Connection end-point replied with ACK to SYN-packet. Connection refused.", "Deny", "Failure", "Invalid TCP", "",
             "TSC error: Query timed out", "", "Failure", "Timeout", ""
     ];
-    let parser = (disabled:bool) 
-    { 
-      CommonSecurityLog
+    let parser = (disabled:bool) { 
+    let ForcePointNetwork = CommonSecurityLog
             | where not(disabled)
             | where DeviceVendor=="FORCEPOINT" and DeviceProduct=="Firewall"
-            | where DeviceFacility in~ ("Inspection","Packet Filtering","File Filtering","IPsec VPN","Protocol Agent")
-            | extend NetworkProtocol = _ASIM_LookupNetworkProtocol(Protocol)            
-            | lookup ActionLookup on DeviceAction
-            | lookup LogSeverityLookup on LogSeverity
+            | where DeviceFacility in~ ("Inspection","Packet Filtering","File Filtering") and isnotempty(DeviceEventClassID) and DeviceEventClassID != "0" 
+            ;
+    let PacketFilteringData = ForcePointNetwork
+            | where DeviceFacility == "Packet Filtering" and DeviceEventClassID !in ("70383","70393","70734","71009","71040")
             | lookup DeviceEventClassIDLookup on DeviceEventClassID
             | lookup MessageLookup on Message
-            | extend DvcAction = coalesce(DvcAction_ActionLookup, DvcAction_DeviceEventClassIDLookup, DvcAction_MessageLookup), 
-                     EventResult = coalesce(EventResult_ActionLookup, EventResult_DeviceEventClassIDLookup, EventResult_MessageLookup), 
-                     EventSeverity = coalesce(EventSeverity_ActionLookup, EventSeverity_DeviceEventClassIDLookup)            
-            | project-away DvcAction_*, EventSeverity_*, EventResult_*
-            | lookup ApplicationProtocolLookup on ApplicationProtocol
+            | extend DvcAction = coalesce(DvcAction_DeviceEventClassIDLookup, DvcAction_MessageLookup), 
+                    EventResult = case (Message startswith "Referred connection not known", "Failure",
+                                        coalesce(EventResult_DeviceEventClassIDLookup, EventResult_MessageLookup)), 
+                    EventSeverity = case(Message startswith "Referred connection not known", "Low",
+                                        EventSeverity_DeviceEventClassIDLookup),
+                    EventOriginalResultDetails = case(Message startswith "Referred connection not known", Message,
+                                                    EventOriginalResultDetails)
+            | project-away DvcAction_*, EventResult_*, EventSeverity_DeviceEventClassIDLookup;
+    let FileFilteringData = ForcePointNetwork
+            | where DeviceFacility == "File Filtering"
+            | extend ThreatName = case (DeviceEventClassID in ("76508", "76509") and DeviceFacility == "File Filtering", Activity,
+                                        "")
+            | extend EventResult = case (isnotempty(Message), "Failure",
+                                        ""), 
+                     EventSeverity = case(isnotempty(Message), "Low",
+                                        ""),
+                     EventOriginalResultDetails = case(isnotempty(Message), Message,
+                                                    "");
+    let InspectionData = ForcePointNetwork
+            | where DeviceFacility == "Inspection" or DeviceEventClassID == "70734"
             | extend MessageCode = toint(DeviceEventClassID)
-            | extend ThreatName = case (MessageCode between (70035 .. 82000) and DeviceFacility == "Inspection", Activity,
-                                        MessageCode == 76506 and DeviceFacility == "File Filtering", "",
-                                        MessageCode == 76508 and DeviceFacility == "File Filtering", Activity,
-                                        MessageCode == 76509 and DeviceFacility == "File Filtering", Activity,
-                                        MessageCode >= 200000 and DeviceFacility == "Inspection", Activity,
-                                        ""
-                                        )
+            | extend EventSeverity = case (DeviceAction in~ ("Allow","Permit"), "Informational",
+                                        MessageCode >= 200000, "High",
+                                        MessageCode < 200000, "Low",
+                                        "")
+            | extend ThreatName = Activity
+            | project-away MessageCode;
+    union PacketFilteringData, FileFilteringData, InspectionData
+            | extend NetworkProtocol = _ASIM_LookupNetworkProtocol(Protocol)
+            | lookup ActionLookup on DeviceAction
+            | extend DvcAction = coalesce(DvcAction,DvcAction_ActionLookup), 
+                     EventResult = coalesce(EventResult,EventResult_ActionLookup), 
+                     EventSeverity = coalesce(EventSeverity, EventSeverity_ActionLookup)
+            | project-away *_ActionLookup
+            | lookup ApplicationProtocolLookup on ApplicationProtocol
             | extend 
                     EventCount = toint(1),
                     EventType = "NetworkSession",
@@ -290,9 +295,7 @@ ParserQuery: |
                     EventEndTime = todatetime(ReceiptTime),
                     ipv6_parts = extract_all (@'^\[(.+)\](?:\:(\d+))?$',requestURL)[0],
                     ipv4_parts = extract_all (@'^(\d+\.\d+\.\d+\.\d+)(?:\:(\d+))?$',requestURL)[0],
-                    host_parts = extract_all (@'^([^\\\d:]+)(?:\:(\d+))?$',requestURL)[0],
-                    EventSeverity = case(isnotempty(ThreatName), CalculatedThreatSeverity, //If the MessageCode is above 70035, ThreatName gets populated. In that case, Severity is determined based on the Log Severity provided by the source.
-                                        EventSeverity)
+                    host_parts = extract_all (@'^([^\\\d:]+)(?:\:(\d+))?$',requestURL)[0]
             | extend 
                      NetworkRuleName = case(isnotempty(DeviceCustomString2), strcat(DeviceCustomString1,',',DeviceCustomString2),
                                             DeviceCustomString1),
@@ -301,26 +304,21 @@ ParserQuery: |
                      DstPortNumber = coalesce(DstPortNumber, host_parts[1], ipv4_parts[1],ipv6_parts[1])
             | invoke _ASIM_ResolveDstFQDN('DstDomainPart')
             | extend
-                     DvcIdType = case(
-                                    isnotempty(DvcId), "ForcepointId",
-                                    ""
-                                ),
+                     DvcIdType = case(isnotempty(DvcId), "ForcepointId",
+                                    ""),
                      DstPortNumber = case(
                                     isnotempty(DstPortNumber), DstPortNumber,
                                     ApplicationProtocol startswith "TCP", toint(split(ApplicationProtocol,'/')[1]),
                                     ApplicationProtocol startswith "UDP", toint(split(ApplicationProtocol,'/')[1]),
-                                    int(null)
-                            ),
-                     AdditionalFields = pack("RequestMethod",iff(isnotempty(RequestMethod) and RequestMethod != "UNKNOWN", RequestMethod, ""),
-                                             "Activity",Activity,
-                                             "VirusId",DeviceCustomString4),
+                                    int(null)),
+                     AdditionalFields = pack(iff(isnotempty(RequestMethod) and RequestMethod != "UNKNOWN", "RequestMethod", ""),
+                                             iff(isnotempty(RequestMethod) and RequestMethod != "UNKNOWN", RequestMethod, ""),
+                                             iff(isnotempty(DeviceCustomString4),"VirusId",""),
+                                             DeviceCustomString4),
                      DstAppName = case(DestinationServiceName in~ ("Generic-Web-HTTP","Application-Unknown","Unknown-Encrypted-Application"), "",
                                         DestinationServiceName),
-                     DvcIpAddr = coalesce(DvcIpAddr,DeviceName)                     
+                     DvcIpAddr = coalesce(DvcIpAddr,DeviceName)
             | extend
-                    EventSeverity = case(isnotempty(EventSeverity),EventSeverity,
-                                         isnotempty(ThreatName), "High",
-                                         "Informational"),
                     Dvc = DvcIpAddr,
                     IpAddr = SrcIpAddr,
                     Rule = NetworkRuleName,
@@ -328,6 +326,6 @@ ParserQuery: |
                     Src = SrcIpAddr,
                     DvcInterface = DvcInboundInterface,
                     Hostname = DstHostname
-            | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, Remote*, ReportReferenceLink, Request*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, ExtID, EventOutcome, FieldDevice*, Reason, ApplicationProtocol, Activity, requestURL, Computer, MessageCode, DstDomainPart, host_parts, ipv4_parts, ipv6_parts, CalculatedThreatSeverity
+            | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, Remote*, ReportReferenceLink, Request*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, ExtID, EventOutcome, FieldDevice*, Reason, ApplicationProtocol, Activity, requestURL, Computer, DstDomainPart, host_parts, ipv4_parts, ipv6_parts
         };
         parser(disabled=disabled)
