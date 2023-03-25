@@ -66,7 +66,7 @@ This integration requires an App registration in the Azure portal. Follow the st
 5. Select **Register** to complete the initial app registration.
 6. When registration finishes, the Azure portal displays the app registration's Overview pane. You see the **Application (client) ID** and **Tenant ID**. The client ID and Tenant ID is required as configuration parameters for the execution of CofenseTriage Data Connector.
 
-> **Reference link:** [https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app)
+> [**Reference document link**](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app)
 
 ### STEP 2 - Add a client secret for Microsoft Azure Active Directory Application
 
@@ -79,7 +79,7 @@ Sometimes called an application password, a client secret is a string value requ
 5. Select **Add**.
 6. *Record the secret's value for use in your client application code. This secret value is never displayed again after you leave this page.* The secret value is required as configuration parameter for the execution of CofenseTriage Data Connector.
 
-> **Reference link:** [https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app#add-a-client-secret](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app#add-a-client-secret)"
+> [**Reference document link**](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app#add-a-client-secret)"
 
 ### STEP 3 - Assign role of Contributor to Microsoft Azure Active Directory Application
 
@@ -93,7 +93,7 @@ Follow the steps in this section to assign the role:
 6. Click on **add members** and type **your app name** that you have created and select it.
 7. Now click on **Review + assign** and then again click on **Review + assign**.
 
-> **Reference link:** [https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal)
+> [**Reference document link**](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal)
 
 ### STEP 4 - Assign Defender Threat Indicator permissions to Microsoft Azure Active Directory Application
 
@@ -104,14 +104,14 @@ Follow the steps in this section to assign the permissions:
 3. Select **Application permissions > Ti.ReadWrite.All**, and then select **Add permissions**.
 4. Select **Grant consent**.
 
-> **Reference link:** [https://docs.microsoft.com/en-us/microsoft-365/security/defender-endpoint/exposed-apis-create-app-webapp?view=o365-worldwide](https://docs.microsoft.com/en-us/microsoft-365/security/defender-endpoint/exposed-apis-create-app-webapp?view=o365-worldwide)
+> [**Reference document link**](https://docs.microsoft.com/en-us/microsoft-365/security/defender-endpoint/exposed-apis-create-app-webapp?view=o365-worldwide)
 
 ### STEP 5 - Configuration steps for the Cofense Client ID and Client Secret
 
 Follow the steps in this section to create/get **Cofense Client ID** and **Client Secret**:
 
 1. Go to **Administration > API Management > Version 2 tab > Applications**
-2. Click on **New Application** 
+2. Click on **New Application**
 3. Add the required information and click on **submit**."
 
 ## Deployment<a name="Deployment"></a>
@@ -128,27 +128,27 @@ Use this method for automated deployment of the Cofense connector.
 5. Select the preferred Subscription, Resource Group and Location.
 6. Enter the below information :
     ```
-     Function Name 
-     Workspace ID 
-     Workspace Key 
-     Cofense URL (https://<your-cofense-instance-name>/)  
-     Cofense Client ID 
-     Cofense Client Secret 
-     Azure Client ID 
-     Azure Client Secret 
-     Azure Tenant ID 
-     Azure Resource Group Name 
-     Azure Workspace Name 
+     Function Name
+     Workspace ID
+     Workspace Key
+     Cofense URL (https://<your-cofense-instance-name>/)
+     Cofense Client ID
+     Cofense Client Secret
+     Azure Client ID
+     Azure Client Secret
+     Azure Tenant ID
+     Azure Resource Group Name
+     Azure Workspace Name
      Azure Subscription ID
-     Threat Level 
-     Proxy Username (optional) 
-     Proxy Password (optional) 
-     Proxy URL (optional) 
-     Proxy Port (optional) 
+     Threat Level
+     Proxy Username (optional)
+     Proxy Password (optional)
+     Proxy URL (optional)
+     Proxy Port (optional)
      Throttle Limit for Non-Cofense Indicators (optional)
-     LogLevel (optional) 
-     Reports Table Name 
-     Schedule 
+     LogLevel (optional)
+     Reports Table Name
+     Schedule
      ```
 5. Mark the checkbox labeled **I agree to the terms and conditions stated above**.
 6. Click **Purchase** to deploy.
@@ -182,27 +182,27 @@ Use the following step-by-step instructions to deploy the Cofense Threat Indicat
 2. In the Application settings tab, select + New application setting.
 3. Add each of the following application settings individually, with their respective values (case-sensitive):
     ```
-     Workspace ID 
-     Workspace Key 
-     Cofense URL (https://<your-cofense-instance-name>/)  
-     Cofense Client ID 
-     Cofense Client Secret 
-     Azure Client ID 
-     Azure Client Secret 
-     Azure Tenant ID 
-     Azure Resource Group Name 
-     Azure Workspace Name 
-     Azure Subscription ID 
-     Threat Level 
-     Proxy Username (optional) 
-     Proxy Password (optional) 
-     Proxy URL (optional) 
+     Workspace ID
+     Workspace Key
+     Cofense URL (https://<your-cofense-instance-name>/)
+     Cofense Client ID
+     Cofense Client Secret
+     Azure Client ID
+     Azure Client Secret
+     Azure Tenant ID
+     Azure Resource Group Name
+     Azure Workspace Name
+     Azure Subscription ID
+     Threat Level
+     Proxy Username (optional)
+     Proxy Password (optional)
+     Proxy URL (optional)
      Proxy Port (optional)
-     Throttle Limit for Non-Cofense Indicators (optional) 
-     LogLevel (optional) 
-     Reports Table Name 
-     Schedule 
-     logAnalyticsUri (optional) 
+     Throttle Limit for Non-Cofense Indicators (optional)
+     LogLevel (optional)
+     Reports Table Name
+     Schedule
+     logAnalyticsUri (optional)
       ```
     - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.
 4. Once all application settings have been entered, click **Save**.
