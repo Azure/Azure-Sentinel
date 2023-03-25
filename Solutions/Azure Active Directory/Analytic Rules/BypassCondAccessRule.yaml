@@ -32,12 +32,11 @@ relevantTechniques:
   - T1078
   - T1098
 query: |
-  let threshold = 1;
+  let threshold = 1; // Modify this threshold value to reduce false positives based on your environment
   let aadFunc = (tableName:string){
   table(tableName)
   | where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ "failure"
-  | extend CAP = parse_json(ConditionalAccessPolicies)
-  | mv-apply CAP on (
+  | mv-apply CAP = parse_json(ConditionalAccessPolicies) on (
     project ConditionalAccessPoliciesName = CAP.displayName, result = CAP.result
     | where result =~ "failure"
   )
@@ -46,14 +45,14 @@ query: |
   | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
   | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
   | extend Status = strcat(StatusCode, ": ", ResultDescription)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status), StatusDetails = make_list(StatusDetails), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status,10), StatusDetails = make_list(StatusDetails,50), IPAddresses = make_list(IPAddress,100), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId,100), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName,100)
   by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type
   | where IPAddressCount > threshold and StatusDetails !has "MFA successfully completed"
-  | mvexpand IPAddresses, Status, StatusDetails, CorrelationIds
+  | mv-expand IPAddresses, Status, StatusDetails, CorrelationIds
   | extend Status = strcat(Status, " ", StatusDetails)
-  | summarize IPAddresses = make_set(IPAddresses), Status = make_set(Status), CorrelationIds = make_set(CorrelationIds), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName)
+  | summarize IPAddresses = make_set(IPAddresses,100), Status = make_set(Status,10), CorrelationIds = make_set(CorrelationIds,100), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName,100)
   by StartTime, EndTime, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type
-  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)
+  | extend timestamp = StartTime, IPAddresses = tostring(IPAddresses), Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
@@ -61,11 +60,13 @@ query: |
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.3
+        columnName: IPAddresses
+version: 1.0.4
 kind: Scheduled
