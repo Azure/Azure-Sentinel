@@ -1,0 +1,89 @@
+Parser:
+  Title: ASIM Authentication parser for Cynerio
+  Version: '0.0.1'
+  LastUpdated: 14/03/2023
+Product:
+  Name: Cynerio
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the Cynerio logs to the ASIM authentication normalized schema.
+ParserName: AsimAuthenticationCynerioEvents
+
+ParserQuery: |
+  let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [
+    'Low', 'Informational', 
+    'Medium', 'Low',
+    'High', 'Medium',
+    'Critical', 'High'
+  ];
+  
+  let Passwords = CynerioEvent_CL 
+    | where title_s == 'Default Password' or title_s == 'Weak Password'
+    | extend EventOriginalSeverity = severity_s
+    | lookup SeverityLookup on EventOriginalSeverity
+    | extend
+        Type = 'CynerioEvent_CL',
+        EventStartTime = unixtime_seconds_todatetime(timestamp_d),
+        EventEndTime = unixtime_seconds_todatetime(timestamp_d),
+        EventOriginalUid = uid_s, 
+        EventType = 'Logon',
+        EventOriginalType = 'IDS',
+        EventOriginalSubType = title_s,
+        EventMessage = details_s,
+        DvcIdType = 'Cynerio',
+        Dvc = tostring(asset_id_g),
+        DvcId = tostring(asset_id_g),
+        AssetType = asset_type_s,
+        DvcIpAddr = asset_ip_s,
+        EventProduct = 'Cynerio',
+        EventCount = int(1),
+        EventResult = 'NA',
+        EventVendor = 'Cynerio',
+        EventSchema = 'Authentication',
+        EventSchemaVersion = '0.1.3',
+        SrcIpAddr = client_ip_s,
+        IpAddr = client_ip_s,
+        TargetIpAddr = dst_ip_s,
+        TargetPortNumber = toint(port_d),
+        LogonProtocol = service_s
+    | parse EventMessage with * "User Name: " ActorUserName "," *
+    | project-away
+        *_d, *_s, *_b, *_g;
+  
+  Passwords
+
+Exceptions:
+  - Field: Dst
+    Warning: Missing recommended field
+    Exception: Irrelevant
+  - Field: DvcAction
+    Warning: Missing recommended field
+    Exception: Irrelevant
+  - Field: DvcDomain
+    Warning: Missing recommended field
+    Exception: Irrelevant
+  - Field: DvcHostname
+    Warning: Missing recommended field
+    Exception: Irrelevant
+  - Field: EventResultDetails
+    Warning: Missing recommended field
+    Exception: Irrelevant
+  - Field: EventUid
+    Warning: Missing recommended field
+    Exception: Irrelevant
+  - Field: Src
+    Warning: Missing recommended field
+    Exception: Irrelevant
+  - Field: TargetDomain
+    Warning: Missing recommended field
+    Exception: Irrelevant
+  - Field: TargetHostname
+    Warning: Missing recommended field
+    Exception: Irrelevant
