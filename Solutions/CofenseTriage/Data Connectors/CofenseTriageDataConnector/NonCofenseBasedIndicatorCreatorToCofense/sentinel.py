@@ -59,8 +59,8 @@ class MicrosoftSentinel:
 
     def set_throttle_limit(self):
         """To add a limit in indicator creation in MS Defender in one execution."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             throttle_input = NON_COFENSE_THROTTLE_LIMIT
             if throttle_input == "None":
                 self.page_size = QUERY_SENTINEL_PAGESIZE
@@ -223,8 +223,8 @@ class MicrosoftSentinel:
 
     def convert_datetime_format(self, datetime_string):
         """To convert datetime string to datetime type for comparison of dates."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             if datetime_string is None or datetime_string == "":
                 return datetime_string
             else:
@@ -248,8 +248,8 @@ class MicrosoftSentinel:
 
     def convert_sentinel_datetime_format(self, indicator):
         """To convert sentinel indicator lastUpdatedTimeUtc format."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             return self.convert_datetime_format(
                 indicator.get("properties", {}).get("lastUpdatedTimeUtc")
             )

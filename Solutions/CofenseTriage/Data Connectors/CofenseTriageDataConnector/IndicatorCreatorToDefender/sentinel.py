@@ -185,8 +185,8 @@ class MicrosoftSentinel:
 
     def convert_datetime_format(self, datetime_string):
         """To convert datetime string to datetime type for comparison of dates."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             if datetime_string is None or datetime_string == "":
                 return datetime_string
             else:
@@ -209,8 +209,8 @@ class MicrosoftSentinel:
 
     def convert_sentinel_datetime_format(self, indicator):
         """To convert sentinel indicator lastUpdatedTimeUtc format."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             return self.convert_datetime_format(
                 indicator.get("properties", {}).get("lastUpdatedTimeUtc")
             )
@@ -561,8 +561,9 @@ class MicrosoftSentinel:
 
     def create_indicator_data(self, indicator):
         """To create python dictionary for posting indicator into defender."""
+        __method_name = inspect.currentframe().f_code.co_name
+        sentinel_indicator_display_name = None
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             sentinel_indicator_display_name = indicator.get("properties", {}).get(
                 "displayName", None
             )
@@ -839,8 +840,8 @@ class MicrosoftSentinel:
         indicator_data,
     ):
         """To create indicators into defender."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             # Posting indicator into defender.
             create_indicator_status_code = defender_object.create_defender_indicator(
                 indicator_data=indicator_data
