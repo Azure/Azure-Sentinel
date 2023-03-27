@@ -52,12 +52,14 @@ Based on the guidance provided above, before developing the Asim Parser, ensure 
 Based on the identified data source map it to one or multiple ASIM schemas. It is important to cover the mapping for all the possible ASIM schemas the source logs can fit in
 
 **Build and Validate Parser** – 
-first look at the list of [available parsers] (https://learn.microsoft.com/en-us/azure/sentinel/normalization-parsers-list) to make sure there is no parser already available that might match the requirement. Once the schema mapping is done, start [building] (https://review.learn.microsoft.com/en-us/azure/sentinel/normalization-develop-parsers?branch=pr-en-us-229997) the parser by relating the source log fields with the ASIM schema fields. 
+first look at the list of [available parsers] (https://learn.microsoft.com/en-us/azure/sentinel/normalization-parsers-list) to make sure there is no parser already available that might match the requirement. 
+Once the schema mapping is done, start [building] (https://review.learn.microsoft.com/en-us/azure/sentinel/normalization-develop-parsers?branch=pr-en-us-229997) the parser by relating the source log fields with the ASIM schema fields. 
+
 Once done with the testing and validation covered under the building document above raise a pull request against the  [Microsoft Sentinel GitHub repository] (https://github.com/Azure/Azure-Sentinel)
-	- Add to the PR your parsers YAML files to the ASIM parser folders (**/Parsers/ASim<schema>/Parsers**)
-	- Add representative sample data and test results to the sample data folder (/Sample Data/ASIM), please follow the [sample data contribution] (https://github.com/Azure/Azure-Sentinel/tree/master/Sample Data#sample-data-contribution-guidance) guidelines for the same. 
-	-After running the test tool please submit the test results into (/Parsers/ASim<schema>/Parsers/Test results)
-Parser Ships - Microsoft team will review the parser and if everything is matching the expected standards then we will deploy the parser in Log analytic workspace so that it will be available to all Microsoft customers.
+- Add to the PR your parsers YAML files to the ASIM parser folders (*/Parsers/ASim\<schema>\/Parsers*)
+- Add representative sample data and test results to the sample data folder (*/Sample Data/ASIM*), please follow the [sample data contribution] (https://github.com/Azure/Azure-Sentinel/tree/master/Sample Data#sample-data-contribution-guidance) and [test result submission] (https://learn.microsoft.com/en-us/azure/sentinel/normalization-develop-parsers#test-results-submission-guidelines) guidelines for the same.
+
+**Parser Ships** - Microsoft team will review the parser and if everything is matching the expected standards then we will deploy the parser in Log analytic workspace so that it will be available to all Microsoft customers.
 
 
 
