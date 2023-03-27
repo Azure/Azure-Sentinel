@@ -6,11 +6,11 @@ Build your ASIM parser.
 ![Microsoft Sentinel solutions build process](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/ASIM_parser.png)
 
 	
-## Identify Data Source – 
+## Identify Data Source 
 
 As ASIM solutions does not have a connector of its own it is important to see if there is already an [connector / solution] (https://learn.microsoft.com/en-us/azure/sentinel/data-connectors-reference) available for the identified data source. If there is no solution / connector available, we would recommend to follow this [data connector building guideline] (https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/ReadMe.md) and building your connector and getting it shipped into the Microsoft sentinel content hub. This guide is to help in building ASIM parsers for vendor products where we have out of box source specific solutions available. We are not intending to support custom connectors that are not available as out of box content.
   
-## ASIM Schema mapping – 
+## ASIM Schema mapping 
 
 An Advanced Security Information Model [(ASIM)] (https://learn.microsoft.com/en-us/azure/sentinel/normalization) schema is a set of fields that represent an activity. Using the fields from a normalized schema in a query ensures that the query will work with every normalized source.
 	
