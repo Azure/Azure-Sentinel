@@ -171,13 +171,19 @@ ParserQuery: |
               "Wait for Further Actions","","Success","Informational",          
               "Wait for RPC Reply","","Success","Informational"
     ];
-    let DeviceEventClassIDLookup=datatable(DeviceEventClassID:string,EventSubType:string,DvcAction_DeviceEventClassIDLookup:string,EventResult_DeviceEventClassIDLookup:string,EventSeverity_DeviceEventClassIDLookup:string) //Add more codes if needed
+    let DeviceEventClassIDLookup_Packet=datatable(DeviceEventClassID:string,EventSubType:string,DvcAction_DeviceEventClassIDLookup:string,EventResult_DeviceEventClassIDLookup:string,EventSeverity_DeviceEventClassIDLookup:string) //Add more codes if needed
     [
               "70018","Start","Allow","Success","Informational", // Connection_Allowed
               "70019","End","Deny","Failure","Low", // Connection_Discarded
               "70021","End","Reset","Failure","Low", // Connection_Closed
               "70022","End","Reset","Failure","Low", // Connection_Closed-Abnormally
               "70026","","","Success","Informational", // Connection_Progress
+    ];
+    let DeviceEventClassIDLookup_File=datatable(DeviceEventClassID:string,DvcAction_DeviceEventClassIDLookup:string,EventResult_DeviceEventClassIDLookup:string,EventSeverity_DeviceEventClassIDLookup:string)
+    [
+              "76506","Allow","Success","Informational", // File_Allowed
+              "76508","Deny","Failure","Low", // File_Malware-Blocked
+              "76509","","Failure","Low" // File_Malware-Detected
     ];
     let MessageLookup = datatable (Message:string, DvcAction_MessageLookup:string, EventResult_MessageLookup:string, EventResultDetails:string, EventOriginalResultDetails:string)  
     [
@@ -221,11 +227,11 @@ ParserQuery: |
             ;
     let PacketFilteringData = ForcePointNetwork
             | where DeviceFacility == "Packet Filtering" and DeviceEventClassID !in ("70383","70393","70734","71009","71040")
-            | lookup DeviceEventClassIDLookup on DeviceEventClassID
+            | lookup DeviceEventClassIDLookup_Packet on DeviceEventClassID
             | lookup MessageLookup on Message
-            | extend DvcAction = coalesce(DvcAction_DeviceEventClassIDLookup, DvcAction_MessageLookup), 
+            | extend DvcAction = coalesce(DvcAction_MessageLookup, DvcAction_DeviceEventClassIDLookup), 
                     EventResult = case (Message startswith "Referred connection not known", "Failure",
-                                        coalesce(EventResult_DeviceEventClassIDLookup, EventResult_MessageLookup)), 
+                                        coalesce(EventResult_MessageLookup, EventResult_DeviceEventClassIDLookup)), 
                     EventSeverity = case(Message startswith "Referred connection not known", "Low",
                                         EventSeverity_DeviceEventClassIDLookup),
                     EventOriginalResultDetails = case(Message startswith "Referred connection not known", Message,
@@ -233,14 +239,16 @@ ParserQuery: |
             | project-away DvcAction_*, EventResult_*, EventSeverity_DeviceEventClassIDLookup;
     let FileFilteringData = ForcePointNetwork
             | where DeviceFacility == "File Filtering"
-            | extend ThreatName = case (DeviceEventClassID in ("76508", "76509") and DeviceFacility == "File Filtering", Activity,
+            | lookup DeviceEventClassIDLookup_File on DeviceEventClassID
+            | extend ThreatName = case (DeviceEventClassID in ("76508", "76509"), Activity,
                                         "")
-            | extend EventResult = case (isnotempty(Message), "Failure",
+            | extend EventResult = case(isnotempty(Message), "Failure",
                                         ""), 
                      EventSeverity = case(isnotempty(Message), "Low",
                                         ""),
                      EventOriginalResultDetails = case(isnotempty(Message), Message,
-                                                    "");
+                                                    "")
+            | project-away *_DeviceEventClassIDLookup;
     let InspectionData = ForcePointNetwork
             | where DeviceFacility == "Inspection" or DeviceEventClassID == "70734"
             | extend MessageCode = toint(DeviceEventClassID)
