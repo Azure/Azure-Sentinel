@@ -41,7 +41,7 @@ query: |
     // sessionize into failure groupings until either the account changes or there is a success
     | extend SessionStartedUtc = row_window_session(TimeGenerated, timeRange, authenticationWindow, Account != prev(Account) or prev(Outcome) == "Success")
     // count the failures in each session
-    | summarize FailureCountBeforeSuccess=sumif(OutcomeCount, Outcome == "Failure"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), make_list(Outcome,50), make_set(Computer,50), make_set(IpAddress,50) by SessionStartedUtc, Account
+    | summarize FailureCountBeforeSuccess=sumif(OutcomeCount, Outcome == "Failure"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), make_list(Outcome, 128), make_set(Computer, 128), make_set(IpAddress, 128) by SessionStartedUtc, Account
     // the session must not start with a success, and must end with one
     | where array_index_of(list_Outcome, "Success") != 0
     | where array_index_of(list_Outcome, "Success") == array_length(list_Outcome) - 1
@@ -51,19 +51,23 @@ query: |
     // expand out ip and computer for customer entity assignment
     | mv-expand set_IpAddress, set_Computer
     | extend IpAddress = tostring(set_IpAddress), Computer = tostring(set_Computer)
-    | extend timestamp=StartTime, AccountCustomEntity=Account, HostCustomEntity=Computer, IPCustomEntity=IpAddress
+    | extend timestamp=StartTime, NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.3
+        columnName: IpAddress
+version: 1.0.4
 kind: Scheduled
