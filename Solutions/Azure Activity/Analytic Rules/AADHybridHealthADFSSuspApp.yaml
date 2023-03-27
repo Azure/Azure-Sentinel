@@ -1,7 +1,7 @@
 id: d9938c3b-16f9-444d-bc22-ea9a9110e0fd
 name: Azure Active Directory Hybrid Health AD FS Suspicious Application
 description: |
-  'This detection uses AzureActivity logs (Administrative category) to a suspicious application adding a server instance to an Azure AD Hybrid health AD FS service or deleting the AD FS service instance.
+  'This detection uses AzureActivity logs (Administrative category) to identify a suspicious application adding a server instance to an Azure AD Hybrid Health AD FS service or deleting the AD FS service instance.
   Usually the Azure AD Connect Health Agent application with ID cf6d7e68-f018-4e0a-a7b3-126e053fb88d and ID cb1056e2-e479-49de-ae31-7812af012ed8 is used to perform those operations.'
 severity: Medium
 status: Available 
@@ -27,24 +27,24 @@ query: |
   let appList = dynamic(['cf6d7e68-f018-4e0a-a7b3-126e053fb88d','cb1056e2-e479-49de-ae31-7812af012ed8']);
   let operationNamesList = dynamic(['Microsoft.ADHybridHealthService/services/servicemembers/action','Microsoft.ADHybridHealthService/services/delete']);
   AzureActivity
-  | where CategoryValue == 'Administrative'
+  | where CategoryValue =~ 'Administrative'
   | where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'
-  | where _ResourceId contains 'AdFederationService'
+  | where _ResourceId has 'AdFederationService'
   | where OperationNameValue in~ (operationNamesList)
   | extend claimsJson = parse_json(Claims)
-  | extend AppId = tostring(claimsJson.appid)
-  | extend AccountName = tostring(claimsJson.name)
+  | extend AppId = tostring(claimsJson.appid), AccountName = tostring(claimsJson.name), Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
   | where AppId !in (appList)
   | project-away claimsJson
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 2.0.0
+        columnName: CallerIpAddress
+version: 2.0.1
 kind: Scheduled

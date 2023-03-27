@@ -91,10 +91,11 @@ query:  |
   | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"])
   | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
   | extend Hashes = column_ifexists("Hashes", ""), CommandLine = column_ifexists("CommandLine", "")
-  | where (Hashes has_any (sha256Hashes) ) or (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr "wscript.exe') and CommandLine has ('"%PUBLIC%\\Pictures\\') and CommandLine has ('//e:VBScript //b" /F')) or (CommandLine has ('wscript.exe C:\\Users\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b') or (CommandLine has_all ("schtasks.exe", "create", "wscript", "e:vbscript", ".wav")))
-  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, tostring(Hashes), CommandLine, Image
+  | extend Hashes = todynamic(Hashes) | mv-expand Hashes
+  | where (Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes)) or (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr "wscript.exe') and CommandLine has ('"%PUBLIC%\\Pictures\\') and CommandLine has ('//e:VBScript //b" /F')) or (CommandLine has ('wscript.exe C:\\Users\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b') or (CommandLine has_all ("schtasks.exe", "create", "wscript", "e:vbscript", ".wav")))
+  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = Hashes, AlgorithmCustomEntity = "SHA256"
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = tostring(Hashes[1]), AlgorithmCustomEntity = "SHA256"
   ),
   (DnsEvents
   | where Name in~ (domains)  
@@ -165,5 +166,5 @@ entityMappings:
     fieldMappings:
       - identifier: ProcessId
         columnName: ProcessCustomEntity
-version: 1.1.2
+version: 1.1.3
 kind: Scheduled
