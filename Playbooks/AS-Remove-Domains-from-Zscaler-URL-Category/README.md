@@ -4,8 +4,8 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Remove-Domains-from-Zscaler-URL-Category%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Remove-Domains-from-Zscaler-URL-Category%2Fmaster%2Fazuredeploy.json)    
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Remove-Domains-from-Zscaler-URL-Category%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Remove-Domains-from-Zscaler-URL-Category%2Fazuredeploy.json)    
 
 This playbook is intended to be run from a Microsoft Sentinel incident. It will extract domains from Microsoft Sentinel incidents and remove them from a Zscaler Custom URL Category of your choice. This playbook is meant to be used in tandem with [AS-Add-Domains-to-Zscaler-URL-Category](https://github.com/Accelerynt-Security/Zscaler-add-Domains-to-URL-Category)
 
@@ -19,11 +19,11 @@ This playbook is intended to be run from a Microsoft Sentinel incident. It will 
 The following items are required under the template settings during deployment: 
 
 * The URL of your Zscaler organization
-* A configured Zscaler [admin account](https://github.com/Accelerynt-Security/AS-Remove-Domains-from-Zscaler-URL-Category#zscaler-admin-account)
-* A Zscaler [API key](https://github.com/Accelerynt-Security/AS-Remove-Domains-from-Zscaler-URL-Category#zscaler-api-key)
-* The name of the [Zscaler custom URL category](https://github.com/Accelerynt-Security/AS-Remove-Domains-from-Zscaler-URL-Category#zscaler-url-category) you wish to remove the Microsoft Sentinel incident domains from
-* A Microsoft Azure [integration account](https://github.com/Accelerynt-Security/AS-Remove-Domains-from-Zscaler-URL-Category#create-an-integration-account)
-* A Microsoft Azure [key vault secret](https://github.com/Accelerynt-Security/AS-Remove-Domains-from-Zscaler-URL-Category#create-azure-key-vault-secrets) containing your Okta API Token
+* A configured Zscaler [admin account](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Remove-Domains-from-Zscaler-URL-Category#zscaler-admin-account)
+* A Zscaler [API key](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Remove-Domains-from-Zscaler-URL-Category#zscaler-api-key)
+* The name of the [Zscaler custom URL category](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Remove-Domains-from-Zscaler-URL-Category#zscaler-url-category) you wish to remove the Microsoft Sentinel incident domains from
+* A Microsoft Azure [integration account](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Remove-Domains-from-Zscaler-URL-Category#create-an-integration-account)
+* A Microsoft Azure [key vault secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Remove-Domains-from-Zscaler-URL-Category#create-azure-key-vault-secrets) containing your Okta API Token
 
 # 
 ### Setup
@@ -137,7 +137,7 @@ Repeat this process for your Zscaler password.
 
 ![Zscaler_Key_Vault_3](Images/Zscaler_Key_Vault_3.png)
 
-Once both secrets have been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the key vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-Remove-Domains-from-Zscaler-URL-Category#granting-access-to-azure-key-vault).
+Once both secrets have been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the key vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Remove-Domains-from-Zscaler-URL-Category#granting-access-to-azure-key-vault).
 
 ![Zscaler_Key_Vault_4](Images/Zscaler_Key_Vault_4.png)
 
@@ -150,8 +150,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-Remove-Domains-from-Zscaler-URL-Category
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Remove-Domains-from-Zscaler-URL-Category%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Remove-Domains-from-Zscaler-URL-Category%2Fmaster%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Remove-Domains-from-Zscaler-URL-Category%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Remove-Domains-from-Zscaler-URL-Category%2Fazuredeploy.json)
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
