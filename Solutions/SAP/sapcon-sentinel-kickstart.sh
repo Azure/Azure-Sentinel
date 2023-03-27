@@ -434,7 +434,7 @@ pause '[Press enter to agree and proceed as we guide you through the installatio
 
 #Globals
 containername=sapcon
-sysconf=systemconfig.ini
+sysconf=systemconfig.json
 
 os=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="ID" {print $2}')
 ver_id=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="VERSION_ID" {print $2}' | awk '{print substr($0, 2, length($0) - 2) }')
@@ -802,7 +802,7 @@ elif [ "$MODE" == "cfgf" ]; then
 fi
 echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
 
-sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.ini "$sysfileloc$sysconf"
+sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.json "$sysfileloc$sysconf"
 if [ ! $? -eq 0 ]; then
 	echo 'Error accessing the local folder.'
 	exit 1
