@@ -1,7 +1,6 @@
-import typing
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import azure.functions as func
 from shared_code import configurations, utils
@@ -76,7 +75,7 @@ def generate_time(
     return start_time, end_time
 
 
-def main(myTimer: func.TimerRequest, oatTaskMsg: func.Out[typing.List[str]]) -> None:
+def main(myTimer: func.TimerRequest, oatTaskMsg: func.Out[List[str]]) -> None:
 
     log_analytics = LogAnalytics(WORKSPACE_ID, WORKSPACE_KEY, LOG_TYPE)
     error = None

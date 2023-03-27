@@ -78,6 +78,7 @@ def send_message_to_storage_queue(
     try:
         queue_client.create_queue()
     except ResourceExistsError:
+        # resource not exists
         pass
 
     queue_client.send_message(message)
