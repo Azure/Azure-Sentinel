@@ -218,7 +218,7 @@ while IFS= read -r contname; do
 				envstring+="-e $variable "
 			fi
 		done
-		
+
 		# Check if we have an agent guid already. if we don't have - generate and add to the envstring
 		if [[ $envstring != *"SENTINEL_AGENT_GUID="* ]]; then
 			envstring+="-e SENTINEL_AGENT_GUID=$(uuidgen) "
@@ -283,6 +283,16 @@ while IFS= read -r contname; do
 					log "Agent test run finished. Exit code $containerexitcode"
 					if [ "$containerexitcode" == 0 ]; then
 						dryrunsuccess=1
+					elif [ "$containerexitcode" == 5 ]; then
+						echo ""
+						log "Failed to connect to the SAP system"
+						dryrunsuccess=0
+						break
+					elif [ "$containerexitcode" == 6 ]; then
+						echo ""
+						log "Failed to send heartbeat data to Azure Sentinel Workspace"
+						dryrunsuccess=0
+						break
 					elif [ "$containerexitcode" == 7 ]; then
 						echo ""
 						log "Insufficient authorizations in SAP"
