@@ -1269,7 +1269,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
                                 if($existingFunctionApp)
                                 {
-                                    $templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Function)";
+                                    $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Function")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Function)"
+                                    #$templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Function)";
                                 }
                             }
                             # Data Connector Content -- *Assumes GenericUI
