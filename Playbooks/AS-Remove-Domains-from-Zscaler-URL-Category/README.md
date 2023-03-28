@@ -186,28 +186,9 @@ Once the resources have validated, click on "**Create**".
 ![Zscaler_Deploy_2](Images/Zscaler_Deploy_2.png)
 
 The resources should take around a minute to deploy. Once the deployment is complete, you can expand the "**Deployment details**" section to view them.
-Click the one corresponding to the Logic App.
+You can view the logic app by clicking the corresponding resource.
 
 ![Zscaler_Deploy_3](Images/Zscaler_Deploy_3.png)
-
-Click on the “**Edit**” button. This will bring us into the Logic Apps Designer.
-
-![Zscaler_Deploy_4](Images/Zscaler_Deploy_4.png)
-
-The first and fourth labeled "**Connections**" use a connection created during the deployment of this playbook. Before the playbook can be run, this connection will either need to be authorized in the indicated steps, or an existing authorized connection may be alternatively selected.  
-
-![Zscaler_Deploy_5](Images/Zscaler_Deploy_5.png)
-
-To validate the connections created for this playbook, expand the "**Connections**" step and click the exclamation point icon next to the name matching the playbook.
-                                                                                                
-![Zscaler_Deploy_6](Images/Zscaler_Deploy_6.png)
-
-When prompted, sign in to validate the connection.                                                                                                
-![Zscaler_Deploy_7](Images/Zscaler_Deploy_7.png)
-
-The same connection may need to be reselected for the fourth step. After a valid connection is established for the first two steps, click the "**Save**" button.
-
-![Zscaler_Deploy_8](Images/Zscaler_Deploy_8.png)
 
 #
 ### Granting Access to Azure Key Vault
