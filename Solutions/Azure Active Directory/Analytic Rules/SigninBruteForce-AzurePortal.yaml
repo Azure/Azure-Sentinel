@@ -1,8 +1,7 @@
 id: 28b42356-45af-40a6-a0b4-a554cdfd5d8a
 name: Brute force attack against Azure Portal
 description: |
-  'Identifies evidence of brute force activity against Azure Portal by highlighting multiple authentication failures 
-  and by a successful authentication within a given time window. 
+  'Identifies evidence of brute force activity against Azure Portal by highlighting multiple authentication failures and by a successful authentication within a given time window. 
   Default Failure count is 10 and default Time Window is 20 minutes.
   References: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes.'
 severity: Medium
@@ -50,7 +49,7 @@ query: |
  // bin outcomes based on authenticationWindow
  | summarize FailureOrSuccessCount = count() by  FailureOrSuccess, UserId, UserDisplayName, AppDisplayName, IPAddress, Browser, OS, State, City, Region, Type, CorrelationId, bin(TimeGenerated, authenticationWindow), ResultType, UserPrincipalName,SessionStartedUtc
  // count the failures in each session
- | summarize FailureCountBeforeSuccess=sumif(FailureOrSuccessCount, FailureOrSuccess == "Failure"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), makelist(FailureOrSuccess), IPAddress = make_set(IPAddress), make_set(Browser), make_set(City), make_set(State), make_set(Region), make_set(ResultType) by SessionStartedUtc, UserPrincipalName, CorrelationId, AppDisplayName, UserId, Type
+ | summarize FailureCountBeforeSuccess=sumif(FailureOrSuccessCount, FailureOrSuccess == "Failure"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), makelist(FailureOrSuccess), IPAddress = make_set(IPAddress,15), make_set(Browser,15), make_set(City,15), make_set(State,15), make_set(Region,15), make_set(ResultType,15) by SessionStartedUtc, UserPrincipalName, CorrelationId, AppDisplayName, UserId, Type
  // the session must not start with a success, and must end with one
  | where array_index_of(list_FailureOrSuccess, "Success") != 0
  | where array_index_of(list_FailureOrSuccess, "Success") == array_length(list_FailureOrSuccess) - 1
@@ -60,19 +59,22 @@ query: |
  // expand out ip for entity assignment
  | mv-expand IPAddress
  | extend IPAddress = tostring(IPAddress)
- | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress 
+ | extend timestamp = StartTime 
  };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
   union isfuzzy=true aadSignin, aadNonInt
+  | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+    - identifier: Name
+      columnName: Name
+    - identifier: UPNSuffix
+      columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 2.1.0
+        columnName: IPAddress
+version: 2.1.1
 kind: Scheduled
