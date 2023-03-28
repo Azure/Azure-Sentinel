@@ -47,6 +47,42 @@ namespace Kqlvalidations.Tests
 
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
+        [ClassData(typeof(HuntingQueriesYamlFilesTestData))]
+        public void Validate_HuntingQueries_HaveValidTIData(string fileName, string encodedFilePath)
+        {
+            var res = ReadAndDeserializeYaml(encodedFilePath);
+            var id = (string)res["id"];
+
+            //we ignore known issues. We also ignore templates that are not in the skipped templates list.
+            if (ShouldSkipTemplateValidation(id))
+            {
+                return;
+            }
+
+            var queryStr = (string)res["query"];
+            ValidateKqlForLatestTIData(id, queryStr);
+        }
+
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
+        [ClassData(typeof(DetectionsYamlFilesTestData))]
+        public void Validate_DetectionQueries_HaveValidTIData(string fileName, string encodedFilePath)
+        {
+            var res = ReadAndDeserializeYaml(encodedFilePath);
+            var id = (string)res["id"];
+
+            //we ignore known issues
+            if (ShouldSkipTemplateValidation(id))
+            {
+                return;
+            }
+
+            var queryStr = (string)res["query"];
+            ValidateKqlForLatestTIData(id, queryStr);
+        }
+
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
@@ -214,6 +250,24 @@ namespace Kqlvalidations.Tests
                     ? string.Empty
                     : @$"Template Id: {id} is not valid in Line: {firstErrorLocation.Line} col: {firstErrorLocation.Col}
                     Errors: {validationResult.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+        }
+
+        private void ValidateKqlForLatestTIData(string id, string queryStr)
+        {
+
+            string pattern = @"ThreatIntelligenceIndicator\s*(\|.*\s*)*summarize\s+LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s+by\s+IndicatorId\s*";
+            bool match = Regex.IsMatch(queryStr, pattern);
+
+
+            Assert.True(
+                match,
+                match
+                    ? string.Empty
+                    : @$"Template Id: {id} is not valid 
+                    Errors: Content needs to use latest Threat Intelligence data, sample query to get the latest Threat Intelligence data
+                    ThreatIntelligenceIndicator
+                    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+                    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId");
         }
 
         private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
