@@ -48,9 +48,8 @@ def get_api_tokens():
             try:
                 token = client.get_secret(get_secret_name(clp_id)).value
                 tokens.append(token)
-            except Exception:
-                # screts not exists return empty array
-                pass
+            except Exception as e:
+                print(e)
 
         return tokens
     else:
