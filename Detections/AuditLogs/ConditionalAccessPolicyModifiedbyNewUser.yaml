@@ -1,0 +1,60 @@
+id: 25a7f951-54b7-4cf5-9862-ebc04306c590
+name: Conditional Access Policy Modified by New User
+description: |
+  'Detects a Conditional Access Policy being modified by a user who has not modified a policy in the last 14 days.
+    A threat actor may try to modify policies to weaken the security controls in place.
+    Investigate any change to ensure they are approved.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-infrastructure#conditional-access'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let known_users = (AuditLogs
+    | where TimeGenerated between(ago(14d)..ago(1d))
+    | where OperationName has "conditional access policy"
+    | where Result =~ "success"
+    | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | summarize by userPrincipalName);
+    AuditLogs
+    | where TimeGenerated > ago(1d)
+    | where OperationName has "conditional access policy"
+    | where Result =~ "success"
+    | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend CAPolicyName = tostring(TargetResources[0].displayName)
+    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+    | where userPrincipalName !in (known_users)
+    | extend NewPolicyValues = TargetResources[0].modifiedProperties[0].newValue
+    | extend OldPolicyValues = TargetResources[0].modifiedProperties[0].oldValue
+    | project-reorder TimeGenerated, OperationName, CAPolicyName, userPrincipalName, ipAddress, NewPolicyValues, OldPolicyValues
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: userPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

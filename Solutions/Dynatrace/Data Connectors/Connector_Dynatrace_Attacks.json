@@ -1,0 +1,164 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logAnalyticsWorkspaceName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Sentinel is setup"
+            }
+        },
+        "connectorResourceName": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Resource name for connector"
+            }
+        }
+    },
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-10-01-preview",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/',parameters('connectorResourceName'))]",
+            "location": "[resourceGroup().location]",
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "DynatraceAttacks",
+                    "title": "Dynatrace Attacks",
+                    "publisher": "Dynatrace",
+                    "descriptionMarkdown": "This connector uses the Dynatrace Attacks REST API to ingest detected attacks into Microsoft Sentinel Log Analytics",
+                    "additionalRequirementBanner": "This data connector depends on a parser based on Kusto Function to work as expected which is deployed with the Microsoft Sentinel Solution.",
+                    "graphQueriesTableName": "DynatraceAttacks_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Dynatrace Attack Events",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All Attack Events",
+                            "query": "DynatraceAttacks\n| summarize  arg_max(TimeStamp, *) by AttackId\n|  take 10"
+                        },
+                        {
+                            "description": "All Exploited Attack Events",
+                            "query": "DynatraceAttacks\n| where State == \"EXPLOITED\"\n| summarize  arg_max(TimeStamp, *) by AttackId\n|  take 10"
+                        },
+                        {
+                            "description": "Count Attacks by Type",
+                            "query": "DynatraceAttacks\n| summarize  arg_max(TimeStamp, *) by AttackId\n| summarize count() by AttackType\n| take 10"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": [
+                                "APIPolling"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": true
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                             {
+                                "name": "Dynatrace tenant (ex. xyz.dynatrace.com)",
+                                "description": "You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/support/help/how-to-use-dynatrace/application-security) enabled, learn more about the [Dynatrace platform](https://www.dynatrace.com/)."
+                            },
+                            {
+                                "name": "Dynatrace Access Token",
+                                "description": "You need a Dynatrace Access Token, the token should have ***Read attacks*** (attacks.read) scope."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Dynatrace Attack Events to Microsoft Sentinel",
+                            "description": "Configure and Enable Dynatrace [Application Security](https://www.dynatrace.com/support/help/how-to-use-dynatrace/application-security). \n Follow [these instructions](https://www.dynatrace.com/support/help/get-started/access-tokens#create-api-token) to generate an access token.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [
+                                            {
+                                                "displayText": "Dynatrace tenant (ex. xyz.dynatrace.com)",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{dynatraceEnvironmentUrl}}"
+                                            }
+                                        ]
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "APIKeyIdentifier": "Api-Token",
+                        "APIKeyName": "Authorization"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://{{dynatraceEnvironmentUrl}}/api/v2/attacks",
+                        "httpMethod": "Get",
+                        "rateLimitQPS": 2,
+                        "retryCount": 3,
+                        "timeoutInSeconds": 120,
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                        "queryWindowInMin": 5,
+                        "startTimeAttributeName": "from",
+                        "endTimeAttributeName": "to",
+                        "headers": {
+                            "Accept": "application/json"
+                        },
+                        "queryParameters": {
+                            "fields": "+attacker,+request,+entrypoint,+vulnerability,+managementZones"
+                        }
+                    },
+                    "paging": {
+                        "pagingType": "PageToken",
+                        "nextPageTokenJsonPath": "$.nextPageKey",
+                        "nextPageParaName": "nextPageKey",
+                        "pageSizeParaName": "pageSize",
+                        "pageSize": 500
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$.attacks"
+                        ],
+                        "convertChildPropertiesToArray": true
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

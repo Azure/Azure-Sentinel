@@ -1,0 +1,559 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Forcepoint",
+    "comments": "Solution template for Forcepoint CASB"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Forcepoint Cloud Access Security Broker (CASB)",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "microsoftsentinelcommunity.azure-sentinel-solution-forcepoint-casb",
+    "_solutionId": "[variables('solutionId')]",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "ForcepointCASBWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "ForcepointCasb",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "ForcepointCasb",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Forcepoint CASB Workbook with template",
+        "displayName": "Forcepoint CASB workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ForcepointCASBWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Get insights on user risk with the Forcepoint CASB (Cloud Access Security Broker) workbook."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"<h2>Top 5 Users by Number of Failed Attempts</h2>\"},\"name\":\"text - 0\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\r\\n| where TimeGenerated <= now()\\r\\n| extend outcome = coalesce(\\r\\n                        column_ifexists(\\\"EventOutcome\\\", \\\"\\\"),\\r\\n                        split(split(AdditionalExtensions, \\\";\\\", 2)[0], \\\"=\\\", 1)[0],\\r\\n                        \\\"\\\"\\r\\n                        )\\r\\n| extend reason = coalesce(\\r\\n                        column_ifexists(\\\"Reason\\\", \\\"\\\"),\\r\\n                        split(split(AdditionalExtensions, \\\";\\\", 3)[0], \\\"=\\\", 1)[0],\\r\\n                        \\\"\\\"\\r\\n                        )\\r\\n| where DeviceVendor == \\\"Forcepoint CASB\\\"\\r\\n| where DeviceProduct in (\\\"SaaS Security Gateway\\\", \\\"Cloud Service Monitoring\\\", \\\"CASB Admin audit log\\\")\\r\\n| where outcome ==\\\"Failure\\\" \\r\\n| summarize Count= count() by DestinationUserName| render barchart\",\"size\":0,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 2\"},{\"type\":1,\"content\":{\"json\":\"\\r\\n<h2>Top 5 Users With The Highest Number Of Logs</h2>\"},\"name\":\"text - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\r\\n| where TimeGenerated <= now()\\r\\n| where DeviceVendor == \\\"Forcepoint CASB\\\"\\r\\n| where DeviceProduct in (\\\"SaaS Security Gateway\\\", \\\"Cloud Service Monitoring\\\", \\\"CASB Admin audit log\\\")\\r\\n| summarize Count = count() by DestinationUserName\\r\\n| top 5 by DestinationUserName| render barchart\",\"size\":1,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 4\"}],\"fromTemplateId\":\"sentinel-ForcepointCASB\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=ForcepointCASBWorkbook; logoFileName=FP_Green_Emblem_RGB-01.svg; description=Get insights on user risk with the Forcepoint CASB (Cloud Access Security Broker) workbook.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Forcepoint Cloud Access Security Broker (CASB); templateRelativePath=ForcepointCASB.json; subtitle=; provider=Forcepoint}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Forcepoint CASB",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Forcepoint"
+                },
+                "support": {
+                  "tier": "Community",
+                  "name": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Forcepoint CASB data connector with template",
+        "displayName": "Forcepoint CASB template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Forcepoint CASB data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Forcepoint CASB",
+                  "publisher": "Forcepoint CASB",
+                  "descriptionMarkdown": "The Forcepoint CASB (Cloud Access Security Broker) Connector allows you to automatically export CASB logs and events into Microsoft Sentinel in real-time. This enriches visibility into user activities across locations and cloud applications, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "ForcepointCASB",
+                      "baseQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint CASB\"\n"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 5 Users With The Highest Number Of Logs",
+                      "query": "CommonSecurityLog \n| summarize Count = count() by DestinationUserName\n| top 5 by DestinationUserName\n| render barchart"
+                    },
+                    {
+                      "description": "Top 5 Users by Number of Failed Attempts ",
+                      "query": "CommonSecurityLog \n| extend outcome = coalesce(column_ifexists(\"EventOutcome\", \"\"), tostring(split(split(AdditionalExtensions, \";\", 2)[0], \"=\", 1)[0]), \"\")\n| extend reason = coalesce(column_ifexists(\"Reason\", \"\"), tostring(split(split(AdditionalExtensions, \";\", 3)[0], \"=\", 1)[0]), \"\")\n| where outcome ==\"Failure\"\n| summarize Count= count() by DestinationUserName\n| render barchart"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CommonSecurityLog (ForcepointCASB)",
+                      "lastDataReceivedQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint CASB\"\n   | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint CASB\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+                      "innerSteps": [
+                        {
+                          "title": "1.1 Select or create a Linux machine",
+                          "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel. This machine can be on your on-prem environment, Azure or other clouds."
+                        },
+                        {
+                          "title": "1.2 Install the CEF collector on the Linux machine",
+                          "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                          "instructions": [
+                            {
+                              "parameters": {
+                                "fillWith": [
+                                  "WorkspaceId",
+                                  "PrimaryKey"
+                                ],
+                                "label": "Run the following command to install and apply the CEF collector:",
+                                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                              },
+                              "type": "CopyableLabel"
+                            }
+                          ]
+                        }
+                      ],
+                      "title": "1. Linux Syslog agent configuration"
+                    },
+                    {
+                      "description": "Set your security solution to send Syslog messages in CEF format to the proxy machine. Make sure you to send the logs to port 514 TCP on the machine's IP address.",
+                      "title": "2. Forward Common Event Format (CEF) logs to Syslog agent"
+                    },
+                    {
+                      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version \n \n>2. You must have elevated permissions (sudo) on your machine",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Run the following command to validate your connectivity:",
+                            "value": "sudo wget  -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "3. Validate connection"
+                    },
+                    {
+                      "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+                      "title": "4. Secure your machine "
+                    },
+                    {
+                      "description": "To complete the installation of this Forcepoint product integration, follow the guide linked below.\n\n[Installation Guide >](https://frcpnt.com/casb-sentinel)",
+                      "title": "5. Forcepoint integration installation guide "
+                    }
+                  ],
+                  "metadata": {
+                    "id": "04f93db2-8f2a-4edc-bb78-9e1e7587faff",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Forcepoint"
+                    },
+                    "support": {
+                      "name": "Forcepoint",
+                      "link": "https://support.forcepoint.com",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Forcepoint CASB",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Forcepoint"
+                },
+                "support": {
+                  "tier": "Community",
+                  "name": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Forcepoint CASB",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Forcepoint"
+        },
+        "support": {
+          "tier": "Community",
+          "name": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Forcepoint CASB",
+          "publisher": "Forcepoint CASB",
+          "descriptionMarkdown": "The Forcepoint CASB (Cloud Access Security Broker) Connector allows you to automatically export CASB logs and events into Microsoft Sentinel in real-time. This enriches visibility into user activities across locations and cloud applications, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ForcepointCASB",
+              "baseQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint CASB\"\n"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CommonSecurityLog (ForcepointCASB)",
+              "lastDataReceivedQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint CASB\"\n   | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint CASB\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 5 Users With The Highest Number Of Logs",
+              "query": "CommonSecurityLog \n| summarize Count = count() by DestinationUserName\n| top 5 by DestinationUserName\n| render barchart"
+            },
+            {
+              "description": "Top 5 Users by Number of Failed Attempts ",
+              "query": "CommonSecurityLog \n| extend outcome = coalesce(column_ifexists(\"EventOutcome\", \"\"), tostring(split(split(AdditionalExtensions, \";\", 2)[0], \"=\", 1)[0]), \"\")\n| extend reason = coalesce(column_ifexists(\"Reason\", \"\"), tostring(split(split(AdditionalExtensions, \";\", 3)[0], \"=\", 1)[0]), \"\")\n| where outcome ==\"Failure\"\n| summarize Count= count() by DestinationUserName\n| render barchart"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+              "innerSteps": [
+                {
+                  "title": "1.1 Select or create a Linux machine",
+                  "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel. This machine can be on your on-prem environment, Azure or other clouds."
+                },
+                {
+                  "title": "1.2 Install the CEF collector on the Linux machine",
+                  "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                  "instructions": [
+                    {
+                      "parameters": {
+                        "fillWith": [
+                          "WorkspaceId",
+                          "PrimaryKey"
+                        ],
+                        "label": "Run the following command to install and apply the CEF collector:",
+                        "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                      },
+                      "type": "CopyableLabel"
+                    }
+                  ]
+                }
+              ],
+              "title": "1. Linux Syslog agent configuration"
+            },
+            {
+              "description": "Set your security solution to send Syslog messages in CEF format to the proxy machine. Make sure you to send the logs to port 514 TCP on the machine's IP address.",
+              "title": "2. Forward Common Event Format (CEF) logs to Syslog agent"
+            },
+            {
+              "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version \n \n>2. You must have elevated permissions (sudo) on your machine",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Run the following command to validate your connectivity:",
+                    "value": "sudo wget  -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "3. Validate connection"
+            },
+            {
+              "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+              "title": "4. Secure your machine "
+            },
+            {
+              "description": "To complete the installation of this Forcepoint product integration, follow the guide linked below.\n\n[Installation Guide >](https://frcpnt.com/casb-sentinel)",
+              "title": "5. Forcepoint integration installation guide "
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Forcepoint CASB",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Forcepoint"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-19",
+        "providers": [
+          "Forcepoint"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

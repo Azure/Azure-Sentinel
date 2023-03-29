@@ -1,0 +1,689 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Isolate endpoint - Carbon Black", 
+    "description": "This playbook will quarantine the host in Carbon Black.",
+    "mainSteps": ["When a new Sentinel incident is created,this playbook gets triggered and performs below actions: \n\n 1. Fetches the devices information from CarbonBlack \n\n 2. Quarantine the device \n\n 3. Enrich the incident with device information by fetching from CarbonBlack \n\n ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-QuarantineDevice/images/Incident_Comment.png?raw=true) \n\n ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight1.png?raw=true) \n\n ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight2.png?raw=true)"],
+    "prerequisites": ["1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription. \n\n 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key) \n\n 3. Find Organization key by referring this link [ Find Organization key by referring this link ](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)"],
+    "lastUpdateTime": "2022-07-29T00:00:00.000Z", 
+    "entities": ["Host"], 
+    "tags": ["Remediation"], 
+    "postDeployment": ["** Authorize connections ** \n\n Once deployment is complete, you will need to authorize each connection. \n\n 1. Click the Microsoft Sentinel connection resource \n\n 2. Click edit API connection \n\n 3. Click Authorize \n\n 4. Sign in \n\n 5. Click Save \n\n 6. Repeat step 2&3 while for CarbonBlack connector Connection to authorize connector API of the playbook (For authorizing the CarbonBlack API connection, API Key needs to be provided. API Key Value is the combination of API Key / API ID) \n\n ** Configurations in Sentinel ** \n\n 1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with risky device \n\n 2. Configure the automation rules to trigger this playbook \n\n [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json) \n\n [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json)"],
+    "support": {
+        "tier": "community" 
+    },
+    "author": {
+        "name": "Accenture"
+    },
+    "releaseNotes": [
+    {
+      "version": "1.0.0",
+      "title": "Isolate endpoint - Carbon Black",
+      "notes": [
+        "Initial version"
+      ]
+    }
+    ]
+},
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "IsolateEndpoint-CarbonBlack",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Logic Apps resource to be created"
+      }
+    },
+    "CustomConnectorName":{
+      "defaultValue": "CarbonBlackCloudConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the custom connector which interacts with Carbon Black"
+      }
+    },
+    "OrganizationKey": {
+      "defaultValue": "OrganizationKey",
+      "type": "string",
+      "metadata": {
+        "description": "CarbonBlack Org Key"
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "CarbonBlackConnectionName": "[concat('CarbonBlackCloudConnector-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('CarbonBlackConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+          "displayName": "[variables('AzureSentinelConnectionName')]",
+          "customParameterValues": {},
+          "parameterValueType": "Alternative",
+          "api": {
+              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+          }
+      }
+  },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('CarbonBlackConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "IsolateEndpoint-CarbonBlack",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
+    "identity": {
+      "type": "SystemAssigned"
+  },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Add_comment_to_incident_(V3)": {
+              "runAfter": {
+                "Compose": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p><strong></strong><strong>@{outputs('Compose')}</strong><strong> &nbsp;</strong><span style=\"font-size: 16px\"><strong>CarbonBlack QuarantineDevice Playbook</strong></span><strong><br>\n<br>\nCarbonBlack QuarantineDevice playbook was triggered and collected the following information from Carbon Black:<br>\n<br>\n</strong><strong>@{body('Create_HTML_table_-_Carbon_Black')}</strong><strong><br>\n<br>\nDevices that were quarantined by this playbook:<br>\n<br>\n</strong><strong>@{body('Create_HTML_table_-_Quarantined_devices')}</strong><strong></strong></p>"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/Comment"
+              }
+            },
+            "Carbon_black_information": {
+              "runAfter": {
+                "Organization_Id": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "CarbonblackInformation",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              },
+              "description": "Variable to store the devices information returned from carbon black cloud"
+            },
+            "Compose": {
+              "runAfter": {
+                "Create_HTML_table_-_Quarantined_devices": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "<img src=\"https://avatars.githubusercontent.com/u/2071378?s=280&v=4\" alt=\"Lamp\" width=\"32\" height=\"32\">"
+            },
+            "Condition_to_check_the_devices_that_failed_for_quarantine": {
+              "actions": {
+                "Update_incident": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "classification": {
+                        "ClassificationAndReason": "True Positive - Suspicious Activity"
+                      },
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "severity": "@triggerBody()?['object']?['properties']?['severity']",
+                      "status": "Closed"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "put",
+                    "path": "/Incidents"
+                  }
+                }
+              },
+              "runAfter": {
+                "Add_comment_to_incident_(V3)": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@length(variables('FailedforQuarantine'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "type": "If",
+              "description": "Close the incident if there are no devices that failed for quarantine"
+            },
+            "Create_HTML_table_-_Carbon_Black": {
+              "runAfter": {
+                "For_each_hosts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Table",
+              "inputs": {
+                "columns": [
+                  {
+                    "header": "Devicename",
+                    "value": "@item()?['name']"
+                  },
+                  {
+                    "header": "Quarantined",
+                    "value": "@item()?['quarantined']"
+                  },
+                  {
+                    "header": "Policyname",
+                    "value": "@item()?['policy_name']"
+                  },
+                  {
+                    "header": "PolicyId",
+                    "value": "@item()?['policy_id']"
+                  },
+                  {
+                    "header": "DeviceownerId",
+                    "value": "@item()?['device_owner_id']"
+                  },
+                  {
+                    "header": "DeviceId",
+                    "value": "@item()?['id']"
+                  },
+                  {
+                    "header": "Devicestatus",
+                    "value": "@item()?['status']"
+                  },
+                  {
+                    "header": "Operatingsystem",
+                    "value": "@item()?['os']"
+                  },
+                  {
+                    "header": "OperatingsystemVersion",
+                    "value": "@item()?['os_version']"
+                  },
+                  {
+                    "header": "Organizationname",
+                    "value": "@item()?['organization_name']"
+                  },
+                  {
+                    "header": "Email",
+                    "value": "@item()?['email']"
+                  },
+                  {
+                    "header": "Sensorstates",
+                    "value": "@join(item()?['sensor_states'],',')"
+                  },
+                  {
+                    "header": "LastreportedTime",
+                    "value": "@item()?['last_reported_time']"
+                  },
+                  {
+                    "header": "SensorVersion",
+                    "value": "@{item()?['sensor_version']}"
+                  }
+                ],
+                "format": "HTML",
+                "from": "@variables('CarbonblackInformation')"
+              }
+            },
+            "Create_HTML_table_-_Quarantined_devices": {
+              "runAfter": {
+                "Create_HTML_table_-_Carbon_Black": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Table",
+              "inputs": {
+                "columns": [
+                  {
+                    "header": "DeviceId",
+                    "value": "@item()?['id']"
+                  },
+                  {
+                    "header": "Devicename",
+                    "value": "@item()?['name']"
+                  },
+                  {
+                    "header": "Action",
+                    "value": "@item()?['Action']"
+                  }
+                ],
+                "format": "HTML",
+                "from": "@variables('ActiontakendDevices')"
+              }
+            },
+            "Entities_-_Get_Hosts": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/host"
+              }
+            },
+            "Failed_for_Quarantine": {
+              "runAfter": {
+                "Quarantined_devices": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "FailedforQuarantine",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              },
+              "description": "Variable to store the devices information that failed for Quarantine"
+            },
+            "For_each_hosts": {
+              "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+              "actions": {
+                "Condition": {
+                  "actions": {
+                    "For_each_results": {
+                      "foreach": "@body('Search_devices_in_your_organization')?['results']",
+                      "actions": {
+                        "Condition_to_check_the_device_is_in_quarantine": {
+                          "actions": {
+                            "Condition_to_check_the_success_status_codes": {
+                              "actions": {
+                                "Condition_to_check_the_search_devices_returned_the_results": {
+                                  "actions": {
+                                    "For_each_search_results": {
+                                      "foreach": "@body('Search_devices_in_your_organization_based_on_device_name')?['results']",
+                                      "actions": {
+                                        "Append_to_device_information": {
+                                          "runAfter": {},
+                                          "type": "AppendToArrayVariable",
+                                          "inputs": {
+                                            "name": "CarbonblackInformation",
+                                            "value": "@item()"
+                                          },
+                                          "description": "Append device information that returned from carbon black"
+                                        }
+                                      },
+                                      "runAfter": {},
+                                      "type": "Foreach"
+                                    }
+                                  },
+                                  "runAfter": {
+                                    "Search_devices_in_your_organization_based_on_device_name": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "expression": {
+                                    "and": [
+                                      {
+                                        "greater": [
+                                          "@body('Search_devices_in_your_organization_based_on_device_name')?['num_found']",
+                                          0
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "type": "If"
+                                },
+                                "Search_devices_in_your_organization_based_on_device_name": {
+                                  "runAfter": {
+                                    "Store_devices_information_-_Quarantined": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "ApiConnection",
+                                  "inputs": {
+                                    "body": {
+                                      "query": "name : @{items('For_each_hosts')?['HostName']}"
+                                    },
+                                    "headers": {
+                                      "Content-Type": "application/json"
+                                    },
+                                    "host": {
+                                      "connection": {
+                                        "name": "@parameters('$connections')['CarbonBlackCloudConnector']['connectionId']"
+                                      }
+                                    },
+                                    "method": "post",
+                                    "path": "/appservices/v6/orgs/@{encodeURIComponent(variables('OrganizationKey'))}/devices/_search"
+                                  }
+                                },
+                                "Store_devices_information_-_Quarantined": {
+                                  "runAfter": {},
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": {
+                                    "name": "ActiontakendDevices",
+                                    "value": {
+                                      "Action": "This device was quarantined successfully",
+                                      "id": "@items('For_each_results')?['id']",
+                                      "name": "@items('For_each_results')?['name']"
+                                    }
+                                  },
+                                  "description": "Append each devices that quarantined"
+                                }
+                              },
+                              "runAfter": {
+                                "device_actions": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "else": {
+                                "actions": {
+                                  "Append_carbon_black_information_-_device_id_in_Quarantine": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                      "name": "CarbonblackInformation",
+                                      "value": "@item()"
+                                    },
+                                    "description": "Append device information that returned from carbon black"
+                                  },
+                                  "Devices_that_Failed_for_quarantined": {
+                                    "runAfter": {
+                                      "Append_carbon_black_information_-_device_id_in_Quarantine": [
+                                        "Succeeded"
+                                      ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                      "name": "FailedforQuarantine",
+                                      "value": "@item()"
+                                    },
+                                    "description": "Variable to store the devices that failed to set the devices in quarantine"
+                                  }
+                                }
+                              },
+                              "expression": {
+                                "or": [
+                                  {
+                                    "equals": [
+                                      "@outputs('device_actions')?['statusCode']",
+                                      200
+                                    ]
+                                  },
+                                  {
+                                    "equals": [
+                                      "@outputs('device_actions')?['statusCode']",
+                                      204
+                                    ]
+                                  }
+                                ]
+                              },
+                              "type": "If"
+                            },
+                            "device_actions": {
+                              "runAfter": {},
+                              "type": "ApiConnection",
+                              "inputs": {
+                                "body": {
+                                  "action_type": "QUARANTINE",
+                                  "device_id": [
+                                    "@{items('For_each_results')?['id']}"
+                                  ],
+                                  "options": {
+                                    "toggle": "ON"
+                                  }
+                                },
+                                "headers": {
+                                  "Content-Type": "application/json"
+                                },
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['CarbonBlackCloudConnector']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "path": "/appservices/v6/orgs/@{encodeURIComponent(variables('OrganizationKey'))}/device_actions"
+                              }
+                            }
+                          },
+                          "runAfter": {},
+                          "else": {
+                            "actions": {
+                              "Append_to_array_variable": {
+                                "runAfter": {},
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                  "name": "CarbonblackInformation",
+                                  "value": "@item()"
+                                }
+                              },
+                              "Condition_to_check_the_device_OS": {
+                                "actions": {
+                                  "Store_devices_information_-_Linux": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                      "name": "ActiontakendDevices",
+                                      "value": {
+                                        "Action": "Not supported on devices of OS type Linux",
+                                        "id": "@items('For_each_results')?['id']",
+                                        "name": "@items('For_each_results')?['name']"
+                                      }
+                                    },
+                                    "description": "Quarantined is not supported for Linux OS"
+                                  }
+                                },
+                                "runAfter": {
+                                  "Append_to_array_variable": [
+                                    "Succeeded"
+                                  ]
+                                },
+                                "expression": {
+                                  "and": [
+                                    {
+                                      "equals": [
+                                        "@toLower(item()?['os'])",
+                                        "linux"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "type": "If"
+                              }
+                            }
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "equals": [
+                                  "@items('For_each_results')?['quarantined']",
+                                  false
+                                ]
+                              },
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@toLower(item()?['os'])",
+                                    "linux"
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        }
+                      },
+                      "runAfter": {},
+                      "type": "Foreach"
+                    }
+                  },
+                  "runAfter": {
+                    "Search_devices_in_your_organization": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "greater": [
+                          "@body('Search_devices_in_your_organization')?['num_found']",
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Search_devices_in_your_organization": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "query": "name : @{items('For_each_hosts')?['HostName']}"
+                    },
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['CarbonBlackCloudConnector']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/appservices/v6/orgs/@{encodeURIComponent(variables('OrganizationKey'))}/devices/_search"
+                  }
+                }
+              },
+              "runAfter": {
+                "Failed_for_Quarantine": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach",
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "Organization_Id": {
+              "runAfter": {
+                "Entities_-_Get_Hosts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "OrganizationKey",
+                    "type": "string",
+                    "value": "[parameters('OrganizationKey')]"
+                  }
+                ]
+              },
+              "description": "Pre-configured Organization Id"
+            },
+            "Quarantined_devices": {
+              "runAfter": {
+                "Carbon_black_information": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ActiontakendDevices",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              },
+              "description": "Variable to store the quarantined devices information"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "CarbonBlackCloudConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CarbonBlackConnectionName'))]",
+                "connectionName": "[variables('CarbonBlackConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                      "type": "ManagedServiceIdentity"
+                  }
+              }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,566 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Rubrik Fileset Ransomware Discovery",
+        "description":  "This playbook queries Rubrik Security Cloud to enrich the incoming event with additional information from Rubrik about the fileset object and perform an IOC scan against the fileset.",
+        "prerequisites":  [
+            "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
+            "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
+            "3. To perform an IOC scan the IOC YARA rule should be available as a URL.",
+            "4. Obtain Teams group id and channel id.",
+            "5. Make sure that RubrikIOCScan playbook is deployed before deploying RubrikFilesetRansomwareDiscovery playbook."
+        ],
+        "postDeployment":  [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Click the Microsoft Teams connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections"
+        ],
+        "prerequisitesDeployTemplateFile":  "Azure-Sentinel/Solutions/RubrikSecurityCloud/Playbooks/RubrikIOCScan/azuredeploy.json",
+        "lastUpdateTime":  "2022-01-20T00:00:00.000Z",
+        "entities":  ["account","url"],
+        "tags":  ["Recovery","Ransomware Discovery","Security","Rubrik"],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Rubrik"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "RubrikFilesetRansomwareDiscovery",
+            "type":  "string"
+        },
+        "TeamsGroupId": {
+            "defaultValue": "TeamsGroupIds",
+            "type": "String",
+            "metadata": {
+                "description": "Id of the Teams Group where the adaptive card will be posted."
+            }
+        },
+        "TeamsChannelId": {
+            "defaultValue": "TeamsChannelId",
+            "type": "String",
+            "metadata": {
+                "description": "Id of the Teams Channel where the adaptive card will be posted."
+            }
+        }
+    },
+    "variables":  {
+        "TeamsConnectionName":  "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "manual":  {
+                            "type":  "Request",
+                            "kind":  "Http",
+                            "inputs":  {
+                                "schema":  {
+                                    "properties":  {
+                                        "BaseUrl":  {
+                                            "type":  "string"
+                                        },
+                                        "ClusterId":  {
+                                            "type":  "string"
+                                        },
+                                        "ObjectId":  {
+                                            "type":  "string"
+                                        },
+                                        "ObjectType":  {
+                                            "type":  "string"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Check_that_IOC_scan_has_no_error":  {
+                            "actions":  {
+                            },
+                            "runAfter":  {
+                                "RubrikIOCScan":  [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                    "Error_Response":  {
+                                        "runAfter":  {
+                                            "Set_IOC_Scan_Error_Status":  [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type":  "Response",
+                                        "kind":  "Http",
+                                        "inputs":  {
+                                            "body":  {
+                                                "error":  "@{variables('Status')}"
+                                            },
+                                            "statusCode":  400
+                                        }
+                                    },
+                                    "Set_IOC_Scan_Error_Status":  {
+                                        "runAfter":  {
+                                        },
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "Status",
+                                            "value":  "Error in IOC Scan: @{body('RubrikIOCScan')?['error']}"
+                                        }
+                                    },
+                                    "Terminate":  {
+                                        "runAfter":  {
+                                            "Error_Response":  [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type":  "Terminate",
+                                        "inputs":  {
+                                            "runError":  {
+                                                "message":  "Error: @{variables('Status')}"
+                                            },
+                                            "runStatus":  "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@empty(body('RubrikIOCScan')?['error'])",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Check_that_Polling_Timeout_is_less_than_or_equal_to_0_":  {
+                            "actions":  {
+                                "Set_default_value_for_polling_timeout":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "PollingTimeout",
+                                        "value":  720
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_polling_timeout":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "lessOrEquals":  [
+                                            "@variables('PollingTimeout')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Collect_IOC_Data":  {
+                            "runAfter":  {
+                                "Is_object_type_not_a_Fileset":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "body":  {
+                                        "messageBody":  "{\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.3\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"Large\",\n            \"weight\": \"Bolder\",\n            \"text\": \"IOC Scan Data\",\n            \"horizontalAlignment\": \"Center\",\n            \"style\": \"heading\",\n            \"color\": \"Accent\",\n            \"fontType\": \"Default\",\n            \"wrap\": true,\n            \"id\": \"heading\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Input arguments required to initiate IOC Scan.\",\n            \"wrap\": true,\n            \"color\": \"Light\",\n            \"style\": \"default\",\n            \"separator\": true,\n            \"id\": \"info\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"IOC hash to scan for\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip1\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"IOC hash to scan for\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"IOC path to scan for\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip2\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"IOC path to scan for\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"IOC Yara rule to scan for\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip3\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"IOC Yara rule to scan for\",\n            \"isMultiline\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Start date to initiate the IOC scan\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip4\"\n        },\n        {\n            \"type\": \"Input.Date\",\n            \"id\": \"Start date to initiate the IOC scan\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"End date to initiate the IOC scan\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip5\"\n        },\n        {\n            \"type\": \"Input.Date\",\n            \"id\": \"End date to initiate the IOC scan\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Polling interval for IOC Scan\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip7\"\n        },\n        {\n            \"type\": \"Input.Number\",\n            \"id\": \"Polling interval for IOC Scan\",\n            \"placeholder\": \"5\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Polling timeout for IOC Scan\\n\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip8\"\n        },\n        {\n            \"type\": \"Input.Number\",\n            \"label\": \"In minutes\",\n            \"id\": \"Polling timeout for IOC Scan\",\n            \"placeholder\": \"720\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"IOC Yara rule file URL to scan for\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip10\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"IOC Yara rule file URL to scan for\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Paths to include in the IOC Scan\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip11\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"Paths to include in the IOC Scan\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Paths to exclude in the IOC Scan\",\n            \"wrap\": true,\n            \"separator\": true,\n            \"weight\": \"Bolder\",\n            \"id\": \"Ip12\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"Paths to exclude in the IOC Scan\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Paths to exempt in the IOC Scan\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"Paths to exempt in the IOC Scan\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Scan Name\",\n            \"wrap\": true,\n            \"separator\": true,\n            \"weight\": \"Bolder\",\n            \"id\": \"Ip15\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"Scan Name\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Submit Answer\",\n            \"data\": {\n                \"id\": \"LoginVal\"\n            },\n            \"style\": \"positive\",\n            \"id\": \"Submit\"\n        }\n    ]\n}\n",
+                                        "recipient":  {
+                                            "channelId":  "[concat('', parameters('TeamsChannelId'))]",
+                                            "groupId":  "[concat('', parameters('TeamsGroupId'))]"
+                                        },
+                                        "updateMessage":  "Thanks for your response!"
+                                    },
+                                    "notificationUrl":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "path":  "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                            }
+                        },
+                        "Initialize_Cluster_Id":  {
+                            "runAfter":  {
+                                "Initialize_Object_Id":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ClusterId",
+                                        "type":  "string",
+                                        "value":  "@triggerBody()?['ClusterId']"
+                                    }
+                                ]
+                            },
+                            "description":  "playbook input from incident"
+                        },
+                        "Initialize_IOCYaraRule":  {
+                            "runAfter":  {
+                                "Initialize_Cluster_Id":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "IOCYaraRule",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Object_Id":  {
+                            "runAfter":  {
+                                "Initialize_Object_Type":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ObjectId",
+                                        "type":  "string",
+                                        "value":  "@triggerBody()?['ObjectId']"
+                                    }
+                                ]
+                            },
+                            "description":  "playbook input from incident"
+                        },
+                        "Initialize_Object_Type":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ObjectType",
+                                        "type":  "string",
+                                        "value":  "@triggerBody()?['ObjectType']"
+                                    }
+                                ]
+                            },
+                            "description":  "fetch from incident"
+                        },
+                        "Initialize_Status_for_IOC_scan":  {
+                            "runAfter":  {
+                                "Initialize_IOCYaraRule":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Status",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_polling_timeout":  {
+                            "runAfter":  {
+                                "Collect_IOC_Data":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "PollingTimeout",
+                                        "type":  "integer",
+                                        "value":  "@if(empty(body('Collect_IOC_Data')?['data']?['polling timeout ']),0,int(body('Collect_IOC_Data')?['data']?['polling timeout ']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Is_object_type_not_a_Fileset":  {
+                            "actions":  {
+                                "Error_for_not_a_Fileset_object":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Terminate",
+                                    "inputs":  {
+                                        "runError":  {
+                                            "message":  "Not a Fileset object"
+                                        },
+                                        "runStatus":  "Failed"
+                                    }
+                                },
+                                "Error_response_for_not_a_Fileset_object":  {
+                                    "runAfter":  {
+                                        "Error_for_not_a_Fileset_object":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Response",
+                                    "kind":  "Http",
+                                    "inputs":  {
+                                        "body":  "Not a Fileset object",
+                                        "statusCode":  400
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_Status_for_IOC_scan":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "not":  {
+                                            "contains":  [
+                                                "@variables('ObjectType')",
+                                                "Fileset"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Parse_JSON":  {
+                            "runAfter":  {
+                                "Check_that_IOC_scan_has_no_error":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@body('RubrikIOCScan')",
+                                "schema":  {
+                                    "properties":  {
+                                        "RadarIOCScan":  {
+                                            "properties":  {
+                                            },
+                                            "type":  "object"
+                                        },
+                                        "RadarIOCScanStatus":  {
+                                            "type":  "string"
+                                        },
+                                        "RecoverableSnapshotid":  {
+                                            "type":  "string"
+                                        },
+                                        "error":  {
+                                            "type":  "string"
+                                        },
+                                        "isLatestInfected":  {
+                                            "type":  "boolean"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        },
+                        "Response":  {
+                            "runAfter":  {
+                                "Set_scan_status":  [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type":  "Response",
+                            "kind":  "Http",
+                            "inputs":  {
+                                "body":  "@if(equals(outputs('RubrikIOCScan')['statusCode'],200),variables('Status'),'Error: IOC Scan is not successful')",
+                                "statusCode":  "@if(equals(outputs('RubrikIOCScan')['statusCode'],200),200,400)"
+                            }
+                        },
+                        "RubrikIOCScan":  {
+                            "runAfter":  {
+                                "Whether_to_fetch_Yara_rule(s)_from_a_URLs":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Workflow",
+                            "inputs":  {
+                                "body":  {
+                                    "BaseUrl":  "@triggerBody()?['BaseUrl']",
+                                    "ClusterId":  "@variables('ClusterId')",
+                                    "EndDate":  "@body('Collect_IOC_Data')?['data']?['end date to initiate the IOC scan']",
+                                    "IOCHash":  "@body('Collect_IOC_Data')?['data']?['ioc hash to scan for']",
+                                    "IOCPath":  "@body('Collect_IOC_Data')?['data']?['ioc path to scan for']",
+                                    "IOCYaraRule":  "@body('Collect_IOC_Data')?['data']?['ioc Yara rule to scan for']",
+                                    "Limit":  1,
+                                    "ObjectId":  "@variables('ObjectId')",
+                                    "PathsToExclude":  "@body('Collect_IOC_Data')?['data']?['paths to exclude in the IOC Scan']",
+                                    "PathsToExempt":  "@body('Collect_IOC_Data')?['data']?['paths to exempt in the IOC Scan']",
+                                    "PathsToInclude":  "@body('Collect_IOC_Data')?['data']?['paths to include in the IOC Scan']",
+                                    "PollingInterval":  "@body('Collect_IOC_Data')?['data']?['polling interval for IOC Scan']",
+                                    "PollingTimeout":  "@body('Collect_IOC_Data')?['data']?['polling timeout for IOC Scan']",
+                                    "ScanName":  "@body('Collect_IOC_Data')?['data']?['scan Name']",
+                                    "StartDate":  "@body('Collect_IOC_Data')?['data']?['start date to initiate the IOC scan']"
+                                },
+                                "headers":  {
+                                    "Content-Type":  "application/json"
+                                },
+                                "host":  {
+                                    "triggerName":  "manual",
+                                    "workflow":  {
+                                        "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/RubrikIOCScan')]"
+                                    }
+                                }
+                            }
+                        },
+                        "Set_scan_status":  {
+                            "runAfter":  {
+                                "Parse_JSON":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "Status",
+                                "value":  "@body('Parse_JSON')?['RadarIOCScanStatus']"
+                            }
+                        },
+                        "Whether_to_fetch_Yara_rule(s)_from_a_URLs":  {
+                            "actions":  {
+                                "Fetch_Yara_rule(s)_from_file_URLs":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Http",
+                                    "inputs":  {
+                                        "method":  "GET",
+                                        "uri":  "@body('Collect_IOC_Data')?['data']?['ioc Yara rule file URL to scan for']"
+                                    }
+                                },
+                                "Set_IOCYaraRule_fetched_from_URLs":  {
+                                    "runAfter":  {
+                                        "Fetch_Yara_rule(s)_from_file_URLs":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "IOCYaraRule",
+                                        "value":  "@{body('Fetch_Yara_rule(s)_from_file_URLs')}"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Check_that_Polling_Timeout_is_less_than_or_equal_to_0_":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                    "Set_default_value_for_IOC_YaraRule":  {
+                                        "runAfter":  {
+                                        },
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "IOCYaraRule",
+                                            "value":  "@body('Collect_IOC_Data')?['data']?['ioc Yara rule to scan for']"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "not":  {
+                                            "equals":  [
+                                                "@body('Collect_IOC_Data')?['data']?['ioc Yara rule file URL to scan for']",
+                                                null
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "teams":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName":  "[variables('TeamsConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "RubrikFilesetRansomwareDiscovery",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('TeamsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('TeamsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

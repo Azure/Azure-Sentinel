@@ -1,0 +1,207 @@
+Parser:
+  Title: Network Session ASIM parser for WatchGuard Fireware OS
+  Version: '0.1.4'
+  LastUpdated: Sept 01th, 2022
+Product:
+  Name: WatchGuard Fireware OS
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.4'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: WatchGuard Help Center
+    Link: https://www.watchguard.com/help/docs/help-center/en-US/Content/en-US/Fireware/_intro/fireware_help_front.html?tocpath=Fireware%7C_____0
+Description: |
+  This ASIM parser supports filtering and normalizing WatchGuard Fireware OS logs produced by the Microsoft Sentinel Syslog connector to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionWatchGuardFirewareOS                                  
+EquivalentBuiltInParser: _Im_NetworkSession_WatchGuardFirewareOS                                  
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Parser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let EventLookup=datatable(DvcAction:string,EventResult:string,EventSeverity:string)
+    [
+        "Allow","Success","Informational"
+        , "Deny","Failure","Low"
+    ];
+    let SyslogParser = (Syslog:(SyslogMessage:string)) {
+      Syslog
+      | parse-kv SyslogMessage as (geo_src:string
+      , geo_dst:string
+      , src_user:string
+      , dst_user:string
+      , duration:int
+      , sent_bytes:long
+      , rcvd_bytes:long
+      , fqdn_src_match:string
+      , fqdn_dst_match:string) with (pair_delimiter=' ', kv_delimiter='=', quote='"')
+      | project-rename SrcGeoCountry = geo_src
+      , DstGeoCountry = geo_dst
+      , SrcUsername = src_user
+      , DstUsername = dst_user
+      , NetworkDuration = duration
+      , SrcBytes = sent_bytes
+      , DstBytes = rcvd_bytes
+      , DstDomain = fqdn_dst_match
+      , SrcDomain = fqdn_src_match
+      | extend DstDomainType = iif(isnotempty(DstDomain),"FQDN","")
+      | extend SrcDomainType = iif(isnotempty(SrcDomain),"FQDN","")
+      | extend NetworkProtocol = extract(@" (tcp|udp|icmp|igmp) ", 1, SyslogMessage)
+      | extend SrcUsernameType = case(isempty(SrcUsername), ""
+        , SrcUsername contains "@" , "UPN"
+        , "Simple"
+      )
+      | extend DstUsernameType = case(isempty(DstUsername), ""
+        , DstUsername contains "@" , "UPN"
+        , "Simple"
+      )
+      | parse SyslogMessage with * "repeated " EventCount:int " times" *
+      | extend EventCount = iif(isnotempty(EventCount), EventCount, toint(1))
+      | project-away SyslogMessage
+    };
+    let IPParser = (T:(SrcIpAddr:string,DstIpAddr:string)){
+      T
+      | extend temp_SrcMatch = has_any_ipv4_prefix(SrcIpAddr,src_or_any)
+      , temp_DstMatch = has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+      | extend ASimMatchingIpAddr = case(
+        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-",
+        temp_SrcMatch and temp_DstMatch, "Both",
+        temp_SrcMatch, "SrcIpAddr",
+        temp_DstMatch, "DstIpAddr",
+        "No match"
+      )
+    | where ASimMatchingIpAddr != "No match" 
+    | project-away temp_*
+    };
+    let HostParser = (Syslog:(SrcDomain:string,DstDomain:string)){
+    Syslog
+    | extend temp_SrcMatch = SrcDomain has_any(hostname_has_any)
+      , temp_DstMatch= DstDomain has_any(hostname_has_any)
+    | extend ASimMatchingHostname =case(
+        array_length(hostname_has_any) == 0, "-",
+        temp_SrcMatch and temp_DstMatch, "Both",
+        temp_SrcMatch, "SrcDomain",
+        temp_DstMatch, "DstDomain",
+        "No match"
+      )
+    | where ASimMatchingHostname != "No match" 
+    | project-away temp_*
+    };
+    let AllSyslog = 
+    Syslog
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime)
+    | where SyslogMessage has_any('msg_id="3000-0148"' 
+        , 'msg_id="3000-0149"' 
+        , 'msg_id="3000-0150"'
+        , 'msg_id="3000-0151"'
+        , 'msg_id="3000-0173"'
+    ) and SyslogMessage !has 'msg="DNS Forwarding" '
+      and (array_length(ip_any)==0 or has_any_ipv4_prefix(SyslogMessage,ip_any))
+      and (array_length(hostname_has_any)==0 or SyslogMessage has_any(hostname_has_any))
+    | where (array_length(dvcaction)==0 or SyslogMessage has_any (dvcaction))
+    | extend DvcAction = extract(@'" (Allow|Deny) ', 1, SyslogMessage)
+    | lookup EventLookup on DvcAction
+    | where  (eventresult=="*" or (DvcAction=="Allow" and eventresult=="Success") or (eventresult=="Failure"))
+    | project TimeGenerated, SyslogMessage, HostName, DvcAction, EventResult, EventSeverity
+    ;
+    let Parse1 = 
+    AllSyslog
+    | where SyslogMessage !has "icmp" and SyslogMessage !has "igmp" and SyslogMessage !has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} (tcp|udp) \d{2,5} \d{2,5} " SrcIpAddr " " DstIpAddr " " SrcPortNumber:int @" " DstPortNumber:int @" " *
+    | where  (isnull(dstportnumber) or DstPortNumber==dstportnumber)
+    | invoke SyslogParser()
+    | invoke IPParser()
+    | invoke HostParser()
+    ;
+    let Parse2 = 
+    AllSyslog
+    | where SyslogMessage !has "icmp" and SyslogMessage !has "igmp" and SyslogMessage has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" (tcp|udp) " SrcIpAddr " " DstIpAddr " " SrcPortNumber:int @" " DstPortNumber:int @" " *
+    | where  (isnull(dstportnumber) or DstPortNumber==dstportnumber)
+    | invoke SyslogParser()
+    | invoke IPParser()
+    | invoke HostParser()
+    ;
+    let Parse3 = 
+    AllSyslog
+    | where SyslogMessage has "icmp" and SyslogMessage !has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} icmp \d{2,5} \d{1,5} " SrcIpAddr " " DstIpAddr " " * 
+    | invoke SyslogParser()
+    | invoke IPParser()
+    | invoke HostParser()
+    ;
+    let Parse4 = 
+    AllSyslog
+    | where SyslogMessage has "icmp" and SyslogMessage has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" icmp " SrcIpAddr " " DstIpAddr " " * 
+    | invoke SyslogParser()
+    | invoke IPParser()
+    | invoke HostParser()
+    ;
+    let Parse5 = 
+    AllSyslog
+    | where SyslogMessage has "igmp" and SyslogMessage !has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} igmp \d{2,5} \d{1,5} " SrcIpAddr " " DstIpAddr " " * 
+    | invoke SyslogParser()
+    | invoke IPParser()
+    | invoke HostParser()
+    ;
+    union isfuzzy=false Parse1, Parse2, Parse3, Parse4, Parse5
+    | extend EventSchema = "NetworkSession"
+        , EventSchemaVersion = "0.2.4"
+        , EventVendor = "WatchGuard"
+        , EventProduct = "Fireware"
+        , EventType = "NetworkSession"
+        , DvcHostname = HostName
+        , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
+            , DstIpAddr contains ":", "IPv6"
+            , "")
+        , NetworkProtocol = toupper(NetworkProtocol)
+        , NetworkDuration = toint(NetworkDuration * toint(1000))
+        , NetworkBytes = SrcBytes + DstBytes
+        , EventEndTime = TimeGenerated
+        , EventStartTime = TimeGenerated
+        , Src = SrcIpAddr
+        , Dst = DstIpAddr
+        , Duration = NetworkDuration
+        , User = DstUsername
+        , IpAddr = SrcIpAddr
+    | project-rename Dvc = HostName
+  };
+  Parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)

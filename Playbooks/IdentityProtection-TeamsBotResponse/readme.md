@@ -18,7 +18,6 @@ Response Part:<br>
 ![](./images/commmentLight.png)
 
 Documentation references:
-
 <li>Azure AD Identity Protection:
 <ul>
 <li><a href="https://docs.microsoft.com/azure/active-directory/identity-protection/overview-identity-protection" target="_blank" rel="noopener">Learn more about Identity Protection</a></li>

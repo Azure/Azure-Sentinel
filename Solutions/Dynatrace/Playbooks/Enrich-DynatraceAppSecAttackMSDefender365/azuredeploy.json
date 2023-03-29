@@ -1,0 +1,984 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights",
+        "description": "This playbook will enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights.",
+        "prerequisites": [
+            "1. Dynatrace tenant (ex. xyz.dynatrace.com)",
+            "2. Dynatrace Access Token, the token should have Read attacks (attacks.read) and Ingest logs (logs.ingest) scopes."
+        ],
+        "lastUpdateTime": "2022-10-19T00:00:00.000Z",
+        "tags": [ "Attacks" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Dynatrace"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "EnrichDynatraceAppSecAttackMSDefender365",
+            "type": "string",
+            "metadata": {
+                "description": "Incident trigger"
+            }
+        },
+        "DynatraceTenant": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Dynatrace tenant (ex. xyz.dynatrace.com)"
+            }
+        },
+        "KeyvaultName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Enter the key vault name where Dynatrace Access Token is stored"
+            }
+        },
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('akv-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/Connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyvaultName')]"
+                },
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "nonSecretParameterValues": {
+                    "vaultName": "[parameters('KeyvaultName')]"
+                }
+
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "EnrichDynatraceAppSecAttackMSDefender365-Incident",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "KeyvaultName": {
+                            "type": "String"
+                        },
+                        "EndTimeOffsetInMinutes": {
+                            "defaultValue": 15,
+                            "type": "Int"
+                        },
+                        "Tenant": {
+                            "type": "String"
+                        },
+                        "StartTimeOffsetInMinutes": {
+                            "defaultValue": -1,
+                            "type": "Int"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_Each_Security_Alert": {
+                            "foreach": "@body('Get_MSDefender365_Security_Alerts')?['value']",
+                            "actions": {
+                                "Append_Payload_Item_to_LogEntries": {
+                                    "runAfter": {
+                                        "Compose_Ingest_Payload_Item": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "logentries",
+                                        "value": "@outputs('Compose_Ingest_Payload_Item')"
+                                    }
+                                },
+                                "Compose_Ingest_Payload_Item": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "AlertName": "@{items('For_Each_Security_Alert')?['AlertName']}",
+                                        "AlertType": "@{items('For_Each_Security_Alert')?['AlertType']}",
+                                        "EndTime": "@{items('For_Each_Security_Alert')?['EndTime']}",
+                                        "OriginalSeverity": "@{items('For_Each_Security_Alert')?['AlertSeverity']}",
+                                        "ProductName": "@{items('For_Each_Security_Alert')?['ProductName']}",
+                                        "ProviderName": "@{items('For_Each_Security_Alert')?['ProviderName']}",
+                                        "StartTime": "@{items('For_Each_Security_Alert')?['StartTime']}",
+                                        "SystemAlertId": "@{items('For_Each_Security_Alert')?['SystemAlertId']}",
+                                        "Tactics": "@{items('For_Each_Security_Alert')?['Tactics']}",
+                                        "VendorName": "@{items('For_Each_Security_Alert')?['VendorName']}",
+                                        "dt.entity.process_group_instance": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                        "dt.source_entity": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                        "log.source": "@{items('For_Each_Security_Alert')?['ProductName']}",
+                                        "severity": "warn",
+                                        "timestamp": "@{variables('Timestamp')}"
+                                    }
+                                },
+                                "If_Entities_Exist": {
+                                    "actions": {
+                                        "For_each_Security_Alert_Entity": {
+                                            "foreach": "@json(items('For_Each_Security_Alert')?['Entities'])",
+                                            "actions": {
+                                                "Append_Entity_Item_to_LogEntries": {
+                                                    "runAfter": {
+                                                        "Compose_Entity_Item": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "logentries",
+                                                        "value": "@outputs('Compose_Entity_Item')"
+                                                    }
+                                                },
+                                                "Compose_Entity_Item": {
+                                                    "runAfter": {},
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Content": "@{items('For_each_Security_Alert_Entity')}",
+                                                        "EntityType": "@{Coalesce(items('For_each_Security_Alert_Entity')?['Type'], 'None')}",
+                                                        "SystemAlertId": "@{items('For_Each_Security_Alert')?['SystemAlertId']}",
+                                                        "VendorName": "@{items('For_Each_Security_Alert')?['VendorName']}",
+                                                        "dt.entity.process_group_instance": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                                        "dt.source_entity": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                                        "log.source": "@{items('For_Each_Security_Alert')?['ProductName']}",
+                                                        "severity": "info",
+                                                        "timestamp": "@{variables('Timestamp')}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Append_Payload_Item_to_LogEntries": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@empty(items('For_Each_Security_Alert')?['Entities'])",
+                                                        "@true"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "If_Extended_Properties_Exist": {
+                                    "actions": {
+                                        "Append_Extended_Properties_to_LogEntries": {
+                                            "runAfter": {
+                                                "Compose_Extended_Properties_Item": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "logentries",
+                                                "value": "@outputs('Compose_Extended_Properties_Item')"
+                                            }
+                                        },
+                                        "Compose_Extended_Properties_Item": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "Content": "@{items('For_Each_Security_Alert')?['ExtendedProperties']}",
+                                                "SystemAlertId": "@{items('For_Each_Security_Alert')?['SystemAlertId']}",
+                                                "VendorName": "@{items('For_Each_Security_Alert')?['VendorName']}",
+                                                "dt.entity.process_group_instance": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                                "dt.source_entity": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                                "log.source": "@{items('For_Each_Security_Alert')?['ProductName']}",
+                                                "severity": "info",
+                                                "timestamp": "@{variables('Timestamp')}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "If_Entities_Exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@empty(items('For_Each_Security_Alert')?['ExtendedProperties'])",
+                                                        "@true"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_MSDefender365_Security_Alerts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "For_each_payload_item": {
+                            "foreach": "@body('Parse_Dynatrace_Attack_JSON')?['entrypoint']?['payload']?['values']",
+                            "actions": {
+                                "Append_value_to_SearchTerms": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "SearchTerms",
+                                        "value": "@concat('\"', items('For_each_payload_item')?['value'],'\"')"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_SearchTerms": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Dynatrace_Access_Token": {
+                            "runAfter": {
+                                "Parse_Incident_Alert_Custom_Body_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('DynatraceAccessToken')}/value"
+                            }
+                        },
+                        "Get_Dynatrace_Attack_Details": {
+                            "runAfter": {
+                                "Get_Dynatrace_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "Api-Token @{body('Get_Dynatrace_Access_Token')?['value']}"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "fields": "+attacker, +entrypoint,+vulnerability,+managementZones,+request"
+                                },
+                                "uri": "https://@{parameters('Tenant')}/api/v2/attacks/@{first(body('Parse_Incident_Alert_Custom_Body_JSON')?['AttackIdentifier'])}"
+                            }
+                        },
+                        "Get_MSDefender365_Security_Alerts": {
+                            "runAfter": {
+                                "If_Remaing_Minutes_In_Time_Window": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let start_date=datetime_add(\"minute\", @{parameters('StartTimeOffsetInMinutes')}, todatetime(\"@{variables('Timestamp')}\"));\nlet end_date=datetime_add(\"minute\", @{parameters('EndTimeOffsetInMinutes')},  todatetime(\"@{variables('Timestamp')}\"));\nSecurityAlert\n| where ProductName in (\"Microsoft Defender Advanced Threat Protection\",\"Office 365 Advanced Threat Protection\",\"Azure Advanced Threat Protection\",\"Microsoft Cloud App Security\",\"Microsoft 365 Defender\", \"Azure Active Directory Identity Protection\", \"Azure Security Center\")\n| where ExtendedProperties has_any (@{join(variables('SearchTerms'),',')}) or Entities has_any (@{join(variables('SearchTerms'),',')})\n| where TimeGenerated between (start_date .. end_date);",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                    "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                    "timerange": "Last 7 days"
+                                }
+                            }
+                        },
+                        "If_Log_Entries_exist": {
+                            "actions": {
+                                "Ingest_Dynatrace_Log_Entries": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": "@variables('logentries')",
+                                        "headers": {
+                                            "Authorization": "Api-Token @{body('Get_Dynatrace_Access_Token')?['value']}",
+                                            "Content-Type": "application/json; charset=utf-8"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://@{parameters('Tenant')}/api/v2/logs/ingest"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Security_Alert": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "No_log_entries_to_ingest": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Succeeded"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('logentries'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "If_Remaing_Minutes_In_Time_Window": {
+                            "actions": {
+                                "Delay_if_Time_Window_Not_Met_": {
+                                    "runAfter": {},
+                                    "type": "Wait",
+                                    "inputs": {
+                                        "interval": {
+                                            "count": "@mul(variables('RemainingMinutesInTimeWindow'),-1)",
+                                            "unit": "Minute"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_RemainingMinutesInTimeWindow": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "less": [
+                                            "@variables('RemainingMinutesInTimeWindow')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_LogEntries": {
+                            "runAfter": {
+                                "Parse_Dynatrace_Attack_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "logentries",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_RemainingMinutesInTimeWindow": {
+                            "runAfter": {
+                                "For_each_payload_item": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RemainingMinutesInTimeWindow",
+                                        "type": "integer",
+                                        "value": "@div(div(sub(ticks(utcNow()), add(ticks(variables('Timestamp')), mul(parameters('EndTimeOffsetInMinutes'), mul(10000000,60)))),10000000),60)"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SearchTerms": {
+                            "runAfter": {
+                                "Initialize_Timestamp": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SearchTerms",
+                                        "type": "array",
+                                        "value": [
+                                            "\"@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}\"",
+                                            "\"@{body('Parse_Dynatrace_Attack_JSON')?['request']?['url']}\"",
+                                            "\"@{body('Parse_Dynatrace_Attack_JSON')?['request']?['host']}\""
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Timestamp": {
+                            "runAfter": {
+                                "Initialize_LogEntries": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Timestamp",
+                                        "type": "string",
+                                        "value": "@{addSeconds('1970-01-01T00:00:00Z', int(first(split(string(mul(body('Parse_Dynatrace_Attack_JSON')?['timestamp'], 0.001)),'.'))))}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Dynatrace_Attack_JSON": {
+                            "runAfter": {
+                                "Get_Dynatrace_Attack_Details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Dynatrace_Attack_Details')",
+                                "schema": {
+                                    "properties": {
+                                        "affectedEntities": {
+                                            "properties": {
+                                                "processGroup": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "processGroupInstance": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "attackId": {
+                                            "type": "string"
+                                        },
+                                        "attackType": {
+                                            "type": "string"
+                                        },
+                                        "attacker": {
+                                            "properties": {
+                                                "location": {
+                                                    "type": "object"
+                                                },
+                                                "sourceIp": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "displayId": {
+                                            "type": "string"
+                                        },
+                                        "displayName": {
+                                            "type": "string"
+                                        },
+                                        "entrypoint": {
+                                            "properties": {
+                                                "entrypointFunction": {
+                                                    "properties": {
+                                                        "className": {
+                                                            "type": "string"
+                                                        },
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "functionName": {
+                                                            "type": "string"
+                                                        },
+                                                        "parameterTypes": {
+                                                            "properties": {
+                                                                "truncationInfo": {
+                                                                    "properties": {
+                                                                        "truncated": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "values": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "returnType": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "payload": {
+                                                    "properties": {
+                                                        "truncationInfo": {
+                                                            "properties": {
+                                                                "truncated": {
+                                                                    "type": "boolean"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "values": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "value": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "type",
+                                                                    "value"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "managementZones": {
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "name"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "request": {
+                                            "properties": {
+                                                "host": {
+                                                    "type": "string"
+                                                },
+                                                "path": {
+                                                    "type": "string"
+                                                },
+                                                "protocolDetails": {
+                                                    "properties": {
+                                                        "http": {
+                                                            "properties": {
+                                                                "headers": {
+                                                                    "properties": {
+                                                                        "truncationInfo": {
+                                                                            "properties": {
+                                                                                "truncated": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "values": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "name": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "value": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "name",
+                                                                                    "value"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "parameters": {
+                                                                    "properties": {
+                                                                        "truncationInfo": {
+                                                                            "properties": {
+                                                                                "truncated": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "values": {
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "requestMethod": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "state": {
+                                            "type": "string"
+                                        },
+                                        "timestamp": {
+                                            "type": "integer"
+                                        },
+                                        "vulnerability": {
+                                            "properties": {
+                                                "codeLocation": {
+                                                    "properties": {
+                                                        "className": {
+                                                            "type": "string"
+                                                        },
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "functionName": {
+                                                            "type": "string"
+                                                        },
+                                                        "lineNumber": {
+                                                            "type": "integer"
+                                                        },
+                                                        "parameterTypes": {
+                                                            "properties": {
+                                                                "truncationInfo": {
+                                                                    "properties": {
+                                                                        "truncated": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "values": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "returnType": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": [
+                                                        "object",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "displayName": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "vulnerabilityId": {
+                                                    "type": "string"
+                                                },
+                                                "vulnerableFunction": {
+                                                    "properties": {
+                                                        "className": {
+                                                            "type": "string"
+                                                        },
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "functionName": {
+                                                            "type": "string"
+                                                        },
+                                                        "parameterTypes": {
+                                                            "properties": {
+                                                                "truncationInfo": {
+                                                                    "properties": {
+                                                                        "truncated": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "values": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "returnType": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "vulnerableFunctionInput": {
+                                                    "properties": {
+                                                        "inputSegments": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "value": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "value",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_Incident_Alert_Custom_Body_JSON": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['Alerts'][0]['properties']['additionalData']['Custom Details']",
+                                "schema": {
+                                    "properties": {
+                                        "AttackIdentifier": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "AttackState": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "AttackType": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "DisplayIdentifier": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftsentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuremonitorlogs')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "KeyvaultName": {
+                        "value": "[parameters('KeyvaultName')]"
+                    },
+                    "Tenant": {
+                        "value": "[parameters('DynatraceTenant')]"
+                    }
+                }
+            }
+        }
+    ]
+}

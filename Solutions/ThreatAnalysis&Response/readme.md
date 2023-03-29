@@ -9,7 +9,7 @@ You can deploy the solution by clicking on the buttons below:
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatAnalysis%26Response%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatAnalysis%26Response%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
 
-![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ThreatAnalysis%26Response/Workbooks/Images/ThreatAnalysis%26ResponseWhite.png?raw=true)
+![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ThreatAnalysis%26Response/Workbooks/Images/ThreatAnalysis%26ResponseWhite1.png?raw=true)
 
 ## Getting Started Prerequisites
 1️⃣ [Configure Analytics & Hunting with Microsoft Sentinel: MITRE Blade](https://docs.microsoft.com/azure/sentinel/mitre-coverage)<br>

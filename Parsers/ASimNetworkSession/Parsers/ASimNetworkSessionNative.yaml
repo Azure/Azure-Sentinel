@@ -1,0 +1,54 @@
+Parser:
+  Title: Network Session ASIM parser for Microsoft Sentinel native Network Session table
+  Version: '0.3'
+  LastUpdated: Jan 25 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.4'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Microsoft Sentinel Network Session table (ASimNetworkSessionLogs) to the ASIM NetworkSession normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
+ParserName: ASimNetworkSessionNative
+EquivalentBuiltInParser: _ASim_NetworkSession_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false) 
+  {
+    ASimNetworkSessionLogs  | where not(disabled)
+      | project-rename
+          EventUid = _ItemId
+      | extend          
+          EventSchema = "NetworkSession",
+          DvcScopeId = iff(isempty(DvcSubscriptionId), _SubscriptionId, DvcSubscriptionId)
+      //  -- Aliases
+      | extend
+          EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+          EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+          Dvc = case(EventType == 'L2NetworkSession',
+                coalesce (DvcFQDN, DvcHostname, DvcId, _ResourceId, strcat (EventVendor,'/', EventProduct)),
+                coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId, strcat (EventVendor,'/', EventProduct))
+          ),
+          Dst = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),
+          Src = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+          DvcInterface = iff(isempty(DvcInterface), coalesce(DvcInboundInterface, DvcOutboundInterface), DvcInterface),
+          Hostname = iff  (EventType == "EndpointNetworkSession" and NetworkDirection == ("Inbound"), SrcHostname, DstHostname),
+          IpAddr = iff  (EventType == "EndpointNetworkSession" and NetworkDirection == ("Inbound"), DstIpAddr, SrcIpAddr),
+          Rule = coalesce(NetworkRuleName, tostring(NetworkRuleNumber)),
+          Duration = NetworkDuration,
+          SessionId = NetworkSessionId,
+          User = DstUsername,
+          InnerVlanId = SrcVlanId,
+          OuterVlanId = DstVlanId
+      | project-away
+          TenantId, SourceSystem, DvcSubscriptionId, _SubscriptionId, _ResourceId
+    };
+  parser (disabled=disabled)

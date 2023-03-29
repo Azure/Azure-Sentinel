@@ -1,0 +1,32 @@
+id: 088d30e9-c02b-46b1-bd1f-d5b6d6b782f0
+name: Least Common Processes by Command Line
+description: |
+  'Looks across your environment for least common Process Command Lines, may be noisy and require allowlisting.  By ZanCo'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 7d;  
+  let Allowlist = dynamic (['foo.exe', 'baz.exe']);
+  let Sensitivity = 5;  
+  SecurityEvent
+  | where TimeGenerated between(lookback..endtime)
+  | where EventID == 4688 and NewProcessName !endswith 'conhost.exe'
+  | extend ProcArray = split(NewProcessName, '\\')
+  // ProcArrayLength is Folder Depth
+  | extend ProcArrayLength = array_length(ProcArray)
+  | extend LastIndex = ProcArrayLength - 1
+  | extend Proc = ProcArray[LastIndex]
+  | where Proc !in (Allowlist)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = make_set(Computer,maxSize=500), UserCount = dcount(SubjectUserName), Users = make_set(SubjectUserName,maxSize=500) by CommandLine
+  | where TimesSeen < Sensitivity
+  | extend timestamp = StartTimeUtc
+version: 2.0.1

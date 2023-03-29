@@ -1,0 +1,66 @@
+id: af435ca1-fb70-4de1-92c1-7435c48482a9
+name: Authentications of Privileged Accounts Outside of Expected Controls
+description: |
+  'Detects when a privileged user account successfully authenticates from a location, device or ASN that another admin has not logged in from in the last 7 days.
+    Privileged accounts are a key target for threat actors, monitoring for logins from these accounts that deviate from normal activity can help identify compromised accounts.
+    Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-successful-unusual-sign-ins'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let admin_users = (IdentityInfo
+    | summarize arg_max(TimeGenerated, *) by AccountUPN
+    | where AssignedRoles contains "admin"
+    | summarize by tolower(AccountUPN));
+    let admin_asn = (SigninLogs
+    | where TimeGenerated between (ago(7d)..ago(1d))
+    | where tolower(UserPrincipalName) in (admin_users)
+    | summarize by AutonomousSystemNumber);
+    let admin_locations = (SigninLogs
+    | where TimeGenerated between (ago(7d)..ago(1d))
+    | where tolower(UserPrincipalName) in (admin_users)
+    | summarize by Location);
+    let admin_devices = (SigninLogs
+    | where TimeGenerated between (ago(7d)..ago(1d))
+    | where tolower(UserPrincipalName) in (admin_users)
+    | extend deviceId = tostring(DeviceDetail.deviceId)
+    | where isnotempty(deviceId)
+    | summarize by deviceId);
+    SigninLogs
+    | where TimeGenerated > ago(1d)
+    | where ResultType == 0
+    | where tolower(UserPrincipalName) in (admin_users)
+    | extend deviceId = tostring(DeviceDetail.deviceId)
+    | where AutonomousSystemNumber !in (admin_asn) and deviceId !in (admin_devices) and Location !in (admin_locations)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

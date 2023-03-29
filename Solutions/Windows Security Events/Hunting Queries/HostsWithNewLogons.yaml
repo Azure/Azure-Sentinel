@@ -1,0 +1,62 @@
+id: 62e2df59-1535-4c8e-ac6c-c91faeed0179
+name: Hosts with new logons
+description: |
+  'Shows new accounts that have logged onto a host for the first time - this may clearly be benign activity but an account
+  logging onto multiple hosts for the first time can also be used to look for evidence of that account being used to move
+  laterally across a network.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - CredentialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1110
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
+  let LogonEvents=() {
+  let logonSuccess=SecurityEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4624
+  | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='Logon';
+  let logonFail=SecurityEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4625
+  | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='LogonFailure';
+  logonFail
+  | union logonSuccess
+  };
+  LogonEvents
+  | where TimeGenerated between(ago(lookback)..starttime)
+  | where ActionType =~ 'Logon'
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by ComputerName, AccountName
+  | join kind=leftanti (
+  LogonEvents
+  | where TimeGenerated between(starttime..endtime)
+  | where ActionType =~ 'Logon'
+  | summarize count() by ComputerName, AccountName
+  ) on ComputerName, AccountName
+  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), HostCount=dcount(ComputerName), HostSet=make_set(ComputerName, 10)  by AccountName, ComputerName
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = AccountName
+  | extend HostName = tostring(split(ComputerName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(ComputerName, '.'), 1, -1), '.'))
+  | extend Account_0_Name = AccountName
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain        
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+version: 2.0.1

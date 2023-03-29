@@ -1,0 +1,66 @@
+id: cfc1ae62-db63-4a3e-b88b-dc04030c2257
+name: AD FS Abnormal EKU object identifier attribute
+description: |
+  'This detection uses Security events from the "AD FS Auditing" provider to detect suspicious object identifiers (OIDs) as part EventID 501 and specifically part of the Enhanced Key Usage attributes.
+  This query checks to see if you have any new OIDs in the last hour that have not been seen in the previous day. New OIDs should be validated and OIDs that are very long, as indicated
+  by the OID_Length field, could also be an indicator of malicious activity.
+  In order to use this query you need to enable AD FS auditing on the AD FS Server.
+  References:
+  https://www.microsoft.com/security/blog/2022/08/24/magicweb-nobeliums-post-compromise-trick-to-authenticate-as-anyone/
+  https://docs.microsoft.com/windows-server/identity/ad-fs/troubleshooting/ad-fs-tshoot-logging
+  '
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1552
+tags:
+  - Nobelium
+  - MagicWeb
+query: |
+  // change the starttime value for a longer period of known OIDs
+  let starttime = 1d;
+  // change the lookback value for a longer period of lookback for suspicious/abnormal
+  let lookback = 1h;
+  let OIDList = SecurityEvent
+  | where TimeGenerated >= ago(starttime)
+  | where EventSourceName == 'AD FS Auditing'
+  | where EventID == 501
+  | where EventData has '/eku'
+  | extend OIDs = extract_all(@"<Data>([\d+\.]+)</Data>", EventData)
+  | mv-expand OIDs
+  | extend OID = tostring(OIDs)
+  | extend OID_Length = strlen(OID)
+  | project TimeGenerated, Computer, EventSourceName, EventID, OID, OID_Length, EventData
+  ;
+  OIDList
+  | where TimeGenerated >= ago(lookback)
+  | join kind=leftanti (
+  OIDList
+  | where TimeGenerated between (ago(starttime) .. ago(lookback))
+  | summarize by OID
+  ) on OID
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ajeet Prakash
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

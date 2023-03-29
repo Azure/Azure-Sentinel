@@ -1,0 +1,38 @@
+id: 402a42ad-f31c-48d1-8f80-0200846b7f25
+kind: Scheduled
+name: DDoS Attack IP Addresses - Percent Threshold
+description: Identifies IP addresses that generate over 5% of traffic during DDoS attack mitigation
+severity: Medium
+status : Available
+requiredDataConnectors:
+  - connectorId: DDOS
+    dataTypes:
+      - AzureDiagnostics
+queryPeriod: 2h
+queryFrequency: 2h
+triggerOperator: gt
+triggerThreshold: 0
+query: |
+  let T1 = AzureDiagnostics
+    | where ResourceType == "PUBLICIPADDRESSES" and Category == "DDoSMitigationFlowLogs"
+    | summarize rows_count = count() by destPublicIpAddress_s, sourcePublicIpAddress_s;
+  let T2 = AzureDiagnostics
+    | where ResourceType == "PUBLICIPADDRESSES" and Category == "DDoSMitigationFlowLogs"
+    | summarize rows_total = count() by destPublicIpAddress_s;
+  T2
+    | join kind=leftouter T1 on destPublicIpAddress_s
+    | project destPublicIpAddress_s, sourcePublicIpAddress_s, percent_of_traffic = 100*rows_count/rows_total
+    | order by percent_of_traffic desc
+    | where percent_of_traffic > 5
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: sourcePublicIpAddress_s
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+version: 1.0.1

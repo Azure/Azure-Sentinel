@@ -1,0 +1,100 @@
+id: dcc15282-2bcb-496e-84db-3c90d0dc0a0c
+name: Critical user management operations followed by disabling of System Restore from admin account
+description: |
+   'This query could identify critical user management operations like user registration(Azure AD Multi-Factor Authentication & self-service password reset (SSPR)) authentication by admin account followed by attempts to stop System Restore activity. Stopping system restore prevents from recovering data by going back to a restore point. The operations could be an indication of attackers trying to maintain persistence, move laterally with attempts to stop system restore point that could point to a potential ransomware attack.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - IdentityInfo
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+tactics:
+  - InitialAccess
+  - Impact
+relevantTechniques:
+  - T1078
+  - T1490
+query: |
+    let security_info_actions = dynamic(["User registered security info", "User changed default security info", "User deleted security info", "Admin updated security info", "User reviewed security info", "Admin deleted security info", "Admin registered security info"]);
+    let AdminUsers =
+    (IdentityInfo
+    | mv-expand AssignedRoles
+    | where AssignedRoles matches regex 'Admin'
+    | summarize by tolower(AccountUPN));
+    (union isfuzzy=true
+    (
+    SecurityEvent
+    | where EventID == '4688'
+    | where ParentProcessName has 'rundll32.exe'
+    and NewProcessName has 'schtasks.exe'
+    and CommandLine has 'Change' and CommandLine has 'SystemRestore'
+    and CommandLine has 'disable'
+    | extend MachineName = Computer , Process = NewProcessName
+    | project AccountDomain,Account = AccountName, _ResourceId, _SubscriptionId, CategoryId, ClientIPAddress, CommandLine, Process
+    ),
+    (
+    WindowsEvent
+    | extend ParentProcessName = tostring(EventData.ParentProcessName)
+    | extend NewProcessName = tostring(EventData.NewProcessName)
+    | extend IpAddress = tostring(EventData.IpAddress)
+    | extend CommandLine = tostring(EventData.CommandLine)
+    | where isnotempty(CommandLine)
+    | where ParentProcessName has 'rundll32.exe'
+    and NewProcessName has 'schtasks.exe'
+    and CommandLine has 'Change' and CommandLine has 'SystemRestore' and CommandLine has 'disable'
+    | extend MachineName = Computer , Process = NewProcessName
+    | extend MachineName = Computer , Process = NewProcessName
+    | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+    | project _ResourceId, _SubscriptionId, CommandLine, Account, Computer, IpAddress, Process
+    ),
+    (
+    DeviceProcessEvents
+    | where InitiatingProcessFileName =~ 'rundll32.exe'
+    and InitiatingProcessCommandLine !contains " " and InitiatingProcessCommandLine != ""
+    and FileName in~ ('schtasks.exe')
+    and ProcessCommandLine has 'Change' and ProcessCommandLine has 'SystemRestore' and ProcessCommandLine has 'disable'
+    | extend MachineName = DeviceName , Process = InitiatingProcessFolderPath, Account = AccountName
+    | project AccountDomain,Account = AccountName, AccountObjectId, TenantId, ReportId, Computer=MachineName, Process
+    ))
+    | join kind=inner
+    (
+    AuditLogs
+    | where Category =~ "UserManagement"
+    | where ActivityDisplayName in (security_info_actions)
+    | extend Initiator = tostring(InitiatedBy.user.userPrincipalName)
+    | extend IP = tostring(InitiatedBy.user.ipAddress)
+    | extend Target = tolower(tostring(TargetResources[0].userPrincipalName))
+    | where Target in (AdminUsers)
+    | project ActivityDateTime, Target, IP, Account=Initiator, ResourceId, ResultType, AADTenantId, CorrelationId, OperationName
+    ) on Account
+    | project AccountCustomEntity=Account, CategoryId, HostCustomEntity=Computer, IPCustomEntity=IpAddress, CorrelationId, ReportId, ResourceId, TenantId, ProcessCustomEntity=Process, CommandLineCustomEntity=CommandLine, _ResourceId, _SubscriptionId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessCustomEntity
+      - identifier: CommandLine
+        columnName: CommandLineCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

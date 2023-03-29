@@ -1,0 +1,41 @@
+id: 3094e036-e5ae-4d6e-8626-b0f86ebc71f2
+name: User Sign in from different countries
+description: |
+  'This query searches for successful user logins from different countries within 30min.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SalesforceServiceCloud
+    dataTypes:
+      - SalesforceServiceCloud
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let threshold = 2;
+  let Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)
+  [@"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv"];
+  let UsersLocation = SalesforceServiceCloud
+  | where EventType =~ 'Login' and LoginStatus=~'LOGIN_NO_ERROR'
+  | project TimeGenerated, ClientIp, UserId, User, UserType ;
+  UsersLocation
+  | extend Dummy=1
+  | summarize count() by Hour=bin(TimeGenerated,30m), ClientIp,User, Dummy
+  | partition by Hour(
+                  lookup (Countrydb|extend Dummy=1) on Dummy
+                | where ipv4_is_match(ClientIp, Network)
+                )
+  | summarize NumOfCountries = dcount(country_name) by User, Hour
+  | where NumOfCountries >= threshold
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: User
+version: 1.0.1
+kind: Scheduled

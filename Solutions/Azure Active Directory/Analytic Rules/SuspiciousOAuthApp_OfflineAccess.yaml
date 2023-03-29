@@ -1,0 +1,98 @@
+id: 3533f74c-9207-4047-96e2-0eb9383be587
+name: Suspicious application consent for offline access
+description: |
+  'This will alert when a user consents to provide a previously-unknown Azure application with offline access via OAuth.
+  Offline access will provide the Azure App with access to the listed resources without requiring two-factor authentication.
+  Consent to applications with offline access and read capabilities should be rare, especially as the knownApplications list is expanded. Public contributions to expand this filter are welcome!
+  For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+query: |
+  let detectionTime = 1d;
+  let joinLookback = 14d;
+  AuditLogs
+  | where TimeGenerated > ago(detectionTime)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | where OperationName =~ "Consent to application"
+  | where TargetResources has "offline"
+  | mv-apply TargetResource=TargetResources on 
+    (
+        where TargetResource.type =~ "ServicePrincipal"
+        | extend ModifiedProperties = TargetResource.modifiedProperties,
+                 AppDisplayName = tostring(TargetResource.displayName),
+                 AppClientId = tolower(tostring(TargetResource.id))
+    )
+  | where AppClientId !in ((externaldata(knownAppClientId:string, knownAppDisplayName:string)[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.OAuth.KnownApplications.csv"] with (format="csv")))
+  | mv-apply Properties=ModifiedProperties on 
+    (
+        where Properties.displayName =~ "ConsentAction.Permissions"
+        | extend ConsentFull = tostring(Properties.newValue)
+        | extend ConsentFull = trim(@'"',tostring(ConsentFull))
+    )
+  | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope1 "]" *
+  | where ConsentFull has "offline_access" and ConsentFull has_any ("Files.Read", "Mail.Read", "Notes.Read", "ChannelMessage.Read", "Chat.Read", "TeamsActivity.Read", "Group.Read", "EWS.AccessAsUser.All", "EAS.AccessAsUser.All")
+  | where GrantConsentType != "AllPrincipals" // NOTE: we are ignoring if OAuth application was granted to all users via an admin - but admin due diligence should be audited occasionally
+  | extend GrantIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend GrantInitiatedBy = tostring(iff(isnotempty(InitiatedBy.user.userPrincipalName),InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName))
+  | extend GrantUserAgent = tostring(iff(AdditionalDetails[0].key =~ "User-Agent", AdditionalDetails[0].value, ""))
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, GrantIpAddress, GrantUserAgent, AppClientId, OperationName, ConsentFull, CorrelationId
+  | join kind = leftouter (AuditLogs
+  | where TimeGenerated > ago(joinLookback)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | where OperationName =~ "Add service principal"
+  | mv-apply TargetResource=TargetResources on 
+    (
+        where TargetResource.type =~ "ServicePrincipal"
+        | extend ModifiedProperties = TargetResource.modifiedProperties,
+                 AppClientId = tolower(TargetResource.id)
+    )
+  | mv-apply ModifiedProperties=TargetResource.modifiedProperties on 
+     (
+        where ModifiedProperties.displayName =~ "AppAddress" and ModifiedProperties.newValue has "AddressType"
+        | extend AppReplyURLs = ModifiedProperties.newValue
+     )
+   | distinct AppClientId, tostring(AppReplyURLs)
+  )
+  on AppClientId
+  | join kind = innerunique (AuditLogs
+  | where TimeGenerated > ago(joinLookback)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | where OperationName =~ "Add OAuth2PermissionGrant" or OperationName =~ "Add delegated permission grant"
+   | mv-apply TargetResource=TargetResources on 
+    (
+        where TargetResource.type =~ "ServicePrincipal" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)
+        | extend GrantAuthentication = tostring(TargetResource.displayName)
+    )
+  | extend GrantOperation = OperationName
+  | project GrantAuthentication, GrantOperation, CorrelationId
+  ) on CorrelationId
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, AppReplyURLs, GrantIpAddress, GrantUserAgent, AppClientId, GrantAuthentication, OperationName, GrantOperation, CorrelationId, ConsentFull
+  | extend timestamp = TimeGenerated, Name = tostring(split(GrantInitiatedBy,'@',0)[0]), UPNSuffix = tostring(split(GrantInitiatedBy,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: GrantIpAddress
+version: 1.0.1
+kind: Scheduled

@@ -1,0 +1,55 @@
+id: 1b047dc3-a879-4f99-949b-d1dc867efc83
+name: API - BOLA
+description: |
+  '42Crunch API protection against BOLA'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: 42CrunchAPIProtection
+    dataTypes:
+      - apifirewall_log_1_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - Exfiltration
+relevantTechniques:
+query: |
+  let loginRec = apifirewall_log_1_CL
+  | where TimeGenerated >= ago(5m) 
+  | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+  | where Instance_Name_s == "Instance_5" and URI_Path_s has "/api/login" and Status_d == 200;
+  let ipAddress = toscalar(loginRec
+  | top 1 by Timestamp_t desc
+  | summarize by Source_IP_s);
+  let listRec = apifirewall_log_1_CL
+  | where TimeGenerated >= ago(5m) 
+  | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+  | where Instance_Name_s == "Instance_5" and URI_Path_s has "/api/accounts/list" and Status_d == 200;
+  let listCnt = (toscalar(listRec | count));
+  let accountRec = apifirewall_log_1_CL
+  | where TimeGenerated >= ago(5m) 
+  | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+  | where Instance_Name_s == "Instance_5" and Source_IP_s == ipAddress and URI_Path_s matches regex "/api/accounts/\\d{6}$";
+  let accountCnt = (toscalar(accountRec | count));
+  let recCount = iff((toscalar(listRec | count) == 0) and (accountCnt > 5), accountCnt, 0);
+  accountRec | take recCount
+customDetails:
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_IP_s
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname_s
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Instance_Name_s
+version: 1.0.0
+kind: Scheduled

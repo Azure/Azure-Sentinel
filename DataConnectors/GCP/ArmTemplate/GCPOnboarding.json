@@ -1,0 +1,253 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "String"
+        },
+        "workspaceName": {
+            "type": "String"
+        },
+        "GCPProjectId": {
+            "type": "String"
+        },
+        "GCPProjectNumber": {
+            "type": "String"
+        },
+        "GCPWorkloadIdentityProviderId": {
+            "defaultValue": "sentinel-identity-provider",
+            "type": "String"
+        },
+        "GCPServiceAccountEmail": {
+            "type": "String"
+        },
+        "GCPSubscriptionName": {
+            "defaultValue": "sentinel-subscription-auditlogs",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "destinationName": "clv2ws1",
+        "connectorDefinitionName": "GCPAuditLogsDefinition",
+        "connectorName": "GCPAuditLogs",
+        "connectorDefinitionFullName": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('connectorDefinitionName') )]",
+        "connectorFullName": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('connectorName'))]",
+        "streamName": "SENTINEL_GCP_AUDIT_LOGS",
+        "dataCollectionRuleName": "Microsoft-Sentinel-GCPAuditLogsDataCollectionRule",
+        "dataCollectionEndpointName": "Microsoft-Sentinel-DataCollectionEndpoint"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[variables('dataCollectionEndpointName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[variables('dataCollectionRuleName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints',variables('dataCollectionEndpointName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints',variables('dataCollectionEndpointName'))]",
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]",
+                            "name": "[variables('destinationName')]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Microsoft-GCPAuditLogs"
+                        ],
+                        "destinations": [
+                            "[variables('destinationName')]"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "apiVersion": "2022-09-01-preview",
+            "name": "[variables('connectorDefinitionFullName')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "title": "GCP Pub/Sub connector - Audit Logs",
+                    "publisher": "Microsoft",
+                    "descriptionMarkdown": "The Google Cloud Platform (GCP) audit logs, ingested from Sentinel's connector, enable you to capture three types of audit logs: admin activity logs, data access logs, and access transparency logs. Google cloud audit Logs record a trail that practitioners can use to monitor access and detect potential threats across Google Cloud Platform (GCP) resources.",
+                    "graphQueriesTableName": "GCPAuditLogs",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total events received",
+                            "legend": "GCP Audit Logs",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Get Sample of GCP Audit Logs",
+                            "query": "{{graphQueriesTableName}}\n | take 10"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | where TimeGenerated > ago(12h) | where name_s == \"no data test\"               | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors",
+                            "value": null
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "tenant": null,
+                        "licenses": null,
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "read": true,
+                                    "write": true,
+                                    "delete": true,
+                                    "action": false
+                                }
+                            },
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                "providerDisplayName": "Keys",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "read": false,
+                                    "write": false,
+                                    "delete": false,
+                                    "action": true
+                                }
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect GCP Audit Logs to Microsoft Sentinel",
+                            "description": "To enable GCP Audit Logs for Microsoft Sentinel, provide the required information below and click on Connect.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "label": "GCP Project id",
+                                        "placeholder": "GCP_project_id",
+                                        "type": "text",
+                                        "name": "ProjectId"
+                                    },
+                                    "type": "Textbox"
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "GCP Project number",
+                                        "placeholder": "GCP_project_number",
+                                        "type": "text",
+                                        "name": "ProjectNumber"
+                                    },
+                                    "type": "Textbox"
+                                },
+                                {
+                                    "parameters": {
+                                        "disabled": false,
+                                        "label": "toggle",
+                                        "isPrimary": true,
+                                        "name": "toggle",
+                                        "transformation": {
+                                            "dataCollectionRuleTemplateSpecName": "",
+                                            "logAnalyticsTableTemplateSpecName": "",
+                                            "outputStream": "",
+                                            "transformationType": "predefinedTransformation"
+                                        }
+                                    },
+                                    "type": "ToggleConnectionButton"
+                                }
+                            ],
+                            "innerSteps": null
+                        }
+                    ],
+                    "isConnectivityCriteriasMatchSome": false
+                },
+                "connectionsConfig": {
+                    "templateSpecName": "MockName",
+                    "TemplateSpecVersion": "1.0.0"
+                },
+                "createdTimeUtc": "",
+                "lastModifiedUtc": ""
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-09-01-preview",
+            "name": "[variables('connectorFullName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints',variables('dataCollectionEndpointName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules',variables('dataCollectionRuleName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectorDefinitionName'))]"
+            ],
+            "kind": "GCP",
+            "properties": {
+                "connectorDefinitionName": "[variables('connectorDefinitionName')]",
+                "auth": {
+                    "serviceAccountEmail": "[parameters('GCPServiceAccountEmail')]",
+                    "projectNumber": "[parameters('GCPProjectNumber')]",
+                    "workloadIdentityProviderId": "[parameters('GCPWorkloadIdentityProviderId')]"
+                },
+                "request": {
+                    "projectId": "[parameters('GCPProjectId')]",
+                    "subscriptionNames": [
+                        "[parameters('GCPSubscriptionName')]"
+                    ]
+                },
+                "DcrConfig": {
+                    "DataCollectionEndpoint": "[reference(variables('dataCollectionEndpointName')).logsIngestion.endpoint]",
+                    "DataCollectionRuleImmutableId": "[reference(variables('dataCollectionRuleName')).immutableId]",
+                    "StreamName": "[variables('streamName')]"
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "dataCollectionEndpointName": {
+            "type": "String",
+            "value": "[variables('dataCollectionEndpointName')]"
+        },
+        "dataCollectionRuleImmutableId": {
+            "type": "String",
+            "value": "[variables('dataCollectionRuleName')]"
+        },
+        "connectorDefinitionName": {
+            "type": "String",
+            "value": "[variables('connectorDefinitionName')]"
+        },
+        "connectorName": {
+            "type": "String",
+            "value": "[variables('connectorName')]"
+        }
+    }
+}

@@ -1,0 +1,197 @@
+// Title:           Broadcom Symantec Endpoint Protection (SEP)
+// Author:          Microsoft
+// Version:         1.2
+// Last Updated:    04/06/2020
+// Comment:         Fixed regex for Agent Security and Behavior Logs
+//  
+// DESCRIPTION:
+// This parser takes raw Symantec Endpoint Protection (SEP) logs from a Syslog stream and parses the logs into a normalized schema.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+// Site: Site_TEST_SITE,Server Name: SAMPLE0008,Domain Name: Default,The management server received the client log successfully,TESTHOST18,sampleuser99,sample.abccompany.com
+// 
+// sam196136,10.221.252.252,Blocked,[AC15-1.1] Prevent registration of new Browser Helper Objects - Registry Value=0x1 - Caller MD5=747c6064888f11f5431b34a422780650,Registry Write,Begin: 2020-11-12 09:22:22,End Time: 2020-11-12 09:22:22,Rule: Prevent registration of new Browser Helper Objects | [AC15-1.1] Prevent registration of new Browser Helper Objects,16464,C:/Windows/SysWOW64/msiexec.exe,0,No Module Name,/REGISTRY/MACHINE/SOFTWARE/Microsoft/Windows/CurrentVersion/Explorer/Browser Helper Objects/{F4971EE7-DAA0-4053-9964-665D8EE6A077}/NoExplorer,User Name: SYSTEM,Domain Name: SMPL,Action Type: ,File size (bytes): 0,Device ID: 
+//
+// sam733904,Local Host IP: 192.168.1.113,Local Port: 80,Local Host MAC: CCF9E4A91226,Remote Host IP: 192.168.1.1,Remote Host Name: ,Remote Port: 33424,Remote Host MAC: 2C3AFDA79E71,TCP,Inbound,Begin: 2020-11-11 19:25:21,End Time: 2020-11-11 19:25:28,Occurrences: 4,Application: C:/WINDOWS/system32/NTOSKRNL.EXE,Rule: Block Unapproved Incoming Ports,Location: Default,User Name: sampleuser4,Domain Name: SMPL,Action: Blocked,SHA-256: 5379732000000000000000000000000000000000000000000000000000000000,MD-5: 53797320000000000000000000000000
+//
+//
+Syslog
+| where Computer in ("server1", "server2") // server1 and server2 are examples, replace this list with your SEP device names
+| extend ServerName = extract(@"^([\w\-\_]+)?(,|\Site:)",1,SyslogMessage)
+// Administrative Log Header
+| extend AdministrativeLogsParser = iif(SyslogMessage has ("Admin:"), extract_all(@"Site:\s([^,]+)\,Server\sName\:\s([^,]+)\,Domain\sName\:\s([^,]+)?\,Admin\:\s([^,]+)?\,Event\sDescription\:\s([^#]+)?(#|$)",dynamic([1,2,3,4,5,6,7]), SyslogMessage)[0], dynamic(""))
+| extend LogType = iif(isnotempty(AdministrativeLogsParser),"Administrative Logs", "")
+// Agent System Log Header
+| extend AgentSystemLogsParser = iif(SyslogMessage has ("Category:"),extract_all(@'^([^,]+)\,Category:\s([\d]+)\,([^,]+)\,\"?Event\sDescription:\s([^,]+\"?)(\,Event time:\s([^,]+)\,Group Name:\s([^,]+)$?)?',dynamic([1,2,3,4,6,7]), SyslogMessage)[0], dynamic(""))
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentSystemLogsParser),"Agent System Logs",LogType)
+// Agent Activity Log Header
+| extend AgentActivityLogsParser = iif(SyslogMessage has_all ("Site:","Server Name:", ",Domain Name:"),extract_all(@"Site:\s([^,]+)\,Server\sName\:\s([^,]+)\,Domain\sName\:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?",dynamic([1,2,3,4,5,6,7]), SyslogMessage)[0], dynamic(""))
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentActivityLogsParser),"Agent Activity Logs", LogType)
+// Agent Behavior Log Header
+| extend AgentBehaviorLogsParser = iif(SyslogMessage has ("Begin:"), extract_all(@"^([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,Rule:\s([^,]+)?\,(\d+)?\,([^,]+)?\,([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11]),SyslogMessage)[0], dynamic(""))
+| extend AgentBehaviorLogsSubstring = tostring(AgentBehaviorLogsParser[10])
+| extend AgentBehaviorLogsParser2 = iif(SyslogMessage has_all ("User Name:","Domain Name:", "Action Type:"),extract_all(@"([^,]+)?\,([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Action Type:\s([^,]+)?\,File size \(bytes\):\s(\d+)?\,Device ID:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8]),AgentBehaviorLogsSubstring)[0], dynamic(""))
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentBehaviorLogsParser) and isnotempty(AgentBehaviorLogsParser2),"Agent Behavior Logs",LogType)
+// Agent Traffic Log Header
+| extend AgentTrafficLogsParser = iif(SyslogMessage has ("Local Host IP:"),extract_all(@"^([^,]+)\,Local Host IP:\s([^,]+)?\,Local Port:\s([^,]+)?\,Local Host MAC:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Port:\s([^,]+)?\,Remote Host MAC:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),SyslogMessage)[0], dynamic(""))
+| extend AgentTrafficLogsSubstring  = tostring(AgentTrafficLogsParser[12])
+| extend AgentTrafficLogsParser2 = iif(SyslogMessage has("Occurrences:"),extract_all(@"Occurrences:\s([^,]+)?\,Application:\s([^,]+)?\,Rule:\s([^,]+)?\,Location:\s([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Action:\s([^,]+)?\,SHA-256:\s([^,]+)?\,MD-5:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8,9,10,11,12]),AgentTrafficLogsSubstring)[0], dynamic(""))
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentTrafficLogsParser) and isnotempty(AgentTrafficLogsParser2),"Agent Traffic Logs",LogType)
+// Agent Security Log Header
+| extend AgentSecurityLogsParser = iif(SyslogMessage has ("Local Host IP:"),extract_all(@'^([^,]+)\,(Event Description:\s([^,]+)?|\"Event Description:\s([^"]+)?\")\,Local Host IP:\s([^,]+)?\,Local Host MAC:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host MAC:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,(Intrusion ID:\s)?([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,([\s\S]+)',dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]),SyslogMessage)[0], dynamic(""))
+| extend  AgentSecurityLogsSubstring = tostring(AgentSecurityLogsParser[15])
+| extend AgentSecurityLogsParser2 = iif(SyslogMessage has ("CIDS Signature SubID"), extract_all(@'Occurrences:\s([^,]+)?\,Application:\s([^,]+)?\,Location:\s([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Local Port:\s([^,]+)?\,Remote Port:\s([^,]+)?\,CIDS Signature ID:\s([^,]+)?\,CIDS Signature string:\s([^,]+)?\,CIDS Signature SubID:\s([^,]+)?\,\"?Intrusion URL:\s([^\,]+|[^\"]+)?\"?\,Intrusion Payload URL:\s([^,]+)?\,SHA-256:\s([^,]+)?\,MD-5:\s([^,]+)?',dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),AgentSecurityLogsSubstring)[0],dynamic(""))
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentSecurityLogsParser) and isnotempty(AgentSecurityLogsParser2),"Agent Security Logs",LogType)
+// Agent Packet Log Header
+| extend AgentPacketLogsParser = iif(SyslogMessage has ("Local Host IP:"), extract_all(@"Local Host IP:\s([^,]+)?\,Local Port:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Port:\s([^,]+)?\,([^,]+)?\,Application:\s([^,]+)?\,Action:\s([^,]+)?\,",dynamic([1,2,3,4,5,6,7]), SyslogMessage)[0], dynamic(""))
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentPacketLogsParser),"Agent Packet Logs",LogType)
+// Agent Risk Log Header
+| extend AgentRiskLogsParser = iif(SyslogMessage has "Risk name:", extract_all(@'^([^,]+)\,IP Address:\s([^,]+)?\,Computer name:\s([^,]+)?\,Source:\s([^,]+)?\,Risk name:\s([^,]+)?\,Occurrences:\s([^,]+)?\,(File path:\s([^,]+)?|File path:\s\"([^"]+)\"?\")\,Description:\s([^,]+)?\,Actual action:\s([^,]+)?\,Requested action:\s([^,]+)?\,Secondary action:\s([^,]+)?\,Event time:\s([^,]+)?\,Event Insert Time:\s([^,]+)?\,([\s\S]+)',dynamic([1,2,3,4,5,6,8,9,10,11,12,13,14,15,16]), SyslogMessage)[0], dynamic (""))
+| extend AgentRiskLogsSubstring  = tostring(AgentRiskLogsParser[14])
+| extend AgentRiskLogsParser2 = iif(SyslogMessage has ("URL Tracking Status:"), extract_all(@"^End Time:\s([^,]+)?\,Last update time:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Group Name:\s([^,]+)?\,Server Name:\s([^,]+)?\,User Name:\s([^,]+)?\,Source Computer Name:\s([^,]+)?\,Source Computer IP:\s([^,]+)?\,Disposition:\s([^,]+)?\,Download site:\s([^,]+)?\,Web domain:\s([^,]+)?\,Downloaded by:\s([^,]+)?\,Prevalence:\s([^,]+)?\,Confidence:\s([^,]+)?\,URL Tracking Status:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]),AgentRiskLogsSubstring)[0], dynamic(""))
+| extend AgentRiskLogsSubstring2  = tostring(AgentRiskLogsParser2[15])
+| extend AgentRiskLogsParser3 = iif(SyslogMessage has ("Sensitivity:"), extract_all(@"^First Seen:\s([^,]+)?\,Sensitivity:\s([^,]+)?\,Permitted application reason:\s([^,]+)?\,Application hash:\s([^,]+)?\,Hash type:\s([^,]+)?\,Company name:\s([^,]+)?\,Application name:\s([^,]+)?\,Application version:\s([^,]+)?\,Application type:\s([^,]+)?\,File size \(bytes\):\s([^,]+)?\,Category set:\s([^,]+)?\,Category type:\s([^,]+)?\,Location:\s([^,]+)?\,Intensive Protection Level:\s([^,]+)?\,Certificate issuer:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]),AgentRiskLogsSubstring2)[0], dynamic(""))
+| extend AgentRiskLogsSubstring3  = tostring(AgentRiskLogsParser3[15])
+| extend AgentRiskLogsParser4 = iif(SyslogMessage has ("Certificate signer:"), extract_all(@"^Certificate signer:\s([^,]+)?\,Certificate thumbprint:\s([^,]+)?\,Signing timestamp:\s([^,]+)?\,Certificate serial number:\s([^,]+)?(\,|$)",dynamic([1,2,3,4]),AgentRiskLogsSubstring3)[0], dynamic(""))
+| extend SiteName = case(LogType has "Administrative Logs", tostring(AdministrativeLogsParser[0]),
+            LogType has "Agent Activity Logs", tostring(AgentActivityLogsParser[0]), ""),
+         ServerName = case(LogType has "Administrative Logs", tostring(AdministrativeLogsParser[1]),
+            LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser2[4]), ""),
+         DomainName = case(LogType has "Administrative Logs", tostring(AdministrativeLogsParser[2]),
+            LogType has "Agent Activity Logs", tostring(AgentActivityLogsParser[6]), 
+            LogType has "Agent Behavior Logs", tostring(AgentBehaviorLogsParser2[4]), 
+            LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[5]), 
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser2[4]), 
+            LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser2[2]), ""),
+         AdminName = tostring(AdministrativeLogsParser[3]),
+         EventDescription = case(LogType has "Administrative Logs", tostring(AdministrativeLogsParser[4]),
+            LogType has "Agent System Logs", tostring(AgentSystemLogsParser[3]), 
+            LogType has "Agent Activity Logs", tostring(AgentActivityLogsParser[3]), 
+            LogType has "Agent Behavior Logs", extract(@"([\S\s]+)\-\sCaller\sMD5",1,tostring(AgentBehaviorLogsParser[3])),
+            LogType has "Agent Security Logs", iif(isempty(tostring(AgentSecurityLogsParser[2])),tostring(AgentSecurityLogsParser[3]),tostring(AgentSecurityLogsParser[2])), LogType has "Agent System Logs", tostring(AgentSystemLogsParser[3]),
+            LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser[8]), ""),
+         Category = toint(AgentSystemLogsParser[1]),
+         EventSource = tostring(AgentSystemLogsParser[2]),
+         EventTimestamp = tostring(AgentSystemLogsParser[4]),
+         GroupName = case(LogType has "Agent System Logs", tostring(AgentSystemLogsParser[5]),
+            LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser2[3]), ""),
+         SEPMDomainName = tostring(AgentActivityLogsParser[2]),
+         HostName = tostring(AgentActivityLogsParser[4]),
+         UserName = case(LogType has "Agent Activity Logs", tostring(AgentActivityLogsParser[5]),
+            LogType has "Agent Behavior Logs", tostring(AgentBehaviorLogsParser2[3]), 
+            LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[4]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser2[3]), 
+            LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser2[5]),""),
+         IpAddr = tostring(AgentBehaviorLogsParser[1]),
+         Action = case(LogType has "Agent Behavior Logs", tostring(AgentBehaviorLogsParser[2]),
+            LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[6]), 
+            LogType has "Agent Packet Logs", tostring(AgentPacketLogsParser[6]), 
+            LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser[0]), ""),
+         CallerMD5Hash = extract(@"Caller\sMD5\=(\S+)",1,tostring(AgentBehaviorLogsParser[3])),
+         ApiName = tostring(AgentBehaviorLogsParser[4]),
+         EventStartTime = case(LogType has "Agent Behavior Logs", todatetime(AgentBehaviorLogsParser[5]),
+            LogType has "Agent Traffic Logs", todatetime(AgentTrafficLogsParser[10]), 
+            LogType has "Agent Security Logs", todatetime(AgentSecurityLogsParser[13]), 
+            LogType has "Agent Risk Logs", todatetime(AgentRiskLogsParser[12]), datetime(null)),
+         EventEndTime = case(LogType has "Agent Behavior Logs", todatetime(AgentBehaviorLogsParser[6]),
+            LogType has "Agent Traffic Logs", todatetime(AgentTrafficLogsParser[11]), 
+            LogType has "Agent Security Logs", todatetime(AgentSecurityLogsParser[14]), 
+            LogType has "Agent Risk Logs", todatetime(AgentRiskLogsParser[14]), 
+            LogType has "Agent Risk Logs", todatetime(AgentRiskLogsParser2[0]), datetime(null)),
+         SecurityRuleName = tostring(AgentBehaviorLogsParser[7]),
+         CallerProcessId = toint(AgentBehaviorLogsParser[8]),
+         CallerProcessName = tostring(AgentBehaviorLogsParser[9]),
+         AgentBehaviorLogsSubstring = tostring(AgentBehaviorLogsParser[10]),
+         CallerReturnAddr = tostring(AgentBehaviorLogsParser2[0]),
+         CallerReturnModuleName = tostring(AgentBehaviorLogsParser2[1]),
+         Parameters = tostring(AgentBehaviorLogsParser2[2]),
+         ActionType = tostring(AgentBehaviorLogsParser2[5]),
+         FileSize = case(LogType has "Agent Behavior Logs", toint(AgentBehaviorLogsParser2[6]),
+            LogType has "Agent Risk Logs", toint(AgentRiskLogsParser3[9]), int(null)),
+         DeviceId = tostring(AgentBehaviorLogsParser2[7]),
+         LocalHostIpAddr = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser[1]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser[4]), 
+            LogType has "Agent Packet Logs", tostring(AgentPacketLogsParser[0]), ""),
+         LocalPortNumber = case(LogType has "Agent Traffic Logs", toint(AgentTrafficLogsParser[2]),
+            LogType has "Agent Security Logs", toint(AgentSecurityLogsParser2[5]), 
+            LogType has "Agent Packet Logs", toint(AgentPacketLogsParser[1]), int(null)),
+         LocalHostMacAddr = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser[3]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser[5]), ""),
+         RemoteHostIpAddr = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser[4]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser[7]), 
+            LogType has "Agent Packet Logs", tostring(AgentPacketLogsParser[2]), ""),
+         RemoteHostName = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser[5]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser[6]), 
+            LogType has "Agent Packet Logs", tostring(AgentPacketLogsParser[3]), ""),
+         RemotePortNumber = case(LogType has "Agent Traffic Logs", toint(AgentTrafficLogsParser[6]),
+            LogType has "Agent Security Logs", toint(AgentSecurityLogsParser2[6]), 
+            LogType has "Agent Packet Logs", toint(AgentPacketLogsParser[4]), int(null)),
+         RemoteHostMacAddr = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser[7]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser[8]), ""),
+         NetworkProtocol = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser[8]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser[10]), ""),
+         TrafficDirection = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser[9]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser[9]), ""),
+         AgentTrafficLogsSubstring  = tostring(AgentTrafficLogsParser[12]),
+         Occurrences = case(LogType has "Agent Traffic Logs", toint(AgentTrafficLogsParser2[0]),
+            LogType has "Agent Security Logs", toint(AgentSecurityLogsParser2[0]), 
+            LogType has "Agent Risk Logs", toint(AgentRiskLogsParser[5]), int(null)),
+         ApplicationName = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[1]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser2[0]), 
+            LogType has "Agent Risk Logs", AgentRiskLogsParser3[6], ""),
+         RuleName = tostring(AgentTrafficLogsParser2[2]),
+         Location = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[3]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser2[2]), 
+            LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser3[12]), ""),
+         Sha256 = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[8]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser2[11]), ""),
+         Md5 = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[10]),
+            LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser2[12]), ""),
+         IntrusionId = tostring(AgentSecurityLogsParser[11]),
+         CidsSignatureId = tostring(AgentSecurityLogsParser2[7]),
+         CidsSignatureString = tostring(AgentSecurityLogsParser2[8]),
+         CidsSignatureSubId = toint(AgentSecurityLogsParser2[9]),
+         IntrusionUrl = tostring(AgentSecurityLogsParser2[10]),
+         Application = tostring(AgentPacketLogsParser[5]),
+         SrcIpAddr = tostring(AgentRiskLogsParser[1]),
+         SrcHostName = tostring(AgentRiskLogsParser[2]),
+         Source = tostring(AgentRiskLogsParser[3]),
+         RiskName = tostring(AgentRiskLogsParser[4]),
+         FilePath = iif(isempty(tostring(AgentRiskLogsParser[6])),tostring(AgentRiskLogsParser[7]),tostring(AgentRiskLogsParser[6])),
+         ActualAction = tostring(AgentRiskLogsParser[9]),
+         RequestedAction = tostring(AgentRiskLogsParser[10]),
+         SecondaryAction = tostring(AgentRiskLogsParser[11]),
+         EventInsertTime = todatetime(AgentRiskLogsParser[13]),
+         LastUpdateTime = todatetime(AgentRiskLogsParser2[1]),
+         SrcComputerName = tostring(AgentRiskLogsParser2[6]),
+         SrcComputerIpAddr = tostring(AgentRiskLogsParser2[7]),
+         Disposition = tostring(AgentRiskLogsParser2[8]),
+         DownloadSite = tostring(AgentRiskLogsParser2[9]),
+         WebDomain = tostring(AgentRiskLogsParser2[10]),
+         DownloadedBy = tostring(AgentRiskLogsParser2[11]),
+         Prevalence = tostring(AgentRiskLogsParser2[12]),
+         Confidence = tostring(AgentRiskLogsParser2[13]),
+         UrlTrackingStatus = tostring(AgentRiskLogsParser2[14]),
+         FirstSeen = tostring(AgentRiskLogsParser3[0]),
+         Sensitivity = tostring(AgentRiskLogsParser3[1]),
+         PermittedApplicationReason = tostring(AgentRiskLogsParser3[2]),
+         ApplicationHash = tostring(AgentRiskLogsParser3[3]),
+         HashType = tostring(AgentRiskLogsParser3[4]),
+         CompanyName = tostring(AgentRiskLogsParser3[5]),
+         ApplicationVersion = tostring(AgentRiskLogsParser3[7]),
+         ApplicationType = tostring(AgentRiskLogsParser3[8]),
+         CategorySet = tostring(AgentRiskLogsParser3[10]),
+         CategoryType = tostring(AgentRiskLogsParser3[11]),
+         IntensiveProtectionLevel = tostring(AgentRiskLogsParser3[13]),
+         CertificateIssuer = tostring(AgentRiskLogsParser3[14]),
+         CertificateSigner = tostring(AgentRiskLogsParser4[0]),
+         CertificateThumbprint = tostring(AgentRiskLogsParser4[1]),
+         SigningTimestamp = tostring(AgentRiskLogsParser4[2]),
+         CertificateSerialNumber = tostring(AgentRiskLogsParser4[3])
+| extend LogType = case(LogType !in ("Agent System Logs","Agent Activity Logs","Agent Behavior Logs", "Agent Traffic Logs","Agent Security Logs", "Agent Packet Logs", "Agent Risk Logs", "Administrative Logs"), iif(isempty(LogType),"Other", LogType), LogType)
+| project-away *Parser*, *Substring*

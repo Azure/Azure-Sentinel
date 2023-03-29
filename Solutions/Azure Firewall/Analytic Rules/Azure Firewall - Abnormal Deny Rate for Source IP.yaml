@@ -1,0 +1,67 @@
+id: d36bb1e3-5abc-4037-ad9a-24ba3469819e
+name: Abnormal Deny Rate for Source IP
+description: |
+  'Identifies abnormal deny rate for specific source IP to destination IP based on the normal average and standard deviation learned during a configured period. This can indicate potential exfiltration, initial access or C2, where attacker tries to exploit the same vulnerability on machines in the organization, but is being blocked by firewall rules.
+  
+  Configurable Parameters:
+  
+  - Minimum of stds threshold - the number of stds to use in the threshold calculation. Default is set to 3.
+  - Learning period time - learning period for threshold calculation in days. Default is set to 5.
+  - Bin time - learning buckets time in hours. Default is set to 1 hour.
+  - Minimum threshold - minimum threshold for alert. Default is set to 5.
+  - Minimum bucket threshold - minimum learning buckets threshold for alert. Default is set to 5.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - InitialAccess
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  let LearningPeriod = 5d;
+  let RunTime = 1h;
+  let StartLearningPeriod = LearningPeriod + RunTime;
+  let EndRunTime = RunTime - 1d;
+  let BinTime = 1h;
+  let NumOfStdsThreshold = 3;
+  let MinThreshold = 5.0;
+  let MinLearningBuckets = 5;
+  let TrafficLogs = (AzureDiagnostics
+  | where TimeGenerated  between (ago(StartLearningPeriod) .. ago(EndRunTime))
+  | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
+  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport ". Action: " action "." *
+  | where action == "Deny"
+  | where isnotempty(dsturl) and isnotempty(srcip));
+  let LearningSrcIpDenyRate = (TrafficLogs
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | summarize count() by srcip, bin(TimeGenerated, BinTime), dsturl
+  | summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by srcip, dsturl
+  | where LearningTimeBuckets > MinLearningBuckets);
+  let AlertTimeSrcIpDenyRate = (TrafficLogs
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | summarize AlertTimeSrcIpDenyRateCount = count() by srcip);
+  AlertTimeSrcIpDenyRate
+  | join kind=leftouter (LearningSrcIpDenyRate) on srcip
+  | extend LreaningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
+  | where AlertTimeSrcIpDenyRateCount > LreaningThreshold
+  | project-away srcip1, LearningTimeSrcIpDenyRateAvg, LearningTimeSrcIpDenyRateStd
+  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

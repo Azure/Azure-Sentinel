@@ -1,0 +1,53 @@
+id: 9ce755c1-d2e6-4e2f-82d5-7871ec1aef91
+name: Commands executed by WMI on new hosts - potential Impacket
+description: |
+  'This query looks for hosts where commands are run via WMI, where this has not happened in the preceding 7 days. 
+    It also filters to command line arguments associated with Impacket wmiexec. These filters can be adjusted to broaden or narrow hunting as required.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+  - LateralMovement
+relevantTechniques:
+  - T1047
+  - T1021.006
+query: |
+  // Remove items from the artifacts list in order to expand hunting
+    let impacket_artifacts = dynamic(["cmd.exe", "/c", "2>&1", "127.0.0.1\\ADMIN$"]);
+    let starttime = todatetime('{{StartTimeISO}}');
+    let endtime = todatetime('{{EndTimeISO}}');
+    let lookback = starttime - 7d;
+    let wmi_hosts = (SecurityEvent
+    | where TimeGenerated between(lookback..starttime)
+    | where EventID == 4688
+    | where ParentProcessName endswith "wmiprvse.exe"
+    | where CommandLine has_all (impacket_artifacts)
+    | summarize by Computer);
+    SecurityEvent
+    | where TimeGenerated between(starttime..endtime)
+    | where EventID == 4688
+    | where Computer !in (wmi_hosts)
+    | where ParentProcessName endswith "wmiprvse.exe"
+    | where CommandLine has_all (impacket_artifacts)
+    | project-reorder TimeGenerated, Computer, CommandLine, Account
+    | extend NTDomain = tostring(split(Account,'\\',0)[0]), Name = tostring(split(Account,'\\',1)[0])
+    | extend Account_0_Name = Name
+    | extend Account_0_NTDomain = NTDomain
+    | extend Host_0_HostName = Computer
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+version: 2.0.1

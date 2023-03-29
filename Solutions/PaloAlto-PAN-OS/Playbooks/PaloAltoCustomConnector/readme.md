@@ -10,7 +10,7 @@ This custom connector connects to PAN-OS service end point and performs defined 
 
 ### Prerequisites for deploying Custom Connector
 1. PAN-OS service end point should be known. (e.g.  https://{paloaltonetworkdomain})
-2. Generate an API key. [Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
+2. Generate an API key. [Refer this link on how to generate the API Key](https://docs.paloaltonetworks.com/pan-os/10-1/pan-os-panorama-api/get-started-with-the-pan-os-xml-api/get-your-api-key)
 
 
 ## Actions supported by Palo-Alto custom connector

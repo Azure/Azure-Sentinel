@@ -1,0 +1,3042 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Log4j Impact Assessment\r\n\r\nThis Workbook provides a consolidated view of all Security Incidents, Alerts and Asset Vulnerability information related to Log4j across multi-Tenant environments. \r\n\r\nLearn more about Microsoft's [guidance for preventing, detecting, and hunting for exploitation of the Log4j 2 vulnerability](https://www.microsoft.com/security/blog/2021/12/11/guidance-for-preventing-detecting-and-hunting-for-cve-2021-44228-log4j-2-exploitation/).\r\n\r\n**The following tables and data sources are being utilized:**\r\n* Security Incidents\r\n* Security Alerts\r\n* Microsoft Defender for Cloud\r\n* Microsoft Defender for Endpoint\r\n\r\n<br>\r\n**Pre-Requisites:**\r\n* To enable a consolidated multi-Tenant view, [Azure Lighthouse needs to be onboarded](https://docs.microsoft.com/azure/lighthouse/how-to/manage-sentinel-workspaces)\r\n* To leverage Microsoft Defender for Cloud asset vulnerability information, follow [this guide](https://docs.microsoft.com/azure/sentinel/connect-defender-for-cloud) to enable this data source\r\n* To leverage Microsoft Defender for Endpoint Vulnerability and Secure Score information, follow [this guide](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/microsoft-defender-security-insights-in-azure-sentinel/ba-p/2359705) to ingest the data into Microsoft Sentinel\r\n* For more information, refer to the Techcommunity blog post\r\n",
+        "style": "info"
+      },
+      "name": "text - 5"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "loadType": "always",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "crossComponentResources": [
+                "{WatchlistWorkspace}"
+              ],
+              "parameters": [
+                {
+                  "id": "1ca69445-60fc-4806-b43d-ac7e6aad630a",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Subscription",
+                  "type": 6,
+                  "multiSelect": true,
+                  "quote": "'",
+                  "delimiter": ",",
+                  "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId",
+                  "crossComponentResources": [
+                    "value::selected"
+                  ],
+                  "value": [
+                    "value::all"
+                  ],
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "showDefault": false
+                  },
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                },
+                {
+                  "id": "e94aafa3-c5d9-4523-89f0-4e87aa754511",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Workspace",
+                  "type": 5,
+                  "isRequired": true,
+                  "multiSelect": true,
+                  "quote": "'",
+                  "delimiter": ",",
+                  "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces'\n| extend customerID = trim(' ', tostring(properties.customerId))\n| project id, customerID, name=tolower(name)\n|join \n(\n\tresources\n\t// Just show Workspaces that have Sentinel enabled\n\t| where type =~ \"microsoft.operationsmanagement/solutions\"\n\t| where name has \"SecurityInsights\"\n\t| parse name with * '(' s_workspace ')'*\n\t| project name=tolower(s_workspace)\n) on name\n| project tolower(id), customerID, name",
+                  "crossComponentResources": [
+                    "{Subscription}"
+                  ],
+                  "typeSettings": {
+                    "resourceTypeFilter": {
+                      "microsoft.operationalinsights/workspaces": true
+                    },
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "showDefault": false
+                  },
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources",
+                  "value": [
+                    "value::all"
+                  ]
+                },
+                {
+                  "id": "66f59acd-2628-457d-a5cd-176aa453472a",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "TimeRange",
+                  "type": 4,
+                  "isRequired": true,
+                  "value": {
+                    "durationMs": 1209600000
+                  },
+                  "typeSettings": {
+                    "selectableValues": [
+                      {
+                        "durationMs": 300000
+                      },
+                      {
+                        "durationMs": 900000
+                      },
+                      {
+                        "durationMs": 1800000
+                      },
+                      {
+                        "durationMs": 3600000
+                      },
+                      {
+                        "durationMs": 14400000
+                      },
+                      {
+                        "durationMs": 43200000
+                      },
+                      {
+                        "durationMs": 86400000
+                      },
+                      {
+                        "durationMs": 172800000
+                      },
+                      {
+                        "durationMs": 259200000
+                      },
+                      {
+                        "durationMs": 604800000
+                      },
+                      {
+                        "durationMs": 1209600000
+                      },
+                      {
+                        "durationMs": 2419200000
+                      },
+                      {
+                        "durationMs": 2592000000
+                      },
+                      {
+                        "durationMs": 5184000000
+                      },
+                      {
+                        "durationMs": 7776000000
+                      }
+                    ],
+                    "allowCustom": true
+                  }
+                },
+                {
+                  "id": "65e74c73-69f0-4eb5-a772-4fb5eae73d28",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "WorkspaceIDguid",
+                  "type": 1,
+                  "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| extend customerID = trim(' ', tostring(properties.customerId))\r\n| project '{Workspace:name}', name, customerID\r\n| where '{Workspace:name}' has name\r\n//| project customerID, name\r\n// join two columns, seperate with a \":\"; ARG, will comma seperate each row by default\r\n| project strcat(customerID,\":\",name)",
+                  "crossComponentResources": [
+                    "{Subscription}"
+                  ],
+                  "isHiddenWhenLocked": true,
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                },
+                {
+                  "id": "2af84437-b015-456b-9660-97c8415e72fd",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Product",
+                  "label": "Product Name",
+                  "type": 2,
+                  "description": "Filter on All or a named Product",
+                  "multiSelect": true,
+                  "quote": "'",
+                  "delimiter": ",",
+                  "query": "SecurityIncident\r\n| extend productName_ = tostring(parse_json(tostring(AdditionalData.alertProductNames))[0])\r\n| summarize by productName_\r\n",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "isHiddenWhenLocked": true,
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "showDefault": false
+                  },
+                  "timeContext": {
+                    "durationMs": 604800000
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces",
+                  "value": null
+                },
+                {
+                  "id": "5a683c1d-5e10-4d94-bb2a-32c05b17da8e",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "resourceGroup",
+                  "type": 1,
+                  "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n//| where name ==  \"{Workspace:label}\" \r\n| project resourceGroup",
+                  "crossComponentResources": [
+                    "{Subscription}"
+                  ],
+                  "isHiddenWhenLocked": true,
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                },
+                {
+                  "id": "306edc18-d122-478d-97aa-ebc5a4cb88db",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Owner",
+                  "type": 2,
+                  "description": "Filter on All or a named Owner assigned to an Incident",
+                  "isRequired": true,
+                  "multiSelect": true,
+                  "quote": "'",
+                  "delimiter": ",",
+                  "query": "SecurityIncident\r\n| extend owner = tostring(Owner.assignedTo) \r\n| summarize Count=count(IncidentNumber) by Owner= case(owner==\"\", \"Unassigned\",owner)\r\n| project Value = Owner, Label = strcat(Owner, \": \", Count)",
+                  "crossComponentResources": [
+                    "{Workspace}"
+                  ],
+                  "isHiddenWhenLocked": true,
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "selectAllValue": "*",
+                    "showDefault": false
+                  },
+                  "timeContext": {
+                    "durationMs": 2592000000
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces",
+                  "value": null
+                },
+                {
+                  "id": "974fe358-910d-41b0-bd1a-221b5f415197",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "WatchlistWorkspace",
+                  "type": 5,
+                  "description": "Select the Workspace that contains the Campaign/Vuln Watchlist",
+                  "isRequired": true,
+                  "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| extend customerID = trim(' ', tostring(properties.customerId))\r\n| project id, customerID, name=tolower(name)\r\n|join \r\n(\r\n\tresources\r\n\t// Just show Workspaces that have Sentinel enabled\r\n\t| where type =~ \"microsoft.operationsmanagement/solutions\"\r\n\t| where name has \"SecurityInsights\"\r\n\t| parse name with * '(' s_workspace ')'*\r\n\t| project name=tolower(s_workspace)\r\n) on name\r\n| project tolower(id), customerID, name",
+                  "crossComponentResources": [
+                    "value::all"
+                  ],
+                  "value": null,
+                  "typeSettings": {
+                    "additionalResourceOptions": [],
+                    "showDefault": false
+                  },
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                },
+                {
+                  "id": "1307edc5-d777-4710-bb54-4727928d8dae",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Watchlist",
+                  "type": 2,
+                  "isRequired": true,
+                  "query": "_GetWatchlistAlias",
+                  "crossComponentResources": [
+                    "{WatchlistWorkspace}"
+                  ],
+                  "value": "Campaign2",
+                  "typeSettings": {
+                    "additionalResourceOptions": []
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "32bb7b19-c6a4-4a87-8682-06e107899580",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Campaign",
+                  "type": 9,
+                  "isRequired": true,
+                  "multiSelect": true,
+                  "quote": "'",
+                  "delimiter": ",",
+                  "query": "_GetWatchlist('{Watchlist}') | project SearchKey",
+                  "crossComponentResources": [
+                    "{WatchlistWorkspace}"
+                  ],
+                  "isHiddenWhenLocked": true,
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces",
+                  "value": [
+                    "Trojan:Win32/Capfetox.AA",
+                    "Exploit:Linux/CVE-2021-44228.A",
+                    "Trojan:Linux/BashMiner.A",
+                    "Possible Log4j exploitation",
+                    "CVE-2021-44228",
+                    "Behavior similar to common Linux bots detected",
+                    "Vulnerable Machines related to log4j CVE-2021-44228",
+                    "CVE-2021-45046",
+                    "Suspicious file download",
+                    "Process associated with digital currency mining detected",
+                    "TrojanDropper:PowerShell/Cobacis.A",
+                    "Suspicious script launched",
+                    "Detected obfuscated command line",
+                    "A history file has been cleared",
+                    "Log4j vulnerability exploit aka Log4Shell IP IOC",
+                    "HackTool:Win32/Capfetox.A!dha",
+                    "Backdoor:Linux/Tusnami.C",
+                    "Azure WAF matching for Log4j vuln (CVE-2021-44228)",
+                    "Cobalt Strike command and control detected",
+                    "log4j",
+                    "Potential crypto coin miner started",
+                    "TrojanDownloader:Linux/CoinMiner",
+                    "Linux security related process termination activity detected",
+                    "Process associated with digital currency mining",
+                    "Download of file associated with digital currency mining",
+                    "Ongoing hands-on-keyboard attacker activity detected (Cobalt Strike)",
+                    "CVE-2021-3800",
+                    "Exploit:Linux/CVE-2021-44228.B",
+                    "Suspicious use of PowerShell detected",
+                    "Possible Cryptocoinminer download detected",
+                    "Azure WAF Log4j CVE-2021-44228 hunting",
+                    "Trojan:Linux/SuspectJavaExploit.B",
+                    "Trojan:Linux/SuspectJavaExploit.C",
+                    "Possible exploitation of Apache Log4j component detected",
+                    "Cryptocurrency miners EXECVE",
+                    "Possible exploitation of CVE-2021-44228",
+                    "Suspicious domain name reference",
+                    "Suspicious network traffic connection to C2 Server",
+                    "CVE-2021-23840",
+                    "VirTool:Win64/CobaltSrike.A",
+                    "Network connection seen in CVE-2021-44228 exploitation",
+                    "Exploitation attempt against Log4j (CVE-2021-4428)",
+                    "Digital currency mining related behavior detected",
+                    "Trojan:Win32/WebToos.A",
+                    "Backdoor:Linux/Setag.C",
+                    "Suspicious Base64 download activity detected",
+                    "TrojanDownloader:Win32/CoinMiner",
+                    "Suspicious shell script detected",
+                    "Suspicious remote PowerShell execution",
+                    "Trojan:Linux/SuspectJavaExploit.A",
+                    "CVE-2021-45105",
+                    "TrojanDownloader:Linux/Tusnami",
+                    "Suspicious Shell Script Detected"
+                  ]
+                }
+              ],
+              "style": "above",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 1"
+          }
+        ],
+        "exportParameters": true
+      },
+      "name": "group - parameter and help"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "tabs",
+              "links": [
+                {
+                  "id": "84ebce67-e6dc-46ac-a375-b36438e3b2ee",
+                  "cellValue": "Tab",
+                  "linkTarget": "parameter",
+                  "linkLabel": "Security Incidents",
+                  "subTarget": "SecurityIncident",
+                  "style": "link"
+                },
+                {
+                  "id": "fe402b33-8ccb-4d42-906c-4b1a84b902c7",
+                  "cellValue": "Tab",
+                  "linkTarget": "parameter",
+                  "linkLabel": "Security Alerts",
+                  "subTarget": "SecurityAlert",
+                  "style": "link"
+                }
+              ]
+            },
+            "name": "Tab"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| where Title in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n| summarize Count=count() by Title, bin(TimeGenerated, {TimeRange:grain})\r\n\r\n\r\n\r\n",
+                    "size": 1,
+                    "title": "SecurityIncidents related to {Watchlist} over Time",
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "visualization": "areachart",
+                    "graphSettings": {
+                      "type": 0,
+                      "topContent": {
+                        "columnMatch": "Title",
+                        "formatter": 1
+                      },
+                      "centerContent": {
+                        "columnMatch": "Count",
+                        "formatter": 1,
+                        "numberFormat": {
+                          "unit": 17,
+                          "options": {
+                            "maximumSignificantDigits": 3,
+                            "maximumFractionDigits": 2
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "name": "SecurityIncidents related to {Watchlist} over Time"
+                },
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| where Title in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n| summarize count(IncidentName) by   [\"Workspace\"] = workSpacename\r\n\r\n\r\n\r\n",
+                          "size": 4,
+                          "title": "Count of Security Incidents for selected Workspaces related to {Watchlist}",
+                          "timeContext": {
+                            "durationMs": 1209600000
+                          },
+                          "timeContextFromParameter": "TimeRange",
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "visualization": "piechart",
+                          "gridSettings": {
+                            "hierarchySettings": {
+                              "treeType": 1,
+                              "groupBy": [
+                                "wsName"
+                              ]
+                            },
+                            "sortBy": [
+                              {
+                                "itemKey": "wsName",
+                                "sortOrder": 2
+                              }
+                            ]
+                          },
+                          "sortBy": [
+                            {
+                              "itemKey": "wsName",
+                              "sortOrder": 2
+                            }
+                          ]
+                        },
+                        "customWidth": "40",
+                        "name": "Count of Security Incidents for selected Workspaces related to {Watchlist}"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n| where Title in ({Campaign})\r\n// end of get workspace name section\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n| summarize High=  countif(Severity==\"High\"),\r\n            Medium=countif(Severity==\"Medium\"),\r\n            Low   =countif(Severity==\"Low\"), \r\n            Informational=countif(Severity==\"Informational\"),\r\n            Total  = count()\r\n            by workSpacename",
+                          "size": 3,
+                          "title": "Count of Security Incidents per selected Workspace and Severity",
+                          "timeContext": {
+                            "durationMs": 1209600000
+                          },
+                          "timeContextFromParameter": "TimeRange",
+                          "exportFieldName": "workSpacename",
+                          "exportParameterName": "exportworkSpacename",
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "visualization": "table",
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "High",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                }
+                              },
+                              {
+                                "columnMatch": "Medium",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                }
+                              },
+                              {
+                                "columnMatch": "Low",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                }
+                              },
+                              {
+                                "columnMatch": "Informational",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed",
+                                  "customColumnWidthSetting": "150px"
+                                }
+                              },
+                              {
+                                "columnMatch": "Total",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "coldHot"
+                                }
+                              },
+                              {
+                                "columnMatch": "50th_PercentileMeanTime",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                },
+                                "numberFormat": {
+                                  "unit": 26,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false,
+                                    "maximumFractionDigits": 3
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "50th_PercentileCloseTime",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                },
+                                "numberFormat": {
+                                  "unit": 26,
+                                  "options": {
+                                    "style": "decimal",
+                                    "maximumFractionDigits": 3
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "iD",
+                                "formatter": 5
+                              }
+                            ],
+                            "sortBy": [
+                              {
+                                "itemKey": "workSpacename",
+                                "sortOrder": 1
+                              }
+                            ],
+                            "labelSettings": [
+                              {
+                                "columnId": "workSpacename",
+                                "label": "Workspace Name"
+                              }
+                            ]
+                          },
+                          "sortBy": [
+                            {
+                              "itemKey": "workSpacename",
+                              "sortOrder": 1
+                            }
+                          ]
+                        },
+                        "customWidth": "60",
+                        "showPin": true,
+                        "name": "Table - SecurityIncidents"
+                      },
+                      {
+                        "type": 12,
+                        "content": {
+                          "version": "NotebookGroup/1.0",
+                          "groupType": "editable",
+                          "title": "SecurityIncident Trend per Workspace",
+                          "expandable": true,
+                          "expanded": true,
+                          "items": [
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "let incidents = SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n| where Title in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n// end of get workspace name section\r\n| order by LastModifiedTime;\r\n// get trend of detections over time\r\nlet trend = incidents\r\n| summarize Count = count() by Title, workSpacename\r\n| join kind = inner ( incidents\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Title, workSpacename\r\n    | project-away TimeGenerated)\r\n    on Title, workSpacename\r\n| extend Id = strcat(Title,\"_\",workSpacename)\r\n| extend ParentId = Title\r\n| extend Detection = workSpacename;\r\nincidents\r\n| summarize Count = count() by Id = Title\r\n| extend Title = Id, ParentId = ''\r\n| join kind=inner (incidents\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Title\r\n    | project-away TimeGenerated\r\n    | extend Detection = Title)\r\n    on Title\r\n| union (trend)\r\n| project-away workSpacename1, Title1, workSpacename, Title\r\n| sort by Count desc\r\n//| summarize count() by workSpacename, Title",
+                                "size": 1,
+                                "title": "SecurityIncidents triggered over time per Workspace",
+                                "timeContext": {
+                                  "durationMs": 1209600000
+                                },
+                                "timeContextFromParameter": "TimeRange",
+                                "exportFieldName": "Detection",
+                                "exportParameterName": "IncidentSelection",
+                                "exportDefaultValue": "{\"IncidentSelection\": \"*\"}",
+                                "showExportToExcel": true,
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{Workspace}"
+                                ],
+                                "gridSettings": {
+                                  "formatters": [
+                                    {
+                                      "columnMatch": "Id",
+                                      "formatter": 5
+                                    },
+                                    {
+                                      "columnMatch": "Count",
+                                      "formatter": 8,
+                                      "formatOptions": {
+                                        "palette": "redDark"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "ParentId",
+                                      "formatter": 5
+                                    },
+                                    {
+                                      "columnMatch": "Trend",
+                                      "formatter": 9,
+                                      "formatOptions": {
+                                        "palette": "redDark"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "TimeGenerated",
+                                      "formatter": 5
+                                    },
+                                    {
+                                      "columnMatch": "set_ClassificationComment",
+                                      "formatter": 7,
+                                      "formatOptions": {
+                                        "linkTarget": "CellDetails",
+                                        "linkIsContextBlade": true
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "BenignPositive",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed",
+                                        "customColumnWidthSetting": "150px"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "FalsePositive",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed",
+                                        "customColumnWidthSetting": "150px"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "TruePositive",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed",
+                                        "customColumnWidthSetting": "150px"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Undetermined",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed",
+                                        "customColumnWidthSetting": "150px"
+                                      }
+                                    }
+                                  ],
+                                  "filter": true,
+                                  "hierarchySettings": {
+                                    "idColumn": "Id",
+                                    "parentColumn": "ParentId",
+                                    "treeType": 0,
+                                    "expanderColumn": "Detection"
+                                  }
+                                },
+                                "sortBy": []
+                              },
+                              "name": "query - 10"
+                            },
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| where Title in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n| summarize Total  = count()\r\n            by workSpacename\r\n\r\n\r\n\r\n\r\n",
+                                "size": 1,
+                                "title": "Count of Security Incidents for selected Workspaces and Severity",
+                                "timeContext": {
+                                  "durationMs": 1209600000
+                                },
+                                "timeContextFromParameter": "TimeRange",
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{Workspace}"
+                                ],
+                                "visualization": "table",
+                                "gridSettings": {
+                                  "formatters": [
+                                    {
+                                      "columnMatch": "High",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Medium",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Low",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Informational",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    }
+                                  ],
+                                  "labelSettings": [
+                                    {
+                                      "columnId": "workSpacename",
+                                      "label": "Workspace Name"
+                                    }
+                                  ]
+                                },
+                                "sortBy": []
+                              },
+                              "customWidth": "40",
+                              "conditionalVisibility": {
+                                "parameterName": "hide",
+                                "comparison": "isEqualTo",
+                                "value": "hide"
+                              },
+                              "name": "query - KQL for MAP count"
+                            },
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "resources\r\n// Just show Workspaces that have Sentinel enabled\r\n| where type =~ \"microsoft.operationsmanagement/solutions\"\r\n| where name has \"SecurityInsights\"\r\n| parse name with * '(' s_workspace ')'*\r\n| summarize count() by location, s_workspace",
+                                "size": 0,
+                                "title": "Microsoft Sentinel Workspaces by Azure Region",
+                                "queryType": 1,
+                                "resourceType": "microsoft.resourcegraph/resources",
+                                "crossComponentResources": [
+                                  "{Subscription}"
+                                ],
+                                "visualization": "table",
+                                "mapSettings": {
+                                  "locInfo": "AzureLoc",
+                                  "locInfoColumn": "location",
+                                  "sizeSettings": "count_",
+                                  "sizeAggregation": "Sum",
+                                  "labelSettings": "location",
+                                  "legendMetric": "location",
+                                  "legendAggregation": "Count",
+                                  "itemColorSettings": {
+                                    "nodeColorField": "count_",
+                                    "colorAggregation": "Sum",
+                                    "type": "heatmap",
+                                    "heatmapPalette": "greenRed"
+                                  }
+                                }
+                              },
+                              "customWidth": "50",
+                              "conditionalVisibility": {
+                                "parameterName": "hide",
+                                "comparison": "isEqualTo",
+                                "value": "hide"
+                              },
+                              "name": "query - ARG for MAp count"
+                            },
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\",\"mergeType\":\"innerunique\",\"leftTable\":\"query - KQL for MAP count\",\"rightTable\":\"query - ARG for MAp count\",\"leftColumn\":\"workSpacename\",\"rightColumn\":\"s_workspace\"}],\"projectRename\":[{\"originalName\":\"[query - KQL for MAP count].workSpacename\",\"mergedName\":\"Workspace Name\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"},{\"originalName\":\"[query - KQL for MAP count].Total\",\"mergedName\":\"Total\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"},{\"originalName\":\"[query - ARG for MAp count].location\",\"mergedName\":\"location\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"},{\"originalName\":\"[query - ARG for MAp count].s_workspace\",\"mergedName\":\"s_workspace\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"},{\"originalName\":\"[query - ARG for MAp count].count_\",\"mergedName\":\"count_\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"}]}",
+                                "size": 0,
+                                "title": "Microsoft Sentinel Incident Count by Region",
+                                "exportedParameters": [
+                                  {
+                                    "fieldName": "",
+                                    "parameterName": "exportMap1"
+                                  },
+                                  {
+                                    "fieldName": "location",
+                                    "parameterName": "location",
+                                    "parameterType": 1
+                                  }
+                                ],
+                                "queryType": 7,
+                                "visualization": "map",
+                                "gridSettings": {
+                                  "sortBy": [
+                                    {
+                                      "itemKey": "s_workspace",
+                                      "sortOrder": 1
+                                    }
+                                  ]
+                                },
+                                "sortBy": [
+                                  {
+                                    "itemKey": "s_workspace",
+                                    "sortOrder": 1
+                                  }
+                                ],
+                                "mapSettings": {
+                                  "locInfo": "AzureLoc",
+                                  "locInfoColumn": "location",
+                                  "sizeSettings": "Total",
+                                  "sizeAggregation": "Sum",
+                                  "labelSettings": "location",
+                                  "legendMetric": "Total",
+                                  "numberOfMetrics": 50,
+                                  "legendAggregation": "Sum",
+                                  "itemColorSettings": {
+                                    "nodeColorField": "Total",
+                                    "colorAggregation": "Sum",
+                                    "type": "heatmap",
+                                    "heatmapPalette": "greenRed"
+                                  }
+                                }
+                              },
+                              "conditionalVisibility": {
+                                "parameterName": "hide",
+                                "comparison": "isEqualTo",
+                                "value": "hide"
+                              },
+                              "showPin": false,
+                              "name": "query - 6"
+                            },
+                            {
+                              "type": 9,
+                              "content": {
+                                "version": "KqlParameterItem/1.0",
+                                "crossComponentResources": [
+                                  "{Subscription}"
+                                ],
+                                "parameters": [
+                                  {
+                                    "id": "5443aca4-a73d-46ad-aaea-bd391acc3f0d",
+                                    "version": "KqlParameterItem/1.0",
+                                    "name": "getMapdata1",
+                                    "type": 1,
+                                    "isRequired": true,
+                                    "query": "extend a = parse_json('{exportMap1}')\r\n| project  ['region']=a.regionName,  ['Incident Count']=a.legendValue\r\n| limit 1",
+                                    "crossComponentResources": [
+                                      "{Subscription}"
+                                    ],
+                                    "isHiddenWhenLocked": true,
+                                    "timeContext": {
+                                      "durationMs": 0
+                                    },
+                                    "timeContextFromParameter": "TimeRange",
+                                    "queryType": 1,
+                                    "resourceType": "microsoft.resourcegraph/resources"
+                                  },
+                                  {
+                                    "version": "KqlParameterItem/1.0",
+                                    "name": "getMapdata2",
+                                    "type": 1,
+                                    "isRequired": true,
+                                    "query": "extend a = parse_json('{exportMap2}')\r\n| project  ['region']=a.regionName,  ['Incident Count']=a.legendValue\r\n| limit 1",
+                                    "crossComponentResources": [
+                                      "{Subscription}"
+                                    ],
+                                    "isHiddenWhenLocked": true,
+                                    "timeContext": {
+                                      "durationMs": 86400000
+                                    },
+                                    "queryType": 1,
+                                    "resourceType": "microsoft.resourcegraph/resources",
+                                    "id": "793ac0c4-7518-4e52-9509-eb1bdf97854b"
+                                  },
+                                  {
+                                    "version": "KqlParameterItem/1.0",
+                                    "name": "getMapdata1_count",
+                                    "type": 1,
+                                    "isRequired": true,
+                                    "query": "extend a = parse_json('{exportMap1}')\r\n| project  ['Incident Count']=a.legendValue\r\n| limit 1",
+                                    "crossComponentResources": [
+                                      "{Subscription}"
+                                    ],
+                                    "isHiddenWhenLocked": true,
+                                    "timeContext": {
+                                      "durationMs": 0
+                                    },
+                                    "timeContextFromParameter": "TimeRange",
+                                    "queryType": 1,
+                                    "resourceType": "microsoft.resourcegraph/resources",
+                                    "id": "d4349432-c9cf-436e-9ede-2cd303c4bc9c"
+                                  },
+                                  {
+                                    "version": "KqlParameterItem/1.0",
+                                    "name": "getMapdata2_count",
+                                    "type": 1,
+                                    "isRequired": true,
+                                    "query": "extend a = parse_json('{exportMap2}')\r\n| project  ['Incident Count']=a.legendValue\r\n| limit 1",
+                                    "crossComponentResources": [
+                                      "{Subscription}"
+                                    ],
+                                    "isHiddenWhenLocked": true,
+                                    "timeContext": {
+                                      "durationMs": 0
+                                    },
+                                    "timeContextFromParameter": "TimeRange",
+                                    "queryType": 1,
+                                    "resourceType": "microsoft.resourcegraph/resources",
+                                    "id": "88076350-2736-407f-a272-6b473dc92c6c"
+                                  }
+                                ],
+                                "style": "above",
+                                "queryType": 1,
+                                "resourceType": "microsoft.resourcegraph/resources"
+                              },
+                              "name": "parameters - 8"
+                            }
+                          ]
+                        },
+                        "name": "group - classification and tactics - incidents"
+                      },
+                      {
+                        "type": 12,
+                        "content": {
+                          "version": "NotebookGroup/1.0",
+                          "groupType": "editable",
+                          "title": "Incident Investigation",
+                          "expandable": true,
+                          "expanded": true,
+                          "items": [
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of workspace validation, now match workspace to the selected parameter\r\n| summarize arg_max(TimeGenerated,*) by IncidentID=strcat(workSpacename,\"_\",tostring(IncidentNumber))\r\n| where Title in ({Campaign})\r\n| extend Alerts = extract(\"\\\\[(.*?)\\\\]\", 1, tostring(AlertIds))\r\n| extend productName_ = tostring(parse_json(tostring(AdditionalData.alertProductNames))[0])\r\n//| where productName_ in ({Product}) or '{Product:label}' ==\"All\"\r\n| mv-expand AlertIds to typeof(string)\r\n| join \r\n(\r\n    SecurityAlert\r\n    | extend AlertEntities = parse_json(Entities)\r\n    | mv-expand AlertEntities\r\n) on $left.AlertIds == $right.SystemAlertId\r\n| summarize AlertCount=dcount(AlertIds), entityList=make_set((AlertEntities)) by IncidentID, Status, Severity, Title,  Alerts, IncidentUrl, Owner=tostring(Owner.userPrincipalName) , Tactics =tostring(AdditionalData.tactics), workSpacename, productName_, IncidentNumber\r\n// set column order\r\n| project workSpacename, IncidentNumber, Severity, Status, AlertCount, Title, entityList, Tactics, IncidentUrl, productName_, Owner\r\n| order by IncidentNumber desc\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+                                "size": 0,
+                                "title": "{$rowCount} Incidents during {TimeRange:label}",
+                                "timeContext": {
+                                  "durationMs": 1209600000
+                                },
+                                "timeContextFromParameter": "TimeRange",
+                                "exportFieldName": "SystemAlertId",
+                                "exportParameterName": "AlertID",
+                                "showExportToExcel": true,
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{Workspace}"
+                                ],
+                                "gridSettings": {
+                                  "formatters": [
+                                    {
+                                      "columnMatch": "workSpacename",
+                                      "formatter": 5
+                                    },
+                                    {
+                                      "columnMatch": "Severity",
+                                      "formatter": 18,
+                                      "formatOptions": {
+                                        "thresholdsOptions": "colors",
+                                        "thresholdsGrid": [
+                                          {
+                                            "operator": "==",
+                                            "thresholdValue": "High",
+                                            "representation": "redBright",
+                                            "text": "{0}{1}"
+                                          },
+                                          {
+                                            "operator": "==",
+                                            "thresholdValue": "Medium",
+                                            "representation": "orange",
+                                            "text": "{0}{1}"
+                                          },
+                                          {
+                                            "operator": "==",
+                                            "thresholdValue": "Low",
+                                            "representation": "greenDark",
+                                            "text": "{0}{1}"
+                                          },
+                                          {
+                                            "operator": "Default",
+                                            "thresholdValue": null,
+                                            "representation": "lightBlue",
+                                            "text": "{0}{1}"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Status",
+                                      "formatter": 18,
+                                      "formatOptions": {
+                                        "thresholdsOptions": "colors",
+                                        "thresholdsGrid": [
+                                          {
+                                            "operator": "==",
+                                            "thresholdValue": "New",
+                                            "representation": "gray",
+                                            "text": "{0}{1}"
+                                          },
+                                          {
+                                            "operator": "Default",
+                                            "thresholdValue": null,
+                                            "representation": "blue",
+                                            "text": "{0}{1}"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "AlertCount",
+                                      "formatter": 8,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "IncidentUrl",
+                                      "formatter": 1,
+                                      "formatOptions": {
+                                        "linkTarget": "Url",
+                                        "linkLabel": "Open Incident in Microsoft Sentinel "
+                                      }
+                                    }
+                                  ],
+                                  "rowLimit": 500,
+                                  "filter": true,
+                                  "hierarchySettings": {
+                                    "treeType": 1,
+                                    "groupBy": [
+                                      "workSpacename"
+                                    ]
+                                  },
+                                  "sortBy": [
+                                    {
+                                      "itemKey": "IncidentNumber",
+                                      "sortOrder": 2
+                                    }
+                                  ]
+                                },
+                                "sortBy": [
+                                  {
+                                    "itemKey": "IncidentNumber",
+                                    "sortOrder": 2
+                                  }
+                                ]
+                              },
+                              "name": "query - single alert - Copy"
+                            },
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "let AlertEntities = SecurityAlert\r\n| where SystemAlertId == \"{AlertID}\"\r\n| where TimeGenerated {TimeRange}\r\n| extend AlertEntities = parse_json(Entities)\r\n| mv-expand AlertEntities\r\n| where isnotempty(AlertEntities)\r\n| project AlertEntities;\r\nlet filehashEntities = AlertEntities\r\n| where AlertEntities.Type =~ \"filehash\"\r\n| extend Entity = tostring(AlertEntities.Value)\r\n| extend EntityType = strcat(tostring(AlertEntities.Type), \"-\", tostring(AlertEntities.Algorithm))\r\n| distinct Entity, EntityType;\r\nlet fileEntities = AlertEntities\r\n| where AlertEntities.Type == \"file\"\r\n| extend Entity = strcat(tostring(AlertEntities.Directory), \"\\\\\", tostring(AlertEntities.Name))\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet nestedFileHashEntities = AlertEntities\r\n| where AlertEntities.Type =~ \"file\"\r\n| where isnotempty(AlertEntities.FileHashes)\r\n| mv-expand hashes=AlertEntities.FileHashes\r\n| extend Entity = tostring(hashes.Value)\r\n| extend EntityType = strcat(tostring(hashes.Type), \"-\", tostring(hashes.Algorithm))\r\n| distinct Entity, EntityType;\r\nlet IPEntities = AlertEntities\r\n| where AlertEntities.Type == \"ip\"\r\n| extend Entity = tostring(AlertEntities.Address)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet AccountEntities = AlertEntities\r\n| where AlertEntities.Type == \"account\"\r\n| extend Entity = iff(isnotempty(AlertEntities.UPNSuffix), strcat(AlertEntities.Name, '@', AlertEntities.UPNSuffix), AlertEntities.Name)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet HostEntities = AlertEntities\r\n| where AlertEntities.Type == \"host\"\r\n| extend Entity = iff(isnotempty(AlertEntities.DnsDomain), strcat(AlertEntities.HostName, '.', AlertEntities.DnsDomain), AlertEntities.HostName)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet appEntities = AlertEntities\r\n| where AlertEntities.Type == \"cloud-application\"\r\n| extend Entity = tostring(AlertEntities.Name)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet azresEntities = AlertEntities\r\n| where AlertEntities.Type == \"azure-resource\"\r\n| extend Entity = tostring(AlertEntities.ResourceId)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet malwareEntities = AlertEntities\r\n| where AlertEntities.Type == \"malware\"\r\n| extend Entity = tostring(AlertEntities.Name)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet domResIdEntities = AlertEntities\r\n| where AlertEntities.Type == \"DomainResourceIdentifier\"\r\n| extend Entity = tostring(AlertEntities.ResourceName)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet dnsEntities = AlertEntities\r\n| where AlertEntities.Type == \"dns\"\r\n| extend Entity = tostring(AlertEntities.DomainName)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nAlertEntities\r\n| where AlertEntities.Type == \"url\"\r\n| extend Entity = tostring(AlertEntities.Url)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType\r\n| union IPEntities, AccountEntities, HostEntities, filehashEntities, fileEntities, nestedFileHashEntities, appEntities, azresEntities, malwareEntities, domResIdEntities, dnsEntities\r\n| where isnotempty(Entity)\r\n| order by EntityType asc",
+                                "size": 0,
+                                "timeContext": {
+                                  "durationMs": 1209600000
+                                },
+                                "timeContextFromParameter": "TimeRange",
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{Workspace}"
+                                ]
+                              },
+                              "conditionalVisibility": {
+                                "parameterName": "hide",
+                                "comparison": "isEqualTo",
+                                "value": "hide"
+                              },
+                              "name": "query - 3",
+                              "styleSettings": {
+                                "margin": "20"
+                              }
+                            }
+                          ]
+                        },
+                        "name": "group - classification and tactics - incidents - Copy"
+                      }
+                    ]
+                  },
+                  "name": "SecurityIncidents related to {Watchlist} drill down"
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "Tab",
+              "comparison": "isEqualTo",
+              "value": "SecurityIncident"
+            },
+            "name": "Security Incidents"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "SecurityAlert\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n| extend ThreatName_ = tostring(parse_json(ExtendedProperties).ThreatName)\r\n// end of get workspace name section\r\n| where DisplayName in ({Campaign}) or ThreatName_ in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\r\n| summarize Count=count() by Title=AlertName, bin(TimeGenerated, {TimeRange:grain})",
+                    "size": 1,
+                    "title": "SecurityAlerts related to {Watchlist} over Time",
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "visualization": "areachart",
+                    "graphSettings": {
+                      "type": 0,
+                      "topContent": {
+                        "columnMatch": "Title",
+                        "formatter": 1
+                      },
+                      "centerContent": {
+                        "columnMatch": "Count",
+                        "formatter": 1,
+                        "numberFormat": {
+                          "unit": 17,
+                          "options": {
+                            "maximumSignificantDigits": 3,
+                            "maximumFractionDigits": 2
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "name": "query - 6 - Copy"
+                },
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "SecurityAlert\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| extend ThreatName_ = tostring(parse_json(ExtendedProperties).ThreatName)\r\n| where DisplayName in ({Campaign}) or ThreatName_ in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\r\n| summarize count(AlertName) by   [\"Workspace\"] = workSpacename",
+                          "size": 4,
+                          "title": "Count of Security Alerts for selected {$rowCount} Workspaces related to {Watchlist}",
+                          "timeContext": {
+                            "durationMs": 1209600000
+                          },
+                          "timeContextFromParameter": "TimeRange",
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "visualization": "piechart",
+                          "gridSettings": {
+                            "hierarchySettings": {
+                              "treeType": 1,
+                              "groupBy": [
+                                "wsName"
+                              ]
+                            },
+                            "sortBy": [
+                              {
+                                "itemKey": "wsName",
+                                "sortOrder": 2
+                              }
+                            ]
+                          },
+                          "sortBy": [
+                            {
+                              "itemKey": "wsName",
+                              "sortOrder": 2
+                            }
+                          ]
+                        },
+                        "customWidth": "40",
+                        "name": "query - 3 - Copy"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "SecurityAlert\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| extend ThreatName_ = tostring(parse_json(ExtendedProperties).ThreatName)\r\n| where DisplayName in ({Campaign}) or ThreatName_ in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\r\n| summarize High=  countif(AlertSeverity==\"High\"),\r\n            Medium=countif(AlertSeverity==\"Medium\"),\r\n            Low   =countif(AlertSeverity==\"Low\"), \r\n            Informational=countif(AlertSeverity==\"Informational\"),\r\n            Total  = count()\r\n            by workSpacename",
+                          "size": 3,
+                          "title": "Count of Security Alerts for selected Workspaces and Severity",
+                          "timeContext": {
+                            "durationMs": 1209600000
+                          },
+                          "timeContextFromParameter": "TimeRange",
+                          "exportFieldName": "workSpacename",
+                          "exportParameterName": "exportworkSpacename",
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "visualization": "table",
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "High",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                }
+                              },
+                              {
+                                "columnMatch": "Medium",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                }
+                              },
+                              {
+                                "columnMatch": "Low",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                }
+                              },
+                              {
+                                "columnMatch": "Informational",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed",
+                                  "customColumnWidthSetting": "150px"
+                                }
+                              },
+                              {
+                                "columnMatch": "Total",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "coldHot"
+                                }
+                              },
+                              {
+                                "columnMatch": "50th_PercentileMeanTime",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                },
+                                "numberFormat": {
+                                  "unit": 26,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false,
+                                    "maximumFractionDigits": 3
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "50th_PercentileCloseTime",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "greenRed"
+                                },
+                                "numberFormat": {
+                                  "unit": 26,
+                                  "options": {
+                                    "style": "decimal",
+                                    "maximumFractionDigits": 3
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "iD",
+                                "formatter": 5
+                              }
+                            ],
+                            "sortBy": [
+                              {
+                                "itemKey": "workSpacename",
+                                "sortOrder": 1
+                              }
+                            ],
+                            "labelSettings": [
+                              {
+                                "columnId": "workSpacename",
+                                "label": "Workspace Name"
+                              }
+                            ]
+                          },
+                          "sortBy": [
+                            {
+                              "itemKey": "workSpacename",
+                              "sortOrder": 1
+                            }
+                          ]
+                        },
+                        "customWidth": "60",
+                        "name": "query - SecIncidents"
+                      },
+                      {
+                        "type": 12,
+                        "content": {
+                          "version": "NotebookGroup/1.0",
+                          "groupType": "editable",
+                          "title": "SecurityAlert Trend per Workspace",
+                          "expandable": true,
+                          "expanded": true,
+                          "items": [
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "let alerts = SecurityAlert\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n| extend ThreatName_ = tostring(parse_json(ExtendedProperties).ThreatName)\r\n| where DisplayName in ({Campaign}) or ThreatName_ in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\r\n| extend Title = AlertName;\r\n// get trend of detections over time\r\nlet trend = alerts\r\n| summarize Count = count() by Title, workSpacename\r\n| join kind = inner ( alerts\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Title, workSpacename\r\n    | project-away TimeGenerated)\r\n    on Title, workSpacename\r\n| extend Id = strcat(Title,\"_\",workSpacename)\r\n| extend ParentId = Title\r\n| extend Detection = workSpacename;\r\nalerts\r\n| summarize Count = count() by Id = Title\r\n| extend Title = Id, ParentId = ''\r\n| join kind=inner (alerts\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Title\r\n    | project-away TimeGenerated\r\n    | extend Detection = Title)\r\n    on Title\r\n| union (trend)\r\n| project-away workSpacename1, Title1, workSpacename, Title\r\n| sort by Count desc\r\n//| summarize count() by workSpacename, Title",
+                                "size": 1,
+                                "title": "SecurityAlerts triggered over time per Workspace",
+                                "timeContext": {
+                                  "durationMs": 1209600000
+                                },
+                                "timeContextFromParameter": "TimeRange",
+                                "exportFieldName": "Detection",
+                                "exportParameterName": "IncidentSelection",
+                                "exportDefaultValue": "{\"IncidentSelection\": \"*\"}",
+                                "showExportToExcel": true,
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{Workspace}"
+                                ],
+                                "gridSettings": {
+                                  "formatters": [
+                                    {
+                                      "columnMatch": "Id",
+                                      "formatter": 5
+                                    },
+                                    {
+                                      "columnMatch": "Count",
+                                      "formatter": 8,
+                                      "formatOptions": {
+                                        "palette": "redDark"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "ParentId",
+                                      "formatter": 5
+                                    },
+                                    {
+                                      "columnMatch": "Trend",
+                                      "formatter": 9,
+                                      "formatOptions": {
+                                        "palette": "redDark"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "TimeGenerated",
+                                      "formatter": 5
+                                    },
+                                    {
+                                      "columnMatch": "set_ClassificationComment",
+                                      "formatter": 7,
+                                      "formatOptions": {
+                                        "linkTarget": "CellDetails",
+                                        "linkIsContextBlade": true
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "BenignPositive",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed",
+                                        "customColumnWidthSetting": "150px"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "FalsePositive",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed",
+                                        "customColumnWidthSetting": "150px"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "TruePositive",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed",
+                                        "customColumnWidthSetting": "150px"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Undetermined",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed",
+                                        "customColumnWidthSetting": "150px"
+                                      }
+                                    }
+                                  ],
+                                  "filter": true,
+                                  "hierarchySettings": {
+                                    "idColumn": "Id",
+                                    "parentColumn": "ParentId",
+                                    "treeType": 0,
+                                    "expanderColumn": "Detection"
+                                  }
+                                },
+                                "sortBy": []
+                              },
+                              "name": "query - 10"
+                            },
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| where Title in ({Campaign})\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n| summarize Total  = count()\r\n            by workSpacename\r\n\r\n\r\n\r\n\r\n",
+                                "size": 1,
+                                "title": "Count of Security Incidents for selected Workspaces and Severity",
+                                "timeContext": {
+                                  "durationMs": 1209600000
+                                },
+                                "timeContextFromParameter": "TimeRange",
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{Workspace}"
+                                ],
+                                "visualization": "table",
+                                "gridSettings": {
+                                  "formatters": [
+                                    {
+                                      "columnMatch": "High",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Medium",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Low",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Informational",
+                                      "formatter": 4,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    }
+                                  ],
+                                  "labelSettings": [
+                                    {
+                                      "columnId": "workSpacename",
+                                      "label": "Workspace Name"
+                                    }
+                                  ]
+                                },
+                                "sortBy": []
+                              },
+                              "customWidth": "40",
+                              "conditionalVisibility": {
+                                "parameterName": "hide",
+                                "comparison": "isEqualTo",
+                                "value": "hide"
+                              },
+                              "name": "query - KQL for MAP count"
+                            },
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "resources\r\n// Just show Workspaces that have Sentinel enabled\r\n| where type =~ \"microsoft.operationsmanagement/solutions\"\r\n| where name has \"SecurityInsights\"\r\n| parse name with * '(' s_workspace ')'*\r\n| summarize count() by location, s_workspace",
+                                "size": 0,
+                                "title": "Microsoft Sentinel Workspaces by Azure Region",
+                                "queryType": 1,
+                                "resourceType": "microsoft.resourcegraph/resources",
+                                "crossComponentResources": [
+                                  "{Subscription}"
+                                ],
+                                "visualization": "table",
+                                "mapSettings": {
+                                  "locInfo": "AzureLoc",
+                                  "locInfoColumn": "location",
+                                  "sizeSettings": "count_",
+                                  "sizeAggregation": "Sum",
+                                  "labelSettings": "location",
+                                  "legendMetric": "location",
+                                  "legendAggregation": "Count",
+                                  "itemColorSettings": {
+                                    "nodeColorField": "count_",
+                                    "colorAggregation": "Sum",
+                                    "type": "heatmap",
+                                    "heatmapPalette": "greenRed"
+                                  }
+                                }
+                              },
+                              "customWidth": "50",
+                              "conditionalVisibility": {
+                                "parameterName": "hide",
+                                "comparison": "isEqualTo",
+                                "value": "hide"
+                              },
+                              "name": "query - ARG for MAp count"
+                            },
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\",\"mergeType\":\"innerunique\",\"leftTable\":\"query - KQL for MAP count\",\"rightTable\":\"query - ARG for MAp count\",\"leftColumn\":\"workSpacename\",\"rightColumn\":\"s_workspace\"}],\"projectRename\":[{\"originalName\":\"[query - KQL for MAP count].workSpacename\",\"mergedName\":\"Workspace Name\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"},{\"originalName\":\"[query - KQL for MAP count].Total\",\"mergedName\":\"Total\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"},{\"originalName\":\"[query - ARG for MAp count].location\",\"mergedName\":\"location\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"},{\"originalName\":\"[query - ARG for MAp count].s_workspace\",\"mergedName\":\"s_workspace\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"},{\"originalName\":\"[query - ARG for MAp count].count_\",\"mergedName\":\"count_\",\"fromId\":\"9862f923-5d48-4232-8b1d-54f18cd153d3\"}]}",
+                                "size": 0,
+                                "title": "Microsoft Sentinel Incident Count by Region",
+                                "exportedParameters": [
+                                  {
+                                    "fieldName": "",
+                                    "parameterName": "exportMap1"
+                                  },
+                                  {
+                                    "fieldName": "location",
+                                    "parameterName": "location",
+                                    "parameterType": 1
+                                  }
+                                ],
+                                "queryType": 7,
+                                "visualization": "map",
+                                "gridSettings": {
+                                  "sortBy": [
+                                    {
+                                      "itemKey": "s_workspace",
+                                      "sortOrder": 1
+                                    }
+                                  ]
+                                },
+                                "sortBy": [
+                                  {
+                                    "itemKey": "s_workspace",
+                                    "sortOrder": 1
+                                  }
+                                ],
+                                "mapSettings": {
+                                  "locInfo": "AzureLoc",
+                                  "locInfoColumn": "location",
+                                  "sizeSettings": "Total",
+                                  "sizeAggregation": "Sum",
+                                  "labelSettings": "location",
+                                  "legendMetric": "Total",
+                                  "numberOfMetrics": 50,
+                                  "legendAggregation": "Sum",
+                                  "itemColorSettings": {
+                                    "nodeColorField": "Total",
+                                    "colorAggregation": "Sum",
+                                    "type": "heatmap",
+                                    "heatmapPalette": "greenRed"
+                                  }
+                                }
+                              },
+                              "conditionalVisibility": {
+                                "parameterName": "hide",
+                                "comparison": "isEqualTo",
+                                "value": "hide"
+                              },
+                              "showPin": false,
+                              "name": "query - 6"
+                            },
+                            {
+                              "type": 9,
+                              "content": {
+                                "version": "KqlParameterItem/1.0",
+                                "crossComponentResources": [
+                                  "{Subscription}"
+                                ],
+                                "parameters": [
+                                  {
+                                    "id": "5443aca4-a73d-46ad-aaea-bd391acc3f0d",
+                                    "version": "KqlParameterItem/1.0",
+                                    "name": "getMapdata1",
+                                    "type": 1,
+                                    "isRequired": true,
+                                    "query": "extend a = parse_json('{exportMap1}')\r\n| project  ['region']=a.regionName,  ['Incident Count']=a.legendValue\r\n| limit 1",
+                                    "crossComponentResources": [
+                                      "{Subscription}"
+                                    ],
+                                    "isHiddenWhenLocked": true,
+                                    "timeContext": {
+                                      "durationMs": 0
+                                    },
+                                    "timeContextFromParameter": "TimeRange",
+                                    "queryType": 1,
+                                    "resourceType": "microsoft.resourcegraph/resources"
+                                  },
+                                  {
+                                    "version": "KqlParameterItem/1.0",
+                                    "name": "getMapdata2",
+                                    "type": 1,
+                                    "isRequired": true,
+                                    "query": "extend a = parse_json('{exportMap2}')\r\n| project  ['region']=a.regionName,  ['Incident Count']=a.legendValue\r\n| limit 1",
+                                    "crossComponentResources": [
+                                      "{Subscription}"
+                                    ],
+                                    "isHiddenWhenLocked": true,
+                                    "timeContext": {
+                                      "durationMs": 86400000
+                                    },
+                                    "queryType": 1,
+                                    "resourceType": "microsoft.resourcegraph/resources",
+                                    "id": "793ac0c4-7518-4e52-9509-eb1bdf97854b"
+                                  },
+                                  {
+                                    "version": "KqlParameterItem/1.0",
+                                    "name": "getMapdata1_count",
+                                    "type": 1,
+                                    "isRequired": true,
+                                    "query": "extend a = parse_json('{exportMap1}')\r\n| project  ['Incident Count']=a.legendValue\r\n| limit 1",
+                                    "crossComponentResources": [
+                                      "{Subscription}"
+                                    ],
+                                    "isHiddenWhenLocked": true,
+                                    "timeContext": {
+                                      "durationMs": 0
+                                    },
+                                    "timeContextFromParameter": "TimeRange",
+                                    "queryType": 1,
+                                    "resourceType": "microsoft.resourcegraph/resources",
+                                    "id": "d4349432-c9cf-436e-9ede-2cd303c4bc9c"
+                                  },
+                                  {
+                                    "version": "KqlParameterItem/1.0",
+                                    "name": "getMapdata2_count",
+                                    "type": 1,
+                                    "isRequired": true,
+                                    "query": "extend a = parse_json('{exportMap2}')\r\n| project  ['Incident Count']=a.legendValue\r\n| limit 1",
+                                    "crossComponentResources": [
+                                      "{Subscription}"
+                                    ],
+                                    "isHiddenWhenLocked": true,
+                                    "timeContext": {
+                                      "durationMs": 0
+                                    },
+                                    "timeContextFromParameter": "TimeRange",
+                                    "queryType": 1,
+                                    "resourceType": "microsoft.resourcegraph/resources",
+                                    "id": "88076350-2736-407f-a272-6b473dc92c6c"
+                                  }
+                                ],
+                                "style": "above",
+                                "queryType": 1,
+                                "resourceType": "microsoft.resourcegraph/resources"
+                              },
+                              "name": "parameters - 8"
+                            }
+                          ]
+                        },
+                        "name": "group - classification and tactics - alerts"
+                      },
+                      {
+                        "type": 12,
+                        "content": {
+                          "version": "NotebookGroup/1.0",
+                          "groupType": "editable",
+                          "title": "Alert Investigation",
+                          "expandable": true,
+                          "expanded": true,
+                          "items": [
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "SecurityAlert\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n| extend ThreatName_ = tostring(parse_json(ExtendedProperties).ThreatName)\r\n| extend productName_ = tostring(parse_json(ExtendedProperties).DetectionSource)\r\n| where DisplayName in ({Campaign}) or ThreatName_ in ({Campaign})\r\n| extend Title = DisplayName\r\n| extend Title = iff(Title == \"\", ThreatName_, DisplayName)\r\n// end of workspace validation, now match workspace to the selected parameter\r\n| summarize arg_max(TimeGenerated,*) by AlertID=strcat(workSpacename,\"_\",tostring(SystemAlertId))\r\n| summarize entityList=make_set((Entities)) by AlertID, Status, AlertSeverity, Title, AlertLink, workSpacename, productName_, SystemAlertId\r\n// set column order\r\n| project workSpacename, SystemAlertId, AlertSeverity, Status, Title, entityList, AlertLink, productName_\r\n| order by SystemAlertId desc\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+                                "size": 0,
+                                "title": "{$rowCount} Alerts during {TimeRange:label}",
+                                "timeContext": {
+                                  "durationMs": 1209600000
+                                },
+                                "timeContextFromParameter": "TimeRange",
+                                "exportFieldName": "SystemAlertId",
+                                "exportParameterName": "AlertID",
+                                "showExportToExcel": true,
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{Workspace}"
+                                ],
+                                "gridSettings": {
+                                  "formatters": [
+                                    {
+                                      "columnMatch": "workSpacename",
+                                      "formatter": 5
+                                    },
+                                    {
+                                      "columnMatch": "Severity",
+                                      "formatter": 18,
+                                      "formatOptions": {
+                                        "thresholdsOptions": "colors",
+                                        "thresholdsGrid": [
+                                          {
+                                            "operator": "==",
+                                            "thresholdValue": "High",
+                                            "representation": "redBright",
+                                            "text": "{0}{1}"
+                                          },
+                                          {
+                                            "operator": "==",
+                                            "thresholdValue": "Medium",
+                                            "representation": "orange",
+                                            "text": "{0}{1}"
+                                          },
+                                          {
+                                            "operator": "==",
+                                            "thresholdValue": "Low",
+                                            "representation": "greenDark",
+                                            "text": "{0}{1}"
+                                          },
+                                          {
+                                            "operator": "Default",
+                                            "thresholdValue": null,
+                                            "representation": "lightBlue",
+                                            "text": "{0}{1}"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "Status",
+                                      "formatter": 18,
+                                      "formatOptions": {
+                                        "thresholdsOptions": "colors",
+                                        "thresholdsGrid": [
+                                          {
+                                            "operator": "==",
+                                            "thresholdValue": "New",
+                                            "representation": "gray",
+                                            "text": "{0}{1}"
+                                          },
+                                          {
+                                            "operator": "Default",
+                                            "thresholdValue": null,
+                                            "representation": "blue",
+                                            "text": "{0}{1}"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "AlertCount",
+                                      "formatter": 8,
+                                      "formatOptions": {
+                                        "palette": "greenRed"
+                                      }
+                                    },
+                                    {
+                                      "columnMatch": "IncidentUrl",
+                                      "formatter": 1,
+                                      "formatOptions": {
+                                        "linkTarget": "Url",
+                                        "linkLabel": "Open Incident in Microsoft Sentinel "
+                                      }
+                                    }
+                                  ],
+                                  "rowLimit": 500,
+                                  "filter": true,
+                                  "hierarchySettings": {
+                                    "treeType": 1,
+                                    "groupBy": [
+                                      "workSpacename"
+                                    ]
+                                  }
+                                },
+                                "sortBy": []
+                              },
+                              "name": "query - single alert - Copy"
+                            },
+                            {
+                              "type": 3,
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "query": "let AlertEntities = SecurityAlert\r\n| where SystemAlertId == \"{AlertID}\"\r\n| where TimeGenerated {TimeRange}\r\n| extend AlertEntities = parse_json(Entities)\r\n| mv-expand AlertEntities\r\n| where isnotempty(AlertEntities)\r\n| project AlertEntities;\r\nlet filehashEntities = AlertEntities\r\n| where AlertEntities.Type =~ \"filehash\"\r\n| extend Entity = tostring(AlertEntities.Value)\r\n| extend EntityType = strcat(tostring(AlertEntities.Type), \"-\", tostring(AlertEntities.Algorithm))\r\n| distinct Entity, EntityType;\r\nlet fileEntities = AlertEntities\r\n| where AlertEntities.Type == \"file\"\r\n| extend Entity = strcat(tostring(AlertEntities.Directory), \"\\\\\", tostring(AlertEntities.Name))\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet nestedFileHashEntities = AlertEntities\r\n| where AlertEntities.Type =~ \"file\"\r\n| where isnotempty(AlertEntities.FileHashes)\r\n| mv-expand hashes=AlertEntities.FileHashes\r\n| extend Entity = tostring(hashes.Value)\r\n| extend EntityType = strcat(tostring(hashes.Type), \"-\", tostring(hashes.Algorithm))\r\n| distinct Entity, EntityType;\r\nlet IPEntities = AlertEntities\r\n| where AlertEntities.Type == \"ip\"\r\n| extend Entity = tostring(AlertEntities.Address)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet AccountEntities = AlertEntities\r\n| where AlertEntities.Type == \"account\"\r\n| extend Entity = iff(isnotempty(AlertEntities.UPNSuffix), strcat(AlertEntities.Name, '@', AlertEntities.UPNSuffix), AlertEntities.Name)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet HostEntities = AlertEntities\r\n| where AlertEntities.Type == \"host\"\r\n| extend Entity = iff(isnotempty(AlertEntities.DnsDomain), strcat(AlertEntities.HostName, '.', AlertEntities.DnsDomain), AlertEntities.HostName)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet appEntities = AlertEntities\r\n| where AlertEntities.Type == \"cloud-application\"\r\n| extend Entity = tostring(AlertEntities.Name)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet azresEntities = AlertEntities\r\n| where AlertEntities.Type == \"azure-resource\"\r\n| extend Entity = tostring(AlertEntities.ResourceId)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet malwareEntities = AlertEntities\r\n| where AlertEntities.Type == \"malware\"\r\n| extend Entity = tostring(AlertEntities.Name)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet domResIdEntities = AlertEntities\r\n| where AlertEntities.Type == \"DomainResourceIdentifier\"\r\n| extend Entity = tostring(AlertEntities.ResourceName)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nlet dnsEntities = AlertEntities\r\n| where AlertEntities.Type == \"dns\"\r\n| extend Entity = tostring(AlertEntities.DomainName)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType;\r\nAlertEntities\r\n| where AlertEntities.Type == \"url\"\r\n| extend Entity = tostring(AlertEntities.Url)\r\n| extend EntityType = tostring(AlertEntities.Type)\r\n| distinct Entity, EntityType\r\n| union IPEntities, AccountEntities, HostEntities, filehashEntities, fileEntities, nestedFileHashEntities, appEntities, azresEntities, malwareEntities, domResIdEntities, dnsEntities\r\n| where isnotempty(Entity)\r\n| order by EntityType asc",
+                                "size": 0,
+                                "timeContext": {
+                                  "durationMs": 1209600000
+                                },
+                                "timeContextFromParameter": "TimeRange",
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{Workspace}"
+                                ]
+                              },
+                              "conditionalVisibility": {
+                                "parameterName": "hide",
+                                "comparison": "isEqualTo",
+                                "value": "hide"
+                              },
+                              "name": "query - 3",
+                              "styleSettings": {
+                                "margin": "20"
+                              }
+                            }
+                          ]
+                        },
+                        "name": "group - classification and tactics - alerts"
+                      }
+                    ]
+                  },
+                  "name": "group - overview alerts"
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "Tab",
+              "comparison": "isEqualTo",
+              "value": "SecurityAlert"
+            },
+            "name": "Security Alerts"
+          }
+        ]
+      },
+      "name": "Incidents Alerts"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---------------"
+      },
+      "name": "text - 9"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Security Posture, Threat and Vulnerability Management",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "crossComponentResources": [
+                "value::selected"
+              ],
+              "parameters": [
+                {
+                  "id": "3218e2b0-1bcc-46d4-affa-d298e0cf90f6",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "DefaultSubscription_Internal",
+                  "type": 1,
+                  "isRequired": true,
+                  "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
+                  "crossComponentResources": [
+                    "value::selected"
+                  ],
+                  "isHiddenWhenLocked": true,
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                },
+                {
+                  "id": "e6ded9a1-a83c-4762-938d-5bf8ff3d3d38",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Subscription1",
+                  "type": 6,
+                  "isRequired": true,
+                  "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{DefaultSubscription_Internal}', true, false)",
+                  "crossComponentResources": [
+                    "value::selected"
+                  ],
+                  "typeSettings": {
+                    "additionalResourceOptions": []
+                  },
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                }
+              ],
+              "style": "pills",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources"
+            },
+            "customWidth": "33",
+            "conditionalVisibility": {
+              "parameterName": "hide",
+              "comparison": "isEqualTo",
+              "value": "hide"
+            },
+            "name": "parameters - 10"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "tabs",
+              "links": [
+                {
+                  "id": "d4aa2831-0ab8-4977-a80e-359420e7d5f7",
+                  "cellValue": "Tab",
+                  "linkTarget": "parameter",
+                  "linkLabel": "Azure Security Center",
+                  "subTarget": "ASC",
+                  "style": "link"
+                },
+                {
+                  "id": "695cfb00-50a3-47f1-b08e-4902054f74bf",
+                  "cellValue": "Tab",
+                  "linkTarget": "parameter",
+                  "linkLabel": "Microsoft Defender for Cloud",
+                  "subTarget": "MDC",
+                  "style": "link"
+                },
+                {
+                  "id": "d4f75516-6286-4660-8294-395da6b9c29a",
+                  "cellValue": "Tab",
+                  "linkTarget": "parameter",
+                  "linkLabel": "Defender for Endpoint",
+                  "subTarget": "D4E",
+                  "style": "link"
+                }
+              ]
+            },
+            "name": "links - 6"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "M365SecureScore_CL \r\n| extend ActiveUsers=activeUserCount_d, \r\n          CurrentScore=currentScore_d, \r\n          MaximumScore=maxScore_d, \r\n          TenantID=azureTenantId_g \r\n| summarize by round(CurrentScore), bin(TimeGenerated, 1d)",
+                    "size": 0,
+                    "aggregation": 5,
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "visualization": "timechart",
+                    "tileSettings": {
+                      "showBorder": false
+                    },
+                    "graphSettings": {
+                      "type": 0
+                    }
+                  },
+                  "name": "query - 2"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "M365SecureScore_CL \r\n| project TimeGenerated, \r\n          ActiveUsers=activeUserCount_d, \r\n          CurrentScore=currentScore_d, \r\n          MaximumScore=maxScore_d, \r\n          TenantID=azureTenantId_g \r\n| sort by TimeGenerated desc",
+                    "size": 1,
+                    "title": "Microsoft 365 Secure Score",
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ]
+                  },
+                  "name": "query - 2",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                },
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "7c67a766-4287-4a07-a256-4ef237151489",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "Category",
+                        "type": 5,
+                        "isRequired": true,
+                        "multiSelect": true,
+                        "quote": "'",
+                        "delimiter": ",",
+                        "query": "M365SecureScoreControls_CL \r\n| project RecommendationCategory=controlCategory_s \r\n| distinct RecommendationCategory",
+                        "typeSettings": {
+                          "additionalResourceOptions": [
+                            "value::all"
+                          ],
+                          "showDefault": false
+                        },
+                        "timeContext": {
+                          "durationMs": 2419200000
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": 0,
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": [
+                          "value::all"
+                        ]
+                      }
+                    ],
+                    "style": "above",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "parameters - 4"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "M365SecureScoreControls_CL \r\n| where TimeGenerated >= ago(7d) \r\n| extend RecommendationCategory=controlCategory_s \r\n| where RecommendationCategory in ({Category}) \r\n| project RecommendationCategory, \r\n        ControlName=controlName_s, \r\n        Recommendation=description_s, \r\n        ImplementationStatus=implementationStatus_s",
+                    "size": 1,
+                    "title": "Microsoft 365 Secure Score Recommendations",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ]
+                  },
+                  "name": "query - 5",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "Tab",
+              "comparison": "isEqualTo",
+              "value": "M365"
+            },
+            "name": "M365"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "MDfESecureScore_CL \r\n| summarize  arg_max(TimeGenerated, *) by tostring(TenantId)\r\n| project TenantId, TimeGenerated, CurrentScore=score_d",
+                    "size": 1,
+                    "title": "Microsoft Defender for Endpoint Secure Score",
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ]
+                  },
+                  "customWidth": "50",
+                  "name": "query - 3",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "MDfESecureScore_CL \r\n| summarize by TimeGenerated, CurrentScore=score_d,tostring(TenantId)\r\n| render areachart ",
+                    "size": 1,
+                    "aggregation": 5,
+                    "title": "Microsoft Defender for Endpoint Secure Score Trend",
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "visualization": "areachart"
+                  },
+                  "customWidth": "50",
+                  "name": "query - 3 - SecureScoreChart",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "MDfEExposureScore_CL\r\n| summarize  arg_max(TimeGenerated, *) by tostring(TenantId)\r\n| project TenantId, TimeGenerated, CurrentScore=score_d",
+                    "size": 1,
+                    "title": "Microsoft Defender for Endpoint Exposure Score",
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ]
+                  },
+                  "customWidth": "50",
+                  "name": "query - 4",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "MDfEExposureScore_CL\r\n| summarize by TimeGenerated, CurrentScore=score_d,tostring(TenantId)\r\n| render areachart ",
+                    "size": 1,
+                    "aggregation": 5,
+                    "title": "Microsoft Defender for Endpoint Exposure Score Trend",
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ]
+                  },
+                  "customWidth": "50",
+                  "name": "query - 4 -ExposureScoreTrend",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "MDfERecommendations_CL \r\n| project TimeGenerated, Vendor=vendor_s, ProductName=relatedComponent_s, RecommendationName=recommendationName_s, \r\n        Weaknesses=weaknesses_d, PublicExploit=publicExploit_b, ConfigScoreImpact=configScoreImpact_d, \r\n        ExposureScoreImpact=round(exposureImpact_d), NumberOfExposedMachines=exposedMachinesCount_d, \r\n        TotalNumberOfMachines=totalMachineCount_d, RecommendationCategory=recommendationCategory_s, \r\n        SubCategory=subCategory_s, RemediationType=remediationType_s\r\n| where RecommendationName has_any ({Campaign}) or Weaknesses has_any ({Campaign}) or PublicExploit has_any ({Campaign})",
+                    "size": 3,
+                    "title": "Microsoft Defender for Endpoint Recommendations Related to {Watchlist}",
+                    "timeContext": {
+                      "durationMs": 0
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "PublicExploit",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "True",
+                                "representation": "redBright",
+                                "text": "True"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "blue",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        }
+                      ],
+                      "sortBy": [
+                        {
+                          "itemKey": "TimeGenerated",
+                          "sortOrder": 1
+                        }
+                      ]
+                    },
+                    "sortBy": [
+                      {
+                        "itemKey": "TimeGenerated",
+                        "sortOrder": 1
+                      }
+                    ]
+                  },
+                  "name": "query - 2"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "MDfEVulnerabilitiesList_CL\r\n| where isnotempty(name_s) and exposedMachines_d > 0 \r\n| project Name=name_s, Description=description_s, Severity=severity_s, ExposedMachines=exposedMachines_d, CVSS=cvssV3_d,\r\n        PublicExploit=publicExploit_b, ExploitVerified=exploitVerified_b, ExploitType=exploitTypes_s, ExploitURL=exploitUris_s, \r\n        PublishedOn=publishedOn_t, UpdatedOn=updatedOn_t\r\n| where Name has_any ({Campaign}) or Description has_any ({Campaign})",
+                    "size": 3,
+                    "title": "Microsoft Defender for Endpoint Vulnerabilities Related to {Watchlist}",
+                    "timeContext": {
+                      "durationMs": 0
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "Severity",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "High",
+                                "representation": "redBright",
+                                "text": "High"
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "Medium",
+                                "representation": "yellow",
+                                "text": "Medium"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "blue",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "PublicExploit",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "True",
+                                "representation": "redBright",
+                                "text": "True"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "blue",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "ExploitVerified",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "True",
+                                "representation": "redBright",
+                                "text": "True"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "blue",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "name": "query - 3"
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "Tab",
+              "comparison": "isEqualTo",
+              "value": "D4E"
+            },
+            "name": "D4E"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "SecurityResources \r\n| where type == 'microsoft.security/securescores'\r\n| extend Name = properties.displayName, CurrentScore = properties.score.current, MaximumScore = properties.score.max, Percentage1 = todouble(properties.score.percentage)\r\n| project Name, CurrentScore, MaximumScore, Percentage = round(Percentage1*100,2), subscriptionId\r\n| join kind=inner (\r\n    resources\r\n    | summarize by subscriptionId\r\n    | project ASCSubscription = strcat(\"/subscriptions/\", subscriptionId), subscriptionId) on subscriptionId\r\n| project-away subscriptionId1\r\n| project ASCSubscription, CurrentScore, MaximumScore, Percentage, subscriptionId",
+                    "size": 4,
+                    "aggregation": 5,
+                    "title": "Azure Security Center Secure Score",
+                    "queryType": 1,
+                    "resourceType": "microsoft.resourcegraph/resources",
+                    "crossComponentResources": [
+                      "{Subscription}"
+                    ],
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "Percentage",
+                          "formatter": 0,
+                          "numberFormat": {
+                            "unit": 1,
+                            "options": {
+                              "style": "decimal",
+                              "useGrouping": false
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "name": "query - 6"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "    securityresources\r\n    | where type == 'microsoft.security/securescores/securescorecontrols'\r\n    | extend SecureControl = properties.displayName, unhealthy = properties.unhealthyResourceCount, currentscore = properties.score.current, maxscore = properties.score.max\r\n    | where maxscore != 0\r\n    | project SecureControl , unhealthy, currentscore, maxscore, subscriptionId\r\n    | join kind=inner (\r\n    resources\r\n    | summarize by subscriptionId\r\n    | project ASCSubscription = strcat(\"/subscriptions/\", subscriptionId), subscriptionId) on subscriptionId\r\n| project-away subscriptionId1\r\n//    | summarize sum(toint(unhealthy)), avg(tolong(currentscore)), avg(tolong(maxscore)) by subscriptionId, tostring(SecureControl)",
+                    "size": 0,
+                    "queryType": 1,
+                    "resourceType": "microsoft.resourcegraph/resources",
+                    "crossComponentResources": [
+                      "{Subscription}"
+                    ],
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "$gen_group",
+                          "formatter": 13,
+                          "formatOptions": {
+                            "linkTarget": null,
+                            "showIcon": true
+                          }
+                        },
+                        {
+                          "columnMatch": "SecureControl",
+                          "formatter": 5
+                        },
+                        {
+                          "columnMatch": "unhealthy",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "!=",
+                                "thresholdValue": "0",
+                                "representation": "redBright",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "0",
+                                "representation": "greenDark",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "blue",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "currentscore",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "0",
+                                "representation": "redBright",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "greenDark",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "maxscore",
+                          "formatter": 1
+                        },
+                        {
+                          "columnMatch": "ASCSubscription",
+                          "formatter": 5
+                        }
+                      ],
+                      "hierarchySettings": {
+                        "treeType": 1,
+                        "groupBy": [
+                          "SecureControl"
+                        ],
+                        "expandTopLevel": false,
+                        "finalBy": "ASCSubscription"
+                      }
+                    }
+                  },
+                  "name": "query - 1"
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "Tab",
+              "comparison": "isEqualTo",
+              "value": "ASC"
+            },
+            "name": "ASC"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "The following section is from the [Microsoft Defender for Cloud Log4j vulnerability workbook](https://ms.portal.azure.com/#blade/AppInsightsExtension/UsageNotebookBlade/ComponentId/Azure%20Security%20Center/ConfigurationId/community-Workbooks%2FAzure%20Security%20Center%2FLog4j/Type/workbook/WorkbookTemplateName/Log4j%20vulnerability) which finds machines and containers at risk from specific vulnerabilities. The workbook shows resources from your Azure, hybrid, and multi-cloud environments. This section has been modified to accomodate any future Watchlists you may use to filter out Campaign-specific detections and CVE IDs.\r\n\r\nCVE data comes from Defender for Cloud's integrated vulnerability assessment solutions ([TVM](https://docs.microsoft.com/azure/defender-for-cloud/deploy-vulnerability-assessment-tvm) and [Qualys](https://docs.microsoft.com/azure/defender-for-cloud/deploy-vulnerability-assessment-vm)). These tools show vulnerabilities through the following security recommendations:\r\n\r\n- [Machines should have vulnerability findings resolved](https://portal.azure.com/#blade/Microsoft_Azure_Security/RecommendationsBlade/assessmentKey/1195afff-c881-495e-9bc5-1486211ae03f)\r\n- [Container registry images should have vulnerability findings resolved](https://portal.azure.com/#blade/Microsoft_Azure_Security/RecommendationsBlade/assessmentKey/dbd0cb49-b563-45e7-9724-889e799fa648)"
+                        },
+                        "name": "text - 0"
+                      }
+                    ]
+                  },
+                  "name": "group - 2"
+                },
+                {
+                  "type": 11,
+                  "content": {
+                    "version": "LinkItem/1.0",
+                    "style": "tabs",
+                    "links": [
+                      {
+                        "id": "24ecf7d5-388a-4dd1-be0b-1655d136e33f",
+                        "cellValue": "AffectedResource",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Machines",
+                        "subTarget": "Machines",
+                        "style": "link"
+                      },
+                      {
+                        "id": "b5d47c8e-db2f-4379-9db9-692f1323117a",
+                        "cellValue": "AffectedResource",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Containers",
+                        "subTarget": "Containers",
+                        "style": "link"
+                      }
+                    ]
+                  },
+                  "name": "Tabs"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "_GetWatchlist('{Watchlist}') | project SearchKey",
+                    "size": 0,
+                    "timeContext": {
+                      "durationMs": 86400000
+                    },
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{WatchlistWorkspace}"
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Tab",
+                    "comparison": "isEqualTo",
+                    "value": "Hide"
+                  },
+                  "name": "queryCampaign"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "---"
+                  },
+                  "name": "text - 1"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "securityresources\r\n| where type == \"microsoft.security/assessments/subassessments\"\r\n| extend assessmentKey = extract(\".*assessments/(.+?)/.*\",1, id)\r\n| where assessmentKey == \"dbd0cb49-b563-45e7-9724-889e799fa648\"\r\n| project Resource = tolower(extract(\"([\\\\s\\\\S]*?)(/providers/Microsoft.Security.*)\",1,id)), ResourceGroup = trim_end(\"/\",extract(\".*resourceGroups/(.+?)/\",0,id)), ResourceType = tolower(split(id,\"/\").[6]), subscriptionId, Severity = tostring(parse_json(properties).status.severity), Status = tostring(parse_json(properties).status.code), VulnId = tostring(parse_json(properties).id), Description = tostring(parse_json(properties).displayName), CVE = properties.additionalData.cve, ResourceName = tolower(split(id,\"/\").[8]), SoftwareVendor = tostring(properties.additionalData.softwareVendor), SoftwareName = tostring(properties.additionalData.softwareName), SoftwareVersion = tostring(properties.additionalData.softwareVersion), Source = tostring(properties.additionalData.source)\r\n| where Status == 'Unhealthy'\r\n| project Severity, VulnId, Description, Resource, ResourceGroup, CVE, ResourceName\r\n| mvexpand CVE\r\n| extend CVEs = tostring(CVE['title'])\r\n//| where CVEs has \"CVE-2021-44228\" or CVEs has \"CVE-2021-45046\" or CVEs has \"CVE-2021-45105\" //modify this to lookup against Watchlist\r\n//| summarize CVEs = tostring(make_list(CVEs)), NumOfCvePerResouce = dcount(CVEs) by Resource",
+                    "size": 1,
+                    "showAnalytics": true,
+                    "title": "Container registries - Qualys",
+                    "noDataMessage": "No unhealthy container registries found",
+                    "showExportToExcel": true,
+                    "queryType": 1,
+                    "resourceType": "microsoft.resourcegraph/resources",
+                    "crossComponentResources": [
+                      "{Subscription}"
+                    ],
+                    "visualization": "table",
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "Resource",
+                          "formatter": 13,
+                          "formatOptions": {
+                            "linkTarget": "Resource",
+                            "showIcon": true
+                          }
+                        }
+                      ],
+                      "labelSettings": [
+                        {
+                          "columnId": "Resource",
+                          "label": "Container Registry"
+                        }
+                      ]
+                    },
+                    "tileSettings": {
+                      "showBorder": false,
+                      "titleContent": {
+                        "columnMatch": "Resource",
+                        "formatter": 1
+                      },
+                      "leftContent": {
+                        "columnMatch": "NumResources",
+                        "formatter": 12,
+                        "formatOptions": {
+                          "palette": "auto"
+                        },
+                        "numberFormat": {
+                          "unit": 17,
+                          "options": {
+                            "maximumSignificantDigits": 3,
+                            "maximumFractionDigits": 2
+                          }
+                        }
+                      }
+                    },
+                    "graphSettings": {
+                      "type": 0,
+                      "topContent": {
+                        "columnMatch": "CVEs",
+                        "formatter": 1
+                      },
+                      "centerContent": {
+                        "columnMatch": "NumResources",
+                        "formatter": 1,
+                        "numberFormat": {
+                          "unit": 17,
+                          "options": {
+                            "maximumSignificantDigits": 3,
+                            "maximumFractionDigits": 2
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "conditionalVisibilities": [
+                    {
+                      "parameterName": "AffectedResource",
+                      "comparison": "isEqualTo",
+                      "value": "Containers"
+                    },
+                    {
+                      "parameterName": "Tab",
+                      "comparison": "isEqualTo",
+                      "value": "Hide"
+                    }
+                  ],
+                  "name": "RegistriesOverview"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\",\"mergeType\":\"innerunique\",\"leftTable\":\"RegistriesOverview\",\"rightTable\":\"queryCampaign\",\"leftColumn\":\"CVEs\",\"rightColumn\":\"SearchKey\"}],\"projectRename\":[{\"originalName\":\"[TVM].cve\",\"mergedName\":\"cve\",\"fromId\":\"unknown\"},{\"originalName\":\"[TVM].dcount_VulnId\",\"mergedName\":\"dcount_VulnId\",\"fromId\":\"unknown\"},{\"originalName\":\"[RegistriesOverview].Severity\",\"mergedName\":\"Severity\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistriesOverview].VulnId\",\"mergedName\":\"VulnId\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistriesOverview].Description\",\"mergedName\":\"Description\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistriesOverview].Resource\",\"mergedName\":\"Resource\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistriesOverview].ResourceGroup\",\"mergedName\":\"ResourceGroup\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistriesOverview].CVE\",\"mergedName\":\"CVE\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistriesOverview].ResourceName\",\"mergedName\":\"ResourceName\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistriesOverview].CVEs\",\"mergedName\":\"CVEs\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[queryCampaign].SearchKey\",\"mergedName\":\"SearchKey\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"}]}",
+                    "size": 3,
+                    "title": "Container registries affected by {Watchlist} CVEs - Qualys",
+                    "noDataMessage": "No unhealthy container registries found",
+                    "exportFieldName": "Resource",
+                    "exportParameterName": "SelectedCR",
+                    "showExportToExcel": true,
+                    "queryType": 7,
+                    "gridSettings": {
+                      "filter": true
+                    }
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "AffectedResource",
+                    "comparison": "isEqualTo",
+                    "value": "Containers"
+                  },
+                  "showPin": false,
+                  "name": "RegistriesOverview Merged"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "securityresources\r\n | where type == \"microsoft.security/assessments/subassessments\"\r\n | extend assessmentKey = extract(\".*assessments/(.+?)/.*\",1,  id)\r\n | where assessmentKey == \"dbd0cb49-b563-45e7-9724-889e799fa648\"\r\n | project Resource = tolower(extract(@'(?i)(.*?)/providers/Microsoft.Security/([^/]+)', 1, id)), ResourceType = tolower(split(id,\"/\").[6]), subscriptionId, severity = tostring(parse_json(properties).status.severity), status = tostring(parse_json(properties).status.code), VulnId = tostring(parse_json(properties).id), description = tostring(parse_json(properties).displayName), patchable = parse_json(properties.additionalData).patchable, cve = parse_json(properties.additionalData).cve, Repo = tostring(parse_json(properties.additionalData).repositoryName), imageDigest = tostring(parse_json(properties.additionalData).imageDigest)\r\n| where status == 'Unhealthy'\r\n| where '{SelectedCR}' == 'All' or Resource == '{SelectedCR}'\r\n| mvexpand todynamic(cve)\r\n| extend CVEs = parse_json(cve['title'])\r\n//| where CVEs has \"CVE-2021-44228\" or CVEs has \"CVE-2021-45046\" or CVEs has \"CVE-2021-45105\" //modify this to lookup against Watchlist\r\n//| summarize CVEs = tostring(make_list(CVEs)), CVECount = count(CVEs) by Resource, severity, VulnId, description, tostring(patchable), Repo, imageDigest\r\n",
+                    "size": 0,
+                    "showAnalytics": true,
+                    "noDataMessage": "No unhealthy container registries found",
+                    "showExportToExcel": true,
+                    "queryType": 1,
+                    "resourceType": "microsoft.resourcegraph/resources",
+                    "crossComponentResources": [
+                      "{Subscription}"
+                    ],
+                    "gridSettings": {
+                      "labelSettings": [
+                        {
+                          "columnId": "Resource",
+                          "label": "Container Registry"
+                        },
+                        {
+                          "columnId": "severity",
+                          "label": "Severity"
+                        },
+                        {
+                          "columnId": "VulnId",
+                          "label": "Vuln ID"
+                        },
+                        {
+                          "columnId": "description",
+                          "label": "Description"
+                        },
+                        {
+                          "columnId": "patchable",
+                          "label": "Patchable"
+                        },
+                        {
+                          "columnId": "imageDigest",
+                          "label": "Image digest"
+                        }
+                      ]
+                    }
+                  },
+                  "conditionalVisibilities": [
+                    {
+                      "parameterName": "SelectedTab",
+                      "comparison": "isEqualTo",
+                      "value": "ACRTab"
+                    },
+                    {
+                      "parameterName": "Tab",
+                      "comparison": "isEqualTo",
+                      "value": "Hide"
+                    }
+                  ],
+                  "name": "RegistryDetails"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\",\"mergeType\":\"innerunique\",\"leftTable\":\"RegistryDetails\",\"rightTable\":\"queryCampaign\",\"leftColumn\":\"CVEs\",\"rightColumn\":\"SearchKey\"}],\"projectRename\":[{\"originalName\":\"[TVM].cve\",\"mergedName\":\"cve\",\"fromId\":\"unknown\"},{\"originalName\":\"[TVM].dcount_VulnId\",\"mergedName\":\"dcount_VulnId\",\"fromId\":\"unknown\"},{\"originalName\":\"[RegistryDetails].Resource\",\"mergedName\":\"Container Registry\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].ResourceType\",\"mergedName\":\"ResourceType\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].subscriptionId\",\"mergedName\":\"subscriptionId\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].severity\",\"mergedName\":\"Severity\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].status\",\"mergedName\":\"status\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].VulnId\",\"mergedName\":\"Vuln ID\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].description\",\"mergedName\":\"Description\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].patchable\",\"mergedName\":\"Patchable\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].cve\",\"mergedName\":\"cve\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].Repo\",\"mergedName\":\"Repo\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].imageDigest\",\"mergedName\":\"Image digest\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[RegistryDetails].CVEs\",\"mergedName\":\"CVEs\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[queryCampaign].SearchKey\",\"mergedName\":\"SearchKey\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"}]}",
+                    "size": 3,
+                    "title": "Container registries affected by {Watchlist} CVEs - Qualys",
+                    "noDataMessage": "No unhealthy container registries found",
+                    "exportFieldName": "Resource",
+                    "exportParameterName": "SelectedCR",
+                    "showExportToExcel": true,
+                    "queryType": 7,
+                    "gridSettings": {
+                      "filter": true
+                    }
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "AffectedResource",
+                    "comparison": "isEqualTo",
+                    "value": "Containers"
+                  },
+                  "showPin": false,
+                  "name": "RegistriesDetails Merged"
+                },
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 11,
+                        "content": {
+                          "version": "LinkItem/1.0",
+                          "style": "tabs",
+                          "links": [
+                            {
+                              "id": "414bfeff-09a7-499e-95fc-c3adbf05dff5",
+                              "cellValue": "SelectedTab",
+                              "linkTarget": "parameter",
+                              "linkLabel": "TVM",
+                              "subTarget": "ServersTab",
+                              "style": "link"
+                            },
+                            {
+                              "id": "d835a04d-17a7-4e50-b77a-9a8f0a8b3fba",
+                              "cellValue": "SelectedTab",
+                              "linkTarget": "parameter",
+                              "linkLabel": "Qualys",
+                              "subTarget": "ACRTab",
+                              "style": "link"
+                            }
+                          ]
+                        },
+                        "name": "MachinesTabs"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "_GetWatchlist('{Watchlist}') | project SearchKey",
+                          "size": 0,
+                          "timeContext": {
+                            "durationMs": 86400000
+                          },
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{WatchlistWorkspace}"
+                          ]
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "Tab",
+                          "comparison": "isEqualTo",
+                          "value": "Hide"
+                        },
+                        "name": "queryCampaign"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "//let List = (_GetWatchlist('Log4J')\r\n//| where Type == \"Vulnerability\"\r\n//| summarize Detection = make_list(Detection));\r\nsecurityresources\r\n| where type == \"microsoft.security/assessments/subassessments\"\r\n| extend assessmentKey = extract(\".*assessments/(.+?)/.*\",1, id)\r\n| where assessmentKey == \"1195afff-c881-495e-9bc5-1486211ae03f\"\r\n| project Resource = tolower(extract(\"([\\\\s\\\\S]*?)(/providers/Microsoft.Security.*)\",1,id)), ResourceGroup = trim_end(\"/\",extract(\".*resourceGroups/(.+?)/\",0,id)), ResourceType = tolower(split(id,\"/\").[6]), subscriptionId, status = tostring(parse_json(properties).status.code), VulnId = tostring(parse_json(properties).id), description = tostring(parse_json(properties).displayName), cve = parse_json(properties.additionalData).cve, SoftwareVendor = tostring(properties.additionalData.softwareVendor), SoftwareName = tostring(properties.additionalData.softwareName), SoftwareVersion = tostring(properties.additionalData.softwareVersion), Source = tostring(properties.additionalData.source)\r\n| where status == 'Unhealthy'\r\n| summarize dcount(VulnId) by ResourceGroup, Resource, VulnId, description, tostring(cve), SoftwareVendor, SoftwareName, SoftwareVersion\r\n| mvexpand todynamic(cve)\r\n| extend CVEs = parse_json(cve['title'])\r\n//| summarize CVEs = tostring(make_list(CVEs)), CVECount = count(CVEs) by Resource, ResourceGroup, VulnId, description\r\n//| where CVEs has \"CVE-2021-44228\" or CVEs has \"CVE-2021-45046\" or CVEs has \"CVE-2021-45105\"\r\n//\t//CVEs has_any (List)\r\n| order by Resource",
+                          "size": 0,
+                          "showAnalytics": true,
+                          "title": " Machine CVEs - Qualys",
+                          "noDataMessage": "No unhealthy machines found",
+                          "exportFieldName": "Resource",
+                          "exportParameterName": "SelectedServer",
+                          "exportDefaultValue": "All",
+                          "showExportToExcel": true,
+                          "queryType": 1,
+                          "resourceType": "microsoft.resourcegraph/resources",
+                          "crossComponentResources": [
+                            "{Subscription}"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Resource",
+                                "formatter": 13,
+                                "formatOptions": {
+                                  "linkTarget": "Resource",
+                                  "showIcon": true
+                                }
+                              }
+                            ],
+                            "labelSettings": [
+                              {
+                                "columnId": "ResourceGroup",
+                                "label": "Resource group"
+                              },
+                              {
+                                "columnId": "Resource",
+                                "label": "Machine"
+                              },
+                              {
+                                "columnId": "VulnId",
+                                "label": "Vuln ID"
+                              },
+                              {
+                                "columnId": "description",
+                                "label": "Description"
+                              }
+                            ]
+                          }
+                        },
+                        "conditionalVisibilities": [
+                          {
+                            "parameterName": "SelectedTab",
+                            "comparison": "isEqualTo",
+                            "value": "ACRTab"
+                          },
+                          {
+                            "parameterName": "Tab",
+                            "comparison": "isEqualTo",
+                            "value": "Hide"
+                          }
+                        ],
+                        "name": "Qualys"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\",\"mergeType\":\"innerunique\",\"leftTable\":\"Qualys\",\"rightTable\":\"queryCampaign\",\"leftColumn\":\"CVEs\",\"rightColumn\":\"SearchKey\"}],\"projectRename\":[{\"originalName\":\"[TVM].cve\",\"mergedName\":\"cve\",\"fromId\":\"unknown\"},{\"originalName\":\"[TVM].dcount_VulnId\",\"mergedName\":\"dcount_VulnId\",\"fromId\":\"unknown\"},{\"originalName\":\"[Qualys].ResourceGroup\",\"mergedName\":\"Resource group\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].Resource\",\"mergedName\":\"Machine\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].VulnId\",\"mergedName\":\"Vuln ID\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].description\",\"mergedName\":\"Description\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].cve\",\"mergedName\":\"cve\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].SoftwareVendor\",\"mergedName\":\"SoftwareVendor\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].SoftwareName\",\"mergedName\":\"SoftwareName\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].SoftwareVersion\",\"mergedName\":\"SoftwareVersion\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].dcount_VulnId\",\"mergedName\":\"dcount_VulnId\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[Qualys].CVEs\",\"mergedName\":\"CVEs\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[queryCampaign].SearchKey\",\"mergedName\":\"SearchKey\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"}]}",
+                          "size": 3,
+                          "title": " Machines affected by {Watchlist} CVEs - Qualys",
+                          "noDataMessage": "No unhealthy machines found",
+                          "exportFieldName": "Resource",
+                          "exportParameterName": "SelectedServer",
+                          "showExportToExcel": true,
+                          "queryType": 7,
+                          "gridSettings": {
+                            "filter": true
+                          }
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "SelectedTab",
+                          "comparison": "isEqualTo",
+                          "value": "ACRTab"
+                        },
+                        "showPin": false,
+                        "name": "Qualys Merged"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "securityresources\r\n| where type == \"microsoft.security/assessments/subassessments\"\r\n| extend assessmentKey = extract(\".*assessments/(.+?)/.*\",1, id)\r\n| where assessmentKey == \"1195afff-c881-495e-9bc5-1486211ae03f\"\r\n| project Resource = tolower(extract(\"([\\\\s\\\\S]*?)(/providers/Microsoft.Security.*)\",1,id)), ResourceGroup = trim_end(\"/\",extract(\".*resourceGroups/(.+?)/\",0,id)), ResourceType = tolower(split(id,\"/\").[6]), subscriptionId, status = tostring(parse_json(properties).status.code), VulnId = tostring(parse_json(properties).id), description = tostring(parse_json(properties).displayName), cve = parse_json(properties.additionalData).cve, SoftwareVendor = tostring(properties.additionalData.softwareVendor), SoftwareName = tostring(properties.additionalData.softwareName), SoftwareVersion = tostring(properties.additionalData.softwareVersion), Source = tostring(properties.additionalData.source)\r\n| where status == 'Unhealthy'\r\n| where Source == \"Microsoft threat and vulnerability management\"\r\n| summarize dcount(VulnId) by ResourceGroup, Resource, VulnId, description, tostring(cve), SoftwareVendor, SoftwareName, SoftwareVersion\r\n| mvexpand todynamic(cve)\r\n| extend CVEs = parse_json(cve['title'])\r\n//| summarize CVEs = tostring(make_list(CVEs)), CVECount = count(CVEs) by Resource, ResourceGroup, VulnId, description, SoftwareVendor, SoftwareName, SoftwareVersion\r\n//| where CVEs has \"CVE-2021-44228\" or CVEs has \"CVE-2021-45046\" or CVEs has \"CVE-2021-45105\"\r\n| order by Resource",
+                          "size": 0,
+                          "showAnalytics": true,
+                          "title": "Machines - Microsoft threat and vulnerability management",
+                          "noDataMessage": "No unhealthy machines found",
+                          "exportFieldName": "Resource",
+                          "exportParameterName": "selectedsrvitem",
+                          "exportDefaultValue": "All",
+                          "showExportToExcel": true,
+                          "queryType": 1,
+                          "resourceType": "microsoft.resourcegraph/resources",
+                          "crossComponentResources": [
+                            "value::all"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Resource",
+                                "formatter": 0,
+                                "formatOptions": {
+                                  "customColumnWidthSetting": "20ch"
+                                }
+                              },
+                              {
+                                "columnMatch": "ResourceGroup",
+                                "formatter": 0,
+                                "formatOptions": {
+                                  "customColumnWidthSetting": "25ch"
+                                }
+                              },
+                              {
+                                "columnMatch": "VulnId",
+                                "formatter": 0,
+                                "formatOptions": {
+                                  "customColumnWidthSetting": "12ch"
+                                }
+                              },
+                              {
+                                "columnMatch": "description",
+                                "formatter": 0,
+                                "formatOptions": {
+                                  "customColumnWidthSetting": "28ch"
+                                }
+                              },
+                              {
+                                "columnMatch": "SoftwareVersion",
+                                "formatter": 0,
+                                "formatOptions": {
+                                  "customColumnWidthSetting": "19ch"
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "sortBy": [
+                              {
+                                "itemKey": "VulnId",
+                                "sortOrder": 2
+                              }
+                            ],
+                            "labelSettings": [
+                              {
+                                "columnId": "ResourceGroup",
+                                "label": "Resource group"
+                              },
+                              {
+                                "columnId": "Resource",
+                                "label": "Machine"
+                              },
+                              {
+                                "columnId": "VulnId",
+                                "label": "Vuln ID"
+                              },
+                              {
+                                "columnId": "description",
+                                "label": "Description"
+                              },
+                              {
+                                "columnId": "SoftwareVendor",
+                                "label": "Software vendor"
+                              },
+                              {
+                                "columnId": "SoftwareName",
+                                "label": "Software name"
+                              },
+                              {
+                                "columnId": "SoftwareVersion",
+                                "label": "Software version"
+                              },
+                              {
+                                "columnId": "CVEs",
+                                "label": "CVEs "
+                              }
+                            ]
+                          },
+                          "sortBy": [
+                            {
+                              "itemKey": "VulnId",
+                              "sortOrder": 2
+                            }
+                          ]
+                        },
+                        "conditionalVisibilities": [
+                          {
+                            "parameterName": "SelectedTab",
+                            "comparison": "isEqualTo",
+                            "value": "ServersTab"
+                          },
+                          {
+                            "parameterName": "Tab",
+                            "comparison": "isEqualTo",
+                            "value": "Hide"
+                          }
+                        ],
+                        "name": "TVM"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\",\"mergeType\":\"innerunique\",\"leftTable\":\"TVM\",\"rightTable\":\"queryCampaign\",\"leftColumn\":\"CVEs\",\"rightColumn\":\"SearchKey\"}],\"projectRename\":[{\"originalName\":\"[TVM].Resource\",\"mergedName\":\"Machine\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].ResourceGroup\",\"mergedName\":\"Resource group\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].VulnId\",\"mergedName\":\"Vuln ID\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].description\",\"mergedName\":\"Description\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].SoftwareVendor\",\"mergedName\":\"Software vendor\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].SoftwareName\",\"mergedName\":\"Software name\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].SoftwareVersion\",\"mergedName\":\"Software version\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].CVEs\",\"mergedName\":\"CVEs \",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].CVECount\",\"mergedName\":\"CVE count\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[queryCampaign].SearchKey\",\"mergedName\":\"SearchKey\",\"fromId\":\"6946e113-fce5-43cc-a36d-d78bd41a20d4\"},{\"originalName\":\"[TVM].cve\",\"mergedName\":\"cve\",\"fromId\":\"unknown\"},{\"originalName\":\"[TVM].dcount_VulnId\",\"mergedName\":\"dcount_VulnId\",\"fromId\":\"unknown\"}]}",
+                          "size": 3,
+                          "title": "Machines affected by {Watchlist} CVEs - Microsoft threat and vulnerability management",
+                          "noDataMessage": "No unhealthy machines found",
+                          "exportFieldName": "Resource",
+                          "exportParameterName": "selectedsrvitem",
+                          "showExportToExcel": true,
+                          "queryType": 7,
+                          "gridSettings": {
+                            "filter": true
+                          }
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "SelectedTab",
+                          "comparison": "isEqualTo",
+                          "value": "ServersTab"
+                        },
+                        "showPin": false,
+                        "name": "TVM Merged"
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "AffectedResource",
+                    "comparison": "isEqualTo",
+                    "value": "Machines"
+                  },
+                  "name": "group - 4"
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "Tab",
+              "comparison": "isEqualTo",
+              "value": "MDC"
+            },
+            "name": "group - ASCwb"
+          }
+        ]
+      },
+      "name": "group - 7",
+      "styleSettings": {
+        "showBorder": true
+      }
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-Log4j-ImpactAssessment",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

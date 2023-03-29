@@ -1,0 +1,95 @@
+id: 892cd37e-f9e1-49c3-b0b2-d74f52ac7b71
+name: VIP account more than 6 failed logons in 10
+description: |
+  'VIP Account with more than 6 failed logon attempts in 10 minutes, include your own VIP list in the table below
+   NTSTATUS codes - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - CredentialAccess
+query: |
+  // Create DataTable with your own values, example below shows dummy usernames and domain
+  let List = datatable(VIPUser:string, Domain:string)["Bob", "Domain", "joe", "domain", "MATT", "DOMAIN", "administrator", ""];
+  let timeframe = 10m;
+  List
+  | project TargetUserName = tolower(VIPUser), TargetDomainName = toupper(Domain)
+  | join kind= rightsemi ( 
+  SecurityEvent 
+  | where TimeGenerated > ago(2*timeframe) 
+  | where EventID == "4625"
+  | where AccountType == "User"
+  ) on TargetUserName, TargetDomainName
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FailedVIPLogons = count() by EventID, Activity, WorkstationName, Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, SubStatus
+  | where FailedVIPLogons >= 6
+  // map the most common ntstatus codes
+  | extend StatusDesc = case(
+  Status =~ "0x80090302", "SEC_E_UNSUPPORTED_FUNCTION",
+  Status =~ "0x80090308", "SEC_E_INVALID_TOKEN",
+  Status =~ "0x8009030E", "SEC_E_NO_CREDENTIALS",
+  Status =~ "0xC0000008", "STATUS_INVALID_HANDLE",
+  Status =~ "0xC0000017", "STATUS_NO_MEMORY",
+  Status =~ "0xC0000022", "STATUS_ACCESS_DENIED",
+  Status =~ "0xC0000034", "STATUS_OBJECT_NAME_NOT_FOUND",
+  Status =~ "0xC000005E", "STATUS_NO_LOGON_SERVERS",
+  Status =~ "0xC000006A", "STATUS_WRONG_PASSWORD",
+  Status =~ "0xC000006D", "STATUS_LOGON_FAILURE",
+  Status =~ "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+  Status =~ "0xC0000073", "STATUS_NONE_MAPPED",
+  Status =~ "0xC00000FE", "STATUS_NO_SUCH_PACKAGE",
+  Status =~ "0xC000009A", "STATUS_INSUFFICIENT_RESOURCES",
+  Status =~ "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+  Status =~ "0xC0000106", "STATUS_NAME_TOO_LONG",
+  Status =~ "0xC000010B", "STATUS_INVALID_LOGON_TYPE",
+  Status =~ "0xC000015B", "STATUS_LOGON_TYPE_NOT_GRANTED",
+  Status =~ "0xC000018B", "STATUS_NO_TRUST_SAM_ACCOUNT",
+  Status =~ "0xC0000224", "STATUS_PASSWORD_MUST_CHANGE",
+  Status =~ "0xC0000234", "STATUS_ACCOUNT_LOCKED_OUT",
+  Status =~ "0xC00002EE", "STATUS_UNFINISHED_CONTEXT_DELETED",
+  "See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
+  )
+  | extend SubStatusDesc = case(
+  SubStatus =~ "0x80090325", "SEC_E_UNTRUSTED_ROOT",
+  SubStatus =~ "0xC0000008", "STATUS_INVALID_HANDLE",
+  SubStatus =~ "0xC0000022", "STATUS_ACCESS_DENIED",
+  SubStatus =~ "0xC0000064", "STATUS_NO_SUCH_USER",
+  SubStatus =~ "0xC000006A", "STATUS_WRONG_PASSWORD",
+  SubStatus =~ "0xC000006D", "STATUS_LOGON_FAILURE",
+  SubStatus =~ "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+  SubStatus =~ "0xC000006F", "STATUS_INVALID_LOGON_HOURS",
+  SubStatus =~ "0xC0000070", "STATUS_INVALID_WORKSTATION",
+  SubStatus =~ "0xC0000071", "STATUS_PASSWORD_EXPIRED",
+  SubStatus =~ "0xC0000072", "STATUS_ACCOUNT_DISABLED",
+  SubStatus =~ "0xC0000073", "STATUS_NONE_MAPPED",
+  SubStatus =~ "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+  SubStatus =~ "0xC0000133", "STATUS_TIME_DIFFERENCE_AT_DC",
+  SubStatus =~ "0xC000018D", "STATUS_TRUSTED_RELATIONSHIP_FAILURE",
+  SubStatus =~ "0xC0000193", "STATUS_ACCOUNT_EXPIRED",
+  SubStatus =~ "0xC0000380", "STATUS_SMARTCARD_WRONG_PIN",
+  SubStatus =~ "0xC0000381", "STATUS_SMARTCARD_CARD_BLOCKED",
+  SubStatus =~ "0xC0000382", "STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED",
+  SubStatus =~ "0xC0000383", "STATUS_SMARTCARD_NO_CARD",
+  SubStatus =~ "0xC0000384", "STATUS_SMARTCARD_NO_KEY_CONTAINER",
+  SubStatus =~ "0xC0000385", "STATUS_SMARTCARD_NO_CERTIFICATE",
+  SubStatus =~ "0xC0000386", "STATUS_SMARTCARD_NO_KEYSET",
+  SubStatus =~ "0xC0000387", "STATUS_SMARTCARD_IO_ERROR",
+  SubStatus =~ "0xC0000388", "STATUS_DOWNGRADE_DETECTED",
+  SubStatus =~ "0xC0000389", "STATUS_SMARTCARD_CERT_REVOKED",
+  "See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
+  )
+  | project StartTimeUtc, EndTimeUtc, FailedVIPLogons, EventID, Activity, WorkstationName, Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, StatusDesc, SubStatus, SubStatusDesc
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account
+  | extend NTDomain = tostring(split(Account,'\\',0)[0]), Name = tostring(split(Account,'\\',1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain  

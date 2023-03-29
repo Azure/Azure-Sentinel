@@ -80,16 +80,16 @@ Authentication methods this connector supports- [API Key authentication](https:/
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-- Click the Azure Sentinel connection resource
+- Click the Microsoft Sentinel connection resource
 - Click edit API connection
 - Click Authorize
 - Sign in
 - Click Save
 - Repeat steps for other connections such as Teams connection and Fortinet connector API Connection (For authorizing the fortinet connector API connection, API Key needs to be provided.) and API virustotal connection (URL:https://www.virustotal.com/gui/)
 - Open each playbook go to logic app designer-->click on each function call action in the logic app and go to "Managed identity" dropdown and select user identity and save playbook.
-- Go to sentinel hook playbook to azure sentinel rules.
+- Go to sentinel hook playbook to Microsoft Sentinel rules.
 #### b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
+- In Microsoft Sentinel analytical rules should be configured to trigger an incident with risky user account. 
 - Configure the automation rules to trigger the playbooks.
 
 

@@ -1,0 +1,610 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Get-AD4IoTDeviceCVEs - Incident",
+        "description": "For each IoT device entity included in the alert, this playbook will get CVEs from the Azure Defender for IoT Sensor.",
+        "prerequisites": ["None"],
+        "lastUpdateTime": "2022-08-05T00:00:00.000Z",
+        "entities": [ "IoTDevice" ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Nicholas DiCola"
+        },
+        "releaseNotes": [
+        {
+            "version": "1.0.0",
+            "title": "Get-AD4IoTDeviceCVEs - Incident",
+            "notes": [
+                "Initial version"
+            ]
+        }
+    ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-AD4IoTDeviceCVEs-Incident",
+            "type": "string"
+        },
+        "SensorURL": {
+            "type": "string",
+            "defaultValue": "<https://sensor.domain.local>",
+            "metadata": {
+                "description": "The URL of the Azure IoT Sensor."
+            }
+        },
+        "APIKey": {
+            "type": "string",
+            "defaultValue": "<APIKey>",
+            "metadata": {
+                "description": "The API key for the Azure Defender for IoT Sensor."
+            }
+        }
+    },
+    "variables": {
+        "AzureBlobConnectionName": "[concat('azureblob-', parameters('PlaybookName'))]",
+        "AzureStorageName": "[concat('sa', tolower(replace(replace(parameters('PlaybookName'), '-Alert', ''), '-', '')))]",
+        "ContainerName": "ad4iotcves",
+        "AzureKeyVaultName": "[concat('kv-', replace(parameters('PlaybookName'), '-Alert', ''))]",
+        "AzureKeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+        "KeyName": "ad4iotcves",
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "singlequote": "'"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2016-10-01",
+            "name": "[variables('AzureKeyVaultName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": true,
+                "enableSoftDelete": true,
+                "accessPolicies": [
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('AzureKeyVaultName'), '/', variables('KeyName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('AzureKeyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('APIKey')]",
+                "contentType": "string",
+                "attributes": {
+                    "enabled": true
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-04-01",
+            "name": "[variables('AzureStorageName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "accessTier": "Hot",
+                "minimumTlsVersion": "TLS1_2",
+                "supportsHttpsTrafficOnly": "true",
+                "allowBlobPublicAccess": "false",
+                "allowSharedKeyAccess": "true",
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "defaultAction": "Allow",
+                    "ipRules": []
+                }
+            }
+        },
+        {
+            "name": "[concat(variables('AzureStorageName'), '/default')]",
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2021-02-01",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('AzureStorageName'))]"
+            ],
+            "properties": {
+                "deleteRetentionPolicy": {
+                    "enabled": "false"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('AzureStorageName'), '/default/', variables('ContainerName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('AzureStorageName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('AzureStorageName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureBlobConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/', variables('AzureStorageName'))]"
+            ],
+            "properties": {
+                "displayName": "[variables('AzureBlobConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+                },
+                "parameterValues": {
+                    "accountName": "[variables('AzureStorageName')]",
+                    "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('AzureStorageName')), '2021-09-01').keys[0].value]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureKeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[variables('AzureKeyVaultName')]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "Get-AD4IoTDeviceCVEs-incident",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Filter_array": {
+                            "inputs": {
+                                "from": "@body('Parse_JSON')",
+                                "where": "@equals(item()?['Type'], 'iotdevice')"
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query"
+                        },
+                        "For_each": {
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>The following CVEs are found for @{items('For_each')?['DeviceName']} from sensor @{items('For_each')?['DeviceId']}:<br>\n<br>\n@{body('Create_SAS_URI_by_path_(V2)')?['WebUrl']}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            },
+                                            "runAfter": {
+                                                "Create_SAS_URI_by_path_(V2)": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
+                                        },
+                                        "Create_SAS_URI_by_path_(V2)": {
+                                            "inputs": {
+                                                "body": {
+                                                    "Permissions": "Read"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "[concat('/v2/datasets/@{encodeURIComponent(', variables('singlequote'), variables('AzureStorageName'), variables('singlequote'),')}/CreateSharedLinkByPath')]",
+                                                "queries": {
+                                                    "path": "[concat(variables('ContainerName'),'/@{body(', variables('singlequote'),'Alert_-_Get_incident', variables('singlequote'),')?[', variables('singlequote'),'properties', variables('singlequote'),']?[', variables('singlequote'),'incidentNumber', variables('singlequote'),']}-@{items(', variables('singlequote'),'For_each', variables('singlequote'),')?[', variables('singlequote'),'IpAddress', variables('singlequote'),']?[', variables('singlequote'),'Address', variables('singlequote'),']}.json')]"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Create_blob_(V2)": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
+                                        },
+                                        "Create_blob_(V2)": {
+                                            "inputs": {
+                                                "body": "@body('HTTP')",
+                                                "headers": {
+                                                    "ReadFileMetadataFromServer": true
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "[concat('/v2/datasets/@{encodeURIComponent(encodeURIComponent(', variables('singlequote'), variables('AzureStorageName'), variables('singlequote'),'))}/files')]",
+                                                "queries": {
+                                                    "folderPath": "[variables('ContainerName')]",
+                                                    "name": "-@{items('For_each')?['IpAddress']?['Address']}.json",
+                                                    "queryParametersSingleEncoded": true
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "runtimeConfiguration": {
+                                                "contentTransfer": {
+                                                    "transferMode": "Chunked"
+                                                }
+                                            },
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>No CVEs are found for @{items('For_each')?['DeviceName']} from sensor @{items('For_each')?['DeviceId']}.</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                },
+                                                "runAfter": {},
+                                                "type": "ApiConnection"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@length(body('HTTP'))",
+                                                        0
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "For_each_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "For_each_2": {
+                                    "actions": {
+                                        "Append_to_array_variable": {
+                                            "inputs": {
+                                                "name": "CVEs",
+                                                "value": {
+                                                    "attackVector": "@{items('For_each_2')?['attackVector']}",
+                                                    "cveId": "@{items('For_each_2')?['cveId']}",
+                                                    "ipAddress": "@{items('For_each_2')?['ipAddress']}",
+                                                    "score": "@{items('For_each_2')?['score']}"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable"
+                                        }
+                                    },
+                                    "foreach": "@body('Parse_JSON_2')",
+                                    "runAfter": {
+                                        "Parse_JSON_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "HTTP": {
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "@body('Get_secret')?['value']"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{variables('Server')}/api/v1/devices/@{items('For_each')?['IpAddress']?['Address']}/cves"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                },
+                                "Parse_JSON_2": {
+                                    "inputs": {
+                                        "content": "@body('HTTP')",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "attackVector": {
+                                                        "type": "string"
+                                                    },
+                                                    "cveId": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string"
+                                                    },
+                                                    "ipAddress": {
+                                                        "type": "string"
+                                                    },
+                                                    "score": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@body('Filter_array')",
+                            "runAfter": {
+                                "Filter_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(', variables('singlequote'), variables('KeyName'), variables('singlequote'), ')}/value')]"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Server",
+                                        "type": "string",
+                                        "value": "[parameters('SensorURL')]"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_2": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "CVEs",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Parse_JSON": {
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "$id": {
+                                                "type": "string"
+                                            },
+                                            "$ref": {
+                                                "type": "string"
+                                            },
+                                            "DeviceId": {
+                                                "type": "string"
+                                            },
+                                            "DeviceName": {
+                                                "type": "string"
+                                            },
+                                            "DeviceType": {
+                                                "type": "string"
+                                            },
+                                            "IoTHub": {
+                                                "properties": {
+                                                    "$id": {
+                                                        "type": "string"
+                                                    },
+                                                    "ResourceId": {
+                                                        "type": "string"
+                                                    },
+                                                    "Type": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "IpAddress": {
+                                                "properties": {
+                                                    "$id": {
+                                                        "type": "string"
+                                                    },
+                                                    "Address": {
+                                                        "type": "string"
+                                                    },
+                                                    "Type": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "MacAddress": {
+                                                "type": "string"
+                                            },
+                                            "OperatingSystem": {
+                                                "type": "string"
+                                            },
+                                            "Protocols": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "Type": {
+                                                "type": "string"
+                                            },
+                                            "Vendor": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                                "connectionName": "[variables('AzureBlobConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                                "connectionName": "[variables('AzureKeyVaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

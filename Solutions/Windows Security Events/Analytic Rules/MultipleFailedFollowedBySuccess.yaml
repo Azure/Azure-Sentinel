@@ -1,0 +1,73 @@
+id: cf3ede88-a429-493b-9108-3e46d3c741f7
+name: SecurityEvent - Multiple authentication failures followed by a success
+description: |
+  'Identifies accounts who have failed to logon to the domain multiple times in a row, followed by a successful authentication
+  within a short time frame. Multiple failed attempts followed by a success can be an indication of a brute force attempt or
+  possible mis-configuration of a service account within an environment.
+  The lookback is set to 2h and the authentication window and threshold are set to 1h and 5, meaning we need to see a minimum
+  of 5 failures followed by a success for an account within 1 hour to surface an alert.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+    let timeRange = 2h;
+    let authenticationWindow = 1h;
+    let authenticationThreshold = 5;
+    SecurityEvent
+    | where TimeGenerated > ago(timeRange)
+    | where EventID in (4624, 4625)
+    | where IpAddress != "-" and isnotempty(Account)
+    | extend Outcome = iff(EventID == 4624, "Success", "Failure")
+    // bin outcomes into 10 minute windows to reduce the volume of data
+    | summarize OutcomeCount=count() by bin(TimeGenerated, 10m), Account, IpAddress, Computer, Outcome
+    | project TimeGenerated, Account, IpAddress, Computer, Outcome, OutcomeCount
+    // sort ready for sessionizing - by account and time of the authentication outcome
+    | sort by Account asc, TimeGenerated asc
+    | serialize
+    // sessionize into failure groupings until either the account changes or there is a success
+    | extend SessionStartedUtc = row_window_session(TimeGenerated, timeRange, authenticationWindow, Account != prev(Account) or prev(Outcome) == "Success")
+    // count the failures in each session
+    | summarize FailureCountBeforeSuccess=sumif(OutcomeCount, Outcome == "Failure"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), make_list(Outcome, 128), make_set(Computer, 128), make_set(IpAddress, 128) by SessionStartedUtc, Account
+    // the session must not start with a success, and must end with one
+    | where array_index_of(list_Outcome, "Success") != 0
+    | where array_index_of(list_Outcome, "Success") == array_length(list_Outcome) - 1
+    | project-away SessionStartedUtc, list_Outcome
+    // where the number of failures before the success is above the threshold
+    | where FailureCountBeforeSuccess >= authenticationThreshold
+    // expand out ip and computer for customer entity assignment
+    | mv-expand set_IpAddress, set_Computer
+    | extend IpAddress = tostring(set_IpAddress), Computer = tostring(set_Computer)
+    | extend timestamp=StartTime, NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+version: 1.0.4
+kind: Scheduled

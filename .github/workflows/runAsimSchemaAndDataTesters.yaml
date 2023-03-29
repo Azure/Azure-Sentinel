@@ -1,0 +1,59 @@
+name: Run ASIM testers on "eco-connector-test" workspace
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled]
+    paths:
+    - 'Parsers/ASimDns/Parsers/**'
+    - 'Parsers/ASimNetworkSession/Parsers/**'
+    - 'Parsers/ASimWebSession/Parsers/**'
+    - 'Parsers/ASimProcessEvent/Parsers/**'
+    - 'Parsers/ASimAuditEvent/Parsers/**'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+      id-token: write
+      contents: read
+
+jobs: 
+  runAsimTesters:
+      # The workflow should not run on forked repositories for security reasons
+      if: ${{ !github.event.pull_request.head.repo.fork }}
+      runs-on: ubuntu-latest
+      steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
+        with:
+            ref: ${{github.event.pull_request.head.ref}}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
+            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      - name: Login to Azure Public Cloud with AzPowershell
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }} 
+          enable-AzPSSession: true
+      - name: Setup git config
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
+      - name: Merge master into pull request branch
+        run: |
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
+      - name: Run Asim testers
+        uses: azure/powershell@v1
+        with:
+          inlineScript: |
+            & ".script/tests/asimParsersTest/runAsimTesters.ps1"
+          azPSVersion: "latest"
+          errorActionPreference : continue
+          failOnStandardError: false

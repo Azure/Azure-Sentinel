@@ -1,0 +1,47 @@
+id: 4d8de9e6-263e-4845-8618-cd23a4f58b70
+name: Azure DevOps Pull Request Policy Bypassing - Historic allow list
+description: |
+  'This detection builds an allow list of historic PR policy bypasses and compares to recent history, flagging pull request bypasses that are not manually in the allow list and not historically included in the allow list.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 3h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let starttime = 14d;
+  let endtime = 3h;
+  // Add full UPN (user@domain.com) to Authorized Bypassers to ignore policy bypasses by certain authorized users
+  let AuthorizedBypassers = dynamic(['foo@baz.com', 'test@foo.com']);
+  let historicBypassers = AzureDevOpsAuditing
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | where OperationName == 'Git.RefUpdatePoliciesBypassed'
+  | distinct ActorUPN;
+  AzureDevOpsAuditing
+  | where TimeGenerated >= ago(endtime)
+  | where OperationName == 'Git.RefUpdatePoliciesBypassed'
+  | where ActorUPN !in (historicBypassers) and ActorUPN !in (AuthorizedBypassers)
+  | parse ScopeDisplayName with OrganizationName '(Organization)'
+  | project TimeGenerated, ActorUPN, IpAddress, UserAgent, OrganizationName, ProjectName, RepoName = Data.RepoName, AlertDetails = Details, Branch = Data.Name,
+    BypassReason = Data.BypassReason, PRLink = strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_git/', Data.RepoName, '/pullrequest/', Data.PullRequestId)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress, PullRequestLink = PRLink
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: PullRequestLink
+version: 1.0.3
+kind: Scheduled

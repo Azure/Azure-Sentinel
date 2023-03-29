@@ -1,0 +1,370 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft",
+    "comments": "Solution template for Microsoft PowerBI"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Microsoft PowerBI Activity Workbook",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-microsoftpowerbi",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "OfficePowerBI",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "OfficePowerBI",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "MicrosoftPowerBIActivityWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Microsoft PowerBI data connector with template",
+        "displayName": "Microsoft PowerBI template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Microsoft PowerBI data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "StaticUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Microsoft PowerBI",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "Microsoft PowerBI is a collection of software services, apps, and connectors that work together to turn your unrelated sources of data into coherent, visually immersive, and interactive insights. Your data may be an Excel spreadsheet, a collection of cloud-based and on-premises hybrid data warehouses, or a data store of some other type. This connector lets you stream PowerBI audit logs into Microsoft Sentinel, allowing you to track user activities in your PowerBI environment. You can filter the audit data by date range, user, dashboard, report, dataset, and activity type.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Microsoft PowerBI",
+                      "baseQuery": "PowerBIActivity"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "SentinelKinds",
+                      "value": [
+                        "OfficePowerBI"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "PowerBIActivity",
+                      "lastDataReceivedQuery": "PowerBIActivity\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Microsoft PowerBI",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Microsoft PowerBI",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "StaticUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Microsoft PowerBI",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "Microsoft PowerBI is a collection of software services, apps, and connectors that work together to turn your unrelated sources of data into coherent, visually immersive, and interactive insights. Your data may be an Excel spreadsheet, a collection of cloud-based and on-premises hybrid data warehouses, or a data store of some other type. This connector lets you stream PowerBI audit logs into Microsoft Sentinel, allowing you to track user activities in your PowerBI environment. You can filter the audit data by date range, user, dashboard, report, dataset, and activity type.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Microsoft PowerBI",
+              "baseQuery": "PowerBIActivity"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "PowerBIActivity",
+              "lastDataReceivedQuery": "PowerBIActivity\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "SentinelKinds",
+              "value": [
+                "OfficePowerBI"
+              ]
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Microsoft PowerBI Workbook with template",
+        "displayName": "Microsoft PowerBI workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "MicrosoftPowerBIActivityWorkbookWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "This workbook provides details on Microsoft PowerBI Activity"
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"ccd5adcd-8d59-4cfe-99ec-98075de2e253\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"DefaultSubscription_Internal\",\"type\":1,\"isRequired\":true,\"query\":\"where type =~ 'microsoft.operationalinsights/workspaces'\\r\\n| take 1\\r\\n| project subscriptionId\",\"crossComponentResources\":[\"value::selected\"],\"isHiddenWhenLocked\":true,\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},{\"id\":\"1ca69445-60fc-4806-b43d-ac7e6aad630a\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Subscription\",\"type\":6,\"query\":\"summarize by subscriptionId\\r\\n| project value = strcat(\\\"/subscriptions/\\\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{DefaultSubscription_Internal}', true, false)\\r\\n\",\"crossComponentResources\":[\"value::selected\"],\"typeSettings\":{\"showDefault\":false},\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},{\"id\":\"e94aafa3-c5d9-4523-89f0-4e87aa754511\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Workspace\",\"type\":5,\"query\":\"where type =~ 'microsoft.operationalinsights/workspaces'\\n| project id\",\"crossComponentResources\":[\"{Subscription}\"],\"value\":\"\",\"typeSettings\":{\"resourceTypeFilter\":{\"microsoft.operationalinsights/workspaces\":true}},\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},{\"id\":\"eafaa0ec-7c3a-4ee5-babe-9850080c909d\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"resourceGroup\",\"type\":1,\"query\":\"resources\\r\\n| where type =~ 'microsoft.operationalinsights/workspaces'\\r\\n| where id == \\\"{Workspace}\\\"\\r\\n| project resourceGroup\",\"crossComponentResources\":[\"value::selected\"],\"isHiddenWhenLocked\":true,\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},{\"id\":\"c4b69c01-2263-4ada-8d9c-43433b739ff3\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":900000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2419200000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":false},\"value\":{\"durationMs\":7776000000}},{\"id\":\"c71f3009-a3f4-4aa5-aaf0-d0f667100e56\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Help\",\"label\":\"Show Help\",\"type\":10,\"description\":\"This will show some help information to help you understand the page you are on\",\"isRequired\":true,\"typeSettings\":{\"showDefault\":false},\"jsonData\":\"[{ \\\"value\\\": \\\"Yes\\\", \\\"label\\\": \\\"Yes\\\"},\\r\\n {\\\"value\\\": \\\"No\\\", \\\"label\\\": \\\"No\\\", \\\"selected\\\":true }]\"}],\"style\":\"above\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 1\"},{\"type\":1,\"content\":{\"json\":\"# Microsoft PowerBI Activity Workbook\"},\"name\":\"text - 11\"},{\"type\":1,\"content\":{\"json\":\"#### Please select subscription and workspace for the workbook to load.\\r\\n#### Please change the TimeRange to relead the datasets between different timeframe.\\r\\n\\r\\n#### This workbook contains\\r\\n- Overview \\r\\n\\t- Activity Over Time \\r\\n\\t- Events Occured\\r\\n\\t- Workspace Used\\r\\n\\t- Report Accessed\\r\\n\\t- Dataset Accessed\\r\\n\\t- Activity by DistributionMethod\\r\\n\\t- Activity through UserAgent\\r\\n- Datasets\\r\\n\\t- Dataset Directly Accessed\\r\\n\\t- Activity Directly on Datastes\\r\\n\\t- Direct Datasets Activities\\r\\n- Reports\\r\\n\\t- Activities Across Reports\\r\\n- IP and User Activity Trend\\r\\n\\t- IP Address Activity Trend\\r\\n\\t- User Activity Trend\\r\\n\\t- User Activity Across IP Addresses\"},\"conditionalVisibility\":{\"parameterName\":\"Help\",\"comparison\":\"isEqualTo\",\"value\":\"Yes\"},\"name\":\"text - 11 - Copy\"},{\"type\":1,\"content\":{\"json\":\"### Overview\",\"style\":\"info\"},\"name\":\"text - 16\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n| summarize count() by Activity, bin(TimeGenerated,{TimeRange:grain})\",\"size\":0,\"title\":\"Activity Over Time for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"timechart\"},\"name\":\"query - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n|summarize  count() by Activity\",\"size\":0,\"title\":\"Events Occured for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\"},\"name\":\"query - 6 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n|summarize  count() by PbiWorkspaceName\",\"size\":0,\"title\":\"Workspace Used for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\"},\"name\":\"query - 6 - Copy - Copy - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n|summarize  count() by ReportName\",\"size\":0,\"title\":\"Report Accessed for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"gridSettings\":{\"filter\":true},\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"ReportName\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"customWidth\":\"50\",\"name\":\"query - 6 - Copy - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n|summarize  count() by DatasetName\",\"size\":0,\"title\":\"Dataset used for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"gridSettings\":{\"filter\":true},\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"DatasetName\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"customWidth\":\"50\",\"name\":\"query - 6 - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n| summarize count() by DistributionMethod\",\"size\":0,\"title\":\"Activity by DistributionMethod for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"50\",\"name\":\"query - 19\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n| summarize count() by UserAgent\",\"size\":0,\"title\":\"Activity through UserAgent for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"50\",\"name\":\"query - 19 - Copy\"},{\"type\":1,\"content\":{\"json\":\"### Datasets\",\"style\":\"info\"},\"name\":\"text - 17\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n| where isempty(ReportName) and isnotempty(DatasetName)\\r\\n|summarize  count() by DatasetName\",\"size\":0,\"title\":\"Dataset dircetly accessed for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"gridSettings\":{\"filter\":true},\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"DatasetName\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"customWidth\":\"50\",\"name\":\"query - 6 - Copy - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n| where isempty(ReportName) and isnotempty(DatasetName)\\r\\n| summarize count() by Activity\",\"size\":0,\"title\":\"Activity directly on Datasets for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\",\"gridSettings\":{\"filter\":true},\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"DatasetName\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"customWidth\":\"50\",\"name\":\"query - 6 - Copy - Copy - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let PbiTrend = (PowerBIActivity\\r\\n| where isnotempty(DatasetName)\\r\\n| make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by DatasetName);\\r\\nlet PbiSummary = (PowerBIActivity\\r\\n| where isnotempty(DatasetName)\\r\\n|summarize TotalActivity = count(), CreateDataset = countif(Activity ==\\\"CreateDataset\\\"),UpdateDatasetParameters\\r\\n = countif(Activity ==\\\"UpdateDatasetParameters\\\") by DatasetName);\\r\\nPbiTrend\\r\\n| join kind=inner(\\r\\nPbiSummary\\r\\n) on DatasetName\",\"size\":0,\"title\":\"Direct Datasets Activities for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Trend\",\"formatter\":21,\"formatOptions\":{\"palette\":\"blue\"}},{\"columnMatch\":\"TimeGenerated\",\"formatter\":5},{\"columnMatch\":\"DatasetName1\",\"formatter\":5},{\"columnMatch\":\"TotalActivity\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\"}},{\"columnMatch\":\"CreateDataset\",\"formatter\":4,\"formatOptions\":{\"palette\":\"greenDarkDark\"}},{\"columnMatch\":\"UpdateDatasetParameters\",\"formatter\":4,\"formatOptions\":{\"palette\":\"brown\"}}],\"filter\":true}},\"name\":\"query - 13\"},{\"type\":1,\"content\":{\"json\":\"### Reports\",\"style\":\"info\"},\"name\":\"text - 18\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let PbiTrend = (PowerBIActivity\\r\\n| where isnotempty(DatasetName) and  isnotempty(ReportName)\\r\\n| make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by ReportName, DatasetName);\\r\\nlet PbiSummary = (PowerBIActivity\\r\\n| where isnotempty(DatasetName) and  isnotempty(ReportName)\\r\\n|summarize TotalActivity = count(), ViewReport = countif(Activity ==\\\"ViewReport\\\"),CreateReport = countif(Activity ==\\\"CreateReport\\\") by ReportName, DatasetName);\\r\\nPbiTrend\\r\\n| join kind=inner(\\r\\nPbiSummary\\r\\n) on ReportName,DatasetName\",\"size\":0,\"title\":\"Activities Across Reports for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Group\",\"formatter\":1},{\"columnMatch\":\"Trend\",\"formatter\":9,\"formatOptions\":{\"palette\":\"blue\"}},{\"columnMatch\":\"TimeGenerated\",\"formatter\":5},{\"columnMatch\":\"ReportName1\",\"formatter\":5},{\"columnMatch\":\"DatasetName1\",\"formatter\":5},{\"columnMatch\":\"TotalActivity\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\"}},{\"columnMatch\":\"ViewReport\",\"formatter\":4,\"formatOptions\":{\"palette\":\"blue\"}},{\"columnMatch\":\"CreateReport\",\"formatter\":4,\"formatOptions\":{\"palette\":\"blue\"}}],\"filter\":true,\"hierarchySettings\":{\"treeType\":1,\"groupBy\":[\"ReportName\"],\"expandTopLevel\":true}}},\"name\":\"query - 13 - Copy\"},{\"type\":1,\"content\":{\"json\":\"### IP and User Activity Trend\",\"style\":\"info\"},\"name\":\"text - 19\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let PbiTrend = (PowerBIActivity\\r\\n| make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by SrcIpAddr);\\r\\nlet PbiSummary = (PowerBIActivity\\r\\n|summarize count() by SrcIpAddr);\\r\\nPbiTrend\\r\\n| join kind=inner(\\r\\nPbiSummary\\r\\n) on SrcIpAddr\",\"size\":0,\"title\":\"IP Address Activity Trend for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Trend\",\"formatter\":9,\"formatOptions\":{\"palette\":\"blue\"}},{\"columnMatch\":\"TimeGenerated\",\"formatter\":5},{\"columnMatch\":\"SrcIpAddr1\",\"formatter\":5},{\"columnMatch\":\"count_\",\"formatter\":4,\"formatOptions\":{\"palette\":\"blue\"}}],\"filter\":true}},\"customWidth\":\"50\",\"name\":\"query - 6 - Copy - Copy - Copy - Copy - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let PbiTrend = (PowerBIActivity\\r\\n| make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by ActorName);\\r\\nlet PbiSummary = (PowerBIActivity\\r\\n|summarize count() by ActorName);\\r\\nPbiTrend\\r\\n| join kind=inner(\\r\\nPbiSummary\\r\\n) on ActorName\",\"size\":0,\"title\":\"User Activity Trend for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Trend\",\"formatter\":9,\"formatOptions\":{\"palette\":\"blue\"}},{\"columnMatch\":\"TimeGenerated\",\"formatter\":5},{\"columnMatch\":\"ActorName1\",\"formatter\":5},{\"columnMatch\":\"count_\",\"formatter\":4,\"formatOptions\":{\"palette\":\"blue\"}}],\"filter\":true}},\"customWidth\":\"50\",\"name\":\"query - 6 - Copy - Copy - Copy - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PowerBIActivity\\r\\n|summarize  count() by ActorName, SrcIpAddr\",\"size\":0,\"title\":\"User Activity Across IP Addresses for {TimeRange:label}\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Group\",\"formatter\":1},{\"columnMatch\":\"SrcIpAddr\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\"}},{\"columnMatch\":\"count_\",\"formatter\":8,\"formatOptions\":{\"palette\":\"blue\"}}],\"filter\":true,\"hierarchySettings\":{\"treeType\":1,\"groupBy\":[\"ActorName\"]}}},\"name\":\"query - 6 - Copy - Copy - Copy - Copy - Copy - Copy - Copy\"}],\"fromTemplateId\":\"sentinel-MicrosoftPowerBIActivityWorkbook\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=MicrosoftPowerBIActivityWorkbook; logoFileName=; description=This workbook provides details on Microsoft PowerBI Activity; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Microsoft PowerBI Activity Workbook; templateRelativePath=MicrosoftPowerBIActivityWorkbook.json; subtitle=; provider=Microsoft}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Microsoft PowerBI",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "PowerBIActivity",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "OfficePowerBI",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Microsoft PowerBI",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-23",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Application"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

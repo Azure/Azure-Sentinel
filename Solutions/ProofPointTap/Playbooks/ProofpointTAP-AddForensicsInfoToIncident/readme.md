@@ -1,6 +1,6 @@
 # ProofpointTAP-AddForensicsInfoToIncident
  ## Summary
- Once a new sentinal incident is created, this playbook gets triggered and performs the following actions:
+ Once a new sentinel incident is created, this playbook gets triggered and performs the following actions:
  1. [Gets Forensics](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/Forensics_API) by the *campaignId*, provided in the alert custom entities. 
  2. Enriches the incident with Forensics info.
 
@@ -14,7 +14,7 @@
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FProofpointTAPk%2FPlaybooks%2FProofpointTAP-AddForensicsInfoToIncident%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FProofpointTAP%2FPlaybooks%2FProofpointTAP-AddForensicsInfoToIncident%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FProofPointTap%2FPlaybooks%2FProofpointTAP-AddForensicsInfoToIncident%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FProofPointTap%2FPlaybooks%2FProofpointTAP-AddForensicsInfoToIncident%2Fazuredeploy.json)
 
 
 ### Post-Deployment instructions 

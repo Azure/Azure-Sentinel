@@ -1,0 +1,211 @@
+{
+   "$schema":"https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+   "contentVersion":"1.0.0.0",
+   "metadata": {
+      "title": "AD4IoT-NewAssetServiceNowTicket", 
+      "description": "Normally, the authorized entity to program a PLC is the Engineering Workstation, to program a PLC attackers might create a new Engineering Workstation to create malicious programing. The following playbook will open a ticket in ServiceNow each time a new Engineering Workstation is detected. This playbook parses explicitly the IoT device entity fields. For more information, see [AD4IoT-NewAssetServiceNowTicket](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/AD4IoT-NewAssetServiceNowTicket/readme.md)",
+      "prerequisites": ["None"],
+      "lastUpdateTime": "2022-08-05T00:00:00.000Z",
+      "entities": [], 
+      "tags": [], 
+      "support": {
+          "tier": "microsoft" 
+      },
+      "author": {
+          "name": "TJ Banasik"
+      },
+      "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "AD4IoT-NewAssetServiceNowTicket",
+        "notes": [
+          "Initial version"
+        ]
+      }
+      ]
+  },
+   "parameters":{
+      "PlaybookName":{
+         "defaultValue":"AD4IoT-NewAssetServiceNowTicket",
+         "type":"String"
+      }
+   },
+   "variables":{
+      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName'))]",
+      "service-nowConnectionName":"[concat('ServiceNow-', parameters('PlaybookName'))]"
+   },
+   "resources":[
+      {
+         "type":"Microsoft.Web/connections",
+         "apiVersion":"2016-06-01",
+         "name":"[variables('AzureSentinelConnectionName')]",
+         "location":"[resourceGroup().location]",
+         "properties":{
+            "displayName":"[variables('AzureSentinelConnectionName')]",
+            "customParameterValues":{
+               
+            },
+            "api":{
+               "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+            }
+         }
+      },
+      {
+         "type":"Microsoft.Web/connections",
+         "apiVersion":"2016-06-01",
+         "name":"[variables('service-nowConnectionName')]",
+         "location":"[resourceGroup().location]",
+         "properties":{
+            "displayName":"[variables('service-nowConnectionName')]",
+            "customParameterValues":{
+               
+            },
+            "api":{
+               "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/service-now')]"
+            }
+         }
+      },
+      {
+         "type":"Microsoft.Logic/workflows",
+         "apiVersion":"2017-07-01",
+         "name":"[parameters('PlaybookName')]",
+         "location":"[resourceGroup().location]",
+         "dependsOn":[
+            "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+            "[resourceId('Microsoft.Web/connections', variables('service-nowConnectionName'))]"
+         ],
+         "properties":{
+            "state":"Enabled",
+            "definition":{
+               "$schema":"https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+               "actions":{
+                  "Condition":{
+                     "actions":{
+                        "Create_Record":{
+                           "inputs":{
+                              "body":{
+                                 "short_description":"A new @{body('Parse_JSON')?['deviceType']} was detected with the following Ip address @{body('Parse_JSON')?['deviceName']}"
+                              },
+                              "host":{
+                                 "connection":{
+                                    "name":"@parameters('$connections')['service-now']['connectionId']"
+                                 }
+                              },
+                              "method":"post",
+                              "path":"/api/now/v2/table/@{encodeURIComponent('incident')}",
+                              "queries":{
+                                 "sysparm_display_value":true,
+                                 "sysparm_exclude_reference_link":true
+                              }
+                           },
+                           "runAfter":{
+                              
+                           },
+                           "type":"ApiConnection"
+                        }
+                     },
+                     "expression":{
+                        "and":[
+                           {
+                              "equals":[
+                                 "@body('Parse_JSON')?['deviceType']",
+                                 "Engineering Station"
+                              ]
+                           }
+                        ]
+                     },
+                     "runAfter":{
+                        "Parse_JSON":[
+                           "Succeeded"
+                        ]
+                     },
+                     "type":"If"
+                  },
+                  "Parse_JSON":{
+                     "inputs":{
+                        "content":"@\nfirst(triggerBody()?['object']?['properties']?['relatedEntities'])?['properties']",
+                        "schema":{
+                           "properties":{
+                              "deviceId":{
+                                 "type":"string"
+                              },
+                              "deviceName":{
+                                 "type":"string"
+                              },
+                              "deviceType":{
+                                 "type":"string"
+                              },
+                              "friendlyName":{
+                                 "type":"string"
+                              },
+                              "iotHubEntityId":{
+                                 "type":"string"
+                              },
+                              "ipAddressEntityId":{
+                                 "type":"string"
+                              },
+                              "protocols":{
+                                 "items":{
+                                    "type":"string"
+                                 },
+                                 "type":"array"
+                              }
+                           },
+                           "type":"object"
+                        }
+                     },
+                     "runAfter":{
+                        
+                     },
+                     "type":"ParseJson"
+                  }
+               },
+               "contentVersion":"1.0.0.0",
+               "outputs":{
+                  
+               },
+               "parameters":{
+                  "$connections":{
+                     "defaultValue":{
+                        
+                     },
+                     "type":"Object"
+                  }
+               },
+               "triggers":{
+                  "When_Azure_Sentinel_incident_creation_rule_was_triggered":{
+                     "inputs":{
+                        "body":{
+                           "callback_url":"@{listCallbackUrl()}"
+                        },
+                        "host":{
+                           "connection":{
+                              "name":"@parameters('$connections')['azuresentinel']['connectionId']"
+                           }
+                        },
+                        "path":"/incident-creation"
+                     },
+                     "type":"ApiConnectionWebhook"
+                  }
+               }
+            },
+            "parameters":{
+               "$connections":{
+                  "value":{
+                     "azuresentinel":{
+                        "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                        "connectionName":"[variables('AzureSentinelConnectionName')]",
+                        "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                     },
+                     "service-now":{
+                        "connectionId":"[resourceId('Microsoft.Web/connections', variables('service-nowConnectionName'))]",
+                        "connectionName":"[variables('service-nowConnectionName')]",
+                        "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/service-now')]"
+                     }
+                  }
+               }
+            }
+         }
+      }
+   ]
+}

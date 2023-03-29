@@ -1,0 +1,243 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Send email with formatted incident report",
+        "description": "This playbook will be sending email with formated incidents report (Incident title, severity, tactics, link,…) when incident is created in Microsoft Sentinel. Email notification is made in HTML.",
+        "prerequisites": "An O365 account to be used to send email notification (The user account will be used in O365 connector (Send an email).) Link with company logo. No formating since size is defined in the Playbook. Linke example - https://azure.microsoft.com/svghandler/azure-sentinel",
+        "postDeployment": [ "**1.Configure connections**\nEdit the Logic App or go to Logic app designer.\nExpand “Send an email with Incident details” and fix this connector by adding a new connection or signing-in to marked one with user that has mailbox.\nNote:  Email sent with this playbook will be from user that creates connection!\n**Attach the playbook**\nAttach the playbook\n[Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)\nNote: Playbook is disabled by default. Please enable it before assigning to the Automation rule!" ],
+        "lastUpdateTime": "2021-07-14T00:00:00.000Z",
+        "entities": [],
+        "tags": ["Notification" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Benjamin Kovacevic"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Send email with formatted incident report",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Send-email-with-formatted-incident-report",
+            "type": "string"
+        },
+        "NotificationEmail": {
+            "type": "string",
+            "metadata": {
+                "description": "Incident details will be sent to this email (ex. soc@xyz.com)"
+            }
+        },
+        "Company logo link": {
+            "defaultValue": "https://azure.microsoft.com/svghandler/azure-sentinel",
+            "type": "string",
+            "metadata": {
+                "description": "Company logo that will be visible in the incident report (size defined in template) (ex. https://azure.microsoft.com/svghandler/azure-sentinel)"
+            }
+        },
+        "Company name": {
+            "defaultValue": "Contoso SOC",
+            "type": "string",
+            "metadata": {
+                "description": "Company name that will be visible in the report, you can also add SOC (ex. Contoso SOC)"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "o365ConnectionName": "[concat('o365-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('o365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Send-email-with-formatted-incident-report",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]"
+            ],
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Company logo link": {
+                            "defaultValue": "[parameters('Company logo link')]",
+                            "type": "String"
+                        },
+                        "Report name": {
+                            "defaultValue": "[parameters('Company name')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Compose_Email_response": {
+                            "runAfter": {
+                                "Create_HTML_table_with_Alerts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<!DOCTYPE html>\n<html>\n\n<table style=\"width: 100%; border-collapse: collapse;\" border=\"1\" width=\"100%\">\n\n<tbody>\n\n<tr>\n<td style=\"width: 19%;\" align=\"center\" width=\"19%\">\n<strong><img src=\"https://azure.microsoft.com/svghandler/azure-sentinel?width=150&amp;height=79\" alt=\"\" /></strong>\n</td>\n\n<td style=\"width: 41.1434%;\" width=\"48%\">\n<p style=\"text-align: center;\"><span style=\"font-size: 16pt;\"><strong>@{parameters('Report name')}</strong></span></p>\n<p style=\"text-align: center;\"><strong>Azure Sentinel incident report</strong></p>\n</td>\n\n<td style=\"width: 20%;\" width=\"20%\">\n<p><span style=\"font-size: 12pt;\"><strong>Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}</strong></span></p>\n<p><span style=\"font-size: 13pt;\"><strong><a href=\"@{triggerBody()?['object']?['properties']?['incidentUrl']}\">View incident</a></strong></span></p>\n</td>\n\n<td style=\"width: 13%;\" align=\"center\" width=\"13%\">\n<strong><img src=\"@{parameters('Company logo link')}?width=150&amp;height=79\" alt=\"\" /></strong>\n</td>\n\n</tr>\n\n<tr>\n<td style=\"width: 93.1434%;\" colspan=\"4\" width=\"100%\">\n<p>Incident title:</p>\n<p><span style=\"font-size: 16pt;\"><strong>@{triggerBody()?['object']?['properties']?['title']}</strong></span></p>\n<p>&nbsp;</p>\n</td>\n</tr>\n\n</tbody>\n</table>\n\n<table style=\"width: 100%; border-collapse: collapse;\" border=\"1\" width=\"100%\">\n\n<tbody>\n\n<tr style=\"vertical-align: top;\">\n<td style=\"width: 23.25%; height: 190px;\">\n<p><span style=\"font-size: 12pt;\"><strong>Creation time</strong></span><br /><br/>\n<span style=\"font-size: 12.0pt;\">@{triggerBody()?['object']?['properties']?['createdTimeUtc']}</span></p>\n</td>\n\n<td style=\"width: 23.25%; height: 190px;\">\n<p><span style=\"font-size: 12pt;\"><strong>Severity</strong></span><br /><br/>\n<span style=\"font-size: 12.0pt;\">@{triggerBody()?['object']?['properties']?['severity']}</span></p>\n</td>\n\n<td style=\"width: 23.3934%; height: 190px;\">\n<p><span style=\"font-size: 12pt;\"><strong>Alert providers</strong></span><br /><br/>\n<span style=\"font-size: 12.0pt;\">@{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], '<br />')}</span></p>\n</td>\n\n<td style=\"width: 23.25%; height: 190px;\">\n<p><span style=\"font-size: 12pt;\"><strong>Tactics</strong></span><br /><br/>\n<span style=\"font-size: 12.0pt;\">@{join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '<br />')}</span></p>\n</td>\n</tr>\n\n<td style=\"width: 93.1434%;\" colspan=\"4\" width=\"100%\">\n<p><span style=\"font-size: 12pt;\"><strong>Description</strong></span><br /><br />\n<span style=\"font-size: 12.0pt;\">@{triggerBody()?['object']?['properties']?['description']}</span></p>\n</td>\n</tr>\n\n<tr>\n<td style=\"width: 46.5%;\" colspan=\"2\" width=\"50%\">\n<p><span style=\"font-size: 12pt;\"><strong>Entities</strong></span></p>\n<p>@{body('Create_HTML_table_with_Entities')}</p>\n<p>&nbsp;</p>\n</td>\n\n<td style=\"width: 46.6434%;\" colspan=\"2\" width=\"50%\">\n@{body('Create_HTML_table_with_Alerts')}\n</td>\n\n</tr>\n\n</tbody>\n</table>\n</html>"
+                        },
+                        "Create_HTML_table_with_Alerts": {
+                            "runAfter": {
+                                "Select_Alerts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@body('Select_Alerts')"
+                            }
+                        },
+                        "Create_HTML_table_with_Entities": {
+                            "runAfter": {
+                                "Select_Entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@body('Select_Entities')"
+                            }
+                        },
+                        "Select_Alerts": {
+                            "runAfter": {
+                                "Create_HTML_table_with_Entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@triggerBody()?['object']?['properties']?['Alerts']",
+                                "select": {
+                                    "Alerts": "@item()?['properties']?['alertDisplayName']"
+                                }
+                            }
+                        },
+                        "Select_Entities": {
+                            "runAfter": {},
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "select": {
+                                    "Entity": "@item()?['properties']?['friendlyName']",
+                                    "Entity type": "@item()?['kind']"
+                                }
+                            }
+                        },
+                        "Send_an_email_with_Incident_details": {
+                            "runAfter": {
+                                "Compose_Email_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>@{outputs('Compose_Email_response')}</p>",
+                                    "Importance": "High",
+                                    "Subject": "New Azure Sentinel incident - @{triggerBody()?['object']?['properties']?['title']}",
+                                    "To": "[parameters('NotificationEmail')]"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                "connectionName": "[variables('o365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

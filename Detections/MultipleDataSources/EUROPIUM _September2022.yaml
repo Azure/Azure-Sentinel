@@ -1,0 +1,174 @@
+id: 9d8b5a18-b7db-4c23-84a6-95febaf7e1e4
+name: Europium - Hash and IP IOCs - September 2022
+description: | 
+  'Identifies a match across various data feeds for  hashes and IP IOC related to Europium
+   Reference: https://www.microsoft.com/security/blog/2022/09/08/microsoft-investigates-iranian-attacks-against-the-albanian-government'
+severity: High 
+requiredDataConnectors: 
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: F5
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoASA
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: CEF
+    dataTypes: 
+      - CommonSecurityLog               
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+      - DeviceFileEvents
+      - DeviceImageLoadEvents
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+  - connectorId: WindowsFirewall
+    dataTypes:
+      - WindowsFirewall      
+queryFrequency: 12h 
+queryPeriod: 12h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - CommandAndControl
+  - CredentialAccess
+relevantTechniques:
+  - T1071
+  - T1003
+tags:
+  - Europium
+  - Schema: ASIMFileEvent
+    SchemaVersion: 0.1.0
+query:  |  
+  let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Europium_September2022.csv"] with (format="csv", ignoreFirstRecord=True);
+  let sha256Hashes = (iocs | where Type =~ "sha256" | project IoC);
+  let IPList = (iocs | where Type =~ "ip"| project IoC);
+  let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
+  (union isfuzzy=true
+  (CommonSecurityLog
+  | where SourceIP in (IPList) or DestinationIP in (IPList) or Message has_any (IPList)
+  | parse Message with * '(' DNSName ')' * 
+  | project TimeGenerated, SourceIP, DestinationIP, Message, SourceUserID, RequestURL, DNSName, Type
+  | extend MessageIP = extract(IPRegex, 0, Message), RequestIP = extract(IPRegex, 0, RequestURL)
+  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message",  "NoMatch")
+  | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "NoMatch"), AccountCustomEntity = SourceUserID
+  ),
+  (DnsEvents
+  | where IPAddresses in (IPList)  
+  | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
+  | extend DestinationIPAddress = IPAddresses, DNSName = Name, Computer 
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Computer
+  ),
+  (VMConnection
+  | where SourceIp in (IPList) or DestinationIp in (IPList)
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | project TimeGenerated, Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, RemoteDnsQuestions, DNSName,BytesSent, BytesReceived, RemoteCountry, Type
+  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
+  | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "NoMatch"), File = ProcessName, HostCustomEntity = Computer
+  ),
+  (Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 3
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = tostring(EventDetail.[9].["#text"]), DestinationIP = tostring(EventDetail.[14].["#text"]), Image = tostring(EventDetail.[4].["#text"])
+  | where SourceIP in (IPList) or DestinationIP in (IPList)
+  | project TimeGenerated, SourceIP, DestinationIP, Image, UserName, Computer, Type
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
+  | extend timestamp = TimeGenerated, File = tostring(split(Image, '\\', -1)[-1]), IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), HostCustomEntity = Computer, AccountCustomEntity = UserName
+  ), 
+  (OfficeActivity
+  | where ClientIP in (IPList) 
+  | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, AccountCustomEntity = UserId
+  ),
+  (DeviceNetworkEvents
+  | where RemoteIP in (IPList) or InitiatingProcessSHA256 in (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, Computer = DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP,  HostCustomEntity = Computer, AccountCustomEntity = InitiatingProcessAccountName
+  ),
+  (WindowsFirewall
+  | where SourceIP in (IPList) or DestinationIP in (IPList) 
+  | project TimeGenerated, Computer, CommunicationDirection, SourceIP, DestinationIP, SourcePort, DestinationPort, Type
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
+  ), 
+  (imFileEvent
+  | where TargetFileSHA256 has_any (sha256Hashes)
+  | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256
+  | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
+  | extend timestamp = TimeGenerated, IPCustomEntity = IPAddress,  HostCustomEntity = Computer, AccountCustomEntity = Account, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(FileHash)
+  ),
+  (DeviceFileEvents
+  | where SHA256 has_any (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  ),
+  (DeviceImageLoadEvents
+  | where SHA256 has_any (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  ),
+  (Event
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"])
+  | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
+  | extend Hashes = column_ifexists("Hashes", dynamic(["", ""])), CommandLine = column_ifexists("CommandLine", "")
+  | mv-expand Hashes
+  | where Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes)  
+  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
+  | extend Type = strcat(Type, ": ", Source)
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, FileHashCustomEntity = tostring(Hashes[1])
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: AlgorithmCustomEntity
+      - identifier: Value
+        columnName: FileHashCustomEntity
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ajeet Prakash
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Intelligence" ]

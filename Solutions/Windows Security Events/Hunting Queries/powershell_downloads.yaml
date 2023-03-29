@@ -1,0 +1,48 @@
+id: d83f40fc-bbcc-4020-8d45-ad2d82355cb2
+name: PowerShell downloads
+description: |
+  'Finds PowerShell execution events that could involve a download'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+  - CommandAndControl
+query: |
+  let ProcessCreationEvents=() {
+  let processEvents=SecurityEvent
+  | where EventID==4688
+  | project  TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,        AccountDomain=SubjectDomainName,
+    FileName=tostring(split(NewProcessName, '\\')[-1]),
+  ProcessCommandLine = CommandLine, 
+  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+  processEvents};
+  ProcessCreationEvents
+  | where FileName in~ ("powershell.exe", "powershell_ise.exe","pwsh.exe")
+  | where ProcessCommandLine has "Net.WebClient"
+     or ProcessCommandLine has "DownloadFile"
+     or ProcessCommandLine has "Invoke-WebRequest"
+     or ProcessCommandLine has "Invoke-Shellcode"
+     or ProcessCommandLine contains "http:"
+  | project TimeGenerated, ComputerName, AccountName, InitiatingProcessFileName, FileName, ProcessCommandLine
+  | top 100 by TimeGenerated
+  | extend HostName = tostring(split(ComputerName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(ComputerName, '.'), 1, -1), '.'))
+  | extend Account_0_Name = AccountName
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 2.0.1

@@ -1,0 +1,41 @@
+id: a65e4129-d936-4165-bc08-699f9151aa26
+name: McAfee ePO - Long term infected systems
+description: |
+  'Query searches for infected systems which were not cleaned for long term.'
+requiredDataConnectors:
+  - connectorId: McAfeeePO
+    dataTypes:
+      - Syslog
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1189
+query: |
+  let lbperiod_30d = 30d;
+  let infected_systems = McAfeeEPOEvent
+  | where TimeGenerated > ago(lbperiod_30d)
+  | where EventId in ('1038', '3043')
+  | summarize LastScanTimeInfected = max(TimeGenerated) by DvcIpAddr
+  | extend SystemStatus = 'Infected';
+  let clean_systems = McAfeeEPOEvent
+  | where TimeGenerated > ago(lbperiod_30d - 1h)
+  | where EventId in ('1034', '3039')
+  | summarize LastScanTimeClean = max(TimeGenerated) by DvcIpAddr
+  | extend SystemStatus = 'Clean';
+  let clean_systems2 = McAfeeEPOEvent
+  | where TimeGenerated > ago(lbperiod_30d - 1h)
+  | where EventId in ('1034', '3039')
+  | summarize makeset(DvcIpAddr);
+  infected_systems
+  | extend tmp_key = 1
+  | join (clean_systems
+            | extend tmp_key = 1) on tmp_key
+  | where  LastScanTimeInfected > LastScanTimeClean or DvcIpAddr !in (clean_systems2)
+  | project LastScanTimeInfected, DvcIpAddr
+  | extend IPCustomEntity = DvcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

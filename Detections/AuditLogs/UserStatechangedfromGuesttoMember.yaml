@@ -1,0 +1,55 @@
+id: a09a0b8e-30fe-4ebf-94a0-cffe50f579cd
+name: User State changed from Guest to Member
+description: |
+  'Detects when a guest account in a tenant is converted to a member of the tenant.
+    Monitoring guest accounts and the access they are provided is important to detect potential account abuse.
+    Accounts converted to members should be investigated to ensure the activity was legitimate.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+tags:
+  - AADSecOpsGuide
+query: |
+  AuditLogs
+    | where OperationName =~ "Update user"
+    | where Result =~ "success"
+    | mv-expand TargetResources
+    | mv-expand TargetResources.modifiedProperties
+    | where TargetResources_modifiedProperties.displayName =~ "TargetId.UserType"
+    | extend UpdatingServicePrincipal = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)
+    | extend UpdatingUserPrincipal = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend UpdatingUser = iif(isnotempty(UpdatingServicePrincipal), UpdatingServicePrincipal, UpdatingUserPrincipal)
+    | extend UpdatedUserPrincipalName = tostring(TargetResources.userPrincipalName)
+    | project-reorder TimeGenerated, UpdatedUserPrincipalName, UpdatingUser
+    | where parse_json(tostring(TargetResources_modifiedProperties.newValue)) =~ "\"Member\"" and parse_json(tostring(TargetResources_modifiedProperties.oldValue)) =~ "\"Guest\""
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UpdatingUser
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UpdatedUserPrincipalName
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

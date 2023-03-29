@@ -1,0 +1,52 @@
+id: d7feb859-f03e-4e8d-8b21-617be0213b13
+name: Addition of a Temporary Access Pass to a Privileged Account
+description: |
+  'Detects when a Temporary Access Pass (TAP) is created for a Privileged Account.
+    A Temporary Access Pass is a time-limited passcode issued by an admin that satisfies strong authentication requirements and can be used to onboard other authentication methods, including Passwordless ones such as Microsoft Authenticator or even Windows Hello.
+    A threat actor could use a TAP to register a new authentication method to maintain persistance to an account.
+    Review any TAP creations to ensure they were used legitimately.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let admin_users = (IdentityInfo
+    | summarize arg_max(TimeGenerated, *) by AccountUPN
+    | where AssignedRoles contains "admin"
+    | summarize by tolower(AccountUPN));
+    AuditLogs
+    | where OperationName =~ "Admin registered security info"
+    | where ResultReason =~ "Admin registered temporary access pass method for user"
+    | extend userPrincipalName = tostring(TargetResources[0].userPrincipalName)
+    | where tolower(userPrincipalName) in (admin_users)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: userPrincipalName
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

@@ -1,0 +1,45 @@
+id: ac891683-53c3-4f86-86b4-c361708e2b2b
+name: Azure DevOps Personal Access Token (PAT) misuse
+description: |
+  'This Alert detects whenever a PAT is used in ways that PATs are not normally used. May require an allow list and baselining.
+  Reference - https://docs.microsoft.com/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=preview-page
+  Use this query for baselining:
+  AzureDevOpsAuditing
+  | distinct OperationName'
+severity: High
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - Impact
+relevantTechniques:
+  - T1496
+  - T1559
+query: |
+  // Allowlisted UPNs should likely stay empty
+  let AllowlistedUpns = datatable(UPN:string)['foo@bar.com', 'test@foo.com'];
+  // Operation Name parts that will alert
+  let HasAnyBlocklist = datatable(OperationNamePart:string)['Security.','Project.','AuditLog.','Extension.'];
+  // Distinct Operation Names that will flag
+  let HasExactBlocklist = datatable(OperationName:string)['Group.UpdateGroupMembership.Add','Library.ServiceConnectionExecuted','Pipelines.PipelineModified',
+  'Release.ReleasePipelineModified', 'Git.RefUpdatePoliciesBypassed'];
+  AzureDevOpsAuditing
+  | where AuthenticationMechanism startswith "PAT" and (OperationName has_any (HasAnyBlocklist) or OperationName in (HasExactBlocklist))
+    and ActorUPN !in (AllowlistedUpns)
+  | project TimeGenerated, AuthenticationMechanism, ProjectName, ActorUPN, ActorDisplayName, IpAddress, UserAgent, OperationName, Details, Data
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.3
+kind: Scheduled

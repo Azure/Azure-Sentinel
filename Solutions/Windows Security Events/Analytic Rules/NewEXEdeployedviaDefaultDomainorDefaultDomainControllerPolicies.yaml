@@ -1,0 +1,47 @@
+id: 05b4bccd-dd12-423d-8de4-5a6fb526bb4f
+name: New EXE deployed via Default Domain or Default Domain Controller Policies
+description: |
+  'This detection highlights executables deployed to hosts via either the Default Domain or Default Domain Controller Policies. These policies apply to all hosts or Domain Controllers and best practice is that these policies should not be used for deployment of files.
+  A threat actor may use these policies to deploy files or scripts to all hosts in a domain.'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Execution
+  - LateralMovement
+relevantTechniques:
+  - T1072
+  - T1570
+query: |
+  let known_processes = (
+    SecurityEvent
+    // If adjusting Query Period or Frequency update these
+    | where TimeGenerated between(ago(14d)..ago(1d))
+    | where EventID == 4688
+    | where NewProcessName has_any ("Policies\\{6AC1786C-016F-11D2-945F-00C04fB984F9}", "Policies\\{31B2F340-016D-11D2-945F-00C04FB984F9}")
+    | summarize by Process);
+    SecurityEvent
+    // If adjusting Query Period or Frequency update these
+    | where TimeGenerated > ago(1d)
+    | where EventID == 4688
+    | where NewProcessName has_any ("Policies\\{6AC1786C-016F-11D2-945F-00C04fB984F9}", "Policies\\{31B2F340-016D-11D2-945F-00C04FB984F9}")
+    | where Process !in (known_processes)
+    // This will likely apply to multiple hosts so summarize these data
+    | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by Process, NewProcessName, CommandLine, Computer
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.1
+kind: Scheduled

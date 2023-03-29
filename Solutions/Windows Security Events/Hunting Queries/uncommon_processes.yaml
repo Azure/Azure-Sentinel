@@ -1,0 +1,55 @@
+id: 2ff4b10c-7056-4898-83fd-774104189fd5
+name: Uncommon processes - bottom 5%
+description: |
+  'Shows the rarest processes seen running for the first time. (Performs best over longer time ranges - eg 3+ days rather than 24 hours!)
+  These new processes could be benign new programs installed on hosts; 
+  However, especially in normally stable environments, these new processes could provide an indication of an unauthorized/malicious binary that has been installed and run. 
+  Reviewing the wider context of the logon sessions in which these binaries ran can provide a good starting point for identifying possible attacks.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+  let ProcessCreationEvents=() {
+  let processEvents=SecurityEvent
+  | where EventID==4688
+  // filter out common randomly named files related to MSI installers and browsers
+  | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{3}\.tmp")
+  | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{4}\.tmp")
+  | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{3}\.tmp")
+  | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{4}\.tmp")
+  | project TimeGenerated, ComputerName=Computer, AccountName=SubjectUserName, AccountDomain=SubjectDomainName,
+  FileName=tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, 
+  InitiatingProcessFileName=ParentProcessName, InitiatingProcessCommandLine="", InitiatingProcessParentFileName="";
+  processEvents;
+  };
+  let normalizedProcesses = ProcessCreationEvents 
+  // normalize guids
+  | project TimeGenerated, FileName = replace("[0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12}", "<guid>", FileName)
+  // normalize digits away
+  | project TimeGenerated, FileName=replace(@'\d', 'n', FileName); 
+  let freqs = normalizedProcesses
+  | summarize frequency=count() by FileName
+  | join kind= leftouter (
+  normalizedProcesses
+  | summarize Since=min(TimeGenerated), LastSeen=max(TimeGenerated) by FileName
+  ) on FileName;
+  freqs 
+  | where frequency <= toscalar( freqs | serialize | project frequency | summarize percentiles(frequency, 5))
+  | order by frequency asc
+  | project FileName, frequency, Since, LastSeen 
+  // restrict results to unusual processes seen in last day 
+  | where LastSeen >= ago(1d)
+  | extend timestamp = LastSeen 
+  | extend File_0_Name = FileName
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+version: 2.0.1

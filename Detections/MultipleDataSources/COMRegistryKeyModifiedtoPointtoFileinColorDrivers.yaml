@@ -1,0 +1,66 @@
+id: ed8c9153-6f7a-4602-97b4-48c336b299e1
+name: COM Registry Key Modified to Point to File in Color Profile Folder
+description: |
+  'This query looks for changes to COM registry keys to point to files in C:\Windows\System32\spool\drivers\color\.
+    This can be used to enable COM hijacking for persistence.
+    Ref: https://www.microsoft.com/security/blog/2022/07/27/untangling-knotweed-european-private-sector-offensive-actor-using-0-day-exploits/'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceRegistryEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1574
+tags:
+  - KNOTWEED
+query: |
+  let guids = dynamic(["{ddc05a5a-351a-4e06-8eaf-54ec1bc2dcea}","{1f486a52-3cb1-48fd-8f50-b8dc300d9f9d}","{4590f811-1d3a-11d0-891f-00aa004b2e24}", "{4de225bf-cf59-4cfc-85f7-68b90f185355}", "{F56F6FDD-AA9D-4618-A949-C1B91AF43B1A}"]);
+    let mde_data = DeviceRegistryEvents
+    | where ActionType =~ "RegistryValueSet"
+    | where RegistryKey contains "HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\CLSID"
+    | where RegistryKey has_any (guids)
+    | where RegistryValueData has "System32\\spool\\drivers\\color";
+    let event_data = SecurityEvent
+    | where EventID == 4657
+    | where ObjectName contains "HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\CLSID"
+    | where ObjectName has_any (guids)
+    | where NewValue has "System32\\spool\\drivers\\color"
+    | extend RegistryKey = ObjectName, RegistryValueData = NewValue, DeviceName=Computer, InitiatingProcessFileName = Process, InitiatingProcessAccountName=SubjectAccount;
+    union mde_data, event_data
+entityMappings:
+  - entityType: RegistryKey
+    fieldMappings:
+      - identifier: Key
+        columnName: RegistryKey
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: InitiatingProcessFileName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingProcessAccountName
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

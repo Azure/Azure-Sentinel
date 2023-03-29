@@ -1,0 +1,466 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/PingFederate/Data%20Connectors/Logo/PingIdentity.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\nThe [PingFederate](https://www.pingidentity.com/en/pingone/pingfederate.html) solution provides the capability to ingest [PingFederate](https://docs.pingidentity.com/bundle/pingfederate-102/page/lly1564002980532.html) events into Microsoft Sentinel. Refer to [PingFederate documentation](https://docs.pingidentity.com/bundle/pingfederate-102/page/tle1564002955874.html) for more information.\n\n**Underlying Microsoft Technologies used:**\n\nThis solution takes a dependency on the following technologies, and some of these dependencies either may be in [Preview](https://azure.microsoft.com/support/legal/preview-supplemental-terms/) state or might result in additional ingestion or operational costs:\n\na. [Agent-based log collection (CEF over Syslog)](https://docs.microsoft.com/azure/sentinel/connect-common-event-format)\n\n**Data Connectors:** 1, **Parsers:** 1, **Workbooks:** 1, **Analytic Rules:** 11, **Hunting Queries:** 10\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors1-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the data connector that ingest PingFederate events into Microsoft Sentinel. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            }
+          },
+          {
+            "name": "dataconnectors-parser-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "The solution installs a parser that transforms ingested data. The transformed logs can be accessed using the PingFederateEvent Kusto Function alias."
+            }
+          },
+          {
+            "name": "dataconnectors-link2",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more about connecting data sources",
+                "uri": "https://docs.microsoft.com/azure/sentinel/connect-data-sources"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "The workbook installed with the PingFederate help’s you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Abnormal password reset attempts",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects abnormal password reset attempts for user in short period of time."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Authentication from new IP.",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects authentication requests from new IP address."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Forbidden country",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects requests from forbidden countries."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Abnormal password resets for user",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects multiple password reset for user."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - New user SSO success login",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects new user SSO success login."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - OAuth old version",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects requests using not the latest version of OAuth protocol."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Password reset request from unexpected source IP address..",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects password reset requests from unexpected source IP address."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - SAML old version",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects requests using not the latest version of SAML protocol."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic9",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Unexpected authentication URL.",
+            "elements": [
+              {
+                "name": "analytic9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects unexpected authentication URL."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic10",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Unexpected country for user",
+            "elements": [
+              {
+                "name": "analytic10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects requests from different countries for user in shotr term."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic11",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Unusual mail domain.",
+            "elements": [
+              {
+                "name": "analytic11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects unusual mail domain in authentication requests."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Authentication URLs",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for authentication URLs used. It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Failed Authentication",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for failed authentication events It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - New users",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for new users. It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Password reset requests",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for password reset requests events. It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Rare source IP addresses",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for rare source IP addresses of requests It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - SAML subjects",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for SAML subjects used in requests It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery7",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Top source IP addresses",
+            "elements": [
+              {
+                "name": "huntingquery7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for source IP addresses with the most requests It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery8",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Requests from unusual countries",
+            "elements": [
+              {
+                "name": "huntingquery8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for requests from unusual countries. It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery9",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Authentication from unusual sources",
+            "elements": [
+              {
+                "name": "huntingquery9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for unusual sources of authentication. It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery10",
+            "type": "Microsoft.Common.Section",
+            "label": "Ping Federate - Users recently reseted password",
+            "elements": [
+              {
+                "name": "huntingquery10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query searches for users who recently reseted their passwords. It depends on the PingFederate data connector and PingFederateEvent data type and PingFederate parser."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

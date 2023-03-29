@@ -1,0 +1,35 @@
+id: 70c36558-e6d8-48b4-98b3-185d555cd5af
+name: Risky role name created
+description: |
+  'Detections of risky role names could indicate that a malicious framework was executed in your environment.'
+severity: High
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+    let PacuRoleNames = (
+    externaldata (RoleName:string)
+    [h@'https://raw.githubusercontent.com/RhinoSecurityLabs/pacu/master/pacu/modules/iam__enum_roles/default-word-list.txt']
+    );
+    AWSCloudTrail
+    | where EventName == "CreateRole" and isempty(ErrorCode) and isempty(ErrorMessage)
+    | extend roleName = parse_json(tostring((parse_json(RequestParameters)))).roleName
+    | where roleName in (PacuRoleNames)
+    | distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName, tostring(roleName), UserIdentityAccountId, AWSRegion
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | summarize EventCount = count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), EventNameList=make_set(EventName), IPList=make_set(SourceIpAddress) by UserIdentityAccountId, AWSRegion, UserIdentityUserName, TimeGenerated, SourceIpAddress
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

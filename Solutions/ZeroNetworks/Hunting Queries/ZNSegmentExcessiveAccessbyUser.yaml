@@ -1,0 +1,39 @@
+id: 3dd14edf-788d-4f42-868f-28f3208b92a9
+name: Zero Networks Segment - Excessive access by user
+description: |
+  'Find users who gained access to the largest number of target assets in the selected time range'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ZeroNetworksSegmentAuditFunction
+    dataTypes:
+      - ZNSegmentAudit_CL
+  - connectorId: ZeroNetworksSegmentAuditNativePoller
+    dataTypes:
+      - ZNSegmentAuditNativePoller_CL
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1210
+  - T1570
+  - T0866
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  ZNSegmentAudit
+  | where TimeGenerated > ago(endtime-starttime)
+  | where AuditTypeId in (9,12,20,22,23,24)
+  | where DestinationEntityId !startswith "b:"
+  | summarize AffectedEntities=make_set(DestinationEntityName) by PerformedByName
+  | extend numOfTargetEntities=array_length(AffectedEntities)
+  | order by numOfTargetEntities desc
+  | extend Account_0_FullName = PerformedByName
+  | extend Host_0_NetBiosName = AffectedEntities
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: PerformedByName
+  - entityType: Host
+    fieldMappings:
+      - identifier: NetBiosName
+        columnName: AffectedEntities

@@ -1,0 +1,46 @@
+id: 6d63efa6-7c25-4bd4-a486-aa6bf50fde8a
+name: Account created or deleted by non-approved user
+description: |
+  'Identifies accounts that were created or deleted by a defined list of non-approved user principal names. Add to this list before running the query for accurate results.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  // Add non-approved user principal names to the list below to search for their account creation/deletion activity
+  // ex: dynamic(["UPN1", "upn123"])
+  let nonapproved_users = dynamic([]);
+  AuditLogs
+  | where OperationName =~ "Add user" or OperationName =~ "Delete user"
+  | where Result =~ "success"
+  | extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName)
+  | where InitiatingUser has_any (nonapproved_users)
+  | project-reorder TimeGenerated, ResourceId, OperationName, InitiatingUser, TargetResources
+  | extend InitiatedUserIpAddress = tostring(InitiatedBy.user.ipAddress)
+  | extend Name = tostring(split(InitiatingUser,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUser,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatedUserIpAddress
+version: 1.0.2
+kind: Scheduled

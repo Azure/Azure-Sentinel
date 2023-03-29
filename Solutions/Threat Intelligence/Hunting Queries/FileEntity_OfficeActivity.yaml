@@ -1,0 +1,51 @@
+id: 410da56d-4a63-4d22-b68c-9fb1a303be6d
+name: Preview - TI map File entity to OfficeActivity Event
+description: |
+  'Identifies a match in OfficeActivity Event data from any FileName IOC from TI.
+  As File name matches can create noise, this is best as hunting query'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - Impact
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(FileName)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+    OfficeActivity
+    | where TimeGenerated between(starttime..endtime)
+    | where isnotempty(SourceFileName)
+    | extend OfficeActivity_TimeGenerated = TimeGenerated
+  )
+  on $left.FileName == $right.SourceFileName
+  | where OfficeActivity_TimeGenerated < ExpirationDateTime
+  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId, SourceFileName
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, FileName, UserId, ClientIP, OfficeObjectId
+  | extend timestamp = OfficeActivity_TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIP, URLCustomEntity = Url
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity

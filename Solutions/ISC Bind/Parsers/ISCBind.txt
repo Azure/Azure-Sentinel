@@ -1,0 +1,65 @@
+// Title:           ISC Bind
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    09/16/2022
+// Comment:         Inital Release
+//  
+// DESCRIPTION:
+// This parser takes raw ISC Bind logs from a Syslog stream and parses the logs into a normalized schema.
+//
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+
+//request events
+let request = Syslog 
+| where SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
+| parse SyslogMessage with
+        * "client " * " "
+        SrcIpAddr:string "#" 
+        SrcPortNumber:string " " *
+        "query: "
+        DnsQuery:string " "
+        DnsQueryClassName:string " "
+        DnsQueryTypeName:string " "
+        DnsFlags:string
+| extend ServerIPAddressIndex= indexof(DnsFlags, " ")
+| extend ServerIPAddress = iif(ServerIPAddressIndex != "-1", substring(DnsFlags, ServerIPAddressIndex),"")
+| extend ServerIPAddress = replace_regex(ServerIPAddress,@"[()]","")
+| extend DnsFlags =iif(ServerIPAddressIndex != "-1", substring(DnsFlags, 0, ServerIPAddressIndex), DnsFlags)
+| extend SrcPortNumber = replace_regex(SrcPortNumber,@"[^\d]","")
+| extend EventSubType = "request",DnsResponseCodeName = "NA"
+| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,ServerIPAddressIndex;
+//request (cache) events
+let requestcache = Syslog 
+| where SyslogMessage has_all ("client", "query (cache)") and SyslogMessage !has "response:"
+| parse SyslogMessage with
+        * "client " * " "
+        SrcIpAddr:string "#" 
+        SrcPortNumber:string " " *
+        "query (cache) '"
+        DnsQuery:string "/"
+        DnsQueryTypeName:string "/"
+        DnsQueryClassName:string "' "
+        Action
+| extend EventSubType = "requestcache",DnsResponseCodeName = "NA"
+| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName;
+// response events
+let response =Syslog 
+| where SyslogMessage has_all ("client", "query:", "response:")
+| parse SyslogMessage with
+        * "client " * " "
+        SrcIpAddr:string "#" 
+        SrcPortNumber:string " " * "view " * ": "
+        NetworkProtocol:string ": query: "
+        DnsQuery:string " "
+        DnsQueryClassName:string " "
+        DnsQueryTypeName:string " "
+        "response: " DnsResponseCodeName: string
+        " " DnsFlags: string
+| extend DNSResourceRecordIndex= indexof(DnsFlags, " ")
+| extend DnsResponseName =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, DNSResourceRecordIndex), "")
+| extend DnsFlags =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, 0, DNSResourceRecordIndex), DnsFlags)
+| extend EventSubType = "response"
+| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,DNSResourceRecordIndex;
+union request,requestcache,response

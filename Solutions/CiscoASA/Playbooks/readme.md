@@ -14,7 +14,7 @@
 
 # Overview
 Cisco Adaptive Security Appliance (ASA) Software is the core operating system for the Cisco ASA Family. It delivers enterprise-class firewall capabilities for ASA devices in an array of form factors - standalone appliances, blades, and virtual appliances - for any distributed network environment. ASA Software also integrates with other critical security technologies to deliver comprehensive solutions that meet continuously evolving security needs.<br><br>
-This integration allows to automate response to Azure Sentinel incidents which contain IPs. It contains the basic connector component, with which you can create your own playbooks that interact with Cisco ASA.
+This integration allows to automate response to Microsoft Sentinel incidents which contain IPs. It contains the basic connector component, with which you can create your own playbooks that interact with Cisco ASA.
 It also contains 3 playbook templates, ready to quick use, that allow direct response on Cisco ASA from Microsoft Teams.
 
 <a name="prerequisites"></a>

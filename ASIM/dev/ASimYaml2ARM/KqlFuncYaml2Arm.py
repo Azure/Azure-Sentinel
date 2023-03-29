@@ -114,10 +114,10 @@ for f in folders:
     else:
         logging.warning (f'File or folder "{f}" does not exist.')
 
-files = list(dict.fromkeys(files))  # -- remove duplicates
+files = sorted(list(dict.fromkeys(files))) # -- remove duplicates
 
 if len(files) == 0:
-    raise SystemExit ('No files to prcess.')
+    raise SystemExit ('No files to process.')
 
 # -- Read and prepare templates
 func_arm_template = json.load(open(os.path.join(templates_dir, 'func_arm_template.json'), 'r'))
@@ -207,8 +207,8 @@ for f in files:
             Parameters = ""
             for param in params:
                 logging.debug("Param: " + str(param))
-                if param['Type'] == 'table':
-                    ParamString = param["Name"]
+                if param['Type'].startswith('table:'):
+                    ParamString = f'{param["Name"]}:{param["Type"].split(":",1)[1]}'
                 else:
                     try:
                         Default = param["Default"] 

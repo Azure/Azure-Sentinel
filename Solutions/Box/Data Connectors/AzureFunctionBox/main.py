@@ -5,7 +5,7 @@ import time
 from boxsdk.auth.jwt_auth import JWTAuth
 from boxsdk import Client
 from boxsdk.object.events import Events, EnterpriseEventsStreamType
-from boxsdk.util.api_call_decorator import api_call
+#from boxsdk.util.api_call_decorator import api_call
 from .sentinel_connector import AzureSentinelConnector
 from .state_manager import StateManager
 from dateutil.parser import parse as parse_date
@@ -36,6 +36,7 @@ AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = 9
 
 
 def main(mytimer: func.TimerRequest):
+    logging.getLogger().setLevel(logging.INFO)
     start_time = time.time()
     config_json = os.environ['BOX_CONFIG_JSON']
     config_dict = json.loads(config_json)
@@ -53,15 +54,19 @@ def main(mytimer: func.TimerRequest):
 
     sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri = logAnalyticsUri, shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
     with sentinel:
+        logging.getLogger().setLevel(logging.INFO)
+        last_event_date = None
         for events, stream_position in get_events(config_dict, created_after, stream_position=stream_position):
             for event in events:
                 sentinel.send(event)
-            last_event_date = events[-1]['created_at']
+            logging.getLogger().setLevel(logging.INFO)
+            last_event_date = events[-1]['created_at'] if events else last_event_date
             if check_if_time_is_over(start_time, SCRIPT_EXECUTION_INTERVAL_MINUTES, AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES):
                 logging.info('Stopping script because time for execution is over.')
                 break
 
-    save_marker(state_manager, stream_position, last_event_date)
+    if last_event_date:
+        save_marker(state_manager, stream_position, last_event_date)
 
     if sentinel.failed_sent_events_number:
         logging.error('Script finished unsuccessfully. {} events have been sent. {} events have not been sent'.format(sentinel.successfull_sent_events_number, sentinel.failed_sent_events_number))
@@ -72,14 +77,17 @@ def main(mytimer: func.TimerRequest):
 
 
 def get_stream_pos_and_date_from(marker, max_period_minutes, script_execution_interval_minutes):
+    logging.getLogger().setLevel(logging.INFO)
     """Returns last saved checkpoint. If last checkpoint is older than max_period_minutes - returns now - script_execution_interval_minutes."""
 
     def get_default_date_from(script_execution_interval_minutes):
+        logging.getLogger().setLevel(logging.INFO)
         date_from = datetime.datetime.utcnow() - datetime.timedelta(minutes=script_execution_interval_minutes)
         date_from = date_from.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0).isoformat()
         return date_from
 
     def get_token_from_marker(marker, max_period_minutes):
+        logging.getLogger().setLevel(logging.INFO)
         token = 0
         try:
             last_token, last_event_date = marker.split()
@@ -101,6 +109,7 @@ def get_stream_pos_and_date_from(marker, max_period_minutes, script_execution_in
 
 
 def save_marker(state_manager, stream_position, last_event_date):
+    logging.getLogger().setLevel(logging.INFO)
     logging.info('Saving last stream_position {} and last_event_date {}'.format(stream_position, last_event_date))
     state_manager.post(str(stream_position) + ' ' + last_event_date)
 
@@ -108,6 +117,7 @@ def save_marker(state_manager, stream_position, last_event_date):
 def check_if_time_is_over(start_time, interval_minutes, max_script_exec_time_minutes):
     """Returns True if function's execution time is less than interval between function executions and
     less than max azure func lifetime. In other case returns False."""
+    logging.getLogger().setLevel(logging.INFO)
 
     max_minutes = min(interval_minutes, max_script_exec_time_minutes)
     if max_minutes > 1:
@@ -122,7 +132,7 @@ def check_if_time_is_over(start_time, interval_minutes, max_script_exec_time_min
 
 
 class ExtendedEvents(Events):
-    @api_call
+    #@api_call
     def get_events(self, stream_position=0, stream_type=EnterpriseEventsStreamType.ADMIN_LOGS, created_after=None, created_before=None, limit=100):
         url = self.get_url()
         params = {
@@ -138,6 +148,7 @@ class ExtendedEvents(Events):
 
 
 def get_events(config_dict, created_after=None, stream_position=0):
+    logging.getLogger().setLevel(logging.WARNING)
     limit = 500
     config = JWTAuth.from_settings_dictionary(config_dict)
     client = Client(config)

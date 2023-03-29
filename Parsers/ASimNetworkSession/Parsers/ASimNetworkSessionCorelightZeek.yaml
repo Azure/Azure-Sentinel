@@ -1,0 +1,129 @@
+Parser:
+  Title: Network Session ASIM parser for Corelight Zeek
+  Version: '0.2'
+  LastUpdated: Dec 11 2022
+Product:
+  Name: Corelight Zeek
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.4'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Corelight Zeek Connection logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionCorelightZeek
+EquivalentBuiltInParser: _ASim_NetworkSession_CorelightZeek
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let NetworkDirectionLookup = datatable(local_orig: bool, local_resp: bool, NetworkDirection: string)
+  [
+    false, true, 'Inbound',
+    true, false, 'Outbound',
+    true, true, 'Local',
+    false, false, 'Local'
+  ];
+  let ResultLookup = datatable (conn_state:string, EventResult:string, EventResultDetails:string, EventOriginalResultDetails:string, EventSeverity:string)
+  [ 
+     'S0', 'Success', '', 'Connection attempt seen, no reply', 'Informational',
+     'S1', 'Success', '', 'Connection established, not terminated', 'Informational',
+     'SF', 'Success', 'Terminated', 'Normal establishment and termination', 'Informational', // Note that this is the same symbol as for state S1. You can tell the two apart because for S1 there will not be any byte counts in the summary, while for SF there will be.
+     'REJ', 'Failure', 'Rejeced', 'Connection attempt rejected', 'Low',
+     'S2', 'Failure', 'Terminated', 'Connection established and close attempt by originator seen (but no reply from responder)', 'Low',
+     'S3', 'Failure', 'Terminated', 'Connection established and close attempt by responder seen (but no reply from originator)', 'Low',
+     'RSTO', 'Failure', 'Reset', 'Connection established, originator aborted (sent a RST)', 'Low',
+     'RSTR', 'Failure', 'Reset', 'Responder sent a RST', 'Low',
+     'RSTOS0', 'Failure', 'Reset', 'Originator sent a SYN followed by a RST, no SYN-ACK from the responder','Low',
+     'RSTRH', 'Failure', 'Reset', 'Responder sent a SYN ACK followed by a RST, no SYN from the originator','Low',
+     'SH', 'Failure', 'Timeout', 'Originator sent a SYN followed by a FIN, no SYN ACK from the responder', 'Low',
+     'SHR', 'Failure', 'Timeout', 'Responder sent a SYN ACK followed by a FIN, no SYN from the originator', 'Low',
+     'OTH', 'Success', '', 'No SYN seen, just midstream traffic', 'Informational'
+  ];
+  let parser=(disabled:bool=false){
+    Corelight_CL | where not(disabled)
+    | where (Message has '"_path":"conn"' or Message has '"conn_red"')
+    | project Message
+    | parse-kv Message as (
+        ['"_system_name"']:string,
+        ['"_write_ts"']:datetime,
+        ['"ts"']:datetime,
+        ['"uid"']:string,
+        ['"id.orig_h"']:string,
+        ['"id.orig_p"']:int,
+        ['"id.resp_h"']:string,
+        ['"id.resp_p"']:int,
+        ['"proto"']:string,
+        ['"service"']:string,
+        ['"duration"']:int,
+        ['"orig_bytes"']:long,
+        ['"resp_bytes"']:long,
+        ['"local_orig"']:bool,
+        ['"local_resp"']:bool,
+        ['"missed_bytes"']:long,
+        ['"history"']:string,
+        ['"orig_pkts"']:long,
+        ['"resp_pkts"']:long,
+        ['"orig_l2_addr"']:string,
+        ['"resp_l2_addr"']:string,
+        ['"community_id']:string,
+        ['"conn_state"']:string,
+        ['"vlan"']:string,
+        ['"inner_vlan"']:string
+    ) 
+    with (quote = '"')
+    | extend 
+        EventCount=int(1),
+        EventProduct="Zeek",
+        EventVendor="Corelight",
+        EventSchema = "NetworkSession",
+        EventSchemaVersion="0.2.4",
+        EventType="Flow"
+    | project-rename
+        EventStartTime= ['"ts"'],
+        EventEndTime = ['"_write_ts"'],
+        EventOriginalUid = ['"uid"'],
+        SrcIpAddr = ['"id.orig_h"'],
+        SrcPortNumber = ['"id.orig_p"'],
+        DstIpAddr = ['"id.resp_h"'],
+        DstPortNumber = ['"id.resp_p"'],
+        NetworkProtocol = ['"proto"'],
+        NetworkApplicationProtocol = ['"service"'],
+        NetworkDuration = ['"duration"'],
+        SrcBytes = ['"orig_bytes"'],
+        DstBytes = ['"resp_bytes"'],
+        local_orig = ['"local_orig"'],
+        local_resp = ['"local_resp"'],
+        FlowMissedBytes = ['"missed_bytes"'],
+        SrcPackets = ['"orig_pkts"'],
+        DstPackets = ['"resp_pkts"'],
+        SrcMacAddr = ['"orig_l2_addr"'],
+        DstMacAddr = ['"resp_l2_addr"'],
+        DstVlanId = ['"vlan"'],
+        SrcVlanId = ['"inner_vlan"'], 
+        conn_state = ['"conn_state"'],
+        FlowHistory = ['"history"'],
+        NetworkSessionId = ['"community_id'],
+        Dvc = ['"_system_name"']
+    | lookup NetworkDirectionLookup on local_orig, local_resp
+    | lookup ResultLookup on conn_state
+    | extend
+        NetworkBytes = SrcBytes + DstBytes,
+        NetworkPackets = SrcPackets + DstPackets,
+        NetworkProtocol = toupper(NetworkProtocol)
+    // Aliases
+    | extend 
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr,
+        Duration=NetworkDuration,
+        SessionId = NetworkSessionId,
+        InnerVlanId = SrcVlanId,
+        OuterVlanId = DstVlanId,
+        Dst=DstIpAddr
+    | project-away Message, local_orig, local_resp, conn_state
+  };
+  parser (disabled=disabled)

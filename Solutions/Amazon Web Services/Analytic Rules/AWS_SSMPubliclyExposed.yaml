@@ -1,0 +1,36 @@
+id: 75647b58-bcc8-4eb5-9658-46698d3fa153
+name: SSM document is publicly exposed
+description: |
+  'Detected a SSM document that is publicly exposed, which could lead to sensitive information leakage to the public. Verify the object configurations.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1526
+query: |
+  AWSCloudTrail
+  | where  EventName == "ModifyDocumentPermission" and isempty(ErrorCode) and isempty(ErrorMessage)
+  | where todynamic(parse_json(RequestParameters).["accountIdsToAdd"]) == '["all"]'
+  | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, ResponseElements, UserIdentityArn
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

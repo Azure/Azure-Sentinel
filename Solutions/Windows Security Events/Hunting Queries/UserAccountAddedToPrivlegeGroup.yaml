@@ -1,0 +1,51 @@
+id: 8d69a665-074a-443b-aae6-5dd9bdd5cfb1
+name: User Account added to Built in Domain Local or Global Group
+description: |
+  'User account was added to a privileged built in domain local group or global group such as the Enterprise Adminis, Cert Publishers or DnsAdmins
+  Be sure to verify this is an expected addition.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+  // For AD SID mappings - https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups
+  let WellKnownLocalSID = "S-1-5-32-5[0-9][0-9]$";
+  let WellKnownGroupSID = "S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$";
+  SecurityEvent 
+  | where AccountType == "User"
+  // 4728 - A member was added to a security-enabled global group
+  // 4732 - A member was added to a security-enabled local group
+  // 4756 - A member was added to a security-enabled universal group
+  | where EventID in ("4728", "4732", "4756")   
+  | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
+  // Exclude Remote Desktop Users group: S-1-5-32-555
+  | where TargetSid !in ("S-1-5-32-555")
+  | project StartTimeUtc = TimeGenerated, EventID, Activity, Computer, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid 
+  | extend timestamp = StartTimeUtc, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')), Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1

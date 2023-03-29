@@ -1,0 +1,58 @@
+id: 2be4ef67-a93f-4d8a-981a-88158cb73abd
+name: Microsoft COVID-19 file hash indicator matches
+description: |
+  'Identifies a match in CommonSecurityLog Event data from any FileHash published in the Microsoft COVID-19 Threat Intel Feed - as described at https://www.microsoft.com/security/blog/2020/05/14/open-sourcing-covid-threat-intelligence/'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )
+  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv"] with (format="csv"));
+  let fileHashIndicators = covidIndicators
+  | where isnotempty(FileHashValue);
+  // Handle matches against both lower case and uppercase versions of the hash:
+  (fileHashIndicators | extend FileHashValue = tolower(FileHashValue)
+  | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  |  join kind=innerunique (
+     CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
+     | where isnotempty(FileHash)
+     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+     )
+  on $left.FileHashValue == $right.FileHash
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by FileHashValue
+  | project CommonSecurityLog_TimeGenerated, FileHashValue, FileHashType, Description, ThreatType,
+  SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,
+  RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity
+  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: FileHashType
+version: 1.3.1
+kind: Scheduled

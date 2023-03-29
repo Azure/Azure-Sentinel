@@ -1,0 +1,63 @@
+id: 3fbc20a4-04c4-464e-8fcb-6667f53e4987
+name: Brute force attack against a Cloud PC
+description: |
+  'Identifies evidence of brute force activity against a Windows 365 Cloud PC by highlighting multiple authentication failures and by a successful authentication within a given time window.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let authenticationWindow = 20m;
+  let sensitivity = 2.5;
+  SigninLogs
+  | where AppDisplayName =~ "Windows Sign In"
+  | extend FailureOrSuccess = iff(ResultType in ("0", "50125", "50140", "70043", "70044"), "Success", "Failure")
+  | summarize FailureCount = countif(FailureOrSuccess=="Failure"), SuccessCount = countif(FailureOrSuccess=="Success"), IPAddresses = make_set(IPAddress,1000)
+                            by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName
+  | extend FailureSuccessDiff = FailureCount - SuccessCount
+  | where FailureSuccessDiff > 0
+  | summarize Diff = make_list(FailureSuccessDiff, 10000), TimeStamp = make_list(TimeGenerated, 10000) by UserDisplayName, UserPrincipalName//, tostring(IPAddresses)
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(Diff, sensitivity, -1, 'linefit')  
+  | mv-expand Diff to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)
+  | where Anomalies > 0
+  | summarize by UserDisplayName, UserPrincipalName
+  | join kind=leftouter (
+        SigninLogs
+        | where AppDisplayName =~ "Windows Sign In"
+        | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+        | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+        | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
+        | summarize StartTime = min(TimeGenerated), 
+                    EndTime = max(TimeGenerated), 
+                    IPAddress = make_set(IPAddress,100), 
+                    OS = make_set(OS,20), 
+                    Browser = make_set(Browser,20), 
+                    City = make_set(City,100), 
+                    ResultType = make_set(ResultType,100)
+                by UserDisplayName, UserPrincipalName
+    ) on UserDisplayName, UserPrincipalName
+  | extend IPAddressFirst = IPAddress[0]
+  | extend timestamp = StartTime, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddressFirst    
+version: 2.0.0
+kind: Scheduled

@@ -1,0 +1,830 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP & URL on fortiweb cloud",
+        "description": "This Playbook Provides the automation on blocking the suspicious/malicious IP and URL on fortiweb cloud waf",
+        "prerequisites": [
+            "1. FortiwebCloud Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
+            "2. API key. To get API Key, login into your FortiWeb cloud instance dashboard and navigate to Global --> system settings --> API Key."
+        ],
+        "postDeployment": [
+            "1. Once deployment is complete, you will need to authorize each connection.",
+            "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter API key or credentials --> Save"
+        ],
+        "prerequisitesDeployTemplateFile": "../../FortiWebCustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2022-08-18T00:00:00.000Z",
+        "entities": [ "ip", "url" ],
+        "tags": [ "Enrichment", "Fortiweb", "WAF", "Cloud WAF", "Block IP", "Block URL" ],
+        "support": {
+            "tier": "microsoft",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "FortiWeb-BlockIP-URL",
+            "type": "string"
+        },
+        "ep_id": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for ep_id"
+            }
+        },
+        "CustomConnectorName": {
+            "defaultValue": "FortiWebCloud",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the custom connector, if you want to change the default name, make sure to use the same in all FortiWebCloud automation playbooks as well"
+            }
+        }
+    },
+    "variables": {
+        "FortiwebConnectionName": "[concat('Fortiweb-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "ep_id": {
+                            "type": "string",
+                            "defaultValue": "[parameters('ep_id')]"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Add_comment_(IP)_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>Ip mentioned below has been blocked succesfully &nbsp;,<br>\n@{outputs('Creating_formatted_payload_')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Update_IP_Protection": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Creating_formatted_payload_": {
+                                    "runAfter": {
+                                        "converting_array_to_string_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": [
+                                        {
+                                            "ip": "@body('converting_array_to_string_variable')",
+                                            "name": "99",
+                                            "type": "block-ip"
+                                        }
+                                    ]
+                                },
+                                "Ip_members_combined_payload": {
+                                    "runAfter": {
+                                        "Creating_formatted_payload_": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@union(variables('oldipmembers'),outputs('Creating_formatted_payload_'))"
+                                },
+                                "Setting_value_of_OldGeoMembers_variable": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "OldGeoMembers",
+                                        "value": "@body('Get_IP_protection_2')?['result']?['IPProtection']?['geo-ip-block']?['members']"
+                                    }
+                                },
+                                "Setting_value_of_oldipmembers_variable": {
+                                    "runAfter": {
+                                        "Setting_value_of_OldGeoMembers_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "oldipmembers",
+                                        "value": "@body('Get_IP_protection_2')?['result']?['IPProtection']?['ip-list']?['members']"
+                                    }
+                                },
+                                "Update_IP_Protection": {
+                                    "runAfter": {
+                                        "Ip_members_combined_payload": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "IPProtection": {
+                                                "geo-ip-block": {
+                                                    "members": "@variables('OldGeoMembers')"
+                                                },
+                                                "ip-list": {
+                                                    "members": "@outputs('Ip_members_combined_payload')"
+                                                }
+                                            }
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['FortiWeb']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/v1/application/@{encodeURIComponent(parameters('ep_id'))}/ipprotection"
+                                    }
+                                },
+                                "converting_array_to_string_variable": {
+                                    "runAfter": {
+                                        "Setting_value_of_oldipmembers_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Join",
+                                    "inputs": {
+                                        "from": "@variables('tempvariable')",
+                                        "joinWith": ","
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "declaring_oldipmembers_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('tempvariable'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_6": {
+                            "actions": {
+                                "Add_comment_(URL)_to_incident_(V3)_2": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>URL's &nbsp;has been blocked succesfully .<br>\n</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Update_URL_Access": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "For_each_-_creating_payload": {
+                                    "foreach": "@variables('tempurl')",
+                                    "actions": {
+                                        "Append_to_array_variable_6": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "urlpayload",
+                                                "value": {
+                                                    "action": "alert_deny",
+                                                    "name": "@items('For_each_-_creating_payload')",
+                                                    "reg-exp": "@items('For_each_-_creating_payload')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                },
+                                "Update_URL_Access": {
+                                    "runAfter": {
+                                        "combining_all_URL's_-_final_payload": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "urlaccess": "@outputs('combining_all_URL''s_-_final_payload')"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['FortiWeb']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/v1/application/@{encodeURIComponent(parameters('ep_id'))}/urlaccess"
+                                    }
+                                },
+                                "combining_all_URL's_-_final_payload": {
+                                    "runAfter": {
+                                        "For_each_-_creating_payload": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@union(variables('urlpayload'),body('Get_URL_Access')?['result']?['urlaccess'])"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_-_filtering_URL's": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('tempurl'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Declaring_NewURL_variable": {
+                            "runAfter": {
+                                "Declaring_newIp_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "newurl",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Declaring_newIp_variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "newIp",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Declaring_oldblockip_variable": {
+                            "runAfter": {
+                                "Declaring_NewURL_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "oldblockip",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_each_-_filtering_IP's": {
+                            "foreach": "@variables('newIp')",
+                            "actions": {
+                                "Condition_3": {
+                                    "actions": {
+                                        "Append_to_array_variable_2": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "tempvariable",
+                                                "value": "@items('For_each_-_filtering_IP''s')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "contains": [
+                                                        "@body('Join')",
+                                                        "@items('For_each_-_filtering_IP''s')"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Join": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_-_filtering_URL's": {
+                            "foreach": "@variables('newurl')",
+                            "actions": {
+                                "Condition_5": {
+                                    "actions": {
+                                        "Append_to_array_variable_5": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "tempurl",
+                                                "value": "@items('For_each_-_filtering_URL''s')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "contains": [
+                                                        "@variables('oldurl')",
+                                                        "@items('For_each_-_filtering_URL''s')"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_-get_all_old_URL_blocked": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_-_get_all_new_blocking_ip's": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "Switch": {
+                                    "runAfter": {},
+                                    "cases": {
+                                        "Case": {
+                                            "case": "Ip",
+                                            "actions": {
+                                                "create_array_of_IP's_-_blocking": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "newIp",
+                                                        "value": "@items('For_each_-_get_all_new_blocking_ip''s')?['properties']?['address']"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@items('For_each_-_get_all_new_blocking_ip''s')['kind']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_-_get_all_new_blocking_url's": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "Switch_2": {
+                                    "runAfter": {},
+                                    "cases": {
+                                        "Case": {
+                                            "case": "Url",
+                                            "actions": {
+                                                "Append_to_array_variable_3": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "newurl",
+                                                        "value": "@items('For_each_-_get_all_new_blocking_url''s')?['properties']?['friendlyName']"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@items('For_each_-_get_all_new_blocking_url''s')['kind']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_-get_all_old_URL_blocked": {
+                            "foreach": "@body('Get_URL_Access')?['result']?['urlaccess']",
+                            "actions": {
+                                "Condition_4": {
+                                    "actions": {
+                                        "Append_to_array_variable_4": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "oldurl",
+                                                "value": "@items('For_each_-get_all_old_URL_blocked')?['reg-exp']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@items('For_each_-get_all_old_URL_blocked')?['action']",
+                                                    "deny"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_URL_Access": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_IP_protection_2": {
+                            "runAfter": {
+                                "For_each_-_get_all_new_blocking_ip's": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['FortiWeb']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v1/application/@{encodeURIComponent(parameters('ep_id'))}/ipprotection"
+                            }
+                        },
+                        "Get_URL_Access": {
+                            "runAfter": {
+                                "For_each_-_get_all_new_blocking_url's": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['FortiWeb']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v1/application/@{encodeURIComponent(parameters('ep_id'))}/urlaccess"
+                            }
+                        },
+                        "Get_all_old_blocking_ip's": {
+                            "foreach": "@body('Get_IP_protection_2')?['result']?['IPProtection']?['ip-list']?['members']",
+                            "actions": {
+                                "Condition_2": {
+                                    "actions": {
+                                        "Append_to_array_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "oldblockip",
+                                                "value": "@items('Get_all_old_blocking_ip''s')?['ip']"
+                                            }
+                                        },
+                                        "Compose": {
+                                            "runAfter": {
+                                                "Append_to_array_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@variables('oldblockip')"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('Get_all_old_blocking_ip''s')?['type']",
+                                                    "block-ip"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_IP_protection_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "declaring_oldURL_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tempvariable",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Join": {
+                            "runAfter": {
+                                "Get_all_old_blocking_ip's": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Join",
+                            "inputs": {
+                                "from": "@variables('oldblockip')",
+                                "joinWith": ","
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "declaring_url_payload": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "properties": {
+                                                "properties": {
+                                                    "address": {
+                                                        "type": "string"
+                                                    },
+                                                    "friendlyName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "id",
+                                            "type",
+                                            "kind",
+                                            "properties"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "declaring_OldGeoMembers_variable": {
+                            "runAfter": {
+                                "For_each_-_filtering_IP's": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "OldGeoMembers",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "declaring_oldURL_variable": {
+                            "runAfter": {
+                                "Declaring_oldblockip_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "oldurl",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "declaring_oldipmembers_variable": {
+                            "runAfter": {
+                                "declaring_OldGeoMembers_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "oldipmembers",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "declaring_url_payload": {
+                            "runAfter": {
+                                "initializing_temp_url_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "urlpayload",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "initializing_temp_url_variable": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tempurl",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "FortiWeb": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('FortiwebConnectionName'))]",
+                                "connectionName": "[variables('FortiwebConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "testfortiwebsoar",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('FortiwebConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('FortiwebConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('FortiwebConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

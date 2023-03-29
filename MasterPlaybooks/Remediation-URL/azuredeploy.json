@@ -1,0 +1,651 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "MasterPlaybookName": {
+      "defaultValue": "MasterPlaybook_URL_Remidiation",
+      "type": "String",
+      "metadata": {
+        "description": "Enter name for master playbook without spaces"
+      },
+      "minLength": 3
+    },
+    "ZscalerPlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for Zscaler playbook without spaces"
+      }
+    },
+    "ForcepointPlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for Forcepoint playbook without spaces"
+      }
+    },
+    "FortinetPlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for Fortinet playbook without spaces"
+      }
+    },
+    "CiscoMerakiPlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for Cisco Meraki playbook without spaces"
+      }
+    }
+    ,
+    "PaloAltoPanOsPlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for Palo Alto PAN OS playbook without spaces"
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentienl-',parameters('MasterPlaybookName'))]",
+    "Defaultplaybookname": "MSDefaultNestedPlaybook",
+    "ZscalerID": "[ if(not(empty(parameters('ZscalerPlaybookName'))),parameters('ZscalerPlaybookName'),variables('Defaultplaybookname'))]",
+    "ForcepointID": "[ if(not(empty(parameters('ForcepointPlaybookName'))),parameters('ForcepointPlaybookName'),variables('Defaultplaybookname'))]",
+    "FortinetID": "[ if(not(empty(parameters('FortinetPlaybookName'))),parameters('FortinetPlaybookName'),variables('Defaultplaybookname'))]",
+    "CiscoMerakiID": "[ if(not(empty(parameters('CiscoMerakiPlaybookName'))),parameters('CiscoMerakiPlaybookName'),variables('Defaultplaybookname'))]",
+    "PaloAltoPanOsID": "[ if(not(empty(parameters('PaloAltoPanOsPlaybookName'))),parameters('PaloAltoPanOsPlaybookName'),variables('Defaultplaybookname'))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2017-07-01",
+      "location": "[resourceGroup().location]",
+      "name": "[variables('Defaultplaybookname')]",
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "Response": {
+              "runAfter": {},
+              "type": "Response",
+              "kind": "Http",
+              "inputs": {
+                "statusCode": 200
+              }
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {},
+          "parameters": {},
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "parameters": {}
+      },
+      "type": "Microsoft.Logic/workflows"
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('MasterPlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Logic/workflows', variables('Defaultplaybookname'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Zscaler": {
+              "actions": {
+                "Append_Zscaler_status_code": {
+                  "runAfter": {
+                    "Zscaler-Add-Url-To-Category": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('Zscaler-Add-Url-To-Category')['statusCode']"
+                  }
+                },
+                "Zscaler-Add-Url-To-Category": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "URLs": "@body('Entities_-_Get_URLs')?['URLs']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('ZscalerID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_Zscaler_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_Zscaler-Add-Url-To-Category": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('Zscaler-Add-Url-To-Category')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_Zscaler_status_code": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@Outputs('Zscaler-Add-Url-To-Category')?['headers']?['x-ms-workflow-name']",
+                            "MSDefaultNestedPlaybook"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
+            "Forcepoint": {
+              "actions": {
+                "Append_Forcepoint_status_code": {
+                  "runAfter": {
+                    "Forcepoint-BlockURLs-ForcepointNGFW": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('Forcepoint-BlockURLs-ForcepointNGFW')['statusCode']"
+                  }
+                },
+                "Forcepoint-BlockURLs-ForcepointNGFW": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "URLs": "@body('Entities_-_Get_URLs')?['URLs']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('ForcepointID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_Forcepoint_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_Forcepoint-BlockURLs-ForcepointNGFW": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('Forcepoint-BlockURLs-ForcepointNGFW')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_Forcepoint_status_code": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@Outputs('Forcepoint-BlockURLs-ForcepointNGFW')?['headers']?['x-ms-workflow-name']",
+                            "MSDefaultNestedPlaybook"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
+            "Fortinet": {
+              "actions": {
+                "Append_Fortinet_status_code": {
+                  "runAfter": {
+                    "Fortinet-FortiGate-ResponseOnBlockURL": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('Fortinet-FortiGate-ResponseOnBlockURL')['statusCode']"
+                  }
+                },
+                "Fortinet-FortiGate-ResponseOnBlockURL": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "URLs": "@body('Entities_-_Get_URLs')?['URLs']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('FortinetID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_Fortinet_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_Fortinet-FortiGate-ResponseOnBlockURL": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('Fortinet-FortiGate-ResponseOnBlockURL')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_Fortinet_status_code": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@Outputs('Fortinet-FortiGate-ResponseOnBlockURL')?['headers']?['x-ms-workflow-name']",
+                            "MSDefaultNestedPlaybook"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
+            "CiscoMeraki": {
+              "actions": {
+                "Append_CiscoMerakiPlaybook_status_code": {
+                  "runAfter": {
+                    "CiscoMerakiPlaybook": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('CiscoMerakiPlaybook')['statusCode']"
+                  }
+                },
+                "CiscoMerakiPlaybook": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "URLs": "@body('Entities_-_Get_URLs')?['URLs']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('CiscoMerakiID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_CiscoMerakiPlaybook_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_CiscoMerakiPlaybook": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('CiscoMerakiPlaybook')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_CiscoMerakiPlaybook_status_code": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@Outputs('CiscoMerakiPlaybook')?['headers']?['x-ms-workflow-name']",
+                            "MSDefaultNestedPlaybook"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
+            "PaloAltoPanOs": {
+              "actions": {
+                "Append_PaloAltoPanOsPlaybook_status_code": {
+                  "runAfter": {
+                    "PaloAltoPanOsPlaybook": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('PaloAltoPanOsPlaybook')['statusCode']"
+                  }
+                },
+                "PaloAltoPanOsPlaybook": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "URLs": "@body('Entities_-_Get_URLs')?['URLs']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('PaloAltoPanOsID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_PaloAltoPanOsPlaybook_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_PaloAltoPanOsPlaybook": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('PaloAltoPanOsPlaybook')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_PaloAltoPanOsPlaybook_status_code": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@Outputs('PaloAltoPanOsPlaybook')?['headers']?['x-ms-workflow-name']",
+                            "MSDefaultNestedPlaybook"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
+            "Condition_to_check_any_one_of_the_playbook_failed_before_closing_the_incident": {
+              "actions": {
+                "Update_incident": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "classification": {
+                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
+                      },
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "status": "Closed"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "put",
+                    "path": "/Incidents"
+                  }
+                }
+              },
+              "runAfter": {
+                "Filter_Success_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "lessOrEquals": [
+                      "@length(body('Filter_Success_Status_Codes'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "Entities_-_Get_URLs": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/url"
+              }
+            },
+            "Filter_Success_Status_Codes": {
+              "runAfter": {
+                "Zscaler": [
+                  "Succeeded"
+                ],
+                "Forcepoint": [
+                  "Succeeded"
+                ],
+                "Fortinet": [
+                  "Succeeded"
+                ],
+                "CiscoMeraki": [
+                  "Succeeded"
+                ],
+                "PaloAltoPanOs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@variables('StatusCodes')",
+                "where": "@not(equals(item(), 200))"
+              }
+            },
+            "Initialize_variable_Status_Codes": {
+              "runAfter": {
+                "Entities_-_Get_URLs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "StatusCodes",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

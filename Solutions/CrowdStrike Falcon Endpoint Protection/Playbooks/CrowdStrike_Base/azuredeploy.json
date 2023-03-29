@@ -1,0 +1,332 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Crowdstrike API authentication", 
+    "description": "This is Crowdstrike base template which is used to generate access token and this is used in actual crowdstrike templates. This playbook gets triggered when a new Http request is created and this is being called from other Crowdstrike playbooks.",
+    "prerequisites": [
+      "1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2Fquickstarts%2Fmicrosoft.keyvault%2Fkey-vault-secret-create%2Fazuredeploy.json)",
+      "2. Add Crowdstrike Client ID and Client Secret in Key vault secrets and capture the keys which are required during the template deployment."
+    ],
+    "lastUpdateTime": "2022-07-25T00:00:00.000Z", 
+    "entities": [],
+    "tags": ["Utilities"], 
+    "support": {
+        "tier": "microsoft" 
+    },
+    "source": { 
+      "type": "solution",
+      "name": "CrowdStrike Falcon Endpoint Protection"
+    }, 
+    "postDeployment": [
+      "**a. Authorize playbook**", 
+      "Once deployment is complete, we need to add the playbook in the access policy of the Keyvault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)"
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Crowdstrike API authentication",
+        "notes": [
+        "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "keyvault_Name": {
+      "type": "string",
+      "defaultValue": "Crowdstrikekey",
+      "metadata": {
+        "description": "Name of the key vault"
+      }
+    },
+    "ClientID": {
+      "type": "string",
+      "defaultValue": "ClientID",
+      "metadata": {
+        "description": "The client Id from key vault"
+      }
+    },
+    "ClientSecret": {
+      "type": "string",
+      "defaultValue": "ClientSecret",
+      "metadata": {
+        "description": "The client secret from key vault"
+      }
+    },
+    "Service_Endpoint": {
+      "defaultValue": "https://api.crowdstrike.com",
+      "type": "String",
+      "metadata": {
+        "description": "Enter the service endpoint of crowdstrike ex: {https://crowdsrtikeurl.com}"
+      }
+    },
+    "PlaybookName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "CrowdStrike_Base",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    }
+  },
+  "variables": {
+    "keyvault_Connection_Name": "keyvault" },
+  "resources": [
+    {
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {}
+            }
+          },
+          "actions": {
+            "Get_secret_-_Client_ID": {
+              "runAfter": {
+                "Initialize_variable_ClientSecret": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['keyvault']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent(variables('ClientID'))}/value"
+              },
+              "description": "This gets the secret Client Id from the keyvault",
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs",
+                    "outputs"
+                  ]
+                }
+              }
+            },
+            "Get_secret_-_Client_Secret": {
+              "runAfter": {
+                "Get_secret_-_Client_ID": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['keyvault']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent(variables('ClientSecret'))}/value"
+              },
+              "description": "This gets the Clientsecret from the keyvault",
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs",
+                    "outputs"
+                  ]
+                }
+              }
+            },
+            "HTTP_-_Get_Access_Token": {
+              "runAfter": {
+                "Initialize_variable_Falcon_Host_URL": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "body": "client_id=@{body('Get_secret_-_Client_ID')?['value']}&client_secret=@{body('Get_secret_-_Client_Secret')?['value']}",
+                "headers": {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                  "accept": "application/json"
+                },
+                "method": "POST",
+                "uri": "@{variables('FalconHost')}/oauth2/token"
+              },
+              "description": "This calls the crowdstrike to generate the access token",
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs",
+                    "outputs"
+                  ]
+                }
+              }
+            },
+            "Initialize_variable_ClientID": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ClientID",
+                    "type": "string",
+                    "value": "[parameters('ClientID')]"
+                  }
+                ]
+              }
+            },
+            "Initialize_variable_ClientSecret": {
+              "runAfter": {
+                "Initialize_variable_ClientID": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ClientSecret",
+                    "type": "string",
+                    "value": "[parameters('ClientSecret')]"
+                  }
+                ]
+              }
+            },
+            "Initialize_variable_Falcon_Host_URL": {
+              "runAfter": {
+                "Get_secret_-_Client_Secret": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "FalconHost",
+                    "type": "string",
+                    "value": "[parameters('Service_Endpoint')]"
+                  }
+                ]
+              },
+              "description": "This is to hold the Falcon Host URL"
+            },
+            "Parse_JSON_-_Access_Token_Response": {
+              "runAfter": {
+                "HTTP_-_Get_Access_Token": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('HTTP_-_Get_Access_Token')",
+                "schema": {
+                  "properties": {
+                    "access_token": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "integer"
+                    },
+                    "token_type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "description": "prepare json format for get access token response",
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs"
+                  ]
+                }
+              }
+            },
+            "Response": {
+              "runAfter": {
+                "Parse_JSON_-_Access_Token_Response": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Response",
+              "kind": "Http",
+              "inputs": {
+                "body": {
+                  "AccessToken": "Bearer @{body('Parse_JSON_-_Access_Token_Response')?['access_token']}",
+                  "FalconHost": "@{variables('FalconHost')}"
+                },
+                "statusCode": 200
+              },
+              "description": "This holds the access token and falcon host URL"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "keyvault": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'keyvault')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault_Connection_Name'))]",
+                "connectionName": "[variables('keyvault_Connection_Name')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+
+              }
+            }
+          }
+        }
+      },
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('keyvault_Connection_Name'))]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "Crowdstrike-Authentication",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
+      "identity": {
+        "type": "SystemAssigned",
+        "principalId": "",
+        "tenantId": ""
+
+
+      },
+      "apiVersion": "2016-06-01"
+
+    },
+    {
+      "type": "Microsoft.Web/Connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('keyvault_Connection_Name')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'keyvault')]"
+        },
+        "displayName": "[variables('keyvault_Connection_Name')]",
+        "parameterValueType": "Alternative",
+        "AlternativeParameterValues": {
+          "vaultName": "[parameters('keyvault_Name')]"
+
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}

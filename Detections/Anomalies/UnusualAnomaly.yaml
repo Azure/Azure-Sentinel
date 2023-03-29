@@ -1,0 +1,54 @@
+id: d0255b5f-2a3c-4112-8744-e6757af3283a
+name: Unusual Anomaly
+description: |
+  'Anomaly Rules generate events in the Anomalies table. This scheduled rule tries to detect Anomalies that are not usual, they could be a type of Anomaly that has recently been activated, or an infrequent type. The detected Anomaly should be reviewed, if it is relevant enough, eventually a separate scheduled Analytics Rule could be created specifically for that Anomaly Type, so an alert and/or incident is generated everytime that type of Anomaly happens.'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 4d
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+techniques: []
+query: |
+  // You can leave out Anomalies that are already monitored through other Analytics Rules
+  //let _MonitoredRules = dynamic(["TestAlertName"]);
+  let query_frequency = 1h;
+  let query_lookback = 3d;
+  Anomalies
+  | where TimeGenerated > ago(query_frequency)
+  //| where not(RuleName has_any (_MonitoredRules))
+  | join kind = leftanti (
+      Anomalies
+      | where TimeGenerated between (ago(query_frequency + query_lookback)..ago(query_frequency))
+      | distinct RuleName
+  ) on RuleName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails:
+      - DisplayName
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: Unusual Anomaly - {{RuleName}}
+  alertTacticsColumnName: Tactics
+sentinelEntitiesMappings:
+  - columnName: Entities
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Jose Sebastian Canos
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

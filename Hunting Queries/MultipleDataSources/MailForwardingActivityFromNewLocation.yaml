@@ -1,0 +1,75 @@
+id: a689a21c-9369-47e6-b5fa-e1f65045c1cf
+name: New Location Sign in with Mail forwarding activity
+description: |
+  'This query helps detect new azure active directory sign in from a new location correlating with Office Activity data highlighting cases where user mails are being forwarded and shows if  it is being forwarded to external domains as well.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Exchange)
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - Collection
+  - Exfiltration
+  - InitialAccess
+relevantTechniques:
+  - T1114
+  - T1020
+  - T1078
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let countThreshold = 1;
+  SigninLogs
+  | where TimeGenerated between(starttime..endtime)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), perIdentityAuthCount = count()
+  by UserPrincipalName, locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/",
+  tostring(LocationDetails["city"]), ";" , tostring(LocationDetails["geoCoordinates"]))
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), distinctAccountCount = count(), identityList=makeset(UserPrincipalName) by locationString
+  | extend identityList = iff(distinctAccountCount<10, identityList, "multiple (>10)")
+  | join kind= anti (
+  SigninLogs
+  | where TimeGenerated between(lookback..starttime)
+  | project locationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/",
+  tostring(LocationDetails["city"]), ";" , tostring(LocationDetails["geoCoordinates"]))
+  | summarize priorCount = count() by locationString
+  )
+  on locationString
+  | where distinctAccountCount > countThreshold
+  | mv-expand todynamic(identityList)
+  | extend timestamp = StartTime, AccountCustomEntity = identityList
+  | extend AccountCustomEntity = tostring(AccountCustomEntity)
+  | join kind=inner
+  (
+   OfficeActivity
+  | where (Operation =~ "Set-Mailbox" and Parameters contains 'ForwardingSmtpAddress')
+  or (Operation in~ ('New-InboxRule','Set-InboxRule') and (Parameters contains 'ForwardTo' or Parameters contains 'RedirectTo'))
+  | extend parsed=parse_json(Parameters)
+  | extend fwdingDestination_initial = (iif(Operation=~"Set-Mailbox", tostring(parsed[1].Value), tostring(parsed[2].Value)))
+  | where isnotempty(fwdingDestination_initial)
+  | extend fwdingDestination = iff(fwdingDestination_initial has "smtp", (split(fwdingDestination_initial,":")[1]), fwdingDestination_initial )
+  | parse fwdingDestination with * '@' ForwardedtoDomain
+  | parse UserId with *'@' UserDomain
+  | extend subDomain = ((split(strcat(tostring(split(UserDomain, '.')[-2]),'.',tostring(split(UserDomain, '.')[-1])), '.') [0]))
+  | where ForwardedtoDomain !contains subDomain
+  | extend Result = iff( ForwardedtoDomain != UserDomain ,"Mailbox rule created to forward to External Domain", "Forward rule for Internal domain")
+  | extend ClientIPAddress = case( ClientIP has ".", tostring(split(ClientIP,":")[0]), ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))), ClientIP )
+  | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, OriginatingServer, OfficeObjectId, fwdingDestination
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIPAddress, HostCustomEntity = OriginatingServer
+  | extend AccountCustomEntity = tostring(AccountCustomEntity)
+  ) on AccountCustomEntity
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

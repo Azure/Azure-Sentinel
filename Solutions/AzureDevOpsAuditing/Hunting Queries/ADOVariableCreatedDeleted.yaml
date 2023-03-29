@@ -1,0 +1,35 @@
+id: 0fa523de-ce23-49d0-87a4-e890028e1e50
+name: Azure DevOps - Variable Created and Deleted
+description: |
+  'Variables can be used at various stages of a pipeline to inject static variables. Depending on the build process these variables could be added by an attacker to get a build process to conduct an unwanted action such as communicating with an attacker-controlled endpoint or injecting values into code. This query looks for variables that are added and then deleted in a short space of time. This is not normal expected behavior and could ben an indicator of attacker creating elements and then covering tracks. If this hunting query produces only a small number of events in an environment it could be promoted to a detection.'
+requiredDataConnectors: []
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1578
+query: |
+  AzureDevOpsAuditing
+  | where OperationName =~ "Library.VariableGroupModified"
+  | extend variables = Data.Variables
+  | extend VariableGroupName = tostring(Data.VariableGroupName)
+  | join (AzureDevOpsAuditing
+  | where OperationName =~ "Library.VariableGroupModified"
+  | extend variables = Data.Variables
+  | extend VariableGroupName = tostring(Data.VariableGroupName)) on VariableGroupName
+  | extend len = array_length(bag_keys(variables))
+  | extend len1 = array_length(bag_keys(variables1))
+  | where (TimeGenerated < TimeGenerated1 and len > len1) or (TimeGenerated1 > TimeGenerated and len1 < len)
+  | project-away len, len1
+  | extend VariablesRemoved = set_difference(bag_keys(variables), bag_keys(variables1)) 
+  | project-rename TimeCreated=TimeGenerated, TimeDeleted = TimeGenerated1, CreatingUser = ActorUPN, DeletingUser = ActorUPN1, CreatingIP = IpAddress, DeletingIP = IpAddress1, CreatingUA = UserAgent, DeletingUA = UserAgent1
+  | project-reorder VariableGroupName, TimeCreated, TimeDeleted, VariablesRemoved, CreatingUser, CreatingIP, CreatingUA, DeletingUser, DeletingIP, DeletingUA
+  | extend timestamp = TimeDeleted, AccountCustomEntity = DeletingUser, IPCustomEntity = DeletingIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

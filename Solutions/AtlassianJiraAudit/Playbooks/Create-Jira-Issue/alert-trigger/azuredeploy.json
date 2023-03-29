@@ -1,0 +1,184 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Create Jira Issue alert-trigger",
+        "description": "This playbook will open a Jira Issue when a new incident is opened in Microsoft Sentinel.",
+        "prerequisites": "We will need following data to make Jira connector: 1. Jira instance (ex. xyz.atlassian.net); 2. Jira API; 3. Username.; After deployment assign Microsoft Sentinel Reader role to the Playbooks Managed Identity.",
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
+        "Post-deployment": [
+            "Go to Playbook edit mode and fix Jira connection with data from Prerequisite. \n\n When connection is fixed, choose your: \n\n 1. Jira Project (where you want to sync Microsoft Sentinel incidents to) and \n\n 2. Issue Type Id (Microsoft Sentinel incident issue type in Jira - Task, Story, Bug,...)"
+        ],
+        "entities": [],
+        "tags": [
+            "Sync"
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Yaniv Shasha and Benjamin Kovacevic"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Create Jira Issue alert-trigger",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CreateJiraIssue",
+            "type": "string",
+            "metadata": {
+                "description": "Alert trigger"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "JiraConnectionName": "[concat('jira-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('jiraConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('jiraConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/jira')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "CreateJiraIssue-Alert",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('JiraConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Create_a_new_issue": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "fields": {
+                                        "description": "Incident description: @{body('Alert_-_Get_incident')?['properties']?['description']};\nSeverity: @{body('Alert_-_Get_incident')?['properties']?['severity']};\nIncident URL:  @{body('Alert_-_Get_incident')?['properties']?['incidentUrl']}",
+                                        "issuetype": {
+                                            "id": "10007"
+                                        },
+                                        "summary": "@body('Alert_-_Get_incident')?['properties']?['title']"
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['Jira']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/issue",
+                                "queries": {
+                                    "projectKey": "SOC"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "Jira": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('jiraConnectionName'))]",
+                                "connectionName": "[variables('jiraConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/jira')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

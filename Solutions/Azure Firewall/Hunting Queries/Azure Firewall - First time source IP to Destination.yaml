@@ -1,0 +1,38 @@
+id: f055e82b-5ef6-4395-bc9e-99f7e451343a
+name: First Time Source IP to Destination
+description: |
+  'Identifies the first time a source IP communicates with a destination based on a configurable learning period. This can indicate malicious communication (C2) from machines that never accessed the destination before. This query can also be used for hunting destinations that were never accessed before in the organization, and correlating it with different alerts for higher confidence.
+  
+  Configurable Parameters:
+  
+  - Learning period time - learning period for threshold calculation in days. Default is set to 7.'
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  let LearningPeriod = 7d;
+  let RunTime = 1h;
+  let StartLearningPeriod = LearningPeriod + RunTime;
+  let EndRunTime = RunTime - 1d;
+  let TrafficLogs = (AzureDiagnostics
+  | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
+  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport "." *
+  | where isnotempty(dsturl) and isnotempty(srcip));
+  let LearningSrcIpToDstIpPort = (TrafficLogs
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | summarize LearningSrcToDsts = make_set(dsturl,10000) by srcip);
+  let AlertTimeSrcIpToDstIpPort = (TrafficLogs
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | extend AlertTimeDst = dsturl
+  | distinct AlertTimeDst ,srcip);
+  AlertTimeSrcIpToDstIpPort
+  | join kind=leftouter (LearningSrcIpToDstIpPort) on srcip
+  | mv-expand LearningSrcToDsts
+  | where AlertTimeDst != LearningSrcToDsts
+  | summarize LearningSrcToDsts = make_set(LearningSrcToDsts,10000) by srcip, AlertTimeDst
+  | extend IPCustomEntity = srcip, URLCustomEntity = AlertTimeDst

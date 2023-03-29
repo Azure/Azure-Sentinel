@@ -1,0 +1,25 @@
+id: fac7874e-00de-4509-85f2-9aa02ea9887f
+name: KNOTWEED-Downloading new file using Curl
+description: |
+  'This query looks for new files being downloaded using Curl.'
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+tactics:
+relevantTechniques:
+query: |
+  let known_files = DeviceNetworkEvents
+  | where Timestamp between (ago(7d)..ago(1d))
+  | where InitiatingProcessFileName has "curl"
+  | extend url = extract("http[s]?:\\/\\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+", 0,InitiatingProcessCommandLine)
+  | extend ip = extract("(\\b25[0-5]|\\b2[0-4][0-9]|\\b[01]?[0-9][0-9]?)(\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}[^ ]*", 0, InitiatingProcessCommandLine)
+  | extend remote_file = iif(isnotempty(url), url, ip)
+  | summarize by remote_file;
+  DeviceNetworkEvents
+  | where Timestamp > ago(1d)
+  | where InitiatingProcessFileName has "curl"
+  | extend url = extract("http[s]?:\\/\\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+", 0,InitiatingProcessCommandLine)
+  | extend ip = extract("(\\b25[0-5]|\\b2[0-4][0-9]|\\b[01]?[0-9][0-9]?)(\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}[^ ]*", 0, InitiatingProcessCommandLine)
+  | extend remote_file = iif(isnotempty(url), url, ip)
+  | where remote_file !in (known_files)

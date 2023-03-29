@@ -1,0 +1,54 @@
+id: 186970ee-5001-41c1-8c73-3178f75ce96a
+name: AV detections related to Europium actors
+description: |
+  'This query looks for Microsoft Defender AV detections related to  Europium actor. In Microsoft Sentinel the SecurityAlerts table includes only the Device Name of the affected device, 
+   this query joins the DeviceInfo table to clearly connect other information such as Device group, ip, etc. This would allow the Microsoft Sentinel analyst to have more context related to the alert, if available.
+   Reference: https://www.microsoft.com/security/blog/2022/09/08/microsoft-investigates-iranian-attacks-against-the-albanian-government '
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - SecurityAlert
+      - DeviceInfo
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1486
+tags:
+  -  Europium
+query: |
+  let Europium_threats = dynamic(["TrojanDropper:ASP/WebShell!MSR", "Trojan:Win32/BatRunGoXml", "DoS:Win64/WprJooblash", "Ransom:Win32/Eagle!MSR", "Trojan:Win32/Debitom.A"]);
+  DeviceInfo
+  | extend DeviceName = tolower(DeviceName)
+  | join kind=inner ( SecurityAlert
+  | where ProviderName == "MDATP"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)
+  | where ThreatName in~ (Europium_threats) or ThreatFamilyName in~ (Europium_threats)
+  | extend CompromisedEntity = tolower(CompromisedEntity)
+  ) on $left.DeviceName == $right.CompromisedEntity
+  | summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: CompromisedEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIP
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ajeet Prakash
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Intelligence" ]

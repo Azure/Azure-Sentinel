@@ -1,0 +1,44 @@
+id: 5a3615af-21c9-427e-8bf1-ed2350992bb4
+name: Crash dump disabled on host
+description: |
+  'This detection looks the prevention of crash dumps being created. This can be used to limit reporting by malware, look for suspicious processes setting this registry key.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1070
+query: |
+  SecurityEvent
+    | where EventID == 4657
+    | parse ObjectName with "\\REGISTRY\\" KeyPrefix "\\" RegistryKey
+    | project-reorder RegistryKey
+    | where RegistryKey has "SYSTEM\\CurrentControlSet\\Control\\CrashControl"
+    | where ObjectValueName =~ "CrashDumpEnabled"
+    | extend  RegistryValueData = iff (OperationType == "%%1906", OldValue, NewValue)
+    | where RegistryValueData == 0
+    | extend NTDomain = tostring(split(Account,'\\',0)[0]), Name = tostring(split(Account,'\\',1)[0])
+    | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+    | extend Account_0_Name = Name
+    | extend Account_0_NTDomain = NTDomain
+    | extend Host_0_HostName = HostName
+    | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain     
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName 
+      - identifier: DnsDomain
+        columnName: DnsDomain         
+version: 2.0.1
