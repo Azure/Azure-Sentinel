@@ -116,6 +116,8 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                             succMessage += "Successfully completed blob {}.\n".format(link)
                             succCount = succCount + 1
                         except Exception as err:
+                            logging.info('Error while Process file execution happened. Error: {}'.format(str(err)))
+                            logging.error('Error while Process file execution happened. Error: {}'.format(str(err)))
                             connTable.ingest_table_data(link,bucket,"FAILURE")
                             errorMessage += "Could not process the blob {}.\n".format(link)
                             failureCount = failureCount + 1                    
@@ -169,18 +171,22 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                         if line:
                             try:
                                 event = json.loads(line)
+                                await sentinelHelper.send_events(event)
                             except ValueError as e:
+                                logging.info('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
                                 logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
                                 raise e
-                            await sentinelHelper.send_events(event)
+                            
                 s = line
             if s:
                 try:
                     event = json.loads(line)
+                    await sentinelHelper.send_events(event)
                 except ValueError as e:
+                    logging.info('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
                     logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
                     raise e
-                await sentinelHelper.send_events(event)
+                
             await sentinelHelper.flush_all()
             total_events_success += sentinelHelper.get_success_events()
             total_events_failure += sentinelHelper.get_failure_events()
@@ -188,6 +194,8 @@ async def process_file(bucket, s3_path, client, semaphore, session):
             if total_events_failure:
                 logging.info("Failure : {} events failed".format(s3_path,total_events_failure))
         except Exception as e:
+            logging.info("Processing file {} was failed. Error: {}".format(s3_path,e))
+            logging.error("Processing file {} was failed. Error: {}".format(s3_path,e))
             logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
 
 class SentinelTableHelper:
