@@ -1,7 +1,7 @@
 id: e7bfbc3f-98c7-4aaa-a64c-de9c058b86b2
-name: Suspicious Windows Login outside normal hours
+name: Suspicious Windows Login Outside Normal Hours
 description: |
-  Looking for suspiciopus interactive logon events which are outside normal logon hours for the user. Current day logon events are comapred with last 14 days activity
+  This query searches for suspiciopus interactive logon events which are outside normal logon hours for the user. Current day logon events are comapred with last 14 days activity
   and filtered for events which are above or below of historical logon hour range seen for the user.
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -16,7 +16,6 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 14d;
@@ -96,7 +95,7 @@ query: |
   );
   AllLogonEvents
   | where TargetDomainName !in ("Window Manager","Font Driver Host")
-  | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek) by TargetUserName
+  | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek, 10) by TargetUserName
   | join kind= inner
   (
       AllLogonEvents
@@ -107,6 +106,18 @@ query: |
   | where HourOfLogin > max_HourOfLogin or HourOfLogin < min_HourOfLogin
   // Also populating additional column showing historical days of week when logon was seen
   | extend historical_DayofWeek = tostring(historical_DayofWeek)
-  | summarize Total= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek), StartTime=max(StartTime), EndTime = min(StartTime), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName), HostLoggedOn = make_set(Computer) by EventID, Activity, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek
+  | summarize Total= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek, 10), StartTime=max(StartTime), EndTime = min(StartTime), SourceIP = make_set(IpAddress, 10000), SourceHost = make_set(WorkstationName, 10000), SubjectUserName = make_set(SubjectUserName, 10000), HostLoggedOn = make_set(Computer, 10000) by EventID, Activity, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek
   | extend historical_DayofWeek = todynamic(historical_DayofWeek)
-  | extend timestamp = StartTime, AccountCustomEntity = TargetUserName
+  | extend timestamp = StartTime, NTDomain = split(TargetUserName, '\\', 0)[0], Name = split(TargetUserName, '\\', 1)[0]
+  | extend Account_0_NTDomain = NTDomain 
+  | extend Account_0_Name = Name
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+version: 1.0.1
+
