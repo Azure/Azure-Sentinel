@@ -1,0 +1,497 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let day_names =dynamic([\"Sunday\",\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\",\"Saturday\"]);\nlet averageData = view() {  CommonSecurityLog \n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| where TimeGenerated > datetime(2000-01-01)\n| where isnotnull(OriginatingUsers) and OriginatingUsers != \"\"\n| summarize Count=count() by Year=getyear(TimeGenerated), Month=monthofyear(TimeGenerated), Day=dayofmonth(TimeGenerated)\n| summarize Average_Count=toint(avg(Count)) by Day=dayofweek(make_datetime(Year,Month,Day)), SortData=\"Average Daily Change\"\n| order by Day asc};\nlet weeklyData = view() {  CommonSecurityLog \n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| where TimeGenerated > startofweek(now())\n| where isnotnull(OriginatingUsers) and OriginatingUsers != \"\"\n| summarize Count=count() by Year=getyear(TimeGenerated), Month=monthofyear(TimeGenerated), Day=dayofmonth(TimeGenerated)\n| summarize Average_Count=toint(avg(Count)) by Day=dayofweek(make_datetime(Year,Month,Day)), SortData=\"Daily Change\"\n| order by Day asc };\nunion withsource=TableName averageData,weeklyData\n| order by Day asc, SortData asc\n| project Average_Count,Day,TableName,SortData,Days=tostring(day_names[indexof('00010203040506', format_timespan(Day,'dd'))/2])\n| render barchart with (kind=unstacked)\n\n",
+        "size": 0,
+        "title": "Weekly Active Directory Change Count",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "chartSettings": {
+          "xAxis": "Days",
+          "seriesLabelSettings": [
+            {
+              "seriesName": "averageData",
+              "label": "Average Daily Change",
+              "color": "gray"
+            },
+            {
+              "seriesName": "weeklyData",
+              "label": "Daily Change",
+              "color": "orange"
+            }
+          ]
+        },
+        "mapSettings": {
+          "locInfo": "LatLong",
+          "sizeSettings": "Average_Count",
+          "sizeAggregation": "Sum",
+          "legendMetric": "Average_Count",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "type": "heatmap",
+            "colorAggregation": "Sum",
+            "nodeColorField": "Average_Count",
+            "heatmapPalette": "greenRed"
+          }
+        }
+      },
+      "customWidth": "100",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event\n| where Source == 'Semperis-Operation-Log' and EventID == 20000\n| sort by TimeGenerated desc \n| parse RenderedDescription with \"Operation: \" Operation \"Access Granted:\" AccessGranted \"Result: \" Result \"Details: \" * \"Trustee Name: \" TrusteeName \" Correlation ID: \" * \" Source: \" HostIP \"WebSite Target\" *\n| extend host = tostring(HostIP)\n| extend HostIP = trim_end(\":\",HostIP)\n| project TimeGenerated, UserName, HostIP\n| order by TimeGenerated desc\n| top 10 by TimeGenerated",
+        "size": 1,
+        "title": "Successful Logons",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "labelSettings": [
+            {
+              "columnId": "TimeGenerated",
+              "label": "Time Generated"
+            },
+            {
+              "columnId": "UserName",
+              "label": "Identity"
+            },
+            {
+              "columnId": "HostIP",
+              "label": "Host IP"
+            }
+          ]
+        }
+      },
+      "customWidth": "55",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event\n| where Source == 'Semperis-Operation-Log' and ( EventID == 20000 or EventID == 20002 )\n| sort by TimeGenerated desc \n| parse RenderedDescription with \"Operation: \" Operation \"Access Granted:\" AccessGranted \"Result: \" Result \"Details: \" * \"Trustee Name: \" TrusteeName \" Correlation ID: \" * \" Source: \" HostIP \"WebSite Target\" *\n| extend host = tostring(HostIP)\n| extend HostIP = trim_end(\":\",HostIP)\n| where isnotempty(AccessGranted)\n| summarize Count=count() by AccessGranted\n\n\n\n",
+        "size": 1,
+        "title": "DSP Logins",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "chartSettings": {
+          "showLegend": true,
+          "seriesLabelSettings": [
+            {
+              "seriesName": " TRUE  ",
+              "color": "green"
+            },
+            {
+              "seriesName": " FALSE  ",
+              "color": "redBright"
+            },
+            {
+              "color": "red"
+            }
+          ]
+        }
+      },
+      "customWidth": "45",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event\r\n| where Source == 'Semperis-DSP-Notifications' \r\n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\r\n| mv-expand bagexpansion=array p1Xml\r\n| evaluate bag_unpack(p1Xml)\r\n| extend Key1=tostring(['@Name']), Value=['#text']\r\n| evaluate pivot(Key1, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\r\n| order by TimeGenerated desc\r\n| project ruleName, fullOperation\r\n",
+        "size": 0,
+        "title": "Notifications",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "rowLimit": 10000,
+          "labelSettings": [
+            {
+              "columnId": "ruleName",
+              "label": "Rule Name"
+            },
+            {
+              "columnId": "fullOperation",
+              "label": "Operation"
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 1",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event\n| where Source == 'Semperis-Operation-Log' and EventID == 20012\n| sort by TimeGenerated desc\n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| parse details with \"Occured at (UTC): \" OccurredAt \"Session ID: \" SessionID \"Trustee Name: \" TrusteeName \"Correlation ID: \" CorrelationID \"Source: \" Source \"WebSite Target: \" WebSiteTarget \"Product: \" Product \"Component: \" Component \"AD Information: \" ADInformation \"Object GUID: \" ObjectGUID \"Attribute: \" Attribute \"Distinguished Name: \" DistinguishedName \"Additional Information: \"AdditionalInformation \"Operation Detail: \" OperationDetail \"operationName: \" operationName \"trustee: \" trustee \"personas: \" personas \"Status: \" status \"Granted: \" Granted \"Result: \" Result\n| extend _AccessGranted = iif(operationName contains \"CreateRbacIdentity\", \"Added\", \"Removed\")\n| extend _Identity = iif(operationName contains \"CreateRbacIdentity\", trustee, tostring(substring(trustee,1,strlen(trustee))))\n| extend _Identity = iif(operationName contains \"CreateRbacIdentity\", _Identity, replace_string(_Identity,\"'\",\"\"))\n| extend add_personas = replace_string(replace_string(replace_string(personas,\"{ Name = \",\"\"),\" }\",\"\"),\";\",\",\")\n| extend remove_personas = replace_string(personas,\";\",\",\")\n| extend grid_personas = iif(operationName contains \"CreateRbacIdentity\", add_personas, remove_personas)\n| extend date_to_sort = format_datetime(TimeGenerated,\"yyyy-mm-dd   HH:mm:ss\")\n| order by date_to_sort desc\n| project TrusteeName, _Identity, _AccessGranted, grid_personas, TimeGenerated\n\n\n",
+        "size": 1,
+        "title": "Role Based Access Control Changes",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "labelSettings": [
+            {
+              "columnId": "TrusteeName",
+              "label": "Changed By"
+            },
+            {
+              "columnId": "_Identity",
+              "label": "Identity"
+            },
+            {
+              "columnId": "_AccessGranted",
+              "label": "Access Granted"
+            },
+            {
+              "columnId": "grid_personas",
+              "label": "Persona Details"
+            },
+            {
+              "columnId": "TimeGenerated",
+              "label": "Timestamp"
+            }
+          ]
+        },
+        "sortBy": []
+      },
+      "customWidth": "50",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity)\n| where isnotnull(OriginatingUsers) and OriginatingUsers != \"\"\n| summarize ChangedCount = count() by tostring(OriginatingUsers)\n| project replace_string(OriginatingUsers,'\\\\\\\\','/'), ChangedCount, OriginatingUsers, \"Details\"\n| order by ChangedCount desc\n| top 5 by ChangedCount",
+        "size": 1,
+        "title": "Top 5 Identities Making Changes",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "OriginatingUsers",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Column2",
+              "formatter": 1,
+              "formatOptions": {
+                "linkTarget": "WorkbookTemplate",
+                "linkIsContextBlade": true,
+                "workbookContext": {
+                  "componentIdSource": "workbook",
+                  "resourceIdsSource": "workbook",
+                  "typeSource": "workbook",
+                  "gallerySource": "workbook",
+                  "locationSource": "workbook",
+                  "passSpecificParams": true,
+                  "templateParameters": [
+                    {
+                      "name": "OriginatingUsers",
+                      "source": "column",
+                      "value": "Column1"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Originating Identity",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "Group",
+              "formatter": 1
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "Column1",
+              "label": "Originating Identity"
+            },
+            {
+              "columnId": "ChangedCount",
+              "label": "Number of Changes"
+            },
+            {
+              "columnId": "Column2",
+              "label": " "
+            }
+          ]
+        }
+      },
+      "customWidth": "35",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| parse DistinguishedName with * \"CN\\\\=\" cnName \",\" *\n| parse DistinguishedName with * \"DC\\\\=\" dcName \",\" *\n| where ClassName != \"dnsNode\"\n| summarize ChangedCount=count() by cnName\n| project cnName, ChangedCount, \"Details\"\n| order by ChangedCount desc\n| top 5 by ChangedCount\n",
+        "size": 3,
+        "title": "Top 5 Objects Changed",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Column1",
+              "formatter": 1,
+              "formatOptions": {
+                "linkTarget": "WorkbookTemplate",
+                "linkIsContextBlade": true,
+                "workbookContext": {
+                  "componentIdSource": "workbook",
+                  "resourceIdsSource": "workbook",
+                  "typeSource": "workbook",
+                  "gallerySource": "workbook",
+                  "locationSource": "default",
+                  "passSpecificParams": true,
+                  "templateParameters": [
+                    {
+                      "name": "cName",
+                      "source": "column",
+                      "value": "cnName"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "cnName",
+              "label": "Object Changed"
+            }
+          ]
+        }
+      },
+      "customWidth": "35",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event\n| where Source == 'Semperis-DSP-Notifications' \n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| summarize Count=count() by tostring(fullOperation)\n\n",
+        "size": 1,
+        "title": "AD Change Types",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 10000,
+          "sortBy": [
+            {
+              "itemKey": "fullOperation",
+              "sortOrder": 1
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "fullOperation",
+              "label": "Activity"
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "fullOperation",
+            "sortOrder": 1
+          }
+        ]
+      },
+      "customWidth": "30",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| parse DistinguishedName with * \"CN\\\\=\" cnName \",\" *\n| parse DistinguishedName with * \"DC\\\\=\" dcName \",\" *\n| where ClassName == 'group'\n| project AttributeModificationType,cnName,OriginatingTime,replace_string(OriginatingUsers,\"\\\\\\\\\",\"\\\\\"),StringValueFrom,StringValueTo\n",
+        "size": 0,
+        "title": "Builtin Group Changes",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Column1",
+              "formatter": 1,
+              "formatOptions": {
+                "workbookContext": {
+                  "componentIdSource": "workbook",
+                  "resourceIdsSource": "workbook",
+                  "typeSource": "workbook",
+                  "gallerySource": "workbook",
+                  "locationSource": "default",
+                  "passSpecificParams": true,
+                  "templateParameters": [
+                    {
+                      "name": "cName",
+                      "source": "column",
+                      "value": "cnName"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "rowLimit": 10000,
+          "labelSettings": [
+            {
+              "columnId": "AttributeModificationType",
+              "label": "Attribute Modification Type"
+            },
+            {
+              "columnId": "cnName",
+              "label": "Object Changed"
+            },
+            {
+              "columnId": "OriginatingTime",
+              "label": "Originating Time"
+            },
+            {
+              "columnId": "StringValueFrom",
+              "label": "Value From"
+            },
+            {
+              "columnId": "StringValueTo",
+              "label": "Value To"
+            }
+          ]
+        }
+      },
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event\n| where Source == 'Semperis-DSP-Security' \n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| order by tostring(securityIndicatorName)\n| summarize Count=count() by tostring(securityIndicatorName)\n| top 5 by Count\n\n",
+        "size": 1,
+        "title": "Top 5 Failed Security Indicators",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "gridSettings": {
+          "rowLimit": 10000
+        },
+        "chartSettings": {
+          "yAxis": [
+            "Count"
+          ],
+          "showLegend": true
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event\n| where Source == 'Semperis-DSP-Security' \n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| order by tostring(securityIndicatorName)\n| summarize Count=count() by tostring(securityIndicatorName)\n| top 5 by Count\n\n",
+        "size": 1,
+        "title": "Top 5 Failed Security Indicators",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "gridSettings": {
+          "rowLimit": 10000
+        },
+        "chartSettings": {
+          "yAxis": [
+            "Count"
+          ],
+          "showLegend": true
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 2",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event\n| where Source == 'Semperis-DSP-Security' \n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| summarize Count=count() by tostring(securityFrameworkTags)\n\n",
+        "size": 0,
+        "title": "Amount of Generated Events per Category",
+        "timeContext": {
+          "durationMs": 14400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar",
+        "gridSettings": {
+          "rowLimit": 10000
+        },
+        "chartSettings": {
+          "yAxis": [
+            "Count"
+          ],
+          "showLegend": true
+        }
+      },
+      "name": "query - 2"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "styleSettings": {
+    "paddingStyle": "wide",
+    "spacingStyle": "wide"
+  },
+  "fromTemplateId": "sentinel-SemperisDSPQuickviewDashboard",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
