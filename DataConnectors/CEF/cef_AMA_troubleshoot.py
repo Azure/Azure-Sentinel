@@ -706,7 +706,7 @@ def find_dcr_cloud_environment():
     Use the agent config on the machine to determine the cloud environment we are running in
     '''
     global MACHINE_ENV
-    command_to_run = "if grep -q \"azure.com\" {0}; then echo \"Prod\"; elif grep -q \"azure.cn\" {0}; then echo \"MK\"; elif grep -q \"azure.us\" {0}; then echo \"Gov\"; else echo \"Prod\"; fi".format(AGENT_CONF_FILE)
+    command_to_run = "if grep -q \"azure.cn\" {0}; then echo \"MK\"; elif grep -q \"azure.us\" {0}; then echo \"Gov\"; else echo \"Prod\"; fi".format(AGENT_CONF_FILE)
     try:
         command_result, command_result_err = subprocess.Popen(command_to_run, shell=True,
                                                                         stdout=subprocess.PIPE,
