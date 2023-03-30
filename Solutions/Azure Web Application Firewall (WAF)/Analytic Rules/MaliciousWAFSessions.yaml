@@ -4,8 +4,8 @@ description: |
   'Detects unobstructed Web Application Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the 
   ratio between blocked requests and unobstructed WAF requests in these sessions (BlockvsSuccessRatio metric). A high ratio value for 
   a given client IP and hostname calls for further investigation of the WAF data in that session, due to the significantly high number 
-  of blocked requests and a few unobstructed logs which may be malicious but have passed undetected through the WAF. The successCode 
-  variable defines what the detection thinks is a successful status code, and should be altered to fit the environment.'
+  of blocked requests and a few unobstructed logs that may be malicious but have passed undetected through the WAF. The successCode 
+  variable defines what the detection thinks is a successful status code and should be altered to fit the environment.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -27,7 +27,7 @@ query: |
   let sessionBin = 30m;
   AzureDiagnostics
   | where TimeGenerated > ago(queryperiod)
-  | where Category == 'ApplicationGatewayFirewallLog' and action_s == mode
+  | where Category =~ 'ApplicationGatewayFirewallLog' and action_s == mode
   | sort by hostname_s asc, clientIp_s asc, TimeGenerated asc
   | extend SessionBlockedStarted = row_window_session(TimeGenerated, queryperiod, 10m, ((clientIp_s != prev(clientIp_s)) or (hostname_s != prev(hostname_s))))
   | summarize SessionBlockedEnded = max(TimeGenerated), SessionBlockedCount = count() by hostname_s, clientIp_s, SessionBlockedStarted
@@ -36,9 +36,10 @@ query: |
   | join kind = inner(
       AzureDiagnostics
       | where TimeGenerated > ago(queryperiod)
-      | where Category == 'ApplicationGatewayAccessLog' and (isempty(httpStatus_d) or httpStatus_d in (successCode))
+      | where Category =~ 'ApplicationGatewayAccessLog' and (isempty(httpStatus_d) or httpStatus_d in (successCode))
       | extend TimeKey = bin(TimeGenerated, sessionBin)
-  ) on TimeKey, $left.hostname_s == $right.host_s, $left.clientIp_s == $right.clientIP_s
+      | extend hostname_s = coalesce(hostname_s,host_s), clientIp_s = coalesce(clientIp_s,clientIP_s)
+  ) on TimeKey, hostname_s , clientIp_s
   | where TimeGenerated between (SessionBlockedStarted..SessionBlockedEnded)
   | extend
       originalRequestUriWithArgs_s = column_ifexists("originalRequestUriWithArgs_s", ""),
@@ -61,6 +62,6 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.2
+        columnName: clientIp_s
+version: 1.0.3
 kind: Scheduled

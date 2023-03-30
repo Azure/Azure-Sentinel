@@ -1,8 +1,8 @@
 id: 2c55fe7a-b06f-4029-a5b9-c54a2320d7b8
-name: Process execution frequency anomaly
+name: Process Execution Frequency Anomaly
 description: |
-  'Identifies anomalous spike in frequency of executions of sensitive processes which are often leveraged as attack vectors.
-  The query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns.
+  'This detection identifies anomalous spike in frequency of executions of sensitive processes which are often leveraged as attack vectors.
+  The query leverages KQL's built-in anomaly detection algorithms to find large deviations from baseline patterns.
   Sudden increases in execution frequency of sensitive processes should be further investigated for malicious activity.
   Tune the values from 1.5 to 3 in series_decompose_anomalies for further outliers or based on custom threshold values for score.'
 severity: Medium
@@ -27,12 +27,13 @@ query: |
   let endtime = 1d;
   let timeframe = 1h;
   let TotalEventsThreshold = 5;
+  // Configure the list with sensitive process names 
   let ExeList = dynamic(["powershell.exe","cmd.exe","wmic.exe","psexec.exe","cacls.exe","rundll32.exe"]);
   let TimeSeriesData =
   SecurityEvent
   | where EventID == 4688 | extend Process = tolower(Process)
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-  | where Process in (ExeList)
+  | where Process in~ (ExeList)
   | project TimeGenerated, Computer, AccountType, Account, Process
   | make-series Total=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Process;
   let TimeSeriesAlerts = materialize(TimeSeriesData
@@ -53,16 +54,20 @@ query: |
   | summarize CommandlineCount = count() by bin(TimeGenerated, 1h), Process, CommandLine, Computer, Account
   ) on Process, TimeGenerated
   | project AnomalyHour = TimeGenerated, Computer, Account, Process, CommandLine, CommandlineCount, Total, baseline, anomalies, score
-  | extend timestamp = AnomalyHour, AccountCustomEntity = Account, HostCustomEntity = Computer
+  | extend timestamp = AnomalyHour, NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
 
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.0.4
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.5
 kind: Scheduled
