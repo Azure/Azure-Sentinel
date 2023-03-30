@@ -41,13 +41,16 @@ class AWSDataFetcher:
             last_date_read = checkpoint['Date']
 
         utc_now = datetime.now(timezone.utc)
-        utc_last_read = datetime.fromisoformat(last_date_read) if last_date_read else utc_now - timedelta(hours=1)
+        utc_last_read = datetime.fromisoformat(last_date_read) if last_date_read else utc_now - timedelta(hours=6)
+        
+        if (utc_now - utc_last_read).total_seconds() > 21600:
+            utc_last_read = utc_now - timedelta(hours=6)
 
         keys_and_dates = []
         for datetime_to_hour in inclusive_datetime_range(utc_last_read, utc_now):
             response = self.s3_client.list_objects_v2(
                 Bucket=self.bucket_arn,
-                Prefix=f"{self.client_prefix}/AWSLogs/blocks-{datetime_to_hour.strftime(DATE_FORMAT)}",
+                Prefix=f"{self.client_prefix}/blocks-{datetime_to_hour.strftime(DATE_FORMAT)}",
                 StartAfter=last_key_read
             )
             if 'Contents' in response: 
