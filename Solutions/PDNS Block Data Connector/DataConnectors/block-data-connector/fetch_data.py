@@ -42,7 +42,7 @@ class AWSDataFetcher:
 
         utc_now = datetime.now(timezone.utc)
         utc_last_read = datetime.fromisoformat(last_date_read) if last_date_read else utc_now - timedelta(hours=6)
-        
+
         if (utc_now - utc_last_read).total_seconds() > 21600:
             utc_last_read = utc_now - timedelta(hours=6)
 
@@ -61,7 +61,9 @@ class AWSDataFetcher:
     
     def get_stix_events_from_file_key(self, key: str) -> List[StixEvent]:
         s3_object = self.s3_client.get_object(Bucket=self.bucket_arn, Key=key)['Body']
+
         file_content = s3_object.read()
+        s3_object.close()
 
         try:
             json_content = json.loads(file_content)

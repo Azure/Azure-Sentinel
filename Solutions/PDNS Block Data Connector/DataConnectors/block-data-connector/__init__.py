@@ -28,29 +28,26 @@ def main(trigger: azure.functions.TimerRequest) -> None:
     data_fetcher = AWSDataFetcher(*get_aws_configuration())
 
     file_keys_and_dates = data_fetcher.get_recent_file_keys_and_dates()
+    logging.info("Got all recent file keys in bucket")
 
-    if file_keys_and_dates:
-        stix_events = flatten([
-            data_fetcher.get_stix_events_from_file_key(key)
-            for key, _ in file_keys_and_dates
-        ])
+
+    for key, _ in file_keys_and_dates:
+        stix_events = data_fetcher.get_stix_events_from_file_key(key)
+
+        logging.info(f"Got STIX events for {key}")
 
         for stix_events_chunk in chunk_list(stix_events, MAX_NO_EVENTS_IN_REQUEST):
             post_to_log_analytics(stix_events_chunk, workspace_id, shared_key)
 
         logging.info('Data sent to Azure Log Analytics')
 
-   
-        state_manager = StateManager(FILE_SHARE_CONNECTION_STRING)
-
         checkpoint = {
             "Key": file_keys_and_dates[-1][0],
             "Date": file_keys_and_dates[-1][1].isoformat()
         }
 
+        state_manager = StateManager(FILE_SHARE_CONNECTION_STRING)
         state_manager.post(json.dumps(checkpoint))
-
-    
 
 
 def post_to_log_analytics(
