@@ -1,4 +1,3 @@
-from models import Email, Event
 from mailrisk import emails_list, events_list
 from sentinel_api import post_data
 import datetime
@@ -6,7 +5,6 @@ import json
 from collections import defaultdict
 from copy import copy
 from models.event_types import RISK_CHANGED, CONTENTS_RECEIVED, FEEDBACK_REQUESTED, EMAIL_REPORTED
-import azure.functions as func
 
 ACTIVE_EVENT_TYPES = [RISK_CHANGED, CONTENTS_RECEIVED, FEEDBACK_REQUESTED, EMAIL_REPORTED]
 
@@ -55,19 +53,3 @@ def get_new_email_ids_and_event_types(input, outputblob) -> 'dict[int, list[str]
                 email_ids_and_event_types[event.email_id].append(event.event) 
     
     return email_ids_and_event_types
-
-    
-    
-
-
-
-if __name__ == '__main__':
-    email_ids = get_new_email_ids_and_event_types()
-    post_emails(email_ids)
-    
-    # Run again in order to catch up
-    # if len(Events) == limit:
-        # email_ids = get_new_email_ids()
-        # post_emails(email_ids)
-
-    

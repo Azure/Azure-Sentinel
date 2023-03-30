@@ -10,6 +10,6 @@ class Header(Model):
     def from_json(cls, json_item):
         for k, v in json_item.items():
             return cls(key=k, value=v)
-
+        return cls(key=json_item['header'], value=json_item['value'])
     def __str__(self):
         return self.key

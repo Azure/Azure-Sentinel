@@ -1,4 +1,3 @@
-from os import path
 from datetime import datetime
 
 import requests
