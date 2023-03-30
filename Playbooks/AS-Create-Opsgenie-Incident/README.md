@@ -5,11 +5,11 @@ Author: Accelerynt
 For any technical questions, please contact info@accelerynt.com  
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Create-Opsgenie-Incident%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Create-Opsgenie-Incident%2Fazuredeploy.json)       
-
-This playbook is intended to be run from a Microsoft Sentinel Incident. It will create either an incident or an alert in Opsgenie with the information from a Microsoft Sentinel incident.
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Create-Opsgenie-Incident%2Fazuredeploy.json)
 
 ![Opsgenie_Demo_2](Images/Opsgenie_Demo_2.png)
+
+This playbook is intended to be run from a Microsoft Sentinel Incident. It will create either an incident or an alert in Opsgenie with the information from a Microsoft Sentinel incident.
 
 ![Opsgenie_Demo_1](Images/Opsgenie_Demo_1.png)
 
