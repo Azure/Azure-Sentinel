@@ -109,12 +109,15 @@ do {
     $uriself = $uri
     if($uri.length -gt 0){
         $response = Invoke-WebRequest -uri $uri  -Method 'GET' -Headers $headers -Body $body
-    }
-    if($response.headers.Keys -contains "link"){
+        if($response.headers.Keys -contains "link")
+        {
         $uritemp = $response.headers.link.split(",;")
         $uritemp = $uritemp.split(";")
-        $uri = $uritemp[2] -replace "<|>", ""
+        $uri = $uritemp[2] -replace '"next":"', ""
+        $uri = $uri.Trim('"}')
+       }
     }
+    
     ELSE{
         $exitDoUntil = $true
     }
