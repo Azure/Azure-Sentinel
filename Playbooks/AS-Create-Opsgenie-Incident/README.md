@@ -9,6 +9,8 @@ For any technical questions, please contact info@accelerynt.com
 
 This playbook is intended to be run from a Microsoft Sentinel Incident. It will create either an incident or an alert in Opsgenie with the information from a Microsoft Sentinel incident.
 
+![Opsgenie_Demo_2](Images/Opsgenie_Demo_2.png)
+
 ![Opsgenie_Demo_1](Images/Opsgenie_Demo_1.png)
 
 This playbook maps Microsoft Sentinel incident severity over to Opsgenie incident/alert priority like so:
