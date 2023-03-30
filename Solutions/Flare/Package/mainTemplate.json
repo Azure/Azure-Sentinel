@@ -62,7 +62,12 @@
     "playbookContentId1": "Playbooks",
     "_playbookContentId1": "[variables('playbookContentId1')]",
     "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
-    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1')))]"
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1')))]",
+    "analyticRuleVersion1": "1.0.1",
+    "analyticRulecontentId1": "9cb7c337-f170-4af6-b0e8-b6b7552d762d",
+    "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
+    "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
+    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]"
   },
   "resources": [
     {
@@ -92,7 +97,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Flare data connector with template version 2.0.1",
+        "description": "Flare data connector with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -220,6 +225,7 @@
                   ],
                   "metadata": {
                     "id": "c3f2c642-54a5-49b4-b135-e05506720765",
+                    "version": "1.0.0",
                     "kind": "dataConnector",
                     "source": {
                       "kind": "solution",
@@ -447,7 +453,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "FlareSystemsFireworkOverviewWorkbook Workbook with template version 2.0.1",
+        "description": "FlareSystemsFireworkOverviewWorkbook Workbook with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -495,6 +501,19 @@
                   "email": "contact@flare.systems",
                   "tier": "Partner",
                   "link": "https://flare.systems/company/contact/"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "Firework_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "FlareSystemsFirework",
+                      "kind": "DataConnector"
+                    }
+                  ]
                 }
               }
             }
@@ -529,7 +548,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "credential-warning Playbook with template version 2.0.1",
+        "description": "credential-warning Playbook with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -869,11 +888,111 @@
       }
     },
     {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('analyticRuleTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AnalyticsRule"
+      },
+      "properties": {
+        "description": "Flare Analytics Rule 1 with template",
+        "displayName": "Flare Analytics Rule template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('analyticRuleTemplateSpecName1'),'/',variables('analyticRuleVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AnalyticsRule"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "FlareCredentialLeaks_AnalyticalRules Analytics Rule with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('AnalyticRulecontentId1')]",
+              "apiVersion": "2022-04-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Searches for Flare Leaked Credentials",
+                "displayName": "Flare Leaked Credentials",
+                "enabled": false,
+                "query": "Firework_CL\n| where notempty(data_new_leaks_s) and source_s!= 'stealer_logs_samples'\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "Firework_CL"
+                    ],
+                    "connectorId": "Flare"
+                  }
+                ],
+                "tactics": [
+                  "CredentialAccess"
+                ],
+                "techniques": [
+                  "T1110"
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
+              "properties": {
+                "description": "Flare Analytics Rule 1",
+                "parentId": "[variables('analyticRuleId1')]",
+                "contentId": "[variables('_analyticRulecontentId1')]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Flare",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Flare Systems Inc.",
+                  "email": "contact@flare.systems",
+                  "tier": "Partner",
+                  "link": "https://flare.systems/company/contact/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2022-01-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.1",
+        "version": "2.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
@@ -910,6 +1029,11 @@
               "kind": "Playbook",
               "contentId": "[variables('_Playbooks')]",
               "version": "[variables('playbookVersion1')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRulecontentId1')]",
+              "version": "[variables('analyticRuleVersion1')]"
             }
           ]
         },

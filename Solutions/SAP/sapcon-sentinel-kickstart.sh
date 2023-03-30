@@ -261,7 +261,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--keymode [kvmi|kvsi|cfgf]"
 		echo "--connectionmode [abap|mserv]"
 		echo "--configpath <path>"
-		echo "--apabserver <servername>"
+		echo "--abapserver <servername>"
 		echo "--systemnr <system number>"
 		echo "--sid <SID>"
 		echo "--clientnumber <client number>"
@@ -786,9 +786,9 @@ fi
 if [ -n "$HTTPPROXY" ]; then
 	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
 fi
-
+cmdparams=" --label Cloud=$CLOUD"
 # Generating SENTINEL_AGENT_GUID
-cmdparams=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
+cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
 
 if [ "$MODE" == "kvmi" ]; then
 	echo "Creating docker container for use with Azure Key vault and managed VM identity"

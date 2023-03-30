@@ -9,30 +9,10 @@ ENV mainTemplateChanged ${mainTemplateChanged}
 ARG createUiChanged
 ENV createUiChanged ${createUiChanged}
 
-ARG hasPlaybooksChanged
-ENV playbooksChanged ${hasPlaybooksChanged}
-
-ARG playbookFilesList
-ENV playbookFilesList ${playbookFilesList}
-
-ARG isDataConnectorFolderNameWithSpace
-ENV isDataConnectorFolderNameWithSpace ${isDataConnectorFolderNameWithSpace}
-
-ARG dataConnectorFileNames
-ENV dataConnectorFileNames ${dataConnectorFileNames}
-
-ARG hasDataConnectorFileChanged
-ENV hasDataConnectorFileChanged ${hasDataConnectorFileChanged}
-
 ENV sname ${SolutionName}
 ENV sname1 $SolutionName
-RUN echo "playbooksChanged ${playbooksChanged}"
 RUN echo "mainTemplateChanged ${mainTemplateChanged}"
 RUN echo "createUiChanged ${createUiChanged}"
-
-RUN echo "isDataConnectorFolderNameWithSpace ${isDataConnectorFolderNameWithSpace}"
-RUN echo "dataConnectorFileNames ${dataConnectorFileNames}"
-RUN echo "hasDataConnectorFileChanged ${hasDataConnectorFileChanged}"
 
 LABEL version="v1.0"
 
