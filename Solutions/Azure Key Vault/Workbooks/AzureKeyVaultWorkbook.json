@@ -41,7 +41,7 @@
             "type": 4,
             "isRequired": true,
             "value": {
-              "durationMs": 5184000000
+              "durationMs": 7776000000
             },
             "typeSettings": {
               "selectableValues": [
@@ -111,7 +111,6 @@
               "value::selected"
             ],
             "value": [
-              "/subscriptions/4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
             ],
             "typeSettings": {
               "additionalResourceOptions": [
@@ -140,7 +139,6 @@
               "value::selected"
             ],
             "value": [
-              "/subscriptions/4383ac89-7cd1-48c1-8061-b0b3c5ccfd97/resourceGroups/manishsoar/providers/Microsoft.OperationalInsights/workspaces/soar-workspace-test"
             ],
             "typeSettings": {
               "additionalResourceOptions": [
@@ -244,6 +242,9 @@
               "version": "KqlItem/1.0",
               "query": "union withsource=_TableName *\r\n| where _TableName == \"AzureDiagnostics\" and Category == \"AuditEvent\" and ResourceType == \"VAULTS\"\r\n| summarize count() by ResourceId = tolower(ResourceId)\r\n| summarize logsKVs = make_set(ResourceId)\r\n| extend selectedKVs = \"[{KeyVault}]\"\r\n| extend selectedKVs = replace(\"'\", '\"', selectedKVs)\r\n| extend selectedKVs = todynamic(selectedKVs)\r\n| mv-expand KVId = selectedKVs\r\n| project KVId = toupper(tostring(KVId)), [\"Diagnostic logs\"] = (logsKVs has tostring(KVId))\r\n| extend [\"Diagnostic settings\"] = iff([\"Diagnostic logs\"] == false, strcat(\"https://ms.portal.azure.com/#@microsoft.onmicrosoft.com/resource\", KVId, \"/diagnostics\"), \"\")\r\n| order by [\"Diagnostic settings\"] desc\r\n",
               "size": 0,
+              "timeContext": {
+                "durationMs": 7776000000
+              },
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -293,6 +294,9 @@
               "version": "KqlItem/1.0",
               "query": "union withsource=_TableName *\r\n| where _TableName == \"AzureDiagnostics\" and Category == \"AuditEvent\" and ResourceType == \"VAULTS\"\r\n| summarize count() by ResourceId = tolower(ResourceId)\r\n| summarize logsKVs = make_set(ResourceId)\r\n| extend selectedKVs = \"[{KeyVault}]\"\r\n| extend selectedKVs = replace(\"'\", '\"', selectedKVs)\r\n| extend selectedKVs = todynamic(selectedKVs)\r\n| mv-expand KVId = selectedKVs\r\n| project KVId = toupper(tostring(KVId)),isDiag = (logsKVs has tostring(KVId))\r\n| summarize KeyVaults = count() by isDiag\r\n| project KeyVaults, ['Diagnostic logs for Key Vaults'] = iif(isDiag,'Diagnostic logs collected','Diagnostic logs not collected')\r\n",
               "size": 0,
+              "timeContext": {
+                "durationMs": 7776000000
+              },
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -545,12 +549,18 @@
                 "filter": true,
                 "labelSettings": [
                   {
+                    "columnId": "ResourceId"
+                  },
+                  {
                     "columnId": "AnomalyScore",
                     "label": "Anomaly Score"
                   },
                   {
                     "columnId": "AnomlyScoreTrend",
                     "label": "Anomaly trend"
+                  },
+                  {
+                    "columnId": "AnomalyScoreAbs"
                   },
                   {
                     "columnId": "WasAnomalous",
@@ -756,11 +766,14 @@
                         "crossComponentResources": [
                           "{Workspaces}"
                         ],
+                        "value": [
+                          "value::all"
+                        ],
                         "typeSettings": {
                           "additionalResourceOptions": [
                             "value::all"
                           ],
-                          "selectAllValue": "*",
+						  "selectAllValue": "*",
                           "showDefault": false
                         },
                         "timeContext": {
@@ -768,10 +781,7 @@
                         },
                         "timeContextFromParameter": "TimeRange",
                         "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces",
-                        "value": [
-                          "value::all"
-                        ]
+                        "resourceType": "microsoft.operationalinsights/workspaces"
                       }
                     ],
                     "style": "pills",
@@ -786,6 +796,9 @@
                     "version": "KqlItem/1.0",
                     "query": "let data = SecurityAlert\r\n| where \"{AlertSeverity:lable}\" == \"All\" or AlertSeverity in ({AlertSeverity})\r\n| where AlertType startswith \"KV_\"\r\n| where tolower(ResourceId) in ({KeyVault});\r\ndata\r\n| summarize Count = count() by AlertSeverity\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AlertSeverity)\r\n on AlertSeverity\r\n | project-away TimeGenerated\r\n| extend AlertSeveritys = AlertSeverity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend AlertSeverity = 'All', AlertSeveritys = '*' \r\n)\r\n| extend Severity = iif(AlertSeverity == \"All\", 0,iif(AlertSeverity == \"High\", 1, iif(AlertSeverity == \"Medium\", 2, iif(AlertSeverity == \"Low\", 3, 4))))\r\n| order by Severity asc\r\n",
                     "size": 3,
+                    "timeContext": {
+                      "durationMs": 0
+                    },
                     "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -829,6 +842,9 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityAlert\r\n| where AlertType startswith \"KV_\"\r\n| where tolower(ResourceId) in ({KeyVault})\r\n| where AlertSeverity in ({AlertSeverity})\r\n| summarize AlertCount = count() by ResourceId\r\n| project Resource = tolower(ResourceId), AlertCount\r\n| order by AlertCount desc\r\n",
                     "size": 0,
+                    "timeContext": {
+                      "durationMs": 7776000000
+                    },
                     "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -867,6 +883,9 @@
                     "size": 0,
                     "title": "Key vault alerts",
                     "noDataMessage": "No alrets from Azure Defender for Key Vaults",
+                    "timeContext": {
+                      "durationMs": 7776000000
+                    },
                     "timeContextFromParameter": "TimeRange",
                     "timeBrushParameterName": "TimeRangeFilter",
                     "queryType": 0,
@@ -886,6 +905,9 @@
                     "query": "let Incidents = SecurityIncident\r\n| project AlertIds, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nSecurityAlert\r\n| where TimeGenerated between ({TimeRange:start} .. ({TimeRange:end} + {TimeRange:grain}))\r\n| where AlertType startswith \"KV_\"\r\n| where ResourceId in ({KeyVault})\r\n| where AlertSeverity in ({AlertSeverity})\r\n| project TimeGenerated, ResourceId, AlertSeverity, DisplayName, AlertLink, AlertId=tostring(SystemAlertId)\r\n| order by TimeGenerated desc\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| project TimeGenerated, ResourceId, AlertSeverity, DisplayName, ['Azure Defender Alert'] = AlertLink, Incident = IncidentUrl, AlertId\r\n",
                     "size": 0,
                     "title": "Key vault alerts",
+                    "timeContext": {
+                      "durationMs": 7776000000
+                    },
                     "timeContextFromParameter": "TimeRange",
                     "exportFieldName": "AlertId",
                     "exportParameterName": "SelectedAlertId",
@@ -941,6 +963,9 @@
                     "query": "let data = SecurityAlert\r\n| where AlertType startswith \"KV_\"\r\n| where SystemAlertId == '{SelectedAlertId}';\r\nlet nodes = data\r\n| project Id = SystemAlertId, Name = DisplayName, Size = 1, Kind = 'alert'\r\n| union (\r\ndata \r\n| project parse_json(Entities), SystemAlertId\r\n| mv-expand Entities\r\n| evaluate bag_unpack(Entities)\r\n| project Id = strcat(SystemAlertId, '-',$id), Name = strcat(ResourceId,Address,AadUserId), Size = 1, Kind = Type\r\n);\r\nlet links = data\r\n| project parse_json(Entities), SystemAlertId\r\n| mv-expand Entities\r\n| evaluate bag_unpack(Entities)\r\n| project SourceId = SystemAlertId, TargetId = strcat(SystemAlertId, '-', $id), Size = 1, Kind = Type;\r\nnodes | union (links)\r\n",
                     "size": 2,
                     "title": "Alert and entity graph (chose an alert from the list above)",
+                    "timeContext": {
+                      "durationMs": 7776000000
+                    },
                     "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1142,6 +1167,9 @@
                                 "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(ResourceId) in ({KeyVault})\r\n| summarize Count = count() by Resource, bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by key vault",
+                                "timeContext": {
+                                  "durationMs": 7776000000
+                                },
                                 "timeContextFromParameter": "TimeRange",
                                 "queryType": 0,
                                 "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1159,6 +1187,9 @@
                                 "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(ResourceId) in ({KeyVault})\r\n| summarize EventCount=count() by Resource\r\n| order by EventCount desc",
                                 "size": 0,
                                 "title": "Activity, by key vault",
+                                "timeContext": {
+                                  "durationMs": 7776000000
+                                },
                                 "timeContextFromParameter": "TimeRange",
                                 "queryType": 0,
                                 "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1187,6 +1218,9 @@
                                 "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(ResourceId) in ({KeyVault})\r\n| summarize EventCount=count() by Resource",
                                 "size": 0,
                                 "title": "Events, by key vault distribution",
+                                "timeContext": {
+                                  "durationMs": 7776000000
+                                },
                                 "timeContextFromParameter": "TimeRange",
                                 "queryType": 0,
                                 "resourceType": "microsoft.operationalinsights/workspaces",
@@ -2074,6 +2108,9 @@
         "query": "let SensitiveOperationList = dynamic([\"VaultDelete\", \"KeyDelete\", \"SecretDelete\", \"SecretPurge\", \"KeyPurge\", \"SecretBackup\", \"KeyBackup\"]);\r\nAzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(ResourceId) in ({KeyVault})\r\n| extend Result = columnifexists(\"ResultType\", \"NoResult\")\r\n| extend requestUri_s = columnifexists(\"requestUri_s\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = columnifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\")\r\n| extend id_s = columnifexists(\"id_s\", \"None\"), CallerIPAddress = columnifexists(\"CallerIPAddress\", \"None\"), clientInfo_s = columnifexists(\"clientInfo_s\", \"None\")\r\n| where Result !~ \"None\" and isnotempty(Result)\r\n| where identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g !~ \"None\" and isnotempty(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g)\r\n| where id_s !~ \"None\" and isnotempty(id_s)\r\n| where CallerIPAddress !~ \"None\" and isnotempty(CallerIPAddress)\r\n| where clientInfo_s !~ \"None\" and isnotempty(clientInfo_s)\r\n| where requestUri_s !~ \"None\" and isnotempty(requestUri_s)\r\n| where ResourceType =~ \"VAULTS\" and Result =~ \"Success\" \r\n| where OperationName in~ (SensitiveOperationList)  \r\n| project TimeGenerated, ResourceId, Result, OperationName, CallerIPAddress, identity_claim_appid_g, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_http_schemas_microsoft_com_identity_claims_scope_s, requestUri_s, clientInfo_s\r\n",
         "size": 0,
         "title": "Sensitive Operations",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
@@ -2249,9 +2286,7 @@
                   "crossComponentResources": [
                     "{Workspaces}"
                   ],
-                  "value": [
-                    "value::all"
-                  ],
+                  "value": [],
                   "typeSettings": {
                     "additionalResourceOptions": [
                       "value::all"
@@ -2363,6 +2398,9 @@
                     "version": "KqlItem/1.0",
                     "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(ResourceId) in ({KeyVaultOperationAnalysis})\r\n| where OperationName contains tostring('{selectedTab}')\r\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\r\n| extend userActivity = iif(isempty(User),0,1), serviceActivity = iif(isempty(User),1,0)\r\n| summarize UserCount=sum(userActivity), ServiceCount=sum(serviceActivity), AllCount = count() by OperationName, bin(TimeGenerated,{TimeRange:grain}/10)\r\n| extend Count = iif(tostring('{Identity}') == 'all', AllCount, iif(tostring('{Identity}') == 'users', UserCount, ServiceCount))\r\n| extend Count = iif(tostring('{GetOperationsScale}') == 'log', iif(OperationName contains \"get\", log(Count), toreal(Count)), toreal(Count))\r\n\r\n",
                     "size": 0,
+                    "timeContext": {
+                      "durationMs": 7776000000
+                    },
                     "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -2518,7 +2556,7 @@
               ],
               "timeContextFromParameter": "TimeRange",
               "timeContext": {
-                "durationMs": 5184000000
+                "durationMs": 7776000000
               },
               "metrics": [
                 {
@@ -2729,6 +2767,15 @@
                 },
                 "labelSettings": [
                   {
+                    "columnId": "Subscription"
+                  },
+                  {
+                    "columnId": "Name"
+                  },
+                  {
+                    "columnId": "Segment"
+                  },
+                  {
                     "columnId": "Api hits",
                     "label": "Requests"
                   },
@@ -2769,7 +2816,7 @@
               ],
               "timeContextFromParameter": "TimeRange",
               "timeContext": {
-                "durationMs": 5184000000
+                "durationMs": 7776000000
               },
               "metrics": [
                 {
@@ -2958,6 +3005,12 @@
                 },
                 "labelSettings": [
                   {
+                    "columnId": "Subscription"
+                  },
+                  {
+                    "columnId": "Name"
+                  },
+                  {
                     "columnId": "microsoft.keyvault/vaults--ServiceApiHit",
                     "label": "Total Service Api Hits (Sum)"
                   },
@@ -2966,36 +3019,8 @@
                     "label": "Total Service Api Hits Timeline"
                   },
                   {
-                    "columnId": "Successes",
-                    "label": "Successes"
-                  },
-                  {
-                    "columnId": "Successes Timeline",
-                    "label": "Successes Timeline"
-                  },
-                  {
-                    "columnId": "Authentication",
-                    "label": "Authentication"
-                  },
-                  {
-                    "columnId": "Authentication Timeline",
-                    "label": "Authentication Timeline"
-                  },
-                  {
-                    "columnId": "Throttling",
-                    "label": "Throttling"
-                  },
-                  {
-                    "columnId": "Throttling Timeline",
-                    "label": "Throttling Timeline"
-                  },
-                  {
                     "columnId": "Failures",
                     "label": "Other Failures"
-                  },
-                  {
-                    "columnId": "Failures Timeline",
-                    "label": "Failures Timeline"
                   }
                 ]
               }
