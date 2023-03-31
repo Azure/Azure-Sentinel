@@ -255,19 +255,23 @@ namespace Kqlvalidations.Tests
         private void ValidateKqlForLatestTIData(string id, string queryStr)
         {
 
-            string pattern = @"ThreatIntelligenceIndicator\s*(\|.*\s*)*summarize\s+LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s+by\s+IndicatorId\s*";
-            bool match = Regex.IsMatch(queryStr, pattern);
-
-
-            Assert.True(
-                match,
-                match
-                    ? string.Empty
-                    : @$"Template Id: {id} is not valid 
+            //Condition to check below logic only when queryStr it contains "ThreatIntelligenceIndicator"
+            if (queryStr.Contains("ThreatIntelligenceIndicator"))
+            {
+                string pattern = @"ThreatIntelligenceIndicator[\s\S]*?(?:(ExpirationDateTime > now\(\))|(Active == true))[\s\S]*?(?:(ExpirationDateTime > now\(\))|(Active == true))?(?:\s*\|\s*summarize\s+LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s+by\s+IndicatorId)?";
+                bool match = Regex.IsMatch(queryStr, pattern);
+                Assert.True(
+                    match,
+                    match
+                        ? string.Empty
+                        : @$"Template Id: {id} is not valid 
                     Errors: Content needs to use latest Threat Intelligence data, sample query to get the latest Threat Intelligence data
                     ThreatIntelligenceIndicator
                     | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-                    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId");
+                    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+                    | where Active == true");
+            }
+            
         }
 
         private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
