@@ -1,0 +1,195 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "IP Enrichment - Virus Total Report - Entity Trigger",
+        "description": "This playbook will query VirusTotal Report for the selected IP Address (https://developers.virustotal.com/v3.0/reference#ip-info). The report will be added as a comment to the incident",
+        "prerequisites": [
+            "Register on VirusTotal portal and get an API key."
+        ],
+        "postDeployment": [
+            "1. Authorize/Configure all the connections.",
+            "2. Assign Microsoft Sentinel Responder Role to playbook."
+        ],
+        "lastUpdateTime": "2023-02-28T00:00:00.000Z",
+        "entities": [ "IP" ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        }
+    },
+   "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-VirusTotalIPReport-EntityTrigger",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "VirusTotalConnectionName": "[concat('virustotal-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('VirusTotalConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "VirusTotalIPReport-EntityTrigger",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "actions": {
+                        "Check_if_ARMId_exist": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<p>@{outputs('Compose')}<br>\n<br>\n<strong>Harmless: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['last_analysis_stats']?['harmless']}</strong><strong><br>\nMalicious: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['last_analysis_stats']?['malicious']}</strong><strong></strong><br>\n<strong>Suspicious: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['last_analysis_stats']?['suspicious']}</strong><strong></strong><br>\n<strong>Timeout: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['last_analysis_stats']?['timeout']}</strong><strong></strong><br>\n<strong>Undetected: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['last_analysis_stats']?['undetected']}</strong><strong></strong><br>\n<br>\n<strong>Country: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['country']}</strong><strong></strong><br>\n<strong>Continent: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['continent']}</strong><strong></strong><br>\n<strong>Owner: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['as_owner']}</strong><strong></strong><br>\n<strong>Total votes harmless: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['total_votes']?['harmless']}</strong><strong></strong><br>\n<strong>Total votes malicious: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['total_votes']?['malicious']}</strong><strong></strong><br>\n<strong>Reputation: </strong><strong>@{body('Get_an_IP_report')?['data']?['attributes']?['reputation']}</strong><strong></strong></p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Compose": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['IncidentArmID']",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Compose": {
+                            "runAfter": {
+                                "Get_an_IP_report": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<h2>VirusTotal report for IP: @{triggerBody()?['Entity']?['properties']?['Address']}</h2>"
+                        },
+                        "Get_an_IP_report": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['virustotal']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/api/v3/ip_addresses/connectorV2/@{encodeURIComponent(triggerBody()?['Entity']?['properties']?['Address'])}"
+                            }
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_entity": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/entity/@{encodeURIComponent('IP')}"
+                            }
+                        }
+                    }
+                },
+                    "parameters": {
+                        "$connections": {
+                            "value": {
+                                "microsoftsentinel": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                    "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                    "connectionProperties": {
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity"
+                                        }
+                                    }
+                                },
+                                "virustotal": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
+                                    "connectionName": "[variables('VirusTotalConnectionName')]",
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
+                                }
+                            }
+                        }
+            }
+
+
+        }
+        }
+    ]
+}

@@ -8,7 +8,7 @@
 // This parser takes raw Infoblox Cloud Data Connector (CDC) logs from a Syslog (CEF) stream and parses the logs into a normalized schema.
 //
 // USAGE:
-// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 1. Open Log Analytics/Microsoft Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
 // 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name as InfobloxCDC.
 // 3. Kusto Functions can typically take up to 15 minutes to activate. You can then use Function Alias for other queries.
 //
@@ -17,21 +17,15 @@
 // 
 CommonSecurityLog
 | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector"
-| extend AEcopy = AdditionalExtensions
-| extend AEcopy = extract_all(@"(?P<key>[^=;]+)=(?P<value>[^=;]+)", dynamic(["key","value"]), AEcopy)
-| mv-apply AEcopy on (
-    summarize AdditionalExtensionsParsedNested = make_bag(pack(tostring(AEcopy[0]), AEcopy[1]))
-)
-| extend AdditionalExtensionsParsed = AdditionalExtensionsParsedNested
-| evaluate bag_unpack(AdditionalExtensionsParsed)
+| parse-kv AdditionalExtensions as (InfobloxAnCount:int, InfobloxArCount:int, InfobloxDNSQClass:string, InfobloxDNSQFlags:string, InfobloxDNSQType:string, InfobloxDNSRCode:string, InfobloxDNSView:string, InfobloxNsCount:int) with (pair_delimiter=';', kv_delimiter='=')
 | extend ThreatLevel_Score = toint(column_ifexists("InfobloxThreatLevel", ""))
 | extend ThreatLevel = case(ThreatLevel_Score>=80, "High",
                        ThreatLevel_Score>=30 and ThreatLevel_Score<80, "Medium",
                        ThreatLevel_Score<30 and ThreatLevel_Score>=1, "Low",
                        ThreatLevel_Score == 0,"Info",
                        "N/A" )
-| extend ThreatClass = extract("(.*?)_", 1, tostring(column_ifexists("InfobloxThreatProperty", "")))
-| extend ThreatProperty = extract("([^_]*$)", 1, tostring(column_ifexists("InfobloxThreatProperty", "")))
+| extend ThreatClass = column_ifexists("ThreatClass", "")
+| extend ThreatProperty = column_ifexists("ThreatProperty", "")
 | extend InfobloxB1FeedName = column_ifexists("InfobloxB1FeedName", "")
 | extend InfobloxRPZ = column_ifexists("InfobloxRPZ", "")
 | extend InfobloxB1PolicyAction = column_ifexists("InfobloxB1PolicyAction", "")
