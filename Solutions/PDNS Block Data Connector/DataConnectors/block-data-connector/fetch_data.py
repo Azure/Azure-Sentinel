@@ -3,7 +3,6 @@ from datetime import datetime, timedelta, timezone
 import json
 import logging
 from typing import Any, Dict, List, Tuple
-import json
 import boto3
 from .state_manager import StateManager
 
@@ -35,10 +34,9 @@ class AWSDataFetcher:
     def get_recent_file_keys_and_dates(self) -> List[Tuple[str, str]]:
         checkpoint_string = self.state_manager.get()
         checkpoint = json.loads(checkpoint_string) if checkpoint_string else {"Key": "", "Date": ""}
-        
-        if 'Key' in checkpoint and 'Date' in checkpoint:
-            last_key_read = checkpoint['Key']
-            last_date_read = checkpoint['Date']
+
+        last_key_read = checkpoint['Key'] if 'Key' in checkpoint else ""
+        last_date_read = checkpoint['Date'] if 'Date' in checkpoint else ""
 
         utc_now = datetime.now(timezone.utc)
         utc_last_read = datetime.fromisoformat(last_date_read) if last_date_read else utc_now - timedelta(hours=6)
