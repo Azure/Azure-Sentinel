@@ -27,14 +27,20 @@ query: |
   | where OperationName has "Add a partner to cross-tenant access setting"
   | extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
   | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress
-  | extend ExtTenantIDAdded = TargetResources[0].modifiedProperties[0].newValue
-  | mv-expand ExtTenantIDAdded = TargetResources[0].modifiedProperties[0].newValue to typeof(string)
+  | mv-apply Property = TargetResources.modifiedProperties on 
+        (
+          where Property.displayName =~ "TargetId.ExtTenantIdAdded"
+          | extend ExtTenantIDAdded = trim('"',tostring(Property.newValue))
+        )
   | where ExtTenantIDAdded !in (ExpectedTenantIDs)
+  | extend Name = tostring(split(ExtTenantIDAdded,'@',0)[0]), UPNSuffix = tostring(split(ExtTenantIDAdded,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Name
         columnName: ExtTenantIDAdded
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: Account
     fieldMappings:
       - identifier: Name
@@ -43,5 +49,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: InitiatedByIPAdress
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled

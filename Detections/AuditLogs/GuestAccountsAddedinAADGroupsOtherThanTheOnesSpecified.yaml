@@ -29,16 +29,31 @@ query: |
   | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress 
   // Uncomment the following line to filter events where the inviting user was a guest user
   //| where InitiatedBy has_any ("CUSTOM DOMAIN NAME#", "#EXT#")
-  | extend InvitedUser = TargetResources[0].userPrincipalName
-  | extend AADGroup = TargetResources[0].modifiedProperties[1].newValue
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend InvitedUser = tostring(TargetResource.userPrincipalName)
+    )
+  | mv-apply Property = TargetResources.modifiedProperties on 
+    (
+        where Property.displayName =~ "ObjectId.AADGroup"
+        | extend AADGroup = trim('"',tostring(Property.newValue))
+    )
   | where InvitedUser has_any ("CUSTOM DOMAIN NAME#", "#EXT#")
-  | mv-expand AADGroupId = TargetResources[1].id to typeof(string)
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "ObjectId"
+        | extend AADGroup = trim('"',tostring(TargetResource.id))
+    )
   | where AADGroupId !in (GroupIDs)
+  | extend Name = tostring(split(InvitedUser,'@',0)[0]), UPNSuffix = tostring(split(InvitedUser,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Name
         columnName: InvitedUser
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: Account
     fieldMappings:
       - identifier: Name
@@ -47,5 +62,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: InitiatedByIPAdress
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
