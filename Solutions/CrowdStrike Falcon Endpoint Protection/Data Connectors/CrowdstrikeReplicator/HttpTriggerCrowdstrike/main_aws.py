@@ -1,5 +1,5 @@
 import asyncio
-import os
+import os, psutil
 import sys
 import asyncio
 import json
@@ -104,7 +104,9 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                 if links:
                     cors = []
                     for link in links:
+                        process = psutil.Process(os.getpid())
                         logging.info("Processing file {}".format(link))
+                        logging.info("Current Available System Memory in gb - {}".format(process.memory_info().rss/1024))
                         try:
                             if check_if_script_runs_too_long(script_start_time):
                                 logging.info('Script is running too long. Stop processing new files.')
