@@ -1,9 +1,9 @@
 id: 6cb75f65-231f-46c4-a0b3-50ff21ee6ed3
-name: Vectra AI Detect - Suspicious Behaviors
+name: Vectra AI Detect - Suspicious Behaviors by Category
 description: |
-  'Create an incident for each new malicious behavior detected by Vectra Detect. 
+  'Create an incident for each new malicious behavior detected by Vectra Detect for a specific Category. 
   By default, it looks through all tactics. This can be modified to create incident only for a subset of tactics.'
-severity: Medium
+severity: Informational
 status: Available
 requiredDataConnectors:
   - connectorId: AIVectraDetect
@@ -39,6 +39,7 @@ query: |
   | project-rename threat_score = FlexNumber1
   | project-rename certainty_score = FlexNumber2
   | project-rename triaged = DeviceCustomString5
+  | where triaged != "True" and AdditionalExtensions !contains "account"
   | project-rename vectra_URL = DeviceCustomString4
   | project-rename detection_name = DeviceEventClassID
   | extend Tactic = case( Category == "COMMAND & CONTROL", "CommandAndControl",
@@ -54,17 +55,19 @@ query: |
                          "UNKNOWN")
   | extend Severity = case( level == "Low", "Low",
                             level == "Medium", "Medium",
-                            level == "High", "Medium",
+                            level == "High", "High",
                             level == "Critical", "High",
                             "UNKNOWN")
   | extend account = extract("account=(.+?);", 1, AdditionalExtensions)
-  | extend upn = iff(account matches regex ":", tostring(split(account,":")[1]) ,tostring(split(account,":")[0])) 
+  | extend upn = iff(account matches regex ":", tostring(split(account,":")[1]) ,tostring(split(account,":")[0]))
+  | extend name = tostring(split(upn, "@")[0])
+  | extend upn_suffix = tostring(split(upn, "@")[1])
   | extend source_entity = case( isnotempty(upn), upn,
                                  isnotempty(SourceHostName), SourceHostName,
                                  "UNKNWON") 
   | where Category in (configured_tactics) 
   | summarize arg_max(threat_score, *) by source_entity , Activity
-  | project  TimeGenerated, source_entity, SourceHostName, SourceIP, upn, Activity, Tactic, Severity, threat_score, certainty_score, triaged, vectra_URL
+  | sort by TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -77,8 +80,8 @@ entityMappings:
       - identifier: UPNSuffix
         columnName: upn_suffix
 alertDetailsOverride:
-  alertDisplayNameFormat: Vectra AI Detect - {{Activity}} detected
-  alertDescriptionFormat: Source entity is {{source_entity}} and category is {{Category}}. Threat score is {{threat_score}}.
+  alertDisplayNameFormat: "Vectra AI Detect - {{Activity}} detected"
+  alertDescriptionFormat: "Source entity is {{source_entity}} and category is {{Category}}. Threat score is {{threat_score}}."
   alertSeverityColumnName: Severity
   alertDynamicProperties:
     - alertProperty: AlertLink
@@ -89,5 +92,8 @@ alertDetailsOverride:
       value: DeviceVendor
     - alertProperty: ConfidenceScore
       value: certainty_score
+customDetails:
+  AttackType: Activity
+  AttackCategory: Category
 version: 1.0.6
 kind: Scheduled
