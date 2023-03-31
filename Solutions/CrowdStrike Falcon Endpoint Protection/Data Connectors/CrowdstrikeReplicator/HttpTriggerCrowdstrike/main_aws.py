@@ -106,7 +106,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                     cors = []
                     for link in links:
                         logging.info("Processing file {}".format(link))
-                        logging.info("peak memory usage in kb - {}".format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
+                        logging.info("peak memory usage in kb before file load - {}".format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
                         try:
                             if check_if_script_runs_too_long(script_start_time):
                                 logging.info('Script is running too long. Stop processing new files.')
@@ -164,6 +164,7 @@ async def process_file(bucket, s3_path, client, semaphore, session):
         sentinelHelper = SentinelTableHelper("EventsToTableMapping.json",session)
         try:
             response = await client.get_object(Bucket=bucket, Key=s3_path)
+            logging.info("peak memory usage in kb after file load - {}".format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
             s = ''
             async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
                 s += decompressed_chunk.decode(errors='ignore')
