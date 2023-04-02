@@ -1,10 +1,15 @@
 
 
+# Audit Sentinel Detection Rules
 
+### Prerequistes : [Configure Audit in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/enable-monitoring)
 
+### Purpose : Detection / Analytics are dircetly changed in the production instace at times due to several reaons.
 
-## In KQL Using at times we might need find ourt who changed a detection rule or waht changes were done.
-Here is an azure function developped in KQL which can be used to display the changes.
+ + As the DevOps workflow is not set up.
+ + Due to urgency.
+
+Here is KQL query to idetify such scenarios and an azure function developped in KQL which can be used to display the changes.
 
 Query
 
