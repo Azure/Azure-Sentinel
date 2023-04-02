@@ -22,7 +22,7 @@ query: |
   | where OperationNameValue =~ "MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE"
   | summarize
       TimeGenerated = arg_max(TimeGenerated, Properties),
-      ActivityStatusValue = make_list(ActivityStatusValue),
+      ActivityStatusValue = make_set(ActivityStatusValue, 5),
       take_any(Caller, CallerIpAddress, OperationName, ResourceGroup, Resource)
       by CorrelationId, _ResourceId, OperationNameValue
   | extend ResourceHierarchy = split(_ResourceId, "/")
@@ -32,12 +32,20 @@ query: |
       | where OperationNameValue !~ "MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE" and OperationNameValue endswith "/DELETE" and ActivityStatusValue has_any ("Success", "Succeeded")
       | project _ResourceId
   ) on $left.MonitoredResourcePath == $right._ResourceId
-  | project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, OperationName, ActivityStatusValue, ResourceGroup, MonitoredResourcePath, Resource,  Properties, _ResourceId, CorrelationId
+  | extend
+      Name = iif(Caller has "@", tostring(split(Caller, "@")[0]), ""),
+      UPNSuffix = iif(Caller has "@", tostring(split(Caller, "@")[1]), ""),
+      AadUserId = iif(Caller has "@", "", Caller)
+  | project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, OperationName, ActivityStatusValue, ResourceGroup, MonitoredResourcePath, Resource, Properties, Name, UPNSuffix, AadUserId, _ResourceId, CorrelationId
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: Caller
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: AadUserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
