@@ -1,29 +1,16 @@
-Parser:
-  Title: Network Session ASIM parser for Cynerio Events
-  Version: '0.0.1'
-  LastUpdated: 14/03/2023
-Product:
-  Name: Cynerio
-Normalization:
-  Schema: NetworkSession
-  Version: '0.2.5'
-References:
-- Title: ASIM Network Session Schema
-  Link: https://aka.ms/ASimNetworkSessionDoc
-- Title: ASIM
-  Link: https:/aka.ms/AboutASIM
-Description: |
-  This ASIM parser supports normalizing Cynerio logs to the ASIM Web Session normalized schema.
-ParserName: AsimNetworkSessionCynerioEvents
-ParserQuery: |
-  let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [
+// Usage Instructions:
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and specifying Legacy Category.
+// This function maps Cynerio Network events to Azure Sentinel Information Model (ASIM) (https://docs.microsoft.com/azure/sentinel/normalization).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [
     'Low', 'Informational',
     'Medium', 'Low',
     'High', 'Medium',
     'Critical', 'High'
   ];
-  
-  let ScannerActivities = CynerioEvent_CL 
+
+  let ScannerActivities = CynerioEvent_CL
     | where title_s == 'Scanner Activity'
     | extend EventOriginalSeverity = severity_s
     | lookup SeverityLookup on EventOriginalSeverity
@@ -31,7 +18,7 @@ ParserQuery: |
         Type = 'CynerioEvent_CL',
         EventStartTime = unixtime_seconds_todatetime(timestamp_d),
         EventEndTime = unixtime_seconds_todatetime(timestamp_d),
-        EventOriginalUid = uid_s, 
+        EventOriginalUid = uid_s,
         EventType = 'EndpointNetworkSession',
         EventOriginalType = 'IDS',
         EventOriginalSubType = 'Scanner Activity',
@@ -54,19 +41,19 @@ ParserQuery: |
     | parse EventMessage with "Scanner type: " SrcAppName " Source IP" * "Expliot: " ThreatName "," *
     | project-away
         *_d, *_s, *_g;
-  
+
   let InternetBrowsings = CynerioEvent_CL
     | where title_s == 'Internet Browsing'
     | extend EventOriginalSeverity = severity_s
     | lookup SeverityLookup on EventOriginalSeverity
-    | extend 
+    | extend
         Type = 'CynerioEvent_CL',
         EventStartTime = unixtime_seconds_todatetime(timestamp_d),
         EventEndTime = unixtime_seconds_todatetime(timestamp_d),
         EventType = 'EndpointNetworkSession',
         EventOriginalType = 'IDS',
         EventOriginalSubType = title_s,
-        EventOriginalUid = uid_s, 
+        EventOriginalUid = uid_s,
         EventMessage = details_s,
         Dvc = tostring(asset_id_g),
         AdditonalFields = pack("AssetType", asset_type_s),
@@ -88,8 +75,8 @@ ParserQuery: |
         SrcAppName = browser_s
     | project-away
         *_d, *_s, *_g;
-  
-  let SuspiciousConnections = CynerioEvent_CL 
+
+  let SuspiciousConnections = CynerioEvent_CL
     | where title_s == 'Suspicious Connection'
     | extend EventOriginalSeverity = severity_s
     | lookup SeverityLookup on EventOriginalSeverity
@@ -97,7 +84,7 @@ ParserQuery: |
         Type = 'CynerioEvent_CL',
         EventStartTime = unixtime_seconds_todatetime(timestamp_d),
         EventEndTime = unixtime_seconds_todatetime(timestamp_d),
-        EventOriginalUid = uid_s, 
+        EventOriginalUid = uid_s,
         EventType = 'EndpointNetworkSession',
         EventOriginalType = 'IDS',
         EventOriginalSubType = title_s,
@@ -123,8 +110,8 @@ ParserQuery: |
     | parse EventMessage with * "Suspicious Connection Entity: " DstDomain "," *
     | project-away
         *_d, *_s, *_g;
-  
-  let ExplotationAttempts = CynerioEvent_CL 
+
+  let ExplotationAttempts = CynerioEvent_CL
     | where title_s == 'Exploitation Attempt'
     | extend EventOriginalSeverity = severity_s
     | lookup SeverityLookup on EventOriginalSeverity
@@ -132,7 +119,7 @@ ParserQuery: |
         Type = 'CynerioEvent_CL',
         EventStartTime = unixtime_seconds_todatetime(timestamp_d),
         EventEndTime = unixtime_seconds_todatetime(timestamp_d),
-        EventOriginalUid = uid_s, 
+        EventOriginalUid = uid_s,
         EventType = 'EndpointNetworkSession',
         EventOriginalType = 'IDS',
         EventOriginalSubType = title_s,
@@ -156,8 +143,8 @@ ParserQuery: |
     | parse EventMessage with * "Expliot: " ThreatName "," *
     | project-away
       *_d, *_s, *_g;
-  
-  let Connections = CynerioEvent_CL 
+
+  let Connections = CynerioEvent_CL
     | where title_s in ('SSH Connection', 'Telnet Connection', 'RDP Connection', 'REXEC Connection')
     | extend EventOriginalSeverity = severity_s
     | lookup SeverityLookup on EventOriginalSeverity
@@ -165,7 +152,7 @@ ParserQuery: |
         Type = 'CynerioEvent_CL',
         EventStartTime = unixtime_seconds_todatetime(timestamp_d),
         EventEndTime = unixtime_seconds_todatetime(timestamp_d),
-        EventOriginalUid = uid_s, 
+        EventOriginalUid = uid_s,
         EventType = 'EndpointNetworkSession',
         EventOriginalType = 'IDS',
         EventOriginalSubType = title_s,
@@ -188,40 +175,5 @@ ParserQuery: |
         DstPortNumber = toint(port_d)
     | project-away
       *_d, *_s, *_g;
-  
-  union InternetBrowsings, ScannerActivities, SuspiciousConnections, ExplotationAttempts, Connections
 
-Exceptions:
-  - Field: ASimMatchingHostname
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: ASimMatchingIpAddr
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: DstHostname
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: Dst
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: DvcDomain
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: DvcHostname
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: EventResultDetails
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: EventUid
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: SrcDomain
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: SrcHostname
-    Warning: Missing recommended field
-    Exception: Irrelevant
-  - Field: Src
-    Warning: Missing recommended field
-    Exception: Irrelevant
+  union InternetBrowsings, ScannerActivities, SuspiciousConnections, ExplotationAttempts, Connections
