@@ -11,6 +11,8 @@
 
 Here is KQL query to idetify such scenarios and an azure function developped in KQL which can be used to display the changes.
 
+### Demo - [Audit Sentinel Detection Rules](https://www.youtube.com/watch?v=v7XQSBnzfHg)
+
 Query
 
 
