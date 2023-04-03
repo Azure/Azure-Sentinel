@@ -258,7 +258,7 @@ namespace Kqlvalidations.Tests
             //Condition to check below logic only when queryStr it contains "ThreatIntelligenceIndicator"
             if (queryStr.Contains("ThreatIntelligenceIndicator"))
             {
-                string pattern = @"ThreatIntelligenceIndicator[\s\S]*?(?:(ExpirationDateTime > now\(\))|(Active == true))[\s\S]*?(?:(ExpirationDateTime > now\(\))|(Active == true))?(?:\s*\|\s*summarize\s+LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s+by\s+IndicatorId)?";
+                string pattern = @"\bThreatIntelligenceIndicator\b\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\((\w+)\)\s*and\s*ExpirationDateTime\s*>\s*now\(\)\s*\|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*Active\s*==\s*true";
                 bool match = Regex.IsMatch(queryStr, pattern);
                 Assert.True(
                     match,
