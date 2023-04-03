@@ -39,7 +39,7 @@ query: |
   | project-rename threat_score = FlexNumber1
   | project-rename certainty_score = FlexNumber2
   | project-rename triaged = DeviceCustomString5
-  | where triaged != "True" and AdditionalExtensions !contains "account"
+  | where triaged != "True"
   | project-rename vectra_URL = DeviceCustomString4
   | project-rename detection_name = DeviceEventClassID
   | extend Tactic = case( Category == "COMMAND & CONTROL", "CommandAndControl",
@@ -53,18 +53,12 @@ query: |
                          threat_score >= 50 and certainty_score <= 50, "High", 
                          threat_score >= 50 and certainty_score >= 50, "Critical",
                          "UNKNOWN")
-  | extend Severity = case( level == "Low", "Low",
-                            level == "Medium", "Medium",
-                            level == "High", "High",
-                            level == "Critical", "High",
-                            "UNKNOWN")
+  | extend Severity = case(level == "Info", "Informational",level == "Critical", "High", level)
   | extend account = extract("account=(.+?);", 1, AdditionalExtensions)
   | extend upn = iff(account matches regex ":", tostring(split(account,":")[1]) ,tostring(split(account,":")[0]))
   | extend name = tostring(split(upn, "@")[0])
   | extend upn_suffix = tostring(split(upn, "@")[1])
-  | extend source_entity = case( isnotempty(upn), upn,
-                                 isnotempty(SourceHostName), SourceHostName,
-                                 "UNKNWON") 
+  | extend source_entity = case(level == "Info", "Informational",level == "Critical", "High", level)
   | where Category in (configured_tactics) 
   | summarize arg_max(threat_score, *) by source_entity , Activity
   | sort by TimeGenerated
@@ -95,5 +89,5 @@ alertDetailsOverride:
 customDetails:
   AttackType: Activity
   AttackCategory: Category
-version: 1.0.6
+version: 1.0.7
 kind: Scheduled
