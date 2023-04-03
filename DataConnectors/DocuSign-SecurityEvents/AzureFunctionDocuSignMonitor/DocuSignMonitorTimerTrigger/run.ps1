@@ -1,9 +1,9 @@
 <#  
     Title:          DocuSign Security Events Data Connector
     Language:       PowerShell
-    Version:        2.0
+    Version:        2.1
     Author:         Sreedhar Ande
-    Last Modified:  2/16/2021
+    Last Modified:  3/31/2023
     Comment:        V2 re-designed; 
 					Ingests Security Events for your DocuSign account into Azure Log Analytics Workspace using DocuSign Monitor REST API
                     Ingests DocuSign Account Users into Azure Log Analytics Workspace using DocuSign Users REST API	
@@ -206,9 +206,10 @@ $timestamp = [int][double]::Parse((Get-Date (Get-Date).ToUniversalTime() -UForma
 
 $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 $checkBlob = Get-AzStorageBlob -Blob "DocuSignRSAPrivateKey.key" -Container $storageAccountContainer -Context $storageAccountContext
+$AzFunDrive = (Get-Location).Drive.Root
+$privateKeyPath = "$($AzFunDrive)home\site\DocuSignRSAPrivateKey.key"
 if($null -ne $checkBlob){
-    Get-AzStorageBlobContent -Blob "DocuSignRSAPrivateKey.key" -Container $storageAccountContainer -Context $storageAccountContext -Destination "C:\local\Temp\DocuSignRSAPrivateKey.key" -Force
-    $privateKeyPath = "C:\local\Temp\DocuSignRSAPrivateKey.key"
+    Get-AzStorageBlobContent -Blob "DocuSignRSAPrivateKey.key" -Container $storageAccountContainer -Context $storageAccountContext -Destination $privateKeyPath -Force    
 }
 else{
     Write-Error "No DocuSignRSAPrivateKey.key file, exiting"
