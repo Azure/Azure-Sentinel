@@ -1,0 +1,54 @@
+Id: 37ca3555-c135-4a73-a65e-9c1d00323f5d
+DisplayName: The least active accounts on this IP
+Description: The least active accounts from this IP during the range of -12h and +12h
+InputEntityType: Ip
+InputFields:
+  - Address
+OutputEntityTypes:
+  - Account
+QueryPeriodBefore: 12h
+QueryPeriodAfter: 12h
+DataSources:
+    - imAuthentication
+    - SigninLogs
+Tactics:
+  - Exfiltration
+  - CommandAndControl
+  - Collection
+query: |
+  let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+  let Legacy = (v_IP_Address:string){
+  (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+  | join kind=inner (
+    union isfuzzy = True SigninLogs, AADNonInteractiveUserSignInLogs
+    | where IPAddress == v_IP_Address
+    | extend TenantId = column_ifexists("TenantId", "")
+    | summarize Account_Aux_StartTime = min(TimeGenerated), 
+      Account_Aux_EndTime = max(TimeGenerated), 
+      Count = count() by UserPrincipalName, UserId, TenantId
+    | top 10 by Count asc nulls last 
+    | extend UPN = UserPrincipalName, Account_AadUserId = UserId
+    | extend Account_Name = split(UPN,'@')[0] , Account_UPNSuffix = split(UPN,'@')[1]
+    | project Account_Name, Account_UPNSuffix, Account_AadUserId, Account_AadTenantId=TenantId, Account_Aux_StartTime , Account_Aux_EndTime 
+    | extend exists=int(1)
+  ) on exists
+  | project-away exists, exists1 
+  };
+   let Normalized = (v_IP_Address:string){
+  (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+  | join kind=inner (
+    imAuthentication
+    | where SrcDvcIpAddr == v_IP_Address
+    | extend TenantId = column_ifexists("TenantId", "")
+    | summarize Account_Aux_StartTime = min(TimeGenerated), 
+      Account_Aux_EndTime = max(TimeGenerated), 
+      Count = count() by User, TargetUserId, TenantId
+    | top 10 by Count asc nulls last 
+    | extend UPN = User, Account_AadUserId = TargetUserId
+    | extend Account_Name = split(UPN,'@')[0] , Account_UPNSuffix = split(UPN,'@')[1]
+    | project Account_Name, Account_UPNSuffix, Account_AadUserId, Account_AadTenantId=TenantId, Account_Aux_StartTime , Account_Aux_EndTime 
+    | extend exists=int(1)
+  ) on exists | project-away exists, exists1 };
+  // change <Address> value below
+  union isfuzzy=true Legacy('<Address>'), Normalized('<Address>')
+
