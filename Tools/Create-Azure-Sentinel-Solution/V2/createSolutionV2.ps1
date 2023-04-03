@@ -434,7 +434,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName$workbookCounter'))]"
                                 );
                                 properties = [PSCustomObject]@{
-                                    description  = "$($fileName) Workbook with template version $($contentToImport.Version)";
+                                    description  = "$($fileName) with template version $($contentToImport.Version)";
                                     mainTemplate = [PSCustomObject]@{
                                         '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
                                         contentVersion = "[variables('workbookVersion$workbookCounter')]";
