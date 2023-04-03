@@ -63,7 +63,8 @@
             },
             "timeContext": {
               "durationMs": 86400000
-            }
+            },
+            "value": ""
           },
           {
             "id": "1231613d-d734-40da-8baf-c55fdee75df1",
@@ -78,7 +79,8 @@
             },
             "timeContext": {
               "durationMs": 86400000
-            }
+            },
+            "value": ""
           },
           {
             "id": "46ef1dfe-ea81-413c-a410-1ea67b7e61ab",
@@ -185,7 +187,7 @@
             "version": "KqlParameterItem/1.0",
             "name": "ticloud_api_check",
             "type": 1,
-            "query": "let RLTable = view (){RLTiCloudQuotas_CL | summarize x=count()};\r\nlet View_2 = view () { print x=1 };\r\nunion isfuzzy=true\r\n(RLTable | where x > 0),\r\n(View_2)\r\n| count\r\n| extend status=iff(Count == 2, \"error\", \"none\")\r\n| project status\r\n",
+            "query": "// check for RLTiCloudQuotas_CL table\r\n// if sum equals 1, then table doesn't exist\r\n// if sum eqals 2, then connection error exists\r\n// any sum greater than 2 means API is working as expected\r\nlet RLTable = view (){     \r\n    RLTiCloudQuotas_CL\r\n        | where eventType_s == \"connection_check\"\r\n        | summarize arg_max(TimeGenerated, *)\r\n        | extend x = iff(RLAPIConnectionStatus_s == \"connected\", 1, 0)\r\n        | project x};\r\nlet RLTableErrorCheck = view (){ \r\n    RLTiCloudQuotas_CL\r\n        | where eventType_s == \"connection_check\"\r\n        | summarize arg_max(TimeGenerated, *)\r\n        | extend x = iff(RLAPIConnectionStatus_s == \"error\", 1, 0)\r\n        | project x\r\n};\r\nlet View_2 = view () { print x=1 };\r\nunion isfuzzy=true\r\n(RLTable | where x > 0),\r\n(RLTableErrorCheck),\r\n(View_2)\r\n| summarize sum(x)\r\n| extend status=case(sum_x > 2, \"error\", sum_x == 2, \"connected\", \"none\")\r\n| project status\r\n",
             "isHiddenWhenLocked": true,
             "timeContext": {
               "durationMs": 2592000000
@@ -1915,7 +1917,7 @@
                         "type": 3,
                         "content": {
                           "version": "KqlItem/1.0",
-                          "query": "RLTiCloudQuotas_CL\r\n| where eventType_s == \"connection_check\"\r\n| summarize arg_max(TimeGenerated, *)\r\n| extend errorMessage = strcat(\"Response code: \", errorMessage_s)",
+                          "query": "RLTiCloudQuotas_CL\r\n| where eventType_s == \"connection_check\"\r\n| summarize arg_max(TimeGenerated, *)\r\n| extend errorMessage = \"\"\r\n| extend errorMessage = column_ifexists(\"errorMessage_s\", errorMessage)\r\n| extend finalErrorMessage = strcat(\"Response code: \", errorMessage)",
                           "size": 3,
                           "title": "Connection status",
                           "timeContext": {
@@ -1955,7 +1957,7 @@
                               }
                             },
                             "secondaryContent": {
-                              "columnMatch": "errorMessage",
+                              "columnMatch": "finalErrorMessage",
                               "formatter": 18,
                               "formatOptions": {
                                 "thresholdsOptions": "colors",
@@ -1974,8 +1976,6 @@
                                   },
                                   {
                                     "operator": "Default",
-                                    "thresholdValue": null,
-                                    "representation": "red",
                                     "text": "{0}{1}"
                                   }
                                 ]
@@ -2042,7 +2042,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let userDailyUsage = RLTiCloudQuotas_CL\r\n| where TimeGenerated > startofday(now())\r\n| where eventType_s == \"user_daily_usage\"\r\n| summarize arg_max(TimeGenerated, *) by product_s\r\n| project product_s, numberOfQueries_d;\r\nRLTiCloudQuotas_CL\r\n| where TimeGenerated > startofday(now())\r\n| where eventType_s == \"company_quota_limits\"\r\n| where limit_type_s == \"daily\"\r\n| where users_s contains \"{ticloud_api_user}\"\r\n| summarize arg_max(TimeGenerated, *) by products_s\r\n| extend products = todynamic(products_s)\r\n| mv-expand products\r\n| project TimeGenerated, tostring(products), [\"Limit Type\"]=limit_type_s, [\"Limit Exceeded\"]=limit_exceeded_b, [\"Limit\"]=limit_d, [\"Users\"]=users_s\r\n| join userDailyUsage on $left.products == $right.product_s\r\n| project TimeGenerated, products, [\"Limit Type\"]= strcat(\"Limit type: \", [\"Limit Type\"]), [\"Limit Exceeded\"], [\"# of queries used\"]=numberOfQueries_d, [\"Limit\"], [\"Users\"]\r\n| extend percentUsed = ([\"# of queries used\"]/Limit)\r\n| extend fullDetails = strcat(split(tostring([\"# of queries used\"]), \".\")[0], \" / \", split(tostring(Limit), \".\")[0])\r\n",
+                    "query": "let userDailyUsage = RLTiCloudQuotas_CL\r\n| where TimeGenerated > startofday(now())\r\n| where eventType_s == \"user_daily_usage\"\r\n| summarize arg_max(TimeGenerated, *) by product_s\r\n| project product_s, numberOfQueries_d;\r\nRLTiCloudQuotas_CL\r\n| where TimeGenerated > startofday(now())\r\n| where eventType_s == \"company_quota_limits\"\r\n| where limit_type_s == \"daily\"\r\n| where users_s contains \"{ticloud_api_user}\"\r\n| summarize arg_max(TimeGenerated, *) by products_s\r\n| extend products = todynamic(products_s)\r\n| mv-expand products\r\n| project TimeGenerated, tostring(products), [\"Limit Type\"]=limit_type_s, [\"Limit Exceeded\"]=limit_exceeded_s, [\"Limit\"]=limit_d, [\"Users\"]=users_s\r\n| join userDailyUsage on $left.products == $right.product_s\r\n| project TimeGenerated, products, [\"Limit Type\"]= strcat(\"Limit type: \", [\"Limit Type\"]), [\"Limit Exceeded\"], [\"# of queries used\"]=numberOfQueries_d, [\"Limit\"], [\"Users\"]\r\n| extend percentUsed = ([\"# of queries used\"]/Limit)\r\n| extend fullDetails = strcat(split(tostring([\"# of queries used\"]), \".\")[0], \" / \", split(tostring(Limit), \".\")[0])\r\n",
                     "size": 3,
                     "title": "Summary of Daily Limit API usage",
                     "noDataMessage": "No API usage found for today.",
@@ -2116,14 +2116,11 @@
                             },
                             {
                               "operator": "Default",
-                              "thresholdValue": null,
-                              "representation": null,
                               "text": "{0}{1}"
                             }
                           ],
                           "compositeBarSettings": {
-                            "labelText": "",
-                            "columnSettings": []
+                            "labelText": ""
                           }
                         },
                         "numberFormat": {
@@ -2393,8 +2390,6 @@
                               "linkIsContextBlade": true,
                               "armActionContext": {
                                 "path": "",
-                                "headers": [],
-                                "params": [],
                                 "httpMethod": "POST",
                                 "title": "Check quota",
                                 "description": "# ✅ Check ReversingLabs TitaniumCloud API quotas\n\n## This action will execute a Logic App that will make calls to the TitaniumCloud TCA-9999 Quota API. The results will be loaded into your log analytics workspace under the RLTiCloudQuotas_CL table.\n\n# ⚠️ Please refresh the workbook after running this action to view updated data.",

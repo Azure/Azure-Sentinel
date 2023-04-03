@@ -218,6 +218,11 @@ while IFS= read -r contname; do
 				envstring+="-e $variable "
 			fi
 		done
+		
+		# Check if we have an agent guid already. if we don't have - generate and add to the envstring
+		if [[ $envstring != *"SENTINEL_AGENT_GUID="* ]]; then
+			envstring+="-e SENTINEL_AGENT_GUID=$(uuidgen) "
+		fi
 			
 		ContainerNetworkSetting=$(docker inspect "$contname" --format '{{.Config.Labels.ContainerNetworkSetting}}')
 		if [ "$ContainerNetworkSetting" == "<no value>" ]; then
