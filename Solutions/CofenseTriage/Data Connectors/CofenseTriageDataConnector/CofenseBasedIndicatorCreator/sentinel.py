@@ -194,7 +194,7 @@ class MicrosoftSentinel:
             response = requests.post(uri, data=body, headers=headers)
             if response.status_code >= 200 and response.status_code <= 299:
                 applogger.debug(
-                    "{}(method={}) : {} : Status_code: {} Accepted: Data Posted Successfully to azure sentinel.".format(
+                    "{}(method={}) : {} : Status_code: {} Accepted: Data Posted Successfully to microsoft sentinel.".format(
                         LOGS_STARTS_WITH,
                         __method_name,
                         COFENSE_TO_SENTINEL,
