@@ -352,9 +352,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     $dataConnectorObject | Add-Member -MemberType NoteProperty -Name "kind" -Value "DataConnector"
                                     $WorkbookDependencyCriteria += $dataConnectorObject
                                 }
+                                if($null -ne $dataConnectorObject -or $null -ne $dataTypeObject){
                                 $workbookDependencies = [PSCustomObject]@{
                                     operator = "AND";
                                 };
+                            }
 
                                 if($WorkbookDependencyCriteria.Count -gt 0)
                                 {
@@ -428,8 +430,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
-                                    dependencies = $workbookDependencies;
                                 }
+                            }
+                            if($null -ne $workbookDependencies)
+                            {
+                                $workbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $workbookDependencies
                             }
 
                             if($workbookDescriptionText -ne "")
@@ -489,7 +494,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
 
                         $fileName = Split-path -Parent $file | Split-Path -leaf
-						if($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger")
+						if($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger" -or $fileName.ToLower() -eq "entity-trigger")
 						{ 
 						$parentPath = Split-Path $file -Parent; $fileName = (Split-Path $parentPath -Parent | Split-Path -leaf) + "-" + $fileName; 
 						}
@@ -1264,7 +1269,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
                                 if($existingFunctionApp)
                                 {
-                                    $templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Function)";
+                                    $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Function")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Function)"
+                                    #$templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Function)";
                                 }
                             }
                             # Data Connector Content -- *Assumes GenericUI
@@ -1778,6 +1784,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         displayName = "$($solutionName) Hunting Query template";
                                     }
                                 }
+                                if($baseAnalyticRuleTemplateSpec.properties.displayName.length -ge 64){
+                                    $baseAnalyticRuleTemplateSpec.properties.displayName = "$($solutionName) HQ template";
+                                }
 
                                 $baseMainTemplate.resources += $baseHuntingQueryTemplateSpec
                                 $author = $contentToImport.Author.Split(" - ");
@@ -2064,6 +2073,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         description = "$($solutionName) Analytics Rule $analyticRuleCounter with template";
                                         displayName = "$($solutionName) Analytics Rule template";
                                     }
+                                }
+                                if($baseAnalyticRuleTemplateSpec.properties.displayName.length -ge 64){
+                                    $baseAnalyticRuleTemplateSpec.properties.displayName = "$($solutionName) AR template";
                                 }
 
                                 $newAnalyticRule.name = "[variables('AnalyticRulecontentId$analyticRuleCounter')]"
