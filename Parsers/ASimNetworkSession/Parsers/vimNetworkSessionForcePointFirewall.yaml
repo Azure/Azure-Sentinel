@@ -272,7 +272,7 @@ ParserQuery: |
                         "No match"
                     )
         | where ASimMatchingIpAddr != "No match"
-        | where AdditionalExtensions has_any (hostname_has_any)
+        | where array_length(hostname_has_any) == 0 or AdditionalExtensions has_any (hostname_has_any)
     };
     let ForcePointNetwork = CommonSecurityLog
             | where not(disabled)
@@ -376,12 +376,8 @@ ParserQuery: |
                      DstIpAddr = coalesce(DstIpAddr, ipv4_parts[0],ipv6_parts[0]),
                      DstPortNumber = coalesce(DstPortNumber, host_parts[1], ipv4_parts[1],ipv6_parts[1])
             | invoke _ASIM_ResolveDstFQDN('DstDomainPart')
-            | extend temp_is_MatchSrcHostname = DstHostname has_any (hostname_has_any), 
-                     temp_is_MatchDstHostname = DstHostname has_any (hostname_has_any)
             | extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"-",
-                                        temp_is_MatchSrcHostname and temp_is_MatchDstHostname, "Both",
-                                        temp_is_MatchSrcHostname, "SrcHostname",
-                                        temp_is_MatchDstHostname, "DstHostname",
+                                        DstHostname has_any (hostname_has_any), "DstHostname",
                                         "No match"
                                         )
             | where ASimMatchingHostname != "No match"
@@ -393,10 +389,8 @@ ParserQuery: |
                                     ApplicationProtocol startswith "TCP", toint(split(ApplicationProtocol,'/')[1]),
                                     ApplicationProtocol startswith "UDP", toint(split(ApplicationProtocol,'/')[1]),
                                     int(null)),
-                     AdditionalFields = pack(iff(isnotempty(RequestMethod) and RequestMethod != "UNKNOWN", "RequestMethod", ""),
-                                             iff(isnotempty(RequestMethod) and RequestMethod != "UNKNOWN", RequestMethod, ""),
-                                             iff(isnotempty(DeviceCustomString4),"VirusId",""),
-                                             DeviceCustomString4),
+                     AdditionalFields = pack(iff(isnotempty(RequestMethod) and RequestMethod != "UNKNOWN", "RequestMethod", ""),RequestMethod,
+                                             iff(isnotempty(DeviceCustomString4),"VirusId",""),DeviceCustomString4),
                      DstAppName = case(DestinationServiceName in~ ("Generic-Web-HTTP","Application-Unknown","Unknown-Encrypted-Application"), "",
                                         DestinationServiceName),
                      DvcIpAddr = coalesce(DvcIpAddr,DeviceName)
