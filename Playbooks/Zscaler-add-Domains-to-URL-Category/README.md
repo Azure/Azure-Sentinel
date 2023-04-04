@@ -7,6 +7,8 @@ For any technical questions, please contact info@accelerynt.com
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZscaler-add-Domains-to-URL-Category%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZscaler-add-Domains-to-URL-Category%2Fazuredeploy.json)    
 
+![Zscaler_Demo_3](Images/Zscaler_Demo_3.png)
+
 This playbook is intended to be run from a Microsoft Sentinel incident. It will extract domains from Microsoft Sentinel incidents and add them to a Zscaler Custom URL Category of your choice.
 
 ![Zscaler_Demo_1](Images/Zscaler_Demo_1.png)
