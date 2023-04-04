@@ -36,43 +36,43 @@ Before deployment, you will need to configure your Zscaler API roles and API adm
 
 For this Playbook to modify your Zscaler custom domain list, you will need a local Zscaler admin account that has access to the read and modify policy. To limit the access this account has to only what is needed, you will need to make a custom administrator role. 
 
-In the Zscaler administration console hover over **Administration then click on Role Management**.
+* In the Zscaler administration console hover over **Administration then click on Role Management**.
 
 ![](Images/zgit1.png)
 
-Click on **Add Administrator Role**.
+* Click on **Add Administrator Role**.
 
 ![](Images/zgit1a.png)
 
-Create a **Name** for the **Administrator Role** and use the settings **exactly** as depicted in the image below. Then click the **Save** button.
+* Create a **Name** for the **Administrator Role** and use the settings **exactly** as depicted in the image below. Then click the **Save** button.
 
 ![](Images/zgit2.png)
 
-Hover over the **Activation** button and click **Activate** to enable the new Role.
+* Hover over the **Activation** button and click **Activate** to enable the new Role.
 
 ![](Images/Activate.png)
 
-Next, hover over **Administration** and click on **Administrator Management**.
+* Next, hover over **Administration** and click on **Administrator Management**.
 
 ![](Images/zgit4.png)
 
-Click on **Add Administrator**.
+* Click on **Add Administrator**.
 
 ![](Images/zgit5.png)
 
-Enter a **Login ID** for the API administrator account you want to create. 
+* Enter a **Login ID** for the API administrator account you want to create. 
 
-In the **Email** box you can enter a preexisting service account, or simply make up an email address which you will not use in your domain. There is no need for email access for this account.
+* In the **Email** box you can enter a pre-existing service account, or simply make up an email address which you will not use in your domain. There is no need for email access for this account.
 
-Enter a name for the account and in the drop-down box below, select the Role you created in the previous step.
+* Enter a name for the account and in the drop-down box below, select the Role you created in the previous step.
 
-Make sure **Password Based Login** is checked and create a secure password for this API account.
+* Make sure **Password Based Login** is checked and create a secure password for this API account.
 
-Take note of the email address and password, as it will be needed during deployment.
+* Take note of the email address and password, as it will be needed during deployment.
 
 ![](Images/zgit6.png)
 
-Click **Save**, then hover over the **Activation** button and click **Activate**. This will enable the new administrator account.
+* Click **Save**, then hover over the **Activation** button and click **Activate**. This will enable the new administrator account.
 
 ![](Images/Activate.png)
 
@@ -90,9 +90,9 @@ Here you will find you **API Key** as well as **Zscaler Instance Name.** You wil
 
 Lastly, you will need to note the custom URL category you want the domains from Microsoft Sentinel incidents added to. 
 
-Hover over the **Administration** button and click on **URL Categories.** 
+* Hover over the **Administration** button and click on **URL Categories.** 
 
-Take note of the name of your desired URL category, as it will be needed during deployment. 
+* Take note of the name of your desired URL category, as it will be needed during deployment. 
 
 In the example below we use name of our Custom category AS_Blocklist. 
 This category in our test environment configured to a Zscaler access policy that disallows users access to any domain in in that list.
@@ -103,21 +103,21 @@ This category in our test environment configured to a Zscaler access policy that
 
 You will need an integration account before this playbook can be deployed, as it is a requirement for executing JavaScript code, which is an operation used in the logic app.
 
-Navigate to the Azure integration accounts page: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Logic%2FintegrationAccounts
+* Navigate to the Azure integration accounts page: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Logic%2FintegrationAccounts
 
-From the "**Overview**" page, select an existing integration account and take note of its name, or click "**Create**".
+* From the "**Overview**" page, select an existing integration account and take note of its name, or click "**Create**".
 
 ![Zscaler_Integration_Account_1](Images/Zscaler_Integration_Account_1.png)
 
-Select the subscription and resource group that this playbook will be deployed to and a name for the integration account, such as "**AS-Zscaler-Integration**". Review the region and select a pricing tier, then click "**Review + create**".
+* Select the subscription and resource group that this playbook will be deployed to and a name for the integration account, such as "**AS-Zscaler-Integration**". Review the region and select a pricing tier, then click "**Review + create**".
 
 ![Zscaler_Integration_Account_2](Images/Zscaler_Integration_Account_2.png)
 
-From the "**Review + create**" page, review the information, then click "**Create**".
+* From the "**Review + create**" page, review the information, then click "**Create**".
 
 ![Zscaler_Integration_Account_3](Images/Zscaler_Integration_Account_3.png)
 
-From the deployment page, take note of the resource name of your integration account, as it will be needed for deployment.
+* From the deployment page, take note of the resource name of your integration account, as it will be needed for deployment.
 
 ![Zscaler_Integration_Account_4](Images/Zscaler_Integration_Account_4.png)
 
@@ -125,21 +125,21 @@ From the deployment page, take note of the resource name of your integration acc
 
 You will need to add you Zscaler API key and Zscaler password to an Azure key vault.
 
-Navigate to the Azure key vaults page: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults
+* Navigate to the Azure key vaults page: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults
 
-Select an existing key vault or create a new one. From the key vault overview page, click the "**Secrets**" menu option, found under the "**Settings**" section. Click "**Generate/Import**".
+* Select an existing key vault or create a new one. From the key vault overview page, click the "**Secrets**" menu option, found under the "**Settings**" section. Click "**Generate/Import**".
 
 ![Zscaler_Key_Vault_1](Images/Zscaler_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**AS-Zscaler-Integration-API-Key**” and enter the Zscaler API key copied previously in the "**Value**" field. All other settings can be left as is. Click "**Create**". 
+* Choose a name for the secret, such as "**AS-Zscaler-Integration-API-Key**” and enter the Zscaler API key copied previously in the "**Value**" field. All other settings can be left as is. Click "**Create**". 
 
 ![Zscaler_Key_Vault_2](Images/Zscaler_Key_Vault_2.png)
 
-Repeat this process for your Zscaler password. 
+* Repeat this process for your Zscaler password. 
 
 ![Zscaler_Key_Vault_3](Images/Zscaler_Key_Vault_3.png)
 
-Once both secrets have been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the key vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/Zscaler-add-Domains-to-URL-Category#granting-access-to-azure-key-vault).
+* Once both secrets have been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the key vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/Zscaler-add-Domains-to-URL-Category#granting-access-to-azure-key-vault).
 
 ![Zscaler_Key_Vault_4](Images/Zscaler_Key_Vault_4.png)
 
@@ -197,18 +197,18 @@ You can view the logic app by clicking the corresponding resource.
 
 Before the Logic App can run successfully, the key vault connection created during deployment must be granted access to the key vault storing your Zscaler API key and password.
 
-From the key vault "**Access policies**" page, click "**Create**".
+* From the key vault "**Access policies**" page, click "**Create**".
 
 ![Zscaler_Access_1](Images/Zscaler_Access_1.png)
 
-Select the "**Get**" checkbox under "**Secret permissions**", then click "**Next**".
+* Select the "**Get**" checkbox under "**Secret permissions**", then click "**Next**".
 
 ![Zscaler_Access_2](Images/Zscaler_Access_2.png)
 
-Paste "**AS-Add-Domains-to-Zscaler-URL-Category**" or the alternative playbook name used into the principal search box and click the option that appears. Click "**Next**" towards the bottom of the page.
+* Paste "**AS-Add-Domains-to-Zscaler-URL-Category**" or the alternative playbook name used into the principal search box and click the option that appears. Click "**Next**" towards the bottom of the page.
 
 ![Zscaler_Access_3](Images/Zscaler_Access_3.png)
 
-Navigate to the "**Review + create**" section and click "**Create**".
+* Navigate to the "**Review + create**" section and click "**Create**".
 
 ![Zscaler_Access_4](Images/Zscaler_Access_4.png)
