@@ -32,21 +32,22 @@ query: |
   | mv-apply TargetResource = TargetResources on 
     (
         where TargetResource.type =~ "User"
-        | extend InvitedUser = tostring(TargetResource.userPrincipalName)
+        | extend InvitedUser = trim(@'"',tostring(TargetResource.userPrincipalName)),
+                 Properties = TargetResource.modifiedProperties
     )
-  | mv-apply Property = TargetResources.modifiedProperties on 
+  | mv-apply Property = Properties on 
     (
-        where Property.displayName =~ "ObjectId.AADGroup"
+        where Property.displayName =~ "Group.DisplayName"
         | extend AADGroup = trim('"',tostring(Property.newValue))
     )
   | where InvitedUser has_any ("CUSTOM DOMAIN NAME#", "#EXT#")
   | mv-apply TargetResource = TargetResources on 
     (
-        where TargetResource.type =~ "ObjectId"
+        where TargetResource.type =~ "Group.ObjectID"
         | extend AADGroupId = trim('"',tostring(TargetResource.id))
     )
   | where AADGroupId !in (GroupIDs)
-  | extend Name = tostring(split(InvitedUser,'@',0)[0]), UPNSuffix = tostring(split(InvitedUser,'@',1)[0])
+  | extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -58,6 +59,8 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: InitiatedByActionUserInformation
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address

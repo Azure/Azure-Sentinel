@@ -26,25 +26,29 @@ query: |
   // When Access Type in modified outbound settings value is 1 that means that now access is allowed. When Access Type in modified outbound settings value is 2 that means that now access is blocked. 
   AuditLogs
   | where OperationName has "Update a partner cross-tenant access setting"
-  | where B2BType = TargetResources[0].modifiedProperties[0].displayName has "b2bDirectOutbound"
+  | mv-apply TargetResource = TargetResources on
+    (
+        where TargetResource.type =~ "Policy"
+        | extend Properties = TargetResource.modifiedProperties
+    )
+  | where B2BType = Properties.displayName has "b2bDirectConnectOutbound"
   | extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
   | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress
-  | mv-apply Property = TargetResources.modifiedProperties on 
-        (
-          where Property.displayName =~ "AccessType.PremodifiedInboundSettings"
-          | extend PremodifiedInboundSettings = trim('"',tostring(Property.oldValue))
-        )
-  | mv-apply Property = TargetResources.modifiedProperties on 
-       (
-         where Property.displayName =~ "AccessType.ModifiedInboundSettings"
-         | extend ModifiedInboundSettings = trim(@'"',tostring(Property.newValue))
-       )
-  | where PremodifiedInboundSettings != ModifiedInboundSettings
+  | mv-apply Property = Properties on
+    (
+        where Property.displayName =~ "b2bCollaborationOutbound"
+        | extend PremodifiedOutboundSettings = trim('"',tostring(Property.oldValue)),
+                 ModifiedOutboundSettings = trim(@'"',tostring(Property.newValue))
+    )
+  | where PremodifiedOutboundSettings != ModifiedOutboundSettings
+  | extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
         columnName: InitiatedByActionUserInformation
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address

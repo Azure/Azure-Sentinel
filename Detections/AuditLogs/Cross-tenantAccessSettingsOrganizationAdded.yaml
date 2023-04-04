@@ -27,24 +27,29 @@ query: |
   | where OperationName has "Add a partner to cross-tenant access setting"
   | extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
   | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress
-  | mv-apply Property = TargetResources.modifiedProperties on 
-        (
-          where Property.displayName =~ "TargetId.ExtTenantIdAdded"
-          | extend ExtTenantIDAdded = trim('"',tostring(Property.newValue))
-        )
+  | mv-apply TargetResource = TargetResources on
+    (
+        where TargetResource.type =~ "Policy"
+        | extend Properties = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = Properties on
+    (
+        where Property.displayName =~ "tenantId"
+        | extend ExtTenantIDAdded = trim('"',tostring(Property.newValue))
+    )
   | where ExtTenantIDAdded !in (ExpectedTenantIDs)
-  | extend Name = tostring(split(ExtTenantIDAdded,'@',0)[0]), UPNSuffix = tostring(split(ExtTenantIDAdded,'@',1)[0])
+  | extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
         columnName: ExtTenantIDAdded
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
   - entityType: Account
     fieldMappings:
       - identifier: Name
         columnName: InitiatedByActionUserInformation
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
