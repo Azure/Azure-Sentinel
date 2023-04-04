@@ -24,15 +24,16 @@ query: |
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   | where isnotempty(FileName)
+  | extend _lowerFileName = tolower(FileName)
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
     SecurityEvent 
     | where TimeGenerated between(starttime..endtime)
     | where EventID in ("4688","8002","4648","4673")
     | where isnotempty(Process)
-    | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID
+    | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID, _lowerProcess = tolower(Process)
   )
-  on $left.FileName == $right.Process
+  on $left._lowerFileName == $right._lowerProcess
   | where SecurityEvent_TimeGenerated < ExpirationDateTime
   | summarize SecurityEvent_TimeGenerated = arg_max(SecurityEvent_TimeGenerated, *) by IndicatorId, Process
   | project SecurityEvent_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
