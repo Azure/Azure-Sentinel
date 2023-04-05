@@ -1,0 +1,182 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "actionGroupName": {
+            "type": "String",
+            "metadata": {
+                "description": "Unique name within the resource group for the Action group."
+            }
+        },
+        "actionGroupShortName": {
+            "maxLength": 12,
+            "type": "String",
+            "metadata": {
+                "description": "Short name up to 12 characters for the Action group."
+            }
+        },
+        "emailAddress": {
+            "type": "String",
+            "metadata": {
+                "description": "Email Address for alert on Function app failure."
+            }
+        },
+		"alertRuleName": {
+            "minLength": 1,
+            "type": "String",
+            "metadata": {
+                "description": "Name of Monitor Alert Rule"
+            }
+        },
+        "alertRuleDescription": {
+            "defaultValue": "Vectra Function App Failed Alert",
+            "type": "String",
+            "metadata": {
+                "description": "Description of Monitor Alert Rule"
+            }
+        },
+        "alertRuleSeverity": {
+            "defaultValue": 3,
+            "allowedValues": [
+                0,
+                1,
+                2,
+                3,
+                4
+            ],
+            "type": "Int",
+            "metadata": {
+                "description": "Severity of alert {0:Critical, 1:Error, 2:Warning, 3:Informational, 4:Verbose}"
+            }
+        },
+        "isEnabled": {
+            "defaultValue": true,
+            "type": "Bool",
+            "metadata": {
+                "description": "Specifies whether the alert is enabled or not."
+            }
+        },
+        "functionAppName": {
+            "minLength": 1,
+            "type": "String",
+            "metadata": {
+                "description": "Specify the name of the Function App to be monitored for failures in Microsoft Sentinel."
+            }
+        },
+        "functionName": {
+            "defaultValue": "AccountDetection",
+            "allowedValues": [
+                "AccountDetection",
+                "Audits",
+                "EntityScoring"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Select the function you want to monitor"
+            }
+        },
+        "windowSize": {
+            "defaultValue": "PT5M",
+            "allowedValues": [
+                "PT1M",
+                "PT5M",
+                "PT15M",
+                "PT30M",
+                "PT1H",
+                "PT6H",
+                "PT12H",
+                "PT24H"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Period of time used to monitor alert activity based on the threshold. Must be between one minute and one day. ISO 8601 duration format."
+            }
+        },
+        "evaluationFrequency": {
+            "defaultValue": "PT5M",
+            "allowedValues": [
+                "PT1M",
+                "PT5M",
+                "PT15M",
+                "PT30M",
+                "PT1H"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "How often the metric alert is evaluated represents in ISO 8601 duration format.<br> <b>Note</b>: Evaluation Frequency should be less than or equal to the Window Size."
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Insights/actionGroups",
+            "apiVersion": "2023-01-01",
+            "name": "[parameters('actionGroupName')]",
+            "location": "Global",
+            "properties": {
+                "groupShortName": "[parameters('actionGroupShortName')]",
+                "enabled": true,
+                "emailReceivers": [
+                    {
+                        "name": "Vectra-Action-Alert_-EmailAction-",
+                        "emailAddress": "[parameters('emailAddress')]",
+                        "useCommonAlertSchema": false
+                    }
+                ],
+                "smsReceivers": [],
+                "webhookReceivers": [],
+                "eventHubReceivers": [],
+                "itsmReceivers": [],
+                "azureAppPushReceivers": [],
+                "automationRunbookReceivers": [],
+                "voiceReceivers": [],
+                "logicAppReceivers": [],
+                "azureFunctionReceivers": [],
+                "armRoleReceivers": []
+            }
+        },
+		{
+            "type": "microsoft.insights/scheduledqueryrules",
+            "apiVersion": "2022-08-01-preview",
+            "name": "[parameters('alertRuleName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('alertRuleName')]",
+                "description": "[parameters('alertRuleDescription')]",
+                "severity": "[parameters('alertRuleSeverity')]",
+                "enabled": "[parameters('isEnabled')]",
+                "evaluationFrequency": "[parameters('evaluationFrequency')]",
+                "scopes": [
+                    "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Insights/components/', parameters('functionAppName'))]"
+                ],
+                "targetResourceTypes": [
+                    "Microsoft.Insights/components"
+                ],
+                "windowSize": "[parameters('windowSize')]",
+                "criteria": {
+                    "allOf": [
+                        {
+                            "query": "[concat('exceptions\n| where operation_Name == \"',parameters('functionName'),'\"\n| summarize arg_max(timestamp, *) by operation_Id')]",
+                            "timeAggregation": "Count",
+                            "dimensions": [],
+                            "operator": "GreaterThan",
+                            "threshold": 0,
+                            "failingPeriods": {
+                                "numberOfEvaluationPeriods": 1,
+                                "minFailingPeriodsToAlert": 1
+                            }
+                        }
+                    ]
+                },
+                "autoMitigate": true,
+                "actions": {
+                    "actionGroups": [
+                        "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Insights/actionGroups/', parameters('actionGroupName'))]"
+                    ],
+                    "customProperties": {}
+                }
+            }
+        }
+    ]
+}
