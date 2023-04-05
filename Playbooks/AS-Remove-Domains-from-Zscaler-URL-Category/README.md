@@ -60,7 +60,7 @@ Click on **Add Administrator**.
 
 Enter a **Login ID** for the API administrator account you want to create. 
 
-In the **Email** box you can enter a preexisting service account, or simply make up an email address which you will not use in your domain. There is no need for email access for this account.
+In the **Email** box you can enter a pre-existing service account, or simply make up an email address which you will not use in your domain. There is no need for email access for this account.
 
 Enter a name for the account and in the drop-down box below, select the Role you created in the previous step.
 
