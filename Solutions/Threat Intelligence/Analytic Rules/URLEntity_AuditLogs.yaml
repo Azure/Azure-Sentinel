@@ -36,35 +36,26 @@ query: |
     | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,tostring(TargetResources))
     | where isnotempty(Url)
     | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend servicePrincipalId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)
-    | mv-expand TargetResources
-    | extend TargetResourceDisplayName = tostring(TargetResources.displayName)
+    | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName)
     | extend Audit_TimeGenerated = TimeGenerated
   ) on Url
   | where Audit_TimeGenerated < ExpirationDateTime
   | summarize Audit_TimeGenerated = arg_max(Audit_TimeGenerated, *) by IndicatorId, Url
   | project Audit_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
-  OperationName, Identity, userPrincipalName, servicePrincipalId, TargetResourceDisplayName, Url
-  | extend timestamp = Audit_TimeGenerated
-  | extend Name = iif(userPrincipalName has '@', tostring(split(userPrincipalName,'@',0)[0]), "")
-  | extend UPNSuffix = iif(userPrincipalName has '@', tostring(split(userPrincipalName,'@',1)[0]), "")
-  | extend AadUserId = iif(isnotempty(servicePrincipalId), servicePrincipalId, "")
+  OperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url
+  | extend timestamp = Audit_TimeGenerated, AccountCustomEntity = userPrincipalName, HostCustomEntity = TargetResourceDisplayName, URLCustomEntity = Url
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: Name
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
-      - identifier: AadUserId
-        columnName: AadUserId
+      - identifier: FullName
+        columnName: AccountCustomEntity
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: TargetResourceDisplayName
+        columnName: HostCustomEntity
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: Url
+        columnName: URLCustomEntity
 version: 1.2.3
 kind: Scheduled
