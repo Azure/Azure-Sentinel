@@ -1,7 +1,7 @@
 id: 712fab52-2a7d-401e-a08c-ff939cc7c25e
-name: TI map URL entity to AuditLogs
+name: TI Map URL Entity to AuditLogs
 description: |
-  'Identifies a match in AuditLogs from any URL IOC from TI'
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in AuditLogs.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -36,26 +36,34 @@ query: |
     | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,tostring(TargetResources))
     | where isnotempty(Url)
     | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend servicePrincipalId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)
     | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName)
     | extend Audit_TimeGenerated = TimeGenerated
   ) on Url
   | where Audit_TimeGenerated < ExpirationDateTime
   | summarize Audit_TimeGenerated = arg_max(Audit_TimeGenerated, *) by IndicatorId, Url
   | project Audit_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
-  OperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url
-  | extend timestamp = Audit_TimeGenerated, AccountCustomEntity = userPrincipalName, HostCustomEntity = TargetResourceDisplayName, URLCustomEntity = Url
+  OperationName, Identity, userPrincipalName, servicePrincipalId, TargetResourceDisplayName, Url
+  | extend timestamp = Audit_TimeGenerated
+  | extend Name = iif(userPrincipalName has '@', tostring(split(userPrincipalName,'@',0)[0]), "")
+  | extend UPNSuffix = iif(userPrincipalName has '@', tostring(split(userPrincipalName,'@',1)[0]), "")
+  | extend AadUserId = iif(isnotempty(servicePrincipalId), servicePrincipalId, "")
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: AadUserId
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: TargetResourceDisplayName
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.2.2
+        columnName: Url
+version: 1.2.3
 kind: Scheduled
