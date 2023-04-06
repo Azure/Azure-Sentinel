@@ -1,0 +1,56 @@
+id: 229f71ba-d83b-42a5-b83b-11a641049ed1
+name: Cross-tenant Access Settings Organization Outbound Collaboration Settings Changed
+description: |
+  'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when Organization Outbound Collaboration Settings are changed for "Users & Groups" and for "Applications".'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2d
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - Persistence
+  - Discovery
+relevantTechniques:
+  - T1078.004
+  - T1136.003
+  - T1087.004
+query: |
+  //In User & Groups and in Applications, the following "AccessType" values in columns PremodifiedOutboundSettings and ModifiedOutboundSettings are interpreted accordingly:
+  // When Access Type in premodified outbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified outbound settings value was 2 that means that the initial access was blocked. 
+  // When Access Type in modified outbound settings value is 1 that means that now access is allowed. When Access Type in modified outbound settings value is 2 that means that now access is blocked. 
+  AuditLogs
+  | where OperationName has "Update a partner cross-tenant access setting"
+  | mv-apply TargetResource = TargetResources on
+    (
+        where TargetResource.type =~ "Policy"
+        | extend Properties = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = Properties on
+    (
+        where Property.displayName =~ "b2bCollaborationOutbound"
+        | extend PremodifiedOutboundSettings = trim('"',tostring(Property.oldValue)),
+                 ModifiedOutboundSettings = trim(@'"',tostring(Property.newValue))
+    )
+  | extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
+  | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress
+  | where PremodifiedOutboundSettings != ModifiedOutboundSettings
+  | extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatedByIPAdress
+version: 1.0.1
+kind: Scheduled
