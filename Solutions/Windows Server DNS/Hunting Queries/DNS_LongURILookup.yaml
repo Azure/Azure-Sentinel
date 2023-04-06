@@ -1,10 +1,8 @@
 id: a0954a17-cc66-4d47-9651-8bf524bbdcc8
 name: Abnormally long DNS URI queries
 description: |
-  'Length of DNS query can often be an indicator of suspicious activity. Typical domain name lengths are short whereas domain name query used 
-  for data exfiltration or tunneling can often be very large in size. This is because they could be encoded using base 64/32 etc. The hunting query looks 
-  for Names that are more than 150 characters in length. Due to a lot of services using long DNS to communicate via prcodurally generated long domain names
-  this can be prone, so a number of known services are excluded from this query. Additional items might need to be added to this exclusion dependent on your
+  'The length of a DNS query can often be an indicator of suspicious activity. Typical domain name lengths are short, whereas the domain name query used for data exfiltration or tunneling can often be very large in size. This is because they could be encoded using base 64/32 etc. The hunting query looks for Names that are more than 150 characters in length. Due to a lot of services using long DNS to communicate via procedurally generated long domain names,
+  this can be problematic, so a number of known services are excluded from this query. Additional items might need to be added to this exclusion, depending on your
   environment.'
 requiredDataConnectors:
   - connectorId: DNS
@@ -18,7 +16,6 @@ relevantTechniques:
   - T1008
   - T1048
 query: |
-
   // Setting URI length threshold count, shorter URI's may cause noise, change as needed
   let uriThreshold = 150;
   let LocalDomains = 
@@ -48,7 +45,7 @@ query: |
   array_length(split(Name, ".")) <= 2, Name,
   tostring(split(Name, ".")[-2]) == "corp", strcat(tostring(split(Name, ".")[-3]),".",tostring(split(Name, ".")[-2]),".", tostring(split(Name, ".")[-1])),
   strlen(tostring(split(Name, ".")[-1])) == 2, strcat(tostring(split(Name, ".")[-3]),".",tostring(split(Name, ".")[-2]),".", tostring(split(Name, ".")[-1])),
-  strlen(tostring(split(Name, ".")[-2])) != "corp", strcat(tostring(split(Name, ".")[-2]),".", tostring(split(Name, ".")[-1])),
+  tostring(split(Name, ".")[-2]) != "corp", strcat(tostring(split(Name, ".")[-2]),".", tostring(split(Name, ".")[-1])),
   Name))
   ;
   DomainLookups
@@ -56,7 +53,12 @@ query: |
       LocalDomains
   ) on SubDomain 
   | summarize by TimeGenerated, Computer, ClientIP, Name, Urilength
-  | extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, HostCustomEntity = Computer, DomainCustomEntity = Name
+  | extend HostName = iff(Computer has '.', substring(Computer,0,indexof(Computer,'.')),Computer)
+  | extend DnsDomain = iff(Computer has '.', substring(Computer,indexof(Computer,'.')+1),"")
+  | extend DNS_0_DomainName = Name
+  | extend IP_0_Address = ClientIP
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
 entityMappings:
   - entityType: DNS
     fieldMappings:
@@ -68,5 +70,7 @@ entityMappings:
         columnName: ClientIP
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
