@@ -1,4 +1,4 @@
-import { MainTemplateValidationError } from "./../utils/validationError";
+import { MainTemplateDomainVerticalValidationError } from "./../utils/validationError";
 import * as logger from "./../utils/logger";
 import { ExitCode } from "../utils/exitCode";
 import fs from "fs";
@@ -52,7 +52,7 @@ export function IsValidSolutionDomainsVerticals(filePath: string): ExitCode {
                         if (categories.hasOwnProperty("domains")) {
                             let domains = categories.domains;
                             if (domains.length === 0) {
-                                throw new MainTemplateValidationError("The solution must include at least one valid domain. Please provide a domain in the 'domains' field of the 'categories' object.");
+                                throw new MainTemplateDomainVerticalValidationError("The solution must include at least one valid domain. Please provide a domain in the 'domains' field of the 'categories' object.");
                             }
                             for (const domain of domains) {
                                 // check if the domain is valid
@@ -62,7 +62,7 @@ export function IsValidSolutionDomainsVerticals(filePath: string): ExitCode {
                             }
                         }
                         else {
-                            throw new MainTemplateValidationError("The solution must include at least one valid domain. Please provide a domain in the 'domains' field of the 'categories' object.");
+                            throw new MainTemplateDomainVerticalValidationError("The solution must include at least one valid domain. Please provide a domain in the 'domains' field of the 'categories' object.");
                         }
 
                         // check if the categories have a "verticals" field
@@ -84,7 +84,7 @@ export function IsValidSolutionDomainsVerticals(filePath: string): ExitCode {
                                 errorMessage += ` verticals: [${invalidVerticals.join(", ")}]`;
                             }
                             errorMessage += ` provided.`;
-                            throw new MainTemplateValidationError(errorMessage);
+                            throw new MainTemplateDomainVerticalValidationError(errorMessage);
                         }
                     }
                 }

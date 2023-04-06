@@ -1,9 +1,8 @@
-import { MainTemplateValidationError } from "./../utils/validationError";
-import * as logger from "./../utils/logger";
+import { MainTemplateSupportObjectValidationError } from "./../utils/validationError";
 import { ExitCode } from "../utils/exitCode";
 import fs from "fs";
 
-// function to check if the support object in the mainTemplate.json file is valid
+// function to check if the solution has a valid support object
 export function IsValidSupportObject(filePath: string): ExitCode {
 
     // check if the file is a mainTemplate.json file
@@ -24,28 +23,37 @@ export function IsValidSupportObject(filePath: string): ExitCode {
         const filteredResource = resources.filter(function (resource: { type: string; }) {
             return resource.type === "Microsoft.OperationalInsights/workspaces/providers/metadata";
         });
+
         if (filteredResource.length > 0) {
-            filteredResource.forEach((element: { hasOwnProperty: (arg0: string) => boolean; properties: { hasOwnProperty: (arg0: string) => boolean; support: any; }; }) => {
+            filteredResource.forEach((element: { hasOwnProperty: (arg0: string) => boolean; properties: { hasOwnProperty: (arg0: string) => boolean; support: { hasOwnProperty: (arg0: string) => boolean; name: any; email: any; link: any; }; }; }) => {
                 // check if the resource has a "properties" field
                 if (element.hasOwnProperty("properties") === true) {
                     // check if the "properties" field has a "support" field
                     if (element.properties.hasOwnProperty("support") === true) {
                         const support = element.properties.support;
 
-                        // check if the support object has a "name" field
-                        if (!support.hasOwnProperty("name")) {
-                            throw new MainTemplateValidationError("The support object must include a 'name' field.");
-                        }
-                        // check if the support object has an "email" field
-                        if (!support.hasOwnProperty("email")) {
-                            throw new MainTemplateValidationError("The support object must include an 'email' field.");
-                        }
-                        // check if the support object has a "link" field
-                        if (!support.hasOwnProperty("link")) {
-                            throw new MainTemplateValidationError("The support object must include a 'link' field.");
+                        // check if the support object has the required fields
+                        if (support.hasOwnProperty("name") && (support.hasOwnProperty("email") || support.hasOwnProperty("link"))) {
+                            // check if the email is valid
+                            if (support.hasOwnProperty("email") && support.email.trim() !== "") {
+                                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                if (!emailRegex.test(support.email)) {
+                                    throw new MainTemplateSupportObjectValidationError(`Invalid email format for support email: ${support.email}`);
+                                }
+                            }
+
+                            // check if the link is a valid url
+                            if (support.hasOwnProperty("link") && support.link.trim() !== "") {
+                                const linkRegex = /^https?:\/\/\S+$/;
+                                if (!linkRegex.test(support.link)) {
+                                    throw new MainTemplateSupportObjectValidationError(`Invalid url format for support link: ${support.link}`);
+                                }
+                            }
+                        } else {
+                            throw new MainTemplateSupportObjectValidationError(`The support object must have "name" field and either "email" or "link" field.`);
                         }
                     } else {
-                        throw new MainTemplateValidationError("The support object must be included in the mainTemplate.json file.");
+                        throw new MainTemplateSupportObjectValidationError(`The "properties" field must have "support" field.`);
                     }
                 }
             });
