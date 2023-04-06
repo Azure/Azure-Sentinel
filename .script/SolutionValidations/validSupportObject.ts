@@ -32,31 +32,36 @@ export function IsValidSupportObject(filePath: string): ExitCode {
                     if (element.properties.hasOwnProperty("support") === true) {
                         const support = element.properties.support;
 
-                        if (support.hasOwnProperty("name") && support.name.trim() !== "") {
+                        if (!support.hasOwnProperty("name")) {
+                            throw new MainTemplateSupportObjectValidationError(`The support object must have a "name" field.`);
+                        } else if (support.name.trim() === "") {
+                            throw new MainTemplateSupportObjectValidationError(`The value of the "name" field cannot be empty.`);
+                        } else if ((!support.hasOwnProperty("email") || support.email.trim() === "") && (!support.hasOwnProperty("link") || support.link.trim() === "")) {
+                            throw new MainTemplateSupportObjectValidationError(`The support object must have either "email" or "link" field and the value should not be empty.`);
+                        } else {
+                            // check if the email is valid
+                            if (support.hasOwnProperty("email") && support.email.trim() !== "") {
+                                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                if (!emailRegex.test(support.email)) {
+                                    throw new MainTemplateSupportObjectValidationError(`Invalid email format for support email: ${support.email}`);
+                                }
+                            }
+
+                            // check if the link is a valid url
+                            if (support.hasOwnProperty("link") && support.link.trim() !== "") {
+                                const linkRegex = /^https?:\/\/\S+$/;
+                                if (!linkRegex.test(support.link)) {
+                                    throw new MainTemplateSupportObjectValidationError(`Invalid url format for support link: ${support.link}`);
+                                }
+                            }
+
                             // check if either the email or the link field is present and not empty
                             if ((support.hasOwnProperty("email") && support.email.trim() !== "") || (support.hasOwnProperty("link") && support.link.trim() !== "")) {
-                                // check if the email is valid
-                                if (support.hasOwnProperty("email") && support.email.trim() !== "") {
-                                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                                    if (!emailRegex.test(support.email)) {
-                                        throw new MainTemplateSupportObjectValidationError(`Invalid email format for support email: ${support.email}`);
-                                    }
-                                }
-
-                                // check if the link is a valid url
-                                if (support.hasOwnProperty("link") && support.link.trim() !== "") {
-                                    const linkRegex = /^https?:\/\/\S+$/;
-                                    if (!linkRegex.test(support.link)) {
-                                        throw new MainTemplateSupportObjectValidationError(`Invalid url format for support link: ${support.link}`);
-                                    }
-                                }
+                                // do nothing
                             } else {
-                                throw new MainTemplateSupportObjectValidationError(`The support object must have either "email" or "link" field and the value should not be empty.`);
+                                throw new MainTemplateSupportObjectValidationError(`Either the "email" or "link" field is required.`);
                             }
-                        } else {
-                            throw new MainTemplateSupportObjectValidationError(`The support object must have a "name" field.`);
                         }
-
                     } else {
                         throw new MainTemplateSupportObjectValidationError(`The "properties" field must have "support" field.`);
                     }
