@@ -12,6 +12,10 @@ References:
   Link: https://aka.ms/ASimAuditEventDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
+Exceptions:
+- Field: Dvc
+  Warning: Empty value in mandatory field
+  Exception: May be empty for requests for root servers and for requests for RR type DNSKEY
 Description: |
   This ASIM parser supports filtering and normalizing VectraCloud Account Detection Logs Event in the Account_Detection_Data_CL table to the ASIM Audit Event schema.
 ParserName: vimAuditEventVectraCloudAccountDetection
@@ -42,11 +46,11 @@ ParserQuery: |
   {
     Account_Detection_Data_CL
     | where (isnull(starttime) or event_timestamp_t >= starttime) and (array_length(actorusername_has_any) == 0 or tostring(toint(detection_id_d)) has_any (actorusername_has_any)) and (array_length(operation_has_any) == 0 or d_type_vname_s has_any (operation_has_any)) and (array_length(eventtype_in) == 0 or detection_type_s has_any (eventtype_in))
-    | extend details_json = parse_json(detail_s)
-    | where (isnull(endtime) or todatetime(details_json[0].last_timestamp) <= endtime)
-    | extend EventMessage = iff(isnull(details_json[0].error_code) and isnull(details_json[0].error_message),"No error", strcat(details_json[0].error_code, " : ", details_json[0].error_message))
+    | parse-kv detail_s as (['error_code']:string, ['error_message']:string, ['last_timestamp']: datetime, ['user_agent']: string) with (regex=@'"?(error_code|error_message|last_timestamp|user_agent)":\s"?([^,"]+)"?\s*[,|}]')
+    | where (isnull(endtime) or todatetime(last_timestamp) <= endtime)
+    | extend EventMessage = iff((isnull(error_code) and isnull(error_message)) or (isempty(error_code) and isempty(error_message)),"No error", strcat(error_code, " : ",error_message))
     | extend
-          EventEndTime = todatetime(details_json[0].last_timestamp),
+          EventEndTime = todatetime(last_timestamp),
           EventProduct = 'Vectra Cloud',
           EventResult = "Success",
           EventType = "Other",
@@ -56,7 +60,7 @@ ParserQuery: |
           EventVendor = 'Vectra',
           EventUid = tostring(toint(id_d)),
           EventOriginalUid = tostring(toint(detection_id_d)),
-          HttpUserAgent = tostring(details_json[0].user_agent),
+          HttpUserAgent = tostring(user_agent),
           SrcDescription = src_account_s,
           Type = detection_type_s,
           ThreatConfidence = toint(threat_d),
@@ -68,6 +72,6 @@ ParserQuery: |
           Src = src_account_s,
           EventReportUrl = detection_href_s
     | project-away
-          id_d, Category, threat_d, certainty_d, triaged_b, detection_id_d, account_id_d, account_href_s, href_s, account_uid_s, event_timestamp_t, detail_s, details_json, Severity, _SubscriptionId, _ResourceId, RawData, TenantId, SourceSystem, Computer, MG, ManagementGroupName
+          id_d, error_code, error_message, last_timestamp, Category, threat_d, certainty_d, triaged_b, detection_id_d, account_id_d, account_href_s, href_s, account_uid_s, event_timestamp_t, detail_s, Severity, _SubscriptionId, _ResourceId, RawData, TenantId, SourceSystem, Computer, MG, ManagementGroupName
   };
   parser (disabled=disabled, eventresult=eventresult, starttime=starttime, endtime=endtime, actorusername_has_any=actorusername_has_any,operation_has_any=operation_has_any, eventtype_in=eventtype_in)
