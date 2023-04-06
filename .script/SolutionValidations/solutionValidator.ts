@@ -3,7 +3,7 @@ import * as logger from "./../utils/logger";
 import { ExitCode } from "./../utils/exitCode";
 import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals";
 import { IsValidSupportObject } from "./validSupportObject";
-import { MainTemplateDomainVerticalValidationError } from "../utils/validationError";
+import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError } from "../utils/validationError";
 
 
 
@@ -35,6 +35,8 @@ let CheckOptions = {
         console.log(`Solution Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
         if (e instanceof MainTemplateDomainVerticalValidationError) {
             logger.logError("Please refer link https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/sentinel/sentinel-solutions.md?msclkid=9a240b52b11411ec99ae6736bd089c4a#categories-for-microsoft-sentinel-out-of-the-box-content-and-solutions for valid Domains and Verticals.");
+        } else if (e instanceof MainTemplateSupportObjectValidationError) {
+            logger.logError("Validation for Support object failed in Main Template.");
         }
     },
     // Callback function to handle final failure

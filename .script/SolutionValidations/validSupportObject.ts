@@ -35,7 +35,7 @@ export function IsValidSupportObject(filePath: string): ExitCode {
                         if (!support.hasOwnProperty("name")) {
                             throw new MainTemplateSupportObjectValidationError(`The support object must have a "name" field.`);
                         } else if (support.name.trim() === "") {
-                            throw new MainTemplateSupportObjectValidationError(`The value of the "name" field cannot be empty.`);
+                            throw new MainTemplateSupportObjectValidationError(`The support object "name" field value cannot be empty.`);
                         } else if ((!support.hasOwnProperty("email") || support.email.trim() === "") && (!support.hasOwnProperty("link") || support.link.trim() === "")) {
                             throw new MainTemplateSupportObjectValidationError(`The support object must have either "email" or "link" field and the value should not be empty.`);
                         } else {
