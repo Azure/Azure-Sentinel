@@ -456,7 +456,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName$workbookCounter'))]"
                                 );
                                 properties = [PSCustomObject]@{
-                                    description  = "$($fileName) Workbook with template version $($contentToImport.Version)";
+                                    description  = "$($fileName) with template version $($contentToImport.Version)";
                                     mainTemplate = [PSCustomObject]@{
                                         '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
                                         contentVersion = "[variables('workbookVersion$workbookCounter')]";
@@ -1269,7 +1269,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
                                 if($existingFunctionApp)
                                 {
-                                    $templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Function)";
+                                    $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Function")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Function)"
+                                    #$templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Function)";
                                 }
                             }
                             # Data Connector Content -- *Assumes GenericUI
