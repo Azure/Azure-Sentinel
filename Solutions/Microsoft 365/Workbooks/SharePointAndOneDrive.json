@@ -1,0 +1,547 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "crossComponentResources": [],
+        "parameters": [
+          {
+            "id": "36a4172e-0e49-4884-b2a2-2281528a2ff4",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 2592000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "4e1b6539-9788-43e2-a283-4891f33f1677",
+            "version": "KqlParameterItem/1.0",
+            "name": "Operations",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OfficeActivity\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint')\r\n| summarize Count = count() by Operation\r\n| order by Count desc, Operation asc\r\n| project Value = Operation, Label = strcat(Operation, ' - ', Count)",
+            "value": null,
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "e2b700d7-d218-47db-9521-52176ed43005",
+            "version": "KqlParameterItem/1.0",
+            "name": "Users",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OfficeActivity\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint')\r\n|  where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| summarize Count = count() by UserId\r\n| order by Count desc, UserId asc\r\n| project Value = UserId, Label = strcat(UserId, ' - ', Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 1"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## **General overview**"
+      },
+      "name": "text - 0"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint');\r\ndata\r\n| summarize Count = count() by OfficeWorkload\r\n| join kind = fullouter (datatable(OfficeWorkload:string)['OneDrive', 'SharePoint']) on OfficeWorkload\r\n| project OfficeWorkload = iff(OfficeWorkload == '', OfficeWorkload1, OfficeWorkload), Count = iff(OfficeWorkload == '', 0, Count)\r\n| join kind = inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by OfficeWorkload)\r\n    on OfficeWorkload\r\n| project-away OfficeWorkload1, TimeGenerated\r\n| extend OfficeWorkload = OfficeWorkload\r\n| union (\r\n    data \r\n    | summarize Count = count() \r\n    | extend jkey = 1\r\n    | join kind=inner (data\r\n        | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n        | extend jkey = 1) on jkey\r\n    | extend OfficeWorkload = 'All', OfficeWorkloads = '*'    \r\n)\r\n| order by Count desc\r\n| take 10\r\n",
+        "size": 4,
+        "exportFieldName": "OfficeWorkload",
+        "exportParameterName": "SelectedWorkload",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "OfficeWorkload",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "min": 0,
+              "palette": "coldHot",
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 10"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Operation summary"
+      },
+      "name": "text - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\");\r\nlet appData = data\r\n| summarize TotalCount = count() by Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation\r\n    | project-away TimeGenerated) on Operation\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by UserId , Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation, UserId\r\n    | project-away TimeGenerated) on Operation, UserId\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, UserId, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Operation\r\n| project Id, Name = UserId, Type = 'UserId', ['Operations Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Operation, Type = 'Operation', ['Operations Count'] = TotalCount,  Trend)\r\n| order by ['Operations Count'] desc, Name asc",
+        "size": 1,
+        "exportParameterName": "OperationDetail",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "showAnalytics": true,
+        "showExportToExcel": true,
+        "exportToExcelOptions": "visible",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Operations Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "orange",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "min": 0,
+                "palette": "gray",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        }
+      },
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Amount = count() by Operation, bin_at(TimeGenerated, 1d, now()) \r\n| sort by Amount ",
+        "size": 1,
+        "exportDefaultValue": "*",
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "Activities over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "linechart"
+      },
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by Site_Url, UserId, Operation, TimeGenerated",
+        "size": 0,
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "Sites",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by ClientIP , UserId, Operation, bin(TimeGenerated, 1d)",
+        "size": 0,
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "IP addresses",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by Site_Url, UserId, Operation, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+        "size": 1,
+        "exportToExcelOptions": "visible",
+        "title": "Sites details",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by ClientIP , UserId, Operation, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+        "size": 1,
+        "exportToExcelOptions": "visible",
+        "title": "IP addresses details",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 7"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## file operations"
+      },
+      "name": "text - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where Operation contains \"file\"\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\");\r\nlet appData = data\r\n| summarize TotalCount = count() by Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation\r\n    | project-away TimeGenerated) on Operation\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by SourceFileExtension , Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation, SourceFileExtension\r\n    | project-away TimeGenerated) on Operation, SourceFileExtension\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, SourceFileExtension, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Operation\r\n| project Id, Name = SourceFileExtension, Type = 'SourceFileExtension', ['Operations Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Operation, Type = 'Operation', ['Operations Count'] = TotalCount,  Trend)\r\n| order by ['Operations Count'] desc, Name asc",
+        "size": 0,
+        "exportParameterName": "FileOperations",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "exportToExcelOptions": "visible",
+        "title": "FIle operations",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Operations Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 10,
+              "formatOptions": {
+                "min": 0,
+                "palette": "greenDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        }
+      },
+      "name": "query - 8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({FileOperations});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'SourceFileExtension' and SourceFileExtension == details.Name)\r\n| summarize Number = count() by SourceFileName, SourceFileExtension, UserId, Operation, DestinationFileName, DestinationFileExtension, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SourceFileName",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SourceFileExtension",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserId",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Operation",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DestinationFileName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DestinationFileExtension",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Number",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "lightBlue",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "name": "query - 9"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-SharePointAndOneDrive",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

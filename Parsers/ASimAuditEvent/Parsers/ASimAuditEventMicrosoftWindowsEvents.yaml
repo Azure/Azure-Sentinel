@@ -1,0 +1,93 @@
+Parser:
+  Title: Audit Event ASIM parser for Microsoft Windows Events audit events
+  Version: '0.1'
+  LastUpdated: Dec 20 2022
+Product:
+  Name: Microsoft Windows
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Office 365 Management Activity API schema
+  Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
+Description: |
+  This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) in the SecurityEvent, WindowsEvent and Event tables to the ASIM Audit Event schema.
+ParserName: ASimAuditEventMicrosoftWindowsEvents
+EquivalentBuiltInParser: _ASim_AuditEvent_MicrosoftWindowsEvents
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool = false) {
+    union 
+    (
+        union 
+        (
+            SecurityEvent
+            | where not(disabled)
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
+            | where EventID == 1102
+        ),
+        (
+            Event
+            | where not(disabled)
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
+            | where EventID == 1102
+        )
+        | parse-kv EventData as 
+            (
+                SubjectUserSid:string,
+                SubjectUserName:string,
+                SubjectDomainName:string,
+                SubjectLogonId:string
+            ) 
+            with (regex=@'<(\w+)>([^<]*)<')
+        | project-away EventData
+    ),
+    (
+        WindowsEvent 
+        | where not(disabled)
+        | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
+        | where EventID == 1102
+        | extend
+            SubjectUserSid = tostring(EventData.SubjectUserSid),
+            SubjectUserName = tostring(EventData.SubjectUserName),
+            SubjectDomainName = tostring(EventData.SubjectDomainName),
+            SubjectLogonId = tostring(EventData.SubjectLogonId)
+        | project-away EventData
+    )
+    | project-rename
+        ActorUserId = SubjectUserSid,
+        DvcHostname = Computer,
+        ActorSessionId = SubjectLogonId,
+        DvcId = _ResourceId
+    | extend
+        EventCount = int(1),
+        EventType = "Delete",
+        Operation = "Delete Logs",
+        Object = "Logs",
+        EventResult = "Success",
+        EventStartTime = TimeGenerated, 
+        EventEndTime= TimeGenerated,
+        EventProduct = 'Windows',
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'AuditEvent',
+        ActorUserIdType = 'SID',
+        ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
+        ActorUsernameType = iff (SubjectDomainName == "", 'Simple', 'Windows'),
+        DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
+        EventOriginalType = tostring(EventID)
+    // Aliases
+    | extend 
+        User=ActorUsername,
+        ActorUserSid = ActorUserId,
+        Dvc = DvcHostname
+    | project-away Subject*, EventID
+  };
+  parser (disabled=disabled)

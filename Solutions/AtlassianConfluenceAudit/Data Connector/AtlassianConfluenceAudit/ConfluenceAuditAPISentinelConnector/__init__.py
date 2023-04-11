@@ -30,23 +30,16 @@ if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
 def generate_date():
-    # current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
-    current_timestamp = int(datetime.datetime.utcnow().timestamp()*1000)
+    current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
     state = StateManager(connection_string=connection_string)
     past_time = state.get()
-    past_timestamp = 0
-    if past_time is not None and past_time != "":
-        past_timestamp = int(past_time)
-        logging.info("The last time point is: {}".format(past_timestamp))
+    if past_time is not None:
+        logging.info("The last time point is: {}".format(past_time))
     else:
         logging.info("There is no last time point, trying to get events for last hour.")
-        # past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        past_timestamp = (current_timestamp - 3600000) #3600s
-    # state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    logging.info("generate time {} ~ {}".format(past_timestamp, current_timestamp))
-    state.post(str(current_timestamp))
-    # return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    return (past_timestamp, current_timestamp)
+        past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
 
 def get_result_request(offset,limit,from_time,to_time):
@@ -67,7 +60,7 @@ def get_result_request(offset,limit,from_time,to_time):
         elif r.status_code == 403:
             logging.error("The user does not have the required permissions or Confluence products are on free plans. Audit logs are available when at least one Confluence product is on a paid plan. Error code: {}".format(r.status_code))
         else:
-            logging.error("Something wrong. Error code: {}, err: {}".format(r.status_code, r.content))
+            logging.error("Something wrong. Error code: {}".format(r.status_code))
     except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
 
@@ -131,4 +124,3 @@ def main(mytimer: func.TimerRequest)  -> None:
         logging.info('The timer is past due!')
     logging.info('Starting program')
     get_result(generate_date())
-

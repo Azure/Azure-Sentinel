@@ -1,0 +1,578 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "\n>**NOTE:** This workbook uses a parser based on a Kusto Function to normalize fields. [Follow these steps](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Parsers/ProofpointPOD/ProofpointPOD) to create the Kusto function alias **ProofpointPOD**."
+      },
+      "name": "text - 16"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "3fb8c41a-e970-467a-8975-0b87bfda8cc0",
+            "cellValue": "Tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Proofpoint Email Security Main Dashboard",
+            "subTarget": "proofpoint_email_security_main_dashboard",
+            "preText": "Proofpoint Email Security Main Dashboard",
+            "style": "link"
+          },
+          {
+            "id": "40d6c856-9ecd-428b-ada5-ad76ba351f5e",
+            "cellValue": "Tab",
+            "linkTarget": "parameter",
+            "linkLabel": "TLS Dashboard",
+            "subTarget": "tls_dashboard",
+            "style": "link"
+          },
+          {
+            "id": "68036e0c-acaa-48d3-aae0-911917ec637d",
+            "cellValue": "Tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Message Summary",
+            "subTarget": "messages_summary",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "Tab"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f1aebfc5-f1bd-4462-bb99-f87af7f027ba",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 5184000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isNotEqualTo",
+        "value": "messages_summary"
+      },
+      "name": "Parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ProofpointPOD\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by EventType;",
+        "size": 1,
+        "title": "Events over time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "proofpoint_email_security_main_dashboard"
+      },
+      "name": "EventsOverTime"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let email_security_total_messages_timechart=ProofpointPOD\n| where EventType == \"message\" \n| where TimeGenerated {TimeRange}\n| extend event_type = \"Message Rate\";\n\nlet email_security_total_blocked_timechart =\nProofpointPOD\n| where EventType == \"message\" \n| where FilterDisposition == \"discard\" or FilterDisposition == \"reject\"\n| extend event_type = \"Blocked Message Rate\";\n\nlet quarantine_trends = \nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange}\n| where isnotempty(FilterQuarantineFolder)\n| extend event_type = \"Quarantined Message Rate\";\n\nlet result = union email_security_total_messages_timechart, email_security_total_blocked_timechart, quarantine_trends\n| make-series Trend = dcount(MsgHeaderMessageId) on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by event_type;\nresult",
+        "size": 0,
+        "title": "Email Messages over time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "proofpoint_email_security_main_dashboard"
+      },
+      "customWidth": "60",
+      "name": "EmailMessagesOverTime"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let email_security_total_messages_processed =\nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| summarize Count=dcount(MsgHeaderMessageId) \n| extend title=\"Total Messages Processed\";\n\nlet email_security_inbound_messages_processed =\nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where NetworkDirection == \"inbound\"\n| summarize Count=dcount(MsgHeaderMessageId) \n| extend title=\"Inbound Messages Processed\";\n\nlet email_security_outbound_messages_processed =\nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where NetworkDirection == \"outbound\"\n| summarize Count=dcount(MsgHeaderMessageId) \n| extend title=\"Outbound Messages Processed\";\n\nlet email_security_total_blocked_messages =\nProofpointPOD\n| where EventType == \"message\" \n| where TimeGenerated {TimeRange} \n| where FilterDisposition == \"discard\" or FilterDisposition == \"reject\"\n| summarize Count=dcount(MsgHeaderMessageId) \n| extend title=\"Total Blocked Messages\";\n\nlet email_security_total_quarantined_messages = \nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange}\n| where isnotempty(FilterQuarantineFolder)\n| summarize Count=dcount(MsgHeaderMessageId) \n| extend title = \"Quarantined Messages\";\n\nlet email_security_result_table = union email_security_total_messages_processed, email_security_inbound_messages_processed,email_security_outbound_messages_processed,email_security_total_blocked_messages,email_security_total_quarantined_messages; \nemail_security_result_table \n| sort by Count",
+        "size": 3,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "title",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "showBorder": false,
+          "size": "auto"
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "proofpoint_email_security_main_dashboard"
+      },
+      "customWidth": "40",
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where isnotempty(FilterQuarantineRule)\n| summarize Count = dcount(MsgNormalizedHeaderMessageId) by FilterQuarantineRule",
+        "size": 3,
+        "title": "Quarantine Rules Hits",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "proofpoint_email_security_main_dashboard"
+      },
+      "customWidth": "35",
+      "name": "QuarantineRulesHits"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where isnotempty(FilterModulesDmarcFilterdResult)\n| summarize Count = dcount(MsgNormalizedHeaderMessageId) by FilterModulesDmarcFilterdResult",
+        "size": 3,
+        "title": "DMARC Summary Results",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "proofpoint_email_security_main_dashboard"
+      },
+      "customWidth": "35",
+      "name": "DMARCSummaryResults"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where isnotempty(FilterModulesSpamTriggeredClassifier)\n| summarize Count = dcount(MsgNormalizedHeaderMessageId) by FilterModulesSpamTriggeredClassifier",
+        "size": 3,
+        "title": "Top AntiSpam Results",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "proofpoint_email_security_main_dashboard"
+      },
+      "customWidth": "30",
+      "name": "TopAntiSpamResults"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ProofpointPOD\n| where EventType == \"message\"\n| where FilterDisposition == \"discard\" or FilterDisposition == \"reject\" or isnotempty(FilterQuarantineFolder)\n| where TimeGenerated {TimeRange} \n| extend dstUserUpn = todynamic(DstUserUpn) \n| mv-expand dstUserUpn\n| summarize Count = dcount(MsgNormalizedHeaderMessageId) by tostring(dstUserUpn) | top 10 by Count",
+        "size": 0,
+        "title": "Top Recipients with high block rate",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "proofpoint_email_security_main_dashboard"
+      },
+      "customWidth": "30",
+      "name": "TopRecipients"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| extend srcUserUpn = todynamic(SrcUserUpn) \n| mv-expand srcUserUpn\n| where isnotempty(srcUserUpn)\n| summarize Count = dcount(MsgNormalizedHeaderMessageId) by tostring(srcUserUpn) | top 10 by Count",
+        "size": 0,
+        "title": "Top Senders",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "proofpoint_email_security_main_dashboard"
+      },
+      "customWidth": "30",
+      "name": "TopSenders"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "afe179f1-6dc8-4a97-bc20-5b8aadf5a9aa",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange1",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 172800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "label": "TimeRange"
+          },
+          {
+            "id": "cc0743b6-1893-4f3d-8c7c-96f075f3006c",
+            "version": "KqlParameterItem/1.0",
+            "name": "Direction",
+            "type": 2,
+            "isRequired": true,
+            "query": "ProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange1} \n| project NetworkDirection | distinct NetworkDirection | where isnotempty(NetworkDirection)\n| order by NetworkDirection asc",
+            "value": null,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "34bcd907-7f33-4d49-b158-eb7877a763f9",
+            "version": "KqlParameterItem/1.0",
+            "name": "Sender",
+            "type": 1,
+            "value": ""
+          },
+          {
+            "id": "65c7de4d-b953-407a-ac81-9c2fe2fddd99",
+            "version": "KqlParameterItem/1.0",
+            "name": "Recipient",
+            "type": 1,
+            "value": ""
+          },
+          {
+            "id": "e819f521-396a-4292-ae6d-99a173eb09b6",
+            "version": "KqlParameterItem/1.0",
+            "name": "Subject",
+            "type": 1,
+            "value": ""
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "messages_summary"
+      },
+      "name": "Parameters2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange1}\n| project-rename Direction = NetworkDirection, Sender = MsgHeaderFrom,  Recipient = MsgHeaderTo, Subject = MsgHeaderSubject, Filter_Action = FilterDisposition\n| project TimeGenerated, Direction, Sender, Recipient, Subject, Filter_Action, MsgNormalizedHeaderMessageId\n| search Sender contains \"{Sender:value}\" and Recipient contains \"{Recipient:value}\" and Subject contains \"{Subject:value}\"\n| search Direction == \"{Direction:value}\" | project TimeGenerated, Direction, Sender, Recipient, Subject, Filter_Action, MsgNormalizedHeaderMessageId | take 50",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "MsgNormalizedHeaderMessageId",
+              "sortOrder": 1
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "MsgNormalizedHeaderMessageId",
+            "sortOrder": 1
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "messages_summary"
+      },
+      "name": "Table"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let inbound_tls_encrypted = \nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange}\n| where FilterIsMsgEncrypted == \"true\" and NetworkDirection == \"inbound\"\n| extend event_type = \"Inbound TLS Encrypted\";\n\nlet inbound_tls_unencrypted = \nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where FilterIsMsgEncrypted == \"false\" and NetworkDirection == \"inbound\"\n| extend event_type = \"Inbound TLS Unencrypted\";\n\nlet inbound_total = \nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where NetworkDirection == \"inbound\"\n| extend event_type = \"Inbound Total\";\n\nlet trend_result = union inbound_tls_encrypted, inbound_tls_unencrypted, inbound_total;\ntrend_result | summarize Count=dcount(MsgNormalizedHeaderMessageId) by event_type \n| join kind=inner (trend_result | make-series Trend = dcount(MsgNormalizedHeaderMessageId) default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}  by event_type) on event_type \n;\n",
+        "size": 1,
+        "title": "TLS Usage over time",
+        "timeContext": {
+          "durationMs": 5184000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "tls_dashboard"
+      },
+      "customWidth": "70",
+      "name": "TLSUsage"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let inbound_tls_encrypted = \nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange}\n| where FilterIsMsgEncrypted == \"true\" and NetworkDirection == \"inbound\"\n| extend event_type = \"Inbound TLS Encrypted\";\n\nlet inbound_tls_unencrypted = \nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where FilterIsMsgEncrypted == \"false\" and NetworkDirection == \"inbound\"\n| extend event_type = \"Inbound TLS Unencrypted\";\n\nlet inbound_total = \nProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where NetworkDirection == \"inbound\"\n| extend event_type = \"Inbound Total\";\n\nlet trend_result = union inbound_tls_encrypted, inbound_tls_unencrypted, inbound_total;\ntrend_result | summarize Count=dcount(MsgNormalizedHeaderMessageId) by event_type \n| join kind=inner (trend_result | make-series Trend = dcount(MsgNormalizedHeaderMessageId) default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}  by event_type) on event_type \n| order by Count desc\n| project event_type, Trend, Count\n;",
+        "size": 3,
+        "title": "TLS Statistics",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "Count",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "Count",
+            "sortOrder": 2
+          }
+        ],
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "event_type",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "palette": "blue"
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "tls_dashboard"
+      },
+      "customWidth": "30",
+      "name": "TLSStatistics"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ProofpointPOD\n| where EventType == \"message\"\n| where TimeGenerated {TimeRange} \n| where FilterIsMsgEncrypted == \"false\"\n| summarize Count=dcount(MsgNormalizedHeaderMessageId) by MsgHeaderFrom | top 10 by Count | extend Domain = extract(\"(.*@)([a-zA-z0-9.-]*)\", 2, MsgHeaderFrom)\n| project Domain, Count\n",
+        "size": 0,
+        "title": "Top 10 Sender domains not using TLS",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "tls_dashboard"
+      },
+      "customWidth": "50",
+      "name": "Top10SenderNotUsingTLS"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "\nProofpointPOD\n| where EventType == \"message\"\n| where FilterIsMsgEncrypted == \"false\"\n| where TimeGenerated {TimeRange} \n| extend splited=split(MsgHeaderTo,\",\") | mv-expand splited | extend Domain = extract(\"(.*@)([a-zA-z0-9.-]*)\", 2, tostring(splited))\n| where isnotempty(Domain)\n| summarize Count=dcount(MsgNormalizedHeaderMessageId) by Domain | top 10 by Count\n",
+        "size": 0,
+        "title": "Top 10 Recipient domains not using TLS",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "tls_dashboard"
+      },
+      "customWidth": "50",
+      "name": "Top10RecipientNotUsingTLS"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-ProofpointPOD",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

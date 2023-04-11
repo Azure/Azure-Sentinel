@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session Event ASIM parser for Sysmon (Event 3)",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionMicrosoftSysmon",
+            "query": "let parser = (disabled:bool = false) {\nlet Sysmon3_Event=(disabled:bool=false) {\n      Event\n      | where not(disabled)\n      | where Source == \"Microsoft-Windows-Sysmon\" and EventID==3\n      | parse-kv EventData as (\n                  SourceIp:string,\n                  DestinationIp:string,\n                  SourceHostname:string,\n                  DestinationHostname:string,\n                  Initiated:bool,  // Initiated indicates the process initiated a connection (meaning outbound)\n                  RuleName:string,\n                  UtcTime:datetime,\n                  ProcessGuid:string,\n                  ProcessId:string,\n                  Image:string,\n                  User:string,\n                  Protocol:string,\n                  SourceIsIpv6:bool,\n                  SourcePort:int,\n                  SourcePortName:string,\n                  DestinationIsIpv6:bool,\n                  DestinationPort:int,\n                  DestinationPortName:string\n              ) with (regex=@'<Data Name=\"(\\w+)\">{?([^>]*?)}?</Data>')\n      | project-away EventData\n      | project-rename\n              SrcHostname = SourceHostname,\n              DstHostname = DestinationHostname\n      | project-away\n              Source,\n              EventLog,\n              EventCategory,\n              UserName,\n              Message,\n              ParameterXml,\n              RenderedDescription,\n              MG,\n              AzureDeploymentID,\n              Role\n    };\nlet Sysmon3_WindowsEvent=(disabled:bool=false){\n      WindowsEvent\n      | where not(disabled) \n      | where Provider == \"Microsoft-Windows-Sysmon\" and EventID == 3\n      | extend\n              SourceIp = tostring(EventData.SourceIp),\n              DestinationIp = tostring(EventData.DestinationIp),\n              DstHostname = tostring(EventData.DestinationHostname),\n              SrcHostname = tostring(EventData.SrcHostname),\n              RuleName = tostring(EventData.RuleName),\n              UtcTime = todatetime(EventData.UtcTime),\n              ProcessId = tostring(EventData.ProcessId),\n              Image = tostring(EventData.Image),\n              User = tostring(EventData.User),\n              Protocol = tostring(EventData.Protocol),\n              Initiated = tobool(EventData.Initiated), // Initiated indicates the process initiated a connection (meaning outbound)\n              SourceIsIpv6 = tobool(EventData.SourceIsIpv6),\n              SourcePort = toint(EventData.SourcePort),\n              SourcePortName = tostring(EventData.SourcePortName),\n              DestinationIsIpv6 = tobool(EventData.DestinationIsIpv6),\n              DestinationPort = toint(EventData.DestinationPort),\n              DestinationPortName = tostring(EventData.DestinationPortName)\n      | parse EventData.ProcessGuid with \"{\" ProcessGuid \"}\"\n      | project-away EventData\n      | project-away\n                     Provider,\n                     Channel,\n                     Task,\n                     Data,\n                     RawEventData,\n                     EventOriginId\n    };\nunion isfuzzy=true Sysmon3_Event,Sysmon3_WindowsEvent\n      | extend\n              AppName = tostring(split(Image, \"\\\\\")[-1])\n      | extend\n              SrcUsernameType = iff(not(Initiated), \"Windows\", \"\"),\n              SrcUsername = iff(not(Initiated), tostring(User), \"\"),\n              SrcProcessId = iff(not(Initiated), tostring(ProcessId), \"\"),\n              SrcProcessGuid = iff(not(Initiated), ProcessGuid, \"\"),\n              SrcProcessName = iff(not(Initiated), tostring(Image), \"\"),\n              SrcAppName = iff(not(Initiated), AppName, \"\"),\n              SrcAppType = iff(not(Initiated), 'Process', \"\"),\n              DstUsernameType = iff(Initiated, \"Windows\", \"\"),\n              DstUsername = iff(Initiated, tostring(User), \"\"),\n              DstProcessId = iff(Initiated, tostring(ProcessId), \"\"),\n              DstProcessGuid = iff(Initiated, ProcessGuid, \"\"),\n              DstProcessName = iff(Initiated, tostring(Image), \"\"),\n              DstAppName = iff(Initiated, AppName, \"\"),\n              DstAppType = iff(Initiated, 'Process', \"\")\n      | project-away  ProcessId, ProcessGuid, Image, AppName\n      | project-rename \n              EventStartTime = UtcTime,\n              Dvc = Computer,\n              SrcIpAddr = SourceIp,\n              DstIpAddr  = DestinationIp,\n              DstPortNumber = DestinationPort,\n              SrcPortNumber = SourcePort,\n              NetworkRuleName = RuleName \n      | extend \n              EventEndTime = EventStartTime,\n              Hostname = case(\n                              Initiated, DstHostname,\n                              not(Initiated), SrcHostname,\n                              Dvc),\n              Src = SrcIpAddr,\n              Dst = DstIpAddr,\n              DvcIpAddr = iff(Initiated, SrcIpAddr, DstIpAddr),\n              IpAddr = SrcIpAddr,\n              EventType = 'EndpointNetworkSession',\n              EventCount = int(1),\n              EventVendor = 'Microsoft',\n              EventSchemaVersion = '0.2.5',\n              EventSchema = 'NetworkSession', \n              EventProduct = 'Sysmon',\n              EventResult = 'Success',\n              EventSeverity = 'Informational',\n              DvcOs = 'Windows',\n              Protocol = toupper(Protocol),\n              EventOriginalType = '3' // Set with a constant value to avoid parsing   \n      | extend\n              DvcHostname = Hostname\n      | extend\n              SrcHostname = iff( SrcHostname == \"-\", \"\", SrcHostname),\n              DvcHostname = iff( DvcHostname == \"-\", \"\", DvcHostname),\n              DstHostname = iff( DstHostname == \"-\", \"\", DstHostname) // let's make empty values actually empty\n      | project-rename\n              TmpSrcHostname = SrcHostname,\n              TmpDvcHostname = DvcHostname,\n              TmpDstHostname = DstHostname\n      | invoke \n              _ASIM_ResolveSrcFQDN('TmpSrcHostname')\n      | invoke \n              _ASIM_ResolveDvcFQDN('TmpDvcHostname')\n      | invoke \n              _ASIM_ResolveDstFQDN('TmpDstHostname')\n      | project-away\n              TmpSrcHostname,\n              TmpDvcHostname,\n              TmpDstHostname\n      | extend                         \n              NetworkProtocolVersion = iff((DestinationIsIpv6) or (SourceIsIpv6), \"IPV6\", \"IPV4\"),\n              NetworkProtocol = toupper(Protocol)\n      | project-away \n              Destination*,\n              Initiated,\n              ManagementGroupName,\n              TenantId,\n              Protocol,\n              Source*,\n              EventID,\n              EventLevelName,\n              EventLevel\n    };\n    parser (disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

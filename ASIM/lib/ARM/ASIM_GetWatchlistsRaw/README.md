@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM function to get multiple watchlists in raw format.
+# Log Analytics KQL function An ASIM function to get multiple watchlists in raw format
 
-ARM template for deploying the Log Analytics KQL function An ASIM function to get multiple watchlists in raw format.
+ARM template for deploying the Log Analytics KQL function An ASIM function to get multiple watchlists in raw format
 
 This ASIM function reads multiple watchlists in raw format. The primary use case is giving an option for using multiple watchlist names for the same watchlist. It is more performant than using the general _GetWatchlist function.
 

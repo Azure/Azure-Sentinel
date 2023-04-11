@@ -7,12 +7,10 @@ Syslog
 | where SyslogMessage has 'Stealthwatch'
 | extend EventVendor = 'Cisco'
 | extend EventProduct = 'Stealthwatch'
-| extend EventProductVersion = extract(@'Stealthwatch\|([0-9\.]+)\|', 1, SyslogMessage)
-| mv-apply ExtractedFields = extract_all(@'\|(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}>< ]+)', dynamic(["key","value"]), SyslogMessage) on (
-    project packed = pack(tostring(ExtractedFields[0]), tostring(ExtractedFields[1]))
-    | summarize bag = make_bag(packed)
-)
-| evaluate bag_unpack(bag)
+| parse-kv SyslogMessage as (start:string, end:string, alarmID:string, alarmSev:string, alarmStatus:string, cat:string, domain:string, dst:string, dstPort:string, msg:string, proto:string, sourceHG:string, sourceHostSnapshot:string, src:string, flowCollectorIP:string, flowCollectorName:string, sourceUser:string, targetUser:string, argetHG:string, targetHostname:string, targetHostSnapshot:string) with (pair_delimiter='|', kv_delimiter='=')
+| parse SyslogMessage with * "argetHG=" argetHG"|" *
+| parse SyslogMessage with * "targetHG=" targetHG"|" *
+| extend DstGeoCountry = iff(SyslogMessage contains "argetHG",argetHG, targetHG)
 | extend EventStartTime=todatetime(start)
 | extend EventEndTime=todatetime(end)
 | project-rename EventOriginalUid=alarmID
@@ -31,9 +29,10 @@ Syslog
                 , DvcHostname=flowCollectorName
                 , SrcUserName=sourceUser
                 , DstUserName=targetUser
-                , DstGeoCountry=targetHG
                 , DstDvcHostname=targetHostname
                 , DstHostSnapshot=targetHostSnapshot
 | project-away start
              , end
              , SyslogMessage
+			 , argetHG
+			 , targetHG

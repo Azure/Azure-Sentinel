@@ -7,11 +7,15 @@ import re
 # GENERAL SCRIPT CONSTANTS
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
-PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"
+PATH_FOR_CSS_TICKET = {"Prod": "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview",
+                       "MK": "https://portal.azure.cn/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview",
+                       "Gov": "https://portal.azure.us/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"}
+AGENT_CONF_FILE = "/etc/opt/microsoft/azuremonitoragent/config-cache/mdsd.hr.json"
+MACHINE_ENV = "Prod" #Default value is Prod
 FAILED_TESTS_COUNT = 0
 WARNING_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
-SCRIPT_VERSION = 1.0
+SCRIPT_VERSION = 1.2
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generates a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
                       "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
@@ -250,7 +254,7 @@ class AgentInstallationVerifications:
         Verifying the agent service called mdsd is listening on its default port
         """
         command_name = "verify_ama_agent_service_is_running"
-        command_to_run = "sudo service azuremonitoragent status"
+        command_to_run = "sudo systemctl status azuremonitoragent"
         result_keywords_array = ["azuremonitoragent.service", "Azure", "Monitor", "Agent", "active", "running"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
@@ -358,7 +362,7 @@ class DCRConfigurationVerifications:
             self.CEF_stream_name)
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
-                                 "azure.com", "id"]
+                                 "opinsights.azure", "id"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_command()
         command_object.command_result = command_object.command_result.decode('UTF-8').split('\n')[:-1]
@@ -691,7 +695,7 @@ class SystemInfo():
         "agent_log_snip_warn": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.warn"],
         "agent_log_snip_info": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.info"],
         "is_AMA__running_from_boot": ["sudo systemctl list-unit-files --type=service | grep azuremonitoragent"],
-        "AMA_service_status": ["sudo service azuremonitoragent status"],
+        "AMA_service_status": ["sudo systemctl status azuremonitoragent"],
         "DCR_config_dir": ["sudo ls -la /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
         "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
         "syslog_log_snip": ["sudo tail -n 15 /var/log/syslog"],
@@ -735,6 +739,19 @@ def verify_root_privileges(printer):
             "This script must be run in elevated privileges since some of the tests require root privileges")
         exit()
 
+def find_dcr_cloud_environment():
+    '''
+    Use the agent config on the machine to determine the cloud environment we are running in
+    '''
+    global MACHINE_ENV
+    command_to_run = "if grep -qs \"azure.cn\" {0}; then echo \"MK\"; elif grep -qs \"azure.us\" {0}; then echo \"Gov\"; else echo \"Prod\"; fi".format(AGENT_CONF_FILE)
+    try:
+        command_result, command_result_err = subprocess.Popen(command_to_run, shell=True,
+                                                                        stdout=subprocess.PIPE,
+                                                                        stderr=subprocess.STDOUT).communicate()
+        MACHINE_ENV = command_result.decode('utf-8').strip("\n")
+    except Exception:
+        pass
 
 def main():
     collection_feature_flag = "collect"
@@ -742,6 +759,7 @@ def main():
     help_feature_flag = ['-h', '-H', '-help', '--help', '-Help', '--Help']
     printer = ColorfulPrint()
     verify_root_privileges(printer)
+    find_dcr_cloud_environment()
     if len(sys.argv) > 1:
         if str(sys.argv[1]) == collection_feature_flag:
             running_in_collect_mode = True
@@ -754,7 +772,7 @@ def main():
             print(
                 "Finished collecting data \nPlease provide CSS with this file for further investigation- {} \n"
                 "In order to open a support case please browse: {}".format(
-                    COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET))
+                    COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET[MACHINE_ENV]))
             time.sleep(1)
         # Print help message on how to use the script
         elif str(sys.argv[1]) in help_feature_flag:

@@ -1,0 +1,42 @@
+id: 0278e3b8-9899-45c5-8928-700cd80d2d80
+name: Common deployed resources
+description: |
+  'This query looks for common deployed resources (resource name and resource groups) and can be used
+  in combination with other signals that show suspicious deployment to evaluate if the resource is one
+  that is commonly being deployed/created or unique.
+  To understand the basket() function better see - https://docs.microsoft.com/azure/data-explorer/kusto/query/basketplugin' 
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+  AzureActivity
+  | where OperationNameValue has_any (@"deployments/write", @"virtualMachines/write")  
+  | where ActivityStatusValue =~ "Succeeded"
+  | summarize by bin(TimeGenerated,1d), Resource, ResourceGroup, ResourceId, OperationNameValue, Caller
+  | evaluate basket()
+  | where isnotempty(Caller) and isnotempty(Resource) and isnotempty(TimeGenerated)
+  | order by Percent desc, TimeGenerated desc
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend AzureResource_0_ResourceId = ResourceId
+  // remove comments below on filters if the goal is to see more common or more rare Resource, Resource Group and Caller combinations
+  //| where Percent <= 40 // <-- more rare
+  //| where Percent >= 60 // <-- more common
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 2.0.1

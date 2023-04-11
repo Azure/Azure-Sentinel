@@ -1,0 +1,50 @@
+id: 422ca2bf-598b-4872-82bb-5f7e8fa731e7
+name: Dev-0270 Malicious Powershell usage
+description: | 
+  'DEV-0270 heavily uses powershell to achieve their objective at various stages of their attack. To locate powershell related activity tied to the actor, Microsoft Sentinel customers can run the following query.'
+severity: High 
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+status: Available
+tactics: 
+  - Exfiltration
+  - DefenseEvasion
+relevantTechniques:
+  -  T1048
+  -  T1562
+tags:
+  - Dev-0270
+query: |
+  (union isfuzzy=true
+  (SecurityEvent
+  | where EventID==4688
+  | extend FileName=tostring(split(NewProcessName, @'\')[(-1)]),  ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName
+  | where (FileName =~ "powershell.exe" and ProcessCommandLine has_all("try", "Add-MpPreference", "-ExclusionPath", "ProgramData", "catch")) or (FileName =~ 'powershell.exe' and ProcessCommandLine has_all('Add-PSSnapin', 'Get-Recipient', '-ExpandProperty', 'EmailAddresses', 'SmtpAddress', '-hidetableheaders') )
+  | project TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, InitiatingProcessFileName, EventID, Activity, CommandLine, EventSourceName, Type
+  ),
+  (DeviceProcessEvents 
+  | where (FileName =~ "powershell.exe" and ((ProcessCommandLine has_all("try", "Add-MpPreference", "-ExclusionPath", "ProgramData", "catch"))  or (ProcessCommandLine has_all('Add-PSSnapin', 'Get-Recipient', '-ExpandProperty', 'EmailAddresses', 'SmtpAddress', '-hidetableheaders'))))
+  or ( InitiatingProcessFileName =~ 'powershell.exe' and (((InitiatingProcessCommandLine has_all('$file=', 'dllhost.exe', 'Invoke-WebRequest', '-OutFile')) or ((InitiatingProcessCommandLine has_all('$admins=', 'System.Security.Principal.SecurityIdentifier', 'Translate', '-split', 'localgroup', '/add', '$rdp='))))))
+  | extend timestamp = TimeGenerated, AccountCustomEntity =  InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.2
+kind: Scheduled

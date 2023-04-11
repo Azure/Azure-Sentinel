@@ -3,7 +3,7 @@
 ![meraki](../../Connector/MerakiConnector/logo.jpg)
 
 ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious URLs.
  2. For each URL in the list, checks if the URL is blocked by the network of the organization.
   - If URL is allowed by the network, then incident comment is created saying URL is allowed.
@@ -51,12 +51,12 @@
 5. Similarly authorize teams api connection as well.
 
 ## b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with URLs. 
+- In Microsoft sentinel analytical rules should be configured to trigger an incident with URLs. 
 - Configure the automation rules to trigger the playbook.
 
 
 # Playbook steps explained
-## When Azure Sentinel incident creation rule is triggered
+## When Microsoft Sentinel incident creation rule is triggered
   Captures potentially malicious or malware URL incident information.
 
 ## Entities - Get URLs

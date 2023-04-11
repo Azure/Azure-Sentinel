@@ -1,0 +1,51 @@
+id: 9e146876-e303-49af-b847-b029d1a66852
+name: Port opened for an Azure Resource
+description: |
+  'Identifies what ports may have been opened for a given Azure Resource over the last 7 days'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - CommandAndControl
+  - Impact
+relevantTechniques:
+  - T1071
+  - T1571
+  - T1496
+query: |
+  let lookback = 7d;
+  AzureActivity
+  | where TimeGenerated >= ago(lookback)
+  | where OperationNameValue has_any ("ipfilterrules", "securityRules", "publicIPAddresses", "firewallrules") and OperationNameValue endswith "write"
+  // Choosing Accepted here because it has the Rule Attributes included
+  | where ActivityStatusValue == "Accepted" 
+  // If there is publicIP info, include it
+  | extend parsed_properties = parse_json(tostring(parse_json(Properties).responseBody)).properties
+  | extend publicIPAddressVersion = case(Properties has_cs 'publicIPAddressVersion',tostring(parsed_properties.publicIPAddressVersion),"")
+  | extend publicIPAllocationMethod = case(Properties has_cs 'publicIPAllocationMethod',tostring(parsed_properties.publicIPAllocationMethod),"")
+  // Include rule attributes for context
+  | extend access = case(Properties has_cs 'access',tostring(parsed_properties.access),"")
+  | extend description = case(Properties has_cs 'description',tostring(parsed_properties.description),"")
+  | extend destinationPortRange = case(Properties has_cs 'destinationPortRange',tostring(parsed_properties.destinationPortRange),"")
+  | extend direction = case(Properties has_cs 'direction',tostring(parsed_properties.direction),"")
+  | extend protocol = case(Properties has_cs 'protocol',tostring(parsed_properties.protocol),"")
+  | extend sourcePortRange = case(Properties has_cs 'sourcePortRange',tostring(parsed_properties.sourcePortRange),"")
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResourceIds = make_set(_ResourceId,100) by Caller, CallerIpAddress, Resource, ResourceGroup, 
+  ActivityStatusValue, ActivitySubstatus, SubscriptionId, access, description, destinationPortRange, direction, protocol, sourcePortRange, publicIPAddressVersion, publicIPAllocationMethod
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = CallerIpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddresss
+version: 2.0.1

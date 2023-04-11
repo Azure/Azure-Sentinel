@@ -26,7 +26,9 @@ query: |
   let HAS_ANY_MAX = 10000;
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
-  let IP_TI=ThreatIntelligenceIndicator
+  let IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True));
+  let IP_TI= (union isfuzzy=true
+  (ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
@@ -34,7 +36,19 @@ query: |
   // Taking the first non-empty value based on potential IOC match availability
   | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,"NO_IP")
   // Picking up only IOC's that contain the entities we want
-  | where TI_ipEntity != "NO_IP";
+  | where TI_ipEntity != "NO_IP"
+  //Exclude local addresses, using the ipv4_is_private operator
+  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+  ),
+  (IoCList
+  | where IoC_Type =~ 'IP'
+  | where ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC
+  | where Active =~ 'True'
+  | extend TI_ipEntity = IoC
+  | project-away  IoC_Type
+  )
+  );
   let IP_TI_list=toscalar(IP_TI | summarize NIoCs= dcount(TI_ipEntity), IoCs=make_set(TI_ipEntity) 
     | project IoCs=iff(NIoCs > HAS_ANY_MAX, dynamic([]), IoCs )  );
   IP_TI
@@ -47,10 +61,9 @@ query: |
   )
   on $left.TI_ipEntity == $right.SrcIpAddr
   | where imNWS_TimeGenerated < ExpirationDateTime
-  | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated , *) by IndicatorId, DstIpAddr
+  | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated , *) by IndicatorId, DstIpAddr, IoC
   | project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
-  TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr
-
+  TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Type
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -70,5 +83,5 @@ alertDetailsOverride:
   alertDisplayNameFormat: The IP {{SrcIpAddr}} of a web request to hostname  {{domain}} matched an IoC
   alertDescriptionFormat: The source address {{SrcIpAddr}} of a web request for URL {{Url}} matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blead for more information on the indicator.
 
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled

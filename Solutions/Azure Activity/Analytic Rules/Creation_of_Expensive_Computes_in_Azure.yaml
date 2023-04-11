@@ -1,0 +1,47 @@
+id: 9736e5f1-7b6e-4bfb-a708-e53ff1d182c3
+name: Creation of expensive computes in Azure
+description: |
+  'Identifies the creation of large size or expensive VMs (with GPUs or with a large number of virtual CPUs) in Azure.
+  An adversary may create new or update existing virtual machines to evade defenses or use them for cryptomining purposes.
+  For Windows/Linux Vm Sizes, see https://docs.microsoft.com/azure/virtual-machines/windows/sizes 
+  Azure VM Naming Conventions, see https://docs.microsoft.com/azure/virtual-machines/vm-naming-conventions'
+severity: Low
+status: Available 
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1578
+query: |
+  let tokens = dynamic(["416","208","192","128","120","96","80","72","64","48","44","40","g5","gs5","g4","gs4","nc12","nc24","nv24"]);
+  let operationList = dynamic(["microsoft.compute/virtualmachines/write", "microsoft.resources/deployments/write"]);
+  AzureActivity
+  | where OperationNameValue in~ (operationList)
+  | where ActivityStatusValue startswith "Accept"
+  | where Properties has 'vmSize'
+  | extend parsed_property= parse_json(tostring((parse_json(Properties).responseBody))).properties
+  | extend vmSize = tostring((parsed_property.hardwareProfile).vmSize)
+  | where vmSize has_any (tokens)
+  | extend ComputerName = tostring((parsed_property.osProfile).computerName)
+  | project TimeGenerated, OperationNameValue, ActivityStatusValue, Caller, CallerIpAddress, ComputerName, vmSize
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.0.1
+kind: Scheduled

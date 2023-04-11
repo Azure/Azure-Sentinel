@@ -1,0 +1,78 @@
+id: b2c15736-b9eb-4dae-8b02-3016b6a45a32
+name: Suspicious granting of permissions to an account
+description: |
+  'Identifies IPs from which users grant access to other users on Azure resources and alerts when a previously unseen source IP address is used.'
+severity: Medium
+status: Available 
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1548
+query: |
+  let starttime = 14d;
+  let endtime = 1d;
+  // The number of operations above which an IP address is considered an unusual source of role assignment operations
+  let alertOperationThreshold = 5;
+  let AzureBuiltInRole = externaldata(Role:string,RoleDescription:string,ID:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/AzureBuiltInRole.csv"] with (format="csv", ignoreFirstRecord=True);
+  let createRoleAssignmentActivity = AzureActivity
+  | where OperationNameValue =~ "microsoft.authorization/roleassignments/write";
+  let RoleAssignedActivity = createRoleAssignmentActivity 
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | summarize count() by CallerIpAddress, Caller, bin(TimeGenerated, 1d)
+  | where count_ >= alertOperationThreshold
+  // Returns all the records from the right side that don't have matches from the left.
+  | join kind = rightanti ( 
+  createRoleAssignmentActivity
+  | where TimeGenerated > ago(endtime)
+  | extend parsed_property = tostring(parse_json(Properties).requestbody)
+  | extend PrincipalId = case(parsed_property has_cs 'PrincipalId',parse_json(parsed_property).Properties.PrincipalId, parsed_property has_cs 'principalId',parse_json(parsed_property).properties.principalId,"")
+  | extend PrincipalType = case(parsed_property has_cs 'PrincipalType',parse_json(parsed_property).Properties.PrincipalType, parsed_property has_cs 'principalType',parse_json(parsed_property).properties.principalType, "")
+  | extend Scope = case(parsed_property has_cs 'Scope',parse_json(parsed_property).Properties.Scope, parsed_property has_cs 'scope',parse_json(parsed_property).properties.scope,"")
+  | extend RoleAddedDetails = case(parsed_property has_cs 'RoleDefinitionId',parse_json(parsed_property).Properties.RoleDefinitionId,parsed_property has_cs 'roleDefinitionId',parse_json(parsed_property).properties.roleDefinitionId,"")
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  
+  by ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup, PrincipalId, PrincipalType, Scope, RoleAddedDetails
+  ) on CallerIpAddress, Caller
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress;
+  let RoleAssignedActivitywithRoleDetails = RoleAssignedActivity
+  | extend RoleAssignedID = tostring(split(RoleAddedDetails, "/")[-1])
+  // Returns all matching records from left and right sides.
+  | join kind = inner (AzureBuiltInRole 
+  ) on $left.RoleAssignedID == $right.ID;
+  let CallerIPCountSummary = RoleAssignedActivitywithRoleDetails | summarize AssignmentCountbyCaller = count() by Caller, CallerIpAddress;
+  let RoleAssignedActivityWithCount = RoleAssignedActivitywithRoleDetails | join kind = inner (CallerIPCountSummary | project Caller, AssignmentCountbyCaller, CallerIpAddress) on Caller, CallerIpAddress;
+  RoleAssignedActivityWithCount
+  | summarize arg_max(StartTimeUtc, *) by PrincipalId, RoleAssignedID
+  // 	Returns all the records from the left side and only matching records from the right side.
+  | join kind = leftouter( IdentityInfo
+  | summarize arg_max(TimeGenerated, *) by AccountObjectId
+  ) on $left.PrincipalId == $right.AccountObjectId
+  // Check if assignment count is greater than the threshold.
+  | where AssignmentCountbyCaller >= alertOperationThreshold
+  | project ActivityTimeStamp, OperationNameValue, Caller, CallerIpAddress, PrincipalId, RoleAssignedID, RoleAddedDetails, Role, RoleDescription, AccountUPN, AccountCreationTime, GroupMembership, UserType, ActivityStatusValue, ResourceGroup, PrincipalType, Scope, CorrelationId, timestamp, AccountCustomEntity, IPCustomEntity, AssignmentCountbyCaller
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.0.1
+kind: Scheduled
