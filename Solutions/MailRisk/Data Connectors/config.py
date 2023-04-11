@@ -6,7 +6,7 @@ from azure.identity import DefaultAzureCredential
 
 load_dotenv()
 
-keyVaultName = os.environ["KEY_VAULT_NAME"]
+keyVaultName = os.getenv('KEY_VAULT_NAME')
 
 if keyVaultName:
     keyVaultUri = f"https://{keyVaultName}.vault.azure.net"
