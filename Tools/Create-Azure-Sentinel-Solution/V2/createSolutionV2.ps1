@@ -74,7 +74,7 @@ function getQueryResourceLocation () {
     }
 }
 
-function getParserDetails($solutionName)
+function getParserDetails($solutionName,$yaml,$isyaml)
 {
     $API = 'https://catalogapi.azure.com/offers?api-version=2018-08-01-beta&$filter=categoryIds%2Fany(cat%3A%20cat%20eq%20%27AzureSentinelSolution%27)%20or%20keywords%2Fany(key%3A%20contains(key%2C%27f1de974b-f438-4719-b423-8bf704ba2aef%27))'
     $SolutionDataItems = $(Invoke-WebRequest -URI $API | ConvertFrom-Json).items
@@ -85,9 +85,12 @@ function getParserDetails($solutionName)
     }
     $variableExpressionRegex = "\[\s?variables\(\'_([\w\W]+)\'\)\s?\]"
     $parserDisplayDetails = New-Object PSObject
-    $parserDisplayDetails | Add-Member -NotePropertyName "functionAlias" -NotePropertyValue $(getFileNameFromPath $file)
-    $parserDisplayDetails | Add-Member -NotePropertyName "displayName" -NotePropertyValue "$($fileName)"
-    $parserDisplayDetails | Add-Member -NotePropertyName "name" -NotePropertyValue "$($fileName)"
+    $functionAlias = ($isyaml -eq $true) ? $yaml.FunctionName : $(getFileNameFromPath $file)
+    $displayName = ($isyaml -eq $true) ? "$($yaml.Function.Title)" : "$($fileName)"
+    $name = ($isyaml -eq $true) ? "$($yaml.FunctionName)" : "$($fileName)"
+    $parserDisplayDetails | Add-Member -NotePropertyName "functionAlias" -NotePropertyValue $functionAlias
+    $parserDisplayDetails | Add-Member -NotePropertyName "displayName" -NotePropertyValue $displayName
+    $parserDisplayDetails | Add-Member -NotePropertyName "name" -NotePropertyValue $name
 
     $currentSolution = $SolutionDataItems | Where-Object { $_.legacyId -eq $solutionName }
     if($currentSolution.length -gt 0)
@@ -1637,7 +1640,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     }
                 }
                 else {
-                    if ($file -match "(\.yaml)$") {
+                    if ($file -match "(\.yaml)$" -and $objectProperties.Name.ToLower() -ne "parsers") {
                         $objectKeyLowercase = $objectProperties.Name.ToLower()
                         if ($objectKeyLowercase -eq "hunting queries") {
                             Write-Host "Generating Hunting Query using $file"
@@ -2160,225 +2163,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     else {
                         # Assume file is Parser due to parsers having inconsistent types. (.txt, .kql, or none)
                         Write-Host "Generating Data Parser using $file"
-                        if ($parserCounter -eq 1 -and $null -eq $baseMainTemplate.variables.'workspace-dependency' -and !$contentToImport.TemplateSpec) {
-                            # Add parser dependency variable once to ensure validation passes.
-                            $baseMainTemplate.variables | Add-Member -MemberType NoteProperty -Name "workspace-dependency" -Value "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]"
-                        }
-
-                        $fileName = Split-Path $file -leafbase;
-
-                        function getFileNameFromPath ($inputFilePath) {
-                            # Split out path
-                            $output = $inputFilePath.Split("/")
-                            $output = $output[$output.Length - 1]
-
-                            # Split out file type
-                            $output = $output.Split(".")[0]
-                            return $output
-                        }
-                        $content = ''
-                        $rawData = $rawData.Split("`n")
-                        foreach ($line in $rawData) {
-                            # Remove comment lines before condensing query
-                            if (!$line.StartsWith("//")) {
-                                $content = $content + "`n" + $line
-                            }
-                        }
-
-                        # Use File Name as Parser Name
-                        $functionAlias = getFileNameFromPath $file
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserVersion$parserCounter" -NotePropertyValue "1.0.0"
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$($functionAlias)-Parser"
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserContentId$parserCounter" -NotePropertyValue "[variables('parserContentId$parserCounter')]"
-                        $DependencyCriteria += [PSCustomObject]@{
-                            kind      = "Parser";
-                            contentId = "[variables('_parserContentId$parserCounter')]";
-                            version   = "[variables('parserVersion$parserCounter')]";
-                        };
-
-                        if($contentToImport.TemplateSpec) {
-                            $displayDetails = getParserDetails $solutionId
-
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$($displayDetails.name)"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$parserCounter')))]"
-                            # Add workspace resource ID if not available
-                            if (!$baseMainTemplate.variables.workspaceResourceId) {
-                                $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-                            }
-                            # Add base templateSpec
-                            $baseParserTemplateSpec = [PSCustomObject]@{
-                                type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2021-05-01";
-                                name       = "[variables('parserTemplateSpecName$parserCounter')]";
-                                location   = "[parameters('workspace-location')]";
-                                tags       = [PSCustomObject]@{
-                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
-                                    "hidden-sentinelContentType" = "Parser";
-                                };
-                                properties = [PSCustomObject]@{
-                                    description = "$($fileName) Data Parser with template";
-                                    displayName = "$($fileName) Data Parser template";
-                                }
-                            }
-                            $baseMainTemplate.resources += $baseParserTemplateSpec
-
-                            # Parser Content
-                            $parserContent = [PSCustomObject]@{
-                                name       = "[variables('_parserName$parserCounter')]";
-                                apiVersion = "2020-08-01";
-                                type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
-                                location   = "[parameters('workspace-location')]";
-                                properties = [PSCustomObject]@{
-                                    eTag          = "*"
-                                    displayName   = "$($displayDetails.displayName)"
-                                    category      = "Samples"
-                                    functionAlias = "$($displayDetails.functionAlias)"
-                                    query         = "$content"
-                                    version       = 1
-                                    tags          = @([PSCustomObject]@{
-                                        "name"  = "description"
-                                        "value" = "$($displayDetails.displayName)"
-                                        };
-                                    )
-                                }
-                            }
-
-                            $author = $contentToImport.Author.Split(" - ");
-                            $authorDetails = [PSCustomObject]@{
-                                name  = $author[0];
-                            };
-                            if($null -ne $author[1])
-                            {
-                                 $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
-                            }
-                            $parserMetadata = [PSCustomObject]@{
-                                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2022-01-01-preview";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
-                                dependsOn  =  @(
-                                    "[variables('_parserName$parserCounter')]"
-                                );
-                                properties = [PSCustomObject]@{
-                                    parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
-                                    contentId = "[variables('_parserContentId$parserCounter')]";
-                                    kind      = "Parser";
-                                    version   = "[variables('parserVersion$parserCounter')]";
-                                    source    = [PSCustomObject]@{
-                                        name     = $contentToImport.Name;
-                                        kind     = "Solution";
-                                        sourceId = "[variables('_solutionId')]"
-                                    };
-                                    author    = $authorDetails;
-                                    support   = $baseMetadata.support
-                                }
-                            }
-
-                            # Add templateSpecs/versions resource to hold actual content
-                            $parserTemplateSpecContent = [PSCustomObject]@{
-                                type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2021-05-01";
-                                name       = "[concat(variables('parserTemplateSpecName$parserCounter'),'/',variables('parserVersion$parserCounter'))]";
-                                location   = "[parameters('workspace-location')]";
-                                tags       = [PSCustomObject]@{
-                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
-                                    "hidden-sentinelContentType" = "Parser";
-                                };
-                                dependsOn  = @(
-                                    "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName$parserCounter'))]"
-                                );
-                                properties = [PSCustomObject]@{
-                                    description  = "$($fileName) Data Parser with template version $($contentToImport.Version)";
-                                    mainTemplate = [PSCustomObject]@{
-                                        '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
-                                        contentVersion = "[variables('parserVersion$parserCounter')]";
-                                        parameters     = [PSCustomObject]@{};
-                                        variables      = [PSCustomObject]@{};
-                                        resources      = @(
-                                            # Parser
-                                            $parserContent,
-                                            # Metadata
-                                            $parserMetadata
-                                        )
-                                    }
-                                }
-                            }
-                            $baseMainTemplate.resources += $parserTemplateSpecContent
-
-                            $parserObj = [PSCustomObject] @{
-                                type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
-                                apiVersion = "2021-06-01";
-                                name       = "[variables('_parserName$parserCounter')]";
-                                location   = "[parameters('workspace-location')]";
-                                properties = [PSCustomObject] @{
-                                    eTag          = "*";
-                                    displayName   = "$($displayDetails.displayName)";
-                                    category      = "Samples";
-                                    functionAlias = "$($displayDetails.functionAlias)";
-                                    query         = $content;
-                                    version       = 1;
-                                }
-                            }
-                            $baseMainTemplate.resources += $parserObj
-
-                            $parserMetadata = [PSCustomObject]@{
-                                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2022-01-01-preview";
-                                location   = "[parameters('workspace-location')]";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
-                                dependsOn  =  @(
-                                    "[variables('_parserId$parserCounter')]"
-                                );
-                                properties = [PSCustomObject]@{
-                                    parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
-                                    contentId = "[variables('_parserContentId$parserCounter')]";
-                                    kind      = "Parser";
-                                    version   = "[variables('parserVersion$parserCounter')]";
-                                    source    = [PSCustomObject]@{
-                                        kind     = "Solution";
-                                        name     = $contentToImport.Name;
-                                        sourceId = "[variables('_solutionId')]"
-                                    };
-                                    author    = $authorDetails;
-                                    support   = $baseMetadata.support
-                                }
-                            }
-
-                            $baseMainTemplate.resources += $parserMetadata
-                        }
-                        else {
-                            if ($parserCounter -eq 1 -and $(queryResourceExists) -and !$contentToImport.TemplateSpec) {
-                                $baseParserResource = [PSCustomObject] @{
-                                    type       = "Microsoft.OperationalInsights/workspaces";
-                                    apiVersion = "2020-08-01";
-                                    name       = "[parameters('workspace')]";
-                                    location   = "[parameters('workspace-location')]";
-                                    resources  = @(
-
-                                    )
-                                }
-                                $baseMainTemplate.resources += $baseParserResource
-                            }
-                            $parserObj = [PSCustomObject] @{
-                                type       = "savedSearches";
-                                apiVersion = "2020-08-01";
-                                name       = "$solutionName Data Parser";
-                                dependsOn  = @(
-                                    "[variables('workspace-dependency')]"
-                                );
-                                properties = [PSCustomObject] @{
-                                    eTag          = "*";
-                                    displayName   = "$solutionName Data Parser";
-                                    category      = "Samples";
-                                    functionAlias = "$functionAlias";
-                                    query         = $content;
-                                    version       = 1;
-                                }
-                            }
-                            $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $parserObj
-                        }
+                        $DependencyCriteria = generateParserContent
                         # Update Parser Counter
                         $parserCounter += 1
                     }
@@ -2512,7 +2297,289 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         }
     }
 
+    function ConvertHashTo-StringData {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
+            [HashTable[]]$HashTable
+        )
+            $Parameters = ""
+            foreach ($item in $HashTable) {
+                if($Parameters -ne "")
+                {
+                    $Parameters = $Parameters + ","
+                }
+                if($item.Type.StartsWith('table:'))
+                {
+                    $Parameters = $Parameters + "{0}:{1}" -f $item.Name, $item.Type.split(":")[-1]
+                }
+                else
+                {
+                    if($null -ne $item.Default)
+                    {
+                        $Default = $item.Default
+                        if($item.Type.ToLower() -eq 'string')
+                        {
+                            $Default = "'$default'"
+                        }
+                        $Parameters = $Parameters + "{0}:{1}={2}" -f $item.Name, $item.Type,$Default
+                    }
+                    else {
+                        $Parameters = $Parameters + "{0}:{1}" -f $item.Name, $item.Type
+                    }
+                }
+            }
+            return $Parameters
+            #($HashTable.GetEnumerator() | % {$($_.Type.StartsWith('table:')) ? "$($_.Name):$($_.Type.split(":",1)[1])" : "$($_.Name):$($_.Type)"}) -join ','
+    }
+    function addTemplateSpecParserResource($content,$yaml,$isyaml)
+    {
+            # Add workspace resource ID if not available
+            if (!$baseMainTemplate.variables.workspaceResourceId) {
+                $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+            }
+            # Add base templateSpec
+            $baseParserTemplateSpec = [PSCustomObject]@{
+                type       = "Microsoft.Resources/templateSpecs";
+                apiVersion = "2021-05-01";
+                name       = "[variables('parserTemplateSpecName$parserCounter')]";
+                location   = "[parameters('workspace-location')]";
+                tags       = [PSCustomObject]@{
+                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                    "hidden-sentinelContentType" = "Parser";
+                };
+                properties = [PSCustomObject]@{
+                    description = "$($fileName) Data Parser with template";
+                    displayName = "$($fileName) Data Parser template";
+                }
+            }
+            $baseMainTemplate.resources += $baseParserTemplateSpec
 
+            # Parser Content
+            $parserContent = [PSCustomObject]@{
+                name       = "[variables('_parserName$parserCounter')]";
+                apiVersion = "2020-08-01";
+                type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
+                location   = "[parameters('workspace-location')]";
+                properties = [PSCustomObject]@{
+                    eTag          = "*"
+                    displayName   = "$($displayDetails.displayName)"
+                    category      = $isyaml ? "$($yaml.Category)" : "Samples"
+                    functionAlias = "$($displayDetails.functionAlias)"
+                    query         = $isyaml ? "$($yaml.FunctionQuery)" : "$content"
+                    functionParameters = $isyaml ? "$(ConvertHashTo-StringData $yaml.FunctionParams)" : ""
+                    version       = $isyaml ? 2 : 1
+                    tags          = @([PSCustomObject]@{
+                        "name"  = "description"
+                        "value" = $isyaml ? "$($yaml.Description)" : "$($displayDetails.displayName)"
+                        };
+                    )
+                }
+            }
+            $author = $contentToImport.Author.Split(" - ");
+            $authorDetails = [PSCustomObject]@{
+                name  = $author[0];
+            };
+            if($null -ne $author[1])
+            {
+                 $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+            }
+            $parserMetadata = [PSCustomObject]@{
+                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                apiVersion = "2022-01-01-preview";
+                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
+                dependsOn  =  @(
+                    "[variables('_parserName$parserCounter')]"
+                );
+                properties = [PSCustomObject]@{
+                    parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
+                    contentId = "[variables('_parserContentId$parserCounter')]";
+                    kind      = "Parser";
+                    version   = "[variables('parserVersion$parserCounter')]";
+                    source    = [PSCustomObject]@{
+                        name     = $contentToImport.Name;
+                        kind     = "Solution";
+                        sourceId = "[variables('_solutionId')]"
+                    };
+                    author    = $authorDetails;
+                    support   = $baseMetadata.support
+                }
+            }
+
+            # Add templateSpecs/versions resource to hold actual content
+            $parserTemplateSpecContent = [PSCustomObject]@{
+                type       = "Microsoft.Resources/templateSpecs/versions";
+                apiVersion = "2021-05-01";
+                name       = "[concat(variables('parserTemplateSpecName$parserCounter'),'/',variables('parserVersion$parserCounter'))]";
+                location   = "[parameters('workspace-location')]";
+                tags       = [PSCustomObject]@{
+                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                    "hidden-sentinelContentType" = "Parser";
+                };
+                dependsOn  = @(
+                    "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName$parserCounter'))]"
+                );
+                properties = [PSCustomObject]@{
+                    description  = "$($fileName) Data Parser with template version $($contentToImport.Version)";
+                    mainTemplate = [PSCustomObject]@{
+                        '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
+                        contentVersion = "[variables('parserVersion$parserCounter')]";
+                        parameters     = [PSCustomObject]@{};
+                        variables      = [PSCustomObject]@{};
+                        resources      = @(
+                            # Parser
+                            $parserContent,
+                            # Metadata
+                            $parserMetadata
+                        )
+                    }
+                }
+            }
+            $baseMainTemplate.resources += $parserTemplateSpecContent
+
+            $parserObj = [PSCustomObject] @{
+                type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
+                apiVersion = "2021-06-01";
+                name       = "[variables('_parserName$parserCounter')]";
+                location   = "[parameters('workspace-location')]";
+                properties = [PSCustomObject] @{
+                    eTag          = "*"
+                    displayName   = "$($displayDetails.displayName)"
+                    category      = $isyaml ? "$($yaml.Category)" :"Samples"
+                    functionAlias = "$($displayDetails.functionAlias)"
+                    query         = $isyaml ? "$($yaml.FunctionQuery)" : "$content"
+                    functionParameters = $isyaml ? "$(ConvertHashTo-StringData $yaml.FunctionParams)" : ""
+                    version       = $isyaml ? 2 : 1
+                    tags          = @([PSCustomObject]@{
+                        "name"  = "description"
+                        "value" = $isyaml ? "$($yaml.Description)" : "$($displayDetails.displayName)"
+                        };
+                    )
+                }
+            }
+            $baseMainTemplate.resources += $parserObj
+
+            $parserMetadata = [PSCustomObject]@{
+                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                apiVersion = "2022-01-01-preview";
+                location   = "[parameters('workspace-location')]";
+                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
+                dependsOn  =  @(
+                    "[variables('_parserId$parserCounter')]"
+                );
+                properties = [PSCustomObject]@{
+                    parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
+                    contentId = "[variables('_parserContentId$parserCounter')]";
+                    kind      = "Parser";
+                    version   = "[variables('parserVersion$parserCounter')]";
+                    source    = [PSCustomObject]@{
+                        kind     = "Solution";
+                        name     = $contentToImport.Name;
+                        sourceId = "[variables('_solutionId')]"
+                    };
+                    author    = $authorDetails;
+                    support   = $baseMetadata.support
+                }
+            }
+
+            $baseMainTemplate.resources += $parserMetadata
+    }
+
+    function generateParserContent()
+    {
+        if ($parserCounter -eq 1 -and $null -eq $baseMainTemplate.variables.'workspace-dependency' -and !$contentToImport.TemplateSpec) {
+            # Add parser dependency variable once to ensure validation passes.
+            $baseMainTemplate.variables | Add-Member -MemberType NoteProperty -Name "workspace-dependency" -Value "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]"
+        }
+
+        $fileName = Split-Path $file -leafbase;
+        function getFileNameFromPath ($inputFilePath) {
+            # Split out path
+            $output = $inputFilePath.Split("/")
+            $output = $output[$output.Length - 1]
+
+            # Split out file type
+            $output = $output.Split(".")[0]
+            return $output
+        }
+        $content = ''
+        $yaml = $null
+        $isyaml = $false
+        $rawData = $rawData.Split("`n")
+        foreach ($line in $rawData) {
+            # Remove comment lines before condensing query
+            if (!$line.StartsWith("//")) {
+                $content = $content + "`n" + $line
+            }
+        }
+        if($file -match "(\.yaml)$")
+        {        
+            try {
+                $yaml = ConvertFrom-YAML $content
+                $isyaml = $true
+            }
+            catch {
+            Write-Host "Failed to deserialize while converting the Saved Search Function from Yaml $file" -ForegroundColor Red
+            break;
+            }
+        }
+        
+        $displayDetails = getParserDetails $solutionId $yaml $isyaml
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$($displayDetails.name)"
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$parserCounter')))]"
+
+        # Use File Name as Parser Name
+        $functionAlias = ($null -ne $yaml -and $yaml.Count -gt 0) ? $yaml.FunctionName : "$($displayDetails.functionAlias)"
+        $parserVersion = ($null -ne $yaml -and $yaml.Count -gt 0) ? ($null -eq $yaml.Function.Version ? "1.0.0" : $yaml.Function.Version) : "1.0.0"
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserVersion$parserCounter" -NotePropertyValue $parserVersion
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$($functionAlias)-Parser"
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserContentId$parserCounter" -NotePropertyValue "[variables('parserContentId$parserCounter')]"
+        $DependencyCriteria += [PSCustomObject]@{
+            kind      = "Parser";
+            contentId = "[variables('_parserContentId$parserCounter')]";
+            version   = "[variables('parserVersion$parserCounter')]";
+        };
+
+        if($contentToImport.TemplateSpec) {
+            # Adding the Parser respective TemplateSpec Resources and Active Parser and Metadata Resource
+            addTemplateSpecParserResource $content $yaml $isyaml
+        }
+        else {
+            if ($parserCounter -eq 1 -and $(queryResourceExists) -and !$contentToImport.TemplateSpec) {
+                $baseParserResource = [PSCustomObject] @{
+                    type       = "Microsoft.OperationalInsights/workspaces";
+                    apiVersion = "2020-08-01";
+                    name       = "[parameters('workspace')]";
+                    location   = "[parameters('workspace-location')]";
+                    resources  = @(
+
+                    )
+                }
+                $baseMainTemplate.resources += $baseParserResource
+            }
+            $parserObj = [PSCustomObject] @{
+                type       = "savedSearches";
+                apiVersion = "2020-08-01";
+                name       = "$solutionName Data Parser";
+                dependsOn  = @(
+                    "[variables('workspace-dependency')]"
+                );
+                properties = [PSCustomObject] @{
+                    eTag          = "*";
+                    displayName   = "$solutionName Data Parser";
+                    category      = "Samples";
+                    functionAlias = "$functionAlias";
+                    query         = $content;
+                    version       = 1;
+                }
+            }
+            $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $parserObj
+        }
+        return $DependencyCriteria
+    }
     # Update CreateUiDefinition Description with Content Counts
     function updateDescriptionCount($counter, $emplaceString, $replaceString, $countStringCondition) {
         if ($counter -gt 0) {
