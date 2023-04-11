@@ -170,7 +170,7 @@ Note: It may take about 20 minutes until the connection streams data to your wor
 Once you have a working POC, you are ready to build, validate the data connector user experience and submit your connector and relevant documentation.
 
 1. **Review the [data connector template guidance](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Data%20Connectors%20Template%20Guidance.md)** - This is to help get familiarized with the nomenclature used in the templates and to enable filling out the json template easily.
-2. **Use the template** - Download the right template for your data connector type from the following, rename the json file to ‘ProviderNameApplianceName.json’ (no spaces in name) and fill out the template per the guidance mentioned above.
+2. **Use the template** - Download the right template for your data connector type from the following, rename the json file to 'ProviderNameApplianceName.json' (no spaces in name) and fill out the template per the guidance mentioned above.
    * [DataConnector_API_CCP_template.json (Preview)](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_API_CCP_template.json)
    * [Connector_CEF_Template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_CEF_template.json)
    * [Connector_REST_API_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_template.json)
@@ -180,7 +180,7 @@ Once you have a working POC, you are ready to build, validate the data connector
 3. **Validate the Connector UX** – Follow these steps to render and validate the connector UX you just built
     1.	The test utility can be accessed by this URL - https://aka.ms/sentineldataconnectorvalidateurl
     2.  Go to Microsoft Sentinel -> Data Connectors 
-    3.	Click the “import” button and select the json file you created as follows.
+    3.	Click the "import" button and select the json file you created as follows. To validate a codeless connector with this tool, be sure to only upload a json file containing the `connectorUiConfig` collection.
     ![Import button](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/validateUX_stepc.png)
     4. The json file you just created is loaded (example as follows) - Validate connector UX by ensuring all links resolve appropriately with no errors (including query links) in both the main and ‘next steps’ page, check for content accuracy, grammar, typos and formatting.  Update the json as needed and reload to revalidate. 
     ![Validate connector](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/validateUX_stepd.png)
