@@ -77,26 +77,26 @@ FunctionQuery: |
             UserType = iff(UserType == "Guest", UserType, ""),
             UserUpn = Username
     ;
-    let EnrichAadId = T 
-    | where AadIdField != ""
+    T 
+    | extend
+        jkUserId = column_ifexists(AadIdField,''),
+        jkUserScopeId = column_ifexists(TenantIdField,''), 
+        jkUserSid = column_ifexists(SidField,''), 
+        jkUsername = column_ifexists(UpnField,''), 
+        jkUserMailAddress = column_ifexists(EmailField,'')
     | extend 
-        UserId = column_ifexists(AadIdField,''),
-        UserScopeId = column_ifexists(TenantIdField,''), 
-        ASimIdentityInfoMatch="EnrichAadId"
-    | lookup AADinfo on UserScopeId, UserId;
-    let EnrichSid = T 
-    | where AadIdField == "" and SidField != ""
-    | extend UserSid = column_ifexists(SidField,''), ASimIdentityInfoMatch="EnrichSid"
-    | lookup AADinfo on UserSid;
-    let EnrichUpn = T 
-    | where AadIdField == "" and SidField == "" and UpnField != ""
-    | extend Username = column_ifexists(UpnField,''), ASimIdentityInfoMatch="EnrichUpn"
-    | lookup AADinfo on Username;
-    let EnrichEmail = T 
-    | where AadIdField == "" and SidField == "" and UpnField == "" and EmailField != ""
-    | extend UserMailAddress = column_ifexists(EmailField,''), ASimIdentityInfoMatch="EnrichEmail"
-    | lookup AADinfo on UserMailAddress;
-    let default = T 
-    | where AadIdField == "" and SidField == "" and UpnField == "" and EmailField == ""  
-    | extend ASimIdentityInfoMatch="None";
-    union EnrichAadId, EnrichSid, EnrichUpn, EnrichEmail, default
+        jkUserAadFullId = iff (isnotempty(jkUserScopeId), strcat(jkUserScopeId, '/', jkUserId), jkUserId)
+    | extend
+        join_key = coalesce (jkUserAadFullId, jkUserSid, jkUsername, jkUserMailAddress)
+    | lookup ( 
+        AADinfo 
+        | extend join_key = case ( 
+            isnotempty(TenantIdField), strcat(UserScopeId, '/', UserId), 
+            isnotempty(AadIdField), UserId,
+            isnotempty(SidField), UserSid,
+            isnotempty(UpnField), UserUpn,            
+            isnotempty(EmailField), UserMailAddress,
+            ''
+        )
+    ) on join_key
+    | project-away jkUserId, jkUserAadFullId, jkUserMailAddress, jkUsername, jkUserScopeId, jkUserSid, join_key
