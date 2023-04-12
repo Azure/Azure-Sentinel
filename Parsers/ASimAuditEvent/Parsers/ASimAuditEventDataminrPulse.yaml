@@ -1,0 +1,91 @@
+Parser:
+  Title: Audit Event ASIM parser for Dataminr Pulse
+  Version: '0.1'
+  LastUpdated: Mar 29 2023
+Product:
+  Name: Dataminr Pulse
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Dataminr Pulse Audit logs to the ASIM Audit Event schema.
+ParserName: ASimAuditEventDataminrPulse
+EquivalentBuiltInParser: _ASim_AuditEvent_DataminrPulse
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool = false)
+  {
+    DataminrPulse_Alerts_CL
+    | where _embedded_labels_s != "[]" and isnotempty(alertType_name_s)
+    | extend dynamic_embedded_labels = todynamic(_embedded_labels_s), dynamic_category = todynamic(categories_s), dynamic_watchlist = todynamic(watchlistsMatchedByType_s)
+    | extend IpAddresses = tostring(dynamic_embedded_labels[0]['data']['addresses'][0]['ip'])
+    | mv-apply dynamic_category on (summarize CategoryNames = make_list(dynamic_category['name']))
+    | mv-apply dynamic_watchlist on (summarize WatchlistNames = make_list(dynamic_watchlist['name']))
+    | extend
+        Dvc = IpAddresses,
+        EventEndTime = todatetime(odsStatus_timestamp_d),
+        EventProductVersion = "1.0.0",
+        EventResult = "Success",
+        EventSchema = "AuditEvent",
+        EventSchemaVersion = "0.1.0",
+        EventStartTime = todatetime(timestamp_d),
+        EventType = "Create",
+        EventVendor = "Dataminr",
+        Operation = headline_s,
+        Type = alertType_name_s,
+        DvcIpAddr = IpAddresses,
+        EventSeverity = case(alertType_name_s == "Flash", "High", 
+                            alertType_name_s == "Urgent Update", "Medium",
+                            alertType_name_s == "Urgent", "Medium",
+                            alertType_name_s == "Alert", "Low",
+                            "Informational"),
+        SrcIpAddr = IpAddresses,
+        EventCount = toint(array_length(todynamic(relatedAlerts_s))),
+        EventMessage = headline_s,
+        Topics = CategoryNames,
+        WatchlistNames = WatchlistNames,
+        SrcGeoCountry = location_name_s,
+        SrcGeoLongitude = location_longitude_d,
+        SrcGeoLatitude = location_latitude_d
+    | project-rename
+        EventResultDetails = dataMap_headlineMds_content_s,
+        EventUid = index_s
+    | project
+        Dvc,
+        EventEndTime,
+        EventProductVersion,
+        EventResult,
+        EventSchema,
+        EventSchemaVersion,
+        EventStartTime,
+        EventType,
+        EventVendor,
+        Operation,
+        Type,
+        DvcIpAddr,
+        EventSeverity,
+        SrcIpAddr,
+        EventCount,
+        EventMessage,
+        EventResultDetails,
+        EventUid,
+        TimeGenerated,
+        Topics,
+        WatchlistNames,
+        SrcGeoCountry,
+        SrcGeoLongitude,
+        SrcGeoLatitude
+  };
+  parser (disabled=disabled)
+Exceptions:
+- Field: Dvc 
+  Warning: Empty value
+  Exception: May have empty values which are not valid value for Dvc field.
