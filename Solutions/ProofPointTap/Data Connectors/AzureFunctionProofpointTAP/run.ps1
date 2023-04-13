@@ -120,7 +120,7 @@ ForEach ($PPLogType in $ProofpointLogTypes) {
         if($response.$PPLogType -eq $null) {                            # if the log entry is a null, this occurs on the last line of each LogType. Should only be one per log type
             Write-Host ("ProofPointTAP$($PPLogType) null line excluded")    # exclude it from being posted
         } 
-        Write-Host ("ProofPointTAP logs before json conversion$($response.$PPLogType)")
+        Write-Host ("ProofPointTAP logs before json conversion:$($response.$PPLogType)")
         else {            
             $json = $response.$PPLogType | ConvertTo-Json -Depth 3                 # convert each log entry and post each entry to the Log Analytics API
             Write-Host ("ProofPointTAP logs after json conversion$($json)")
