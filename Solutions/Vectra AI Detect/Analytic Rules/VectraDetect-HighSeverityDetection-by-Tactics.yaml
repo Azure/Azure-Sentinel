@@ -10,8 +10,8 @@ requiredDataConnectors:
   - connectorId: AIVectraDetect
     dataTypes:
       - CommonSecurityLog
-queryFrequency: 1h
-queryPeriod: 1h
+queryFrequency: 5m
+queryPeriod: 5m
 triggerOperator: gt
 triggerThreshold: 0
 eventGroupingSettings:
@@ -52,15 +52,23 @@ query: |
                           Category == "LATERAL MOVEMENT", "LateralMovement",
                           Category == "RECONNAISSANCE", "Discovery",
                           "UNKNOWN")
+  | extend level = case(threat_score == 0 and certainty_score == 0, "Info",
+      threat_score < 50 and certainty_score < 50, "Low",
+      threat_score < 50 and certainty_score >= 50, "Medium", 
+      threat_score >= 50 and certainty_score <= 50, "High", 
+      threat_score >= 50 and certainty_score >= 50, "Critical",
+      "UNKNOWN")
+  | extend Severity = case(level == "Info", "Informational",level == "Critical", "High", level)
   | extend account = extract("account=(.+?);", 1, AdditionalExtensions)
-  | extend upn = iff(account matches regex ":", tostring(split(account,":")[1]) ,tostring(split(account,":")[0])) 
+  | extend upn = iff(account matches regex ":", tostring(split(account,":")[1]) ,tostring(split(account,":")[0]))
+  | extend name = tostring(split(upn, "@")[0])
+  | extend upn_suffix = tostring(split(upn, "@")[1])
   | extend source_entity = case( isnotempty(upn), upn,
                                  isnotempty(SourceHostName), SourceHostName,
                                  "UNKNWON") 
   | where Category in (configured_tactics) 
   | summarize arg_max(threat_score, *) by source_entity, Activity
   | sort by TimeGenerated
-  | project TimeGenerated, source_entity, SourceHostName, SourceIP, upn, Tactic, Activity, LogSeverity, Severity, vectra_URL
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -80,10 +88,20 @@ alertDetailsOverride:
     - alertProperty: AlertLink
       value: vectra_URL
     - alertProperty: ProductName
-      value: DeviceVendor
+      value: DeviceProduct
     - alertProperty: ProviderName
       value: DeviceVendor
     - alertProperty: ConfidenceScore
       value: certainty_score
-version: 1.0.5
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 7d
+    matchingMethod: AllEntities
+customDetails:
+  AttackType: Activity
+  AttackCategory: Category  
+version: 1.0.6
 kind: Scheduled
