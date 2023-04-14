@@ -12,7 +12,7 @@ There are two versions of Microsoft Sentinel All-in-One, v1 and v2. V1 has two f
 
 ## What does All-in-One do?
 
-Microsoft Sentinel All-in-One automate the following tasks:
+Microsoft Sentinel All-in-One automates the following tasks:
 
 - Creates resource group
 - Creates Log Analytics workspace
