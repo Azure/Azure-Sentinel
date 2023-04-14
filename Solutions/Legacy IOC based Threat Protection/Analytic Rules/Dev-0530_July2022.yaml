@@ -87,10 +87,12 @@ query:  |
   | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"])
   | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
   | extend Hashes = column_ifexists("Hashes", ""), CommandLine = column_ifexists("CommandLine", "")
-  | where (Hashes has_any (sha256Hashes) ) or ( CommandLine has ('cmd.exe /Q /c schtasks /create /tn lockertask /tr') and CommandLine has ('/sc minute /mo 1 /F /ru system')) 
+  | extend Hashes = todynamic(Hashes) | mv-expand Hashes
+  | where Hashes[0] =~ "SHA256"
+  | where (Hashes[1] has_any (sha256Hashes)) or ( CommandLine has ('cmd.exe /Q /c schtasks /create /tn lockertask /tr') and CommandLine has ('/sc minute /mo 1 /F /ru system')) 
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = Hashes
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = tostring(Hashes[1])
   ),
   (DeviceFileEvents
   | where SHA256 has_any (sha256Hashes)
@@ -199,5 +201,5 @@ entityMappings:
     fieldMappings:
       - identifier: ProcessId
         columnName: ProcessCustomEntity
-version: 1.1.1
+version: 1.1.2
 kind: Scheduled
