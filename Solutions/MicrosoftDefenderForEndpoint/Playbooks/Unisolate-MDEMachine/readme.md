@@ -4,9 +4,16 @@ author: Nicholas DiCola
 This playbook will release a machine from isolation in Microsoft Defender for Endpoint.
 
 ## Quick Deployment
-**Deploy with incident trigger** (recommended)
+**Deploy with entity trigger** (recommended)
 
-After deployment, attach this playbook to an **automation rule** so it runs when the incident is created.
+After deployment, you can run this playbook manually on an entity.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FUnisolate-MDEMachine%2FUnisolate-MDE-Machine-entity-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FUnisolate-MDEMachine%2FUnisolate-MDE-Machine-entity-trigger%2Fazuredeploy.json)
+
+**Deploy with incident trigger**
+
+After deployment, you can run this playbook manually on an incident or attach this playbook to an **automation rule** so it runs when the incident is created.
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
@@ -15,7 +22,7 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 **Deploy with alert trigger**
 
-After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
+After deployment, you can run this playbook manually on an alert or attach it to an **automation rule** so it will rune when an alert is created.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FUnisolate-MDEMachine%2FUnisolate-MDEMachine-alert-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FUnisolate-MDEMachine%2FUnisolate-MDEMachine-alert-trigger%2Fazuredeploy.json)
 
@@ -41,3 +48,6 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 
 **Alert Trigger**
 ![Alert Trigger](./Unisolate-MDEMachine/Unisolate-MDEMachine-alert-trigger/images/Unisolate-MDEMachine_alert.png)
+
+**Entity Trigger**
+![Entity Trigger](./Unisolate-MDEMachine/Unisolate-MDE-Machine-entity-trigger/images/playbookDark.png)
