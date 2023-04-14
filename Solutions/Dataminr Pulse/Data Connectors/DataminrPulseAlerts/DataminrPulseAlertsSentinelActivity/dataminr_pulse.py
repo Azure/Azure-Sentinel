@@ -96,7 +96,7 @@ class DataminrPulse:
                     }
                     body = json.dumps(data)
                     status_code = self.microsoftsentinel.post_data(body, log_type)
-                    if status_code >= 200 or status_code <= 299:
+                    if status_code >= 200 and status_code <= 299:
                         applogger.debug(
                             "{}(method={}) products for vulnerability id={}, alert id={} posted successfully.".format(
                                 self.logs_starts_with,
@@ -183,7 +183,6 @@ class DataminrPulse:
                         alerts_data["internalOnly"]["redirectLinks"][
                             "rawToRedirectedUrls"
                         ] = [redirect_urls]
-            return alerts_data
         except KeyError as err:
             applogger.error(
                 "{}".format(
@@ -226,23 +225,23 @@ class DataminrPulse:
             )
             for alert in related_alerts:
                 alert.update({"alert_relatedTo": alert_id})
-                alert = self.prepare_rawtoredirecturl(alert)
+                self.prepare_rawtoredirecturl(alert)
                 embeded = alert.get("_embedded")
                 if embeded:
                     embeded_labels = embeded.get("labels")
                     if embeded_labels:
-                        embeded_labels = self.prepare_embeded_labels_data(
+                        updated_embeded_labels = self.prepare_embeded_labels_data(
                             alert.get("index"),
                             embeded_labels,
                             vulnerabilities_products_related_alerts_table,
                         )
-                        alert.update({"_embedded": {"labels": embeded_labels}})
+                        alert.update({"_embedded": {"labels": updated_embeded_labels}})
                 related_alert_ids.append(alert.get("index"))
                 body = json.dumps(alert)
                 status_code = self.microsoftsentinel.post_data(
                     body, related_alerts_table
                 )
-                if status_code >= 200 or status_code <= 299:
+                if status_code >= 200 and status_code <= 299:
                     count += 1
             applogger.info(
                 "{}(method={}) Posted total {} alerts data related to id={} successfully.".format(
@@ -277,23 +276,22 @@ class DataminrPulse:
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            alert_data = self.prepare_rawtoredirecturl(alert_data)
+            self.prepare_rawtoredirecturl(alert_data)
             embeded = alert_data.get("_embedded")
             if embeded:
                 embeded_labels = embeded.get("labels")
                 if embeded_labels:
-                    embeded_labels = self.prepare_embeded_labels_data(
+                    updated_embeded_labels = self.prepare_embeded_labels_data(
                         alert_data.get("index"),
                         embeded_labels,
                         vulnerabilities_products_table,
                     )
-                    alert_data.update({"_embedded": {"labels": embeded_labels}})
+                    alert_data.update({"_embedded": {"labels": updated_embeded_labels}})
             if alert_data.get("relatedAlerts"):
                 related_alerts = self.post_related_alerts(
                     alert_data.get("relatedAlerts"), alert_data.get("index")
                 )
                 alert_data.update({"relatedAlerts": related_alerts})
-            return alert_data
         except DataminrPulseException as err:
             raise DataminrPulseException(err)
         except Exception as error:
@@ -313,7 +311,7 @@ class DataminrPulse:
         __method_name = inspect.currentframe().f_code.co_name
         try:
             if type(data) == dict:
-                data = self.prepare_alerts(data)
+                self.prepare_alerts(data)
                 body = json.dumps(data)
                 applogger.debug(
                     "{}(method={}) Posting the RTAP alerts from DataminrPulseAlertsSentinelConnector".format(
@@ -337,7 +335,7 @@ class DataminrPulse:
                 )
                 count = 0
                 for alert in data:
-                    alert = self.prepare_alerts(alert)
+                    self.prepare_alerts(alert)
                     count += 1
                 body = json.dumps(data)
                 applogger.debug(
