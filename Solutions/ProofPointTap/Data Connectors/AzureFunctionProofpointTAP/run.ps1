@@ -122,7 +122,7 @@ ForEach ($PPLogType in $ProofpointLogTypes) {
         } 
         Write-Host ("ProofPointTAP logs before json conversion:$($response.$PPLogType)")
         else {            
-            $json = $response.$PPLogType | ConvertTo-Json -Depth 3                 # convert each log entry and post each entry to the Log Analytics API
+            $json = Get-Content $response.$PPLogType -Encoding utf8 | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
             Write-Host ("ProofPointTAP logs after json conversion$($json)")
             Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
             }
