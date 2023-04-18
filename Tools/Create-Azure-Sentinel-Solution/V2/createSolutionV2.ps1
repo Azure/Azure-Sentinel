@@ -30,7 +30,7 @@ function removePropertiesRecursively ($resourceObj) {
             $resourceObj.PsObject.Properties.Remove($key)
         }
         elseif ($val -is [System.Object[]]) {
-            if ($val.Count -eq 0) {
+            if ($val.Count -eq 0 -and $key -ne "value") {
                 $resourceObj.PsObject.Properties.Remove($key)
             }
             else {
