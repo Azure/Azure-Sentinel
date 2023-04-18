@@ -42,22 +42,19 @@ query: |
                         threat_score >= 50 and certainty_score <= 50, "High", 
                         threat_score >= 50 and certainty_score >= 50, "Critical",
                         "UNKNOWN")
-  | extend Severity = case( level == "Low", "Low",
-                            level == "Medium", "Medium",
-                            level == "High", "Medium",
-                            level == "Critical", "High",
-                            "UNKNOWN")
+  | extend Severity = case(level == "Info", "Informational",level == "Critical", "High", level)
   | where level in (configured_level) 
   //keep only the event with the highest threat score per Host
   | summarize arg_max(TimeGenerated, *) by SourceHostName
+  | sort by TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: HostName
         columnName: SourceHostName
-alertDetails:
+alertDetailsOverride:
   alertDisplayNameFormat: Vectra AI Detect - Host {{SourceHostName}} reaches {{level}} severity
-  alertDescriptionFormat: >-
+  alertDescriptionFormat: |
     The host {{SourceHostName}} has a Threat score of {{threat_score}} and a
     certainty of {{certainty_score}}
   alertSeverityColumnName: Severity
@@ -65,10 +62,19 @@ alertDetails:
     - alertProperty: AlertLink
       value: vectra_URL
     - alertProperty: ProductName
-      value: DeviceVendor
+      value: DeviceProduct
     - alertProperty: ProviderName
       value: DeviceVendor
     - alertProperty: ConfidenceScore
       value: certainty_score
-version: 1.0.4
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 7d
+    matchingMethod: AllEntities
+customDetails:
+  ScoreDecrease: score_decreases
+version: 1.0.5
 kind: Scheduled
