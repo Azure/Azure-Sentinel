@@ -1,0 +1,48 @@
+id: 5d2399f9-ea5c-4e67-9435-1fba745f3a39
+name: Azure storage key enumeration
+description: |
+  'Listing of storage keys is an interesting operation in Azure which might expose additional 
+  secrets and PII to callers as well as granting access to VMs. While there are many benign operations of this
+  type, it would be interesting to see if the account performing this activity or the source IP address from 
+  which it is being done is anomalous. 
+  The query below generates known clusters of ip address per caller, notice that users which only had single
+  operations do not appear in this list as we cannot learn from it their normal activity (only based on a single
+  event). The activities for listing storage account keys is correlated with this learned 
+  clusters of expected activities and activity which is not expected is returned.'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1087
+query: |
+  AzureActivity
+  | where OperationNameValue =~ "microsoft.storage/storageaccounts/listkeys/action"
+  | where ActivityStatusValue =~ "Succeeded" 
+  | join kind= inner (
+      AzureActivity
+      | where OperationNameValue =~ "microsoft.storage/storageaccounts/listkeys/action"
+      | where ActivityStatusValue =~ "Succeeded" 
+      | project ExpectedIpAddress=CallerIpAddress, Caller 
+      | evaluate autocluster()
+  ) on Caller
+  | where CallerIpAddress != ExpectedIpAddress
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResourceIds = make_set(ResourceId,100), ResourceIdCount = dcount(ResourceId) by OperationNameValue, Caller, CallerIpAddress
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = CallerIpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.0.1

@@ -1,0 +1,38 @@
+id: 957cb240-f45d-4491-9ba5-93430a3c08be
+name: Rare and potentially high-risk Office operations
+description: |
+  'Identifies Office operations that are typically rare and can provide capabilities useful to attackers.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1098
+  - T1114
+query: |
+  OfficeActivity
+  | where Operation in~ ( "Add-MailboxPermission", "Add-MailboxFolderPermission", "Set-Mailbox", "New-ManagementRoleAssignment", "New-InboxRule", "Set-InboxRule", "Set-TransportRule")
+  and not(UserId has_any ('NT AUTHORITY\\SYSTEM (Microsoft.Exchange.ServiceHost)', 'NT AUTHORITY\\SYSTEM (w3wp)', 'devilfish-applicationaccount') and Operation in~ ( "Add-MailboxPermission", "Set-Mailbox"))
+  | extend ClientIPOnly = tostring(extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?', dynamic(["IPAddress"]), ClientIP)[0][0])
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIPOnly
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 2.0.1
+kind: Scheduled
