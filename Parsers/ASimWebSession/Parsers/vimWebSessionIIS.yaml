@@ -1,6 +1,6 @@
 Parser:
-  Title: Web Session ASIM parser for Windows IIS logs
-  Version: '0.2'
+  Title: Web Session ASIM filtering parser for Windows IIS logs
+  Version: '0.1'
   LastUpdated: Apr 19, 2023
 Product:
   Name: Internet Information Services (IIS)
@@ -15,18 +15,77 @@ References:
 - Title: IIS HTTP Status Code overview
   Link: https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/iis/www-administration-management/http-status-code
 Description: |
-  This ASIM parser supports normalizing IIS logs produced to the ASIM Web Session normalized schema.
-ParserName: ASimWebSessionIIS
-EquivalentBuiltInParser: _ASim_WebSession_IIS
+  This ASIM parser supports filtering and normalizing IIS logs produced to the ASIM Web Session normalized schema.
+ParserName: vimWebSessionIIS
+EquivalentBuiltInParser: _Im_WebSession_IIS
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])    
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let parser = (disabled: bool = false)
-        {
+  let parser=(
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstipaddr_has_any_prefix:dynamic=dynamic([]),
+    ipaddr_has_any_prefix:dynamic=dynamic([]), 
+    url_has_any:dynamic=dynamic([]),
+    httpuseragent_has_any:dynamic=dynamic([]),
+    eventresultdetails_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    disabled:bool=false
+  )
+  {
+        let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+        let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
         W3CIISLog
         | where not(disabled)
+        | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+        | extend
+            EventResult = iff ( toint(scStatus) < 400, "Success", "Failure")
+        | where (eventresult == '*' or EventResult =~ eventresult)
+        | where (array_length(url_has_any) == 0 or csUriStem has_any (url_has_any) or csUriQuery has_any (url_has_any))
+        | where (array_length(httpuseragent_has_any) == 0 or csUserAgent has_any(httpuseragent_has_any))
+        | where (array_length(eventresultdetails_in) == 0 or scStatus has_any (eventresultdetails_in))
+        | extend temp_SrcMatch=has_any_ipv4_prefix(cIP,src_or_any)
+            , temp_DstMatch=has_any_ipv4_prefix(csHost,dst_or_any)
+        | extend ASimMatchingIpAddr=case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+            temp_SrcMatch and temp_DstMatch, "Both",
+            temp_SrcMatch, "SrcIpAddr",
+            temp_DstMatch, "DstIpAddr",
+            "No match"
+        )
+        | where ASimMatchingIpAddr != "No match" 
+        | project-away temp_*
         | extend
                 EventResult = iff ( toint(scStatus) < 400, "Success", "Failure"),
                 EventResultDetails = tostring(scStatus), 
@@ -119,5 +178,5 @@ ParserQuery: |
                 sPort,
                 sc*,
                 StorageAccount
-      };
-      parser  (disabled=disabled)
+  };
+  parser (starttime=starttime, endtime=endtime, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
