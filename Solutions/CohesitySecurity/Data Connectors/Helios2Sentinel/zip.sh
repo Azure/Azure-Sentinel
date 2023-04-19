@@ -2,6 +2,11 @@
 # This script is used to publish the 2 function apps into 2 zip files, for later azure deployment.
 # no input needed, and it could be run from any where.
 
+set -o nounset
+set -o errexit
+set -o pipefail
+set +o noclobber
+
 SCRIPT=$(realpath "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 cd "$SCRIPTPATH"
