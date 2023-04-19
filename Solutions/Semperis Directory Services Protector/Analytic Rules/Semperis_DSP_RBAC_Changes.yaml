@@ -1,0 +1,40 @@
+id: "e5edf3f3-de53-45e6-b0d7-1ce1c048df4a"
+name: Semperis DSP RBAC Changes
+description: |
+  'Alerts when there are RBAC changes in the DSP system.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SemperisDSP
+    dataTypes:
+      - dsp_parser
+query: |
+  Event 
+  | where Source == 'Semperis-Operation-Log' and EventID == 20012 
+  | order by TimeGenerated desc
+  | extend p1Xml = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array p1Xml
+  | evaluate bag_unpack(p1Xml)
+  | extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')
+  | evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)
+  | extend det = column_ifexists('details', '')
+  | parse det with "Occured at (UTC): " OccurredAt "Session ID: " SessionID "Trustee Name: " TrusteeName "Correlation ID: " CorrelationID "Source: " Source "WebSite Target: " WebSiteTarget "Product: " Product "Component: " Component "AD Information: " ADInformation "Object GUID: " ObjectGUID "Attribute: " Attribute "Distinguished Name: " DistinguishedName "Additional Information: "AdditionalInformation "Operation Detail: " OperationDetail "operationName: " operationName "trustee: " trustee "personas: " personas "Status: " status "Granted: " Granted "Result: " Result
+  | extend _AccessGranted = iif(operationName contains "CreateRbacIdentity", "Added", "Removed")
+  | extend _Identity = iif(operationName contains "CreateRbacIdentity", trustee, tostring(substring(trustee, 1, strlen(trustee))))
+  | extend _Identity = iif(operationName contains "CreateRbacIdentity", _Identity, replace_string(_Identity, "'", ""))
+  | extend add_personas = replace_string(replace_string(replace_string(personas, "{ Name = ", ""), " }", ""), ";", ",")
+  | extend remove_personas = replace_string(personas, ";", ",")
+  | extend grid_personas = iif(operationName contains "CreateRbacIdentity", add_personas, remove_personas)
+  | extend date_to_sort = format_datetime(TimeGenerated, "yyyy-mm-dd   HH:mm:ss")
+  | order by date_to_sort desc
+  | count
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertDisplayNameFormat: RBAC Change -- Alert from Semperis Directory Services Protector
+  alertDescriptionFormat: A RBAC change was detected in the DSP system.
+kind: Scheduled

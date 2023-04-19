@@ -1,0 +1,60 @@
+id: 361dd1e3-1c11-491e-82a3-bb2e44ac36ba
+name: Suspicious number of resource creation or deployment activities
+description: |
+  'Indicates when an anomalous number of VM creations or deployment activities occur in Azure via the AzureActivity log. This query generates the baseline pattern of cloud resource creation by an individual and generates an anomaly when any unusual spike is detected. These anomalies from unusual or privileged users could be an indication of a cloud infrastructure takedown by an adversary.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+  let szOperationNames = dynamic(["microsoft.compute/virtualMachines/write", "microsoft.resources/deployments/write"]);
+  let starttime = 7d;
+  let endtime = 1d;
+  let timeframe = 1d;
+  let TimeSeriesData =
+  AzureActivity
+  | where TimeGenerated between (startofday(ago(starttime)) .. startofday(now()))
+  | where OperationNameValue in~ (szOperationNames)
+  | project TimeGenerated, Caller 
+  | make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step timeframe by Caller; 
+  TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit')
+  | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) 
+  | where TimeGenerated >= startofday(ago(endtime))
+  | where anomalies > 0 and baseline > 0
+  | project Caller, TimeGenerated, Total, baseline, anomalies, score
+  | join (AzureActivity
+  | where TimeGenerated > startofday(ago(endtime)) 
+  | where OperationNameValue in~ (szOperationNames)
+  | summarize make_set(OperationNameValue,100), make_set(_ResourceId,100), make_set(CallerIpAddress,100) by bin(TimeGenerated, timeframe), Caller
+  ) on TimeGenerated, Caller
+  | mv-expand CallerIpAddress=set_CallerIpAddress
+  | project-away Caller1
+  | extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),"")
+  | extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),"")
+  | extend AadUserId = iif(Caller !has '@',Caller,"")
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: AadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.0.3
+kind: Scheduled

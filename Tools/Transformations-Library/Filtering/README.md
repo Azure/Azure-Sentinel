@@ -19,6 +19,21 @@ Deploy this DCR:
 
 [![Deploy this DCR to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTools%2FTransformations-Library%2FFiltering%2FFilteringFieldsDCR.json)
 
+## Dropping fields just for some vendors or devices
+
+There are tables in Sentinel that can hold data coming from multiple devices or vendors. For example, CEF table (CommonSecurityLog) can get data from different device types (firewalls, proxies, etc.) and vendors (Palo Alto, Fortinet, Checkpoint, etc.). If we need to drop fields in those cases, we normally need to do it by vendor or device, for example, drop the *DeviceFacility* field for Palo Alto, but leave it untouched for others.
+
+To achieve this in transformKql, we can use the following approach:
+
+```
+source
+| extend DeviceFacility = iif(DeviceVendor in~ ('Palo Alto Networks','Fortinet'),'', DeviceFacility), 
+```
+
+In this example, we extend the *DeviceFacility* field and we assign an empty string if the *DeviceVendor* is Palo Alto or Fortinet.
+
+[![Deploy this DCR to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTools%2FTransformations-Library%2FFiltering%2FFilteringFieldsByVendorDCR.json)
+
 ## Dropping rows
 
 This is about discarding entire rows (records) when certain conditions are met. Example:

@@ -3,7 +3,7 @@ name: ProofpointPOD - Binary file in attachment
 description: |
   'Detects when email received with binary file as attachment.'
 severity: Medium
-status: Available 
+status: Available
 requiredDataConnectors:
   - connectorId: ProofpointPOD
     dataTypes:
@@ -18,19 +18,19 @@ relevantTechniques:
   - T1078
 query: |
   let lbtime = 10m;
+  let binaryTypes = dynamic(['zip', 'octet-stream', 'java-archive', 'rar', 'tar', 'x-7z-compressed', 'x-msdownload', 'portable-executable']);
   ProofpointPOD
   | where TimeGenerated > ago(lbtime)
   | where EventType == 'message'
   | where NetworkDirection == 'inbound'
   | where FilterDisposition !in ('reject', 'discard')
-  | extend attachedMimeType = todynamic(MsgParts)[0]['detectedMime']
-  | where attachedMimeType == 'application/zip'
-  | project SrcUserUpn, DstUserUpn
-  | extend AccountCustomEntity = DstUserUpn
+  | extend attachedMimeType = tostring(todynamic(MsgParts)[0]['detectedMime'])
+  | where attachedMimeType has_any (binaryTypes)
+  | project SrcUserUpn, AccountCustomEntity = parse_json(DstUserUpn)[0], attachedMimeType, MsgHeaderSubject
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
