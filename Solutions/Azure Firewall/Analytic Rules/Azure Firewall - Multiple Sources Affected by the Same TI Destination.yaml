@@ -12,6 +12,7 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWThreatIntel
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -25,12 +26,16 @@ query: |
   let StartRunTime = 1d; 
   let EndRunTime = StartRunTime - RunTime; 
   let MinAffectedThershold = 5; 
-  AzureDiagnostics 
+  union isfuzzy=true
+  (AzureDiagnostics 
   | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime)) 
-  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport  "." * "ThreatIntel: " ThreatIntel 
-  | where OperationName == "AzureFirewallThreatIntelLog" | summarize TiTrafficCount = count(), dCountSourceIps = dcount(srcip), AffectedIps = make_set(srcip) by dsturl, ThreatIntel, srcip 
-  | where dCountSourceIps > MinAffectedThershold | order by TiTrafficCount desc
-  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
+  | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort  "." * "Action: Deny. " ThreatDescription
+  | where OperationName == "AzureFirewallThreatIntelLog"),
+  (AZFWThreatIntel
+  | where TimeGenerated between (ago(StartRunTime) .. ago(EndRunTime))
+  | distinct Fqdn)
+  | summarize TiTrafficCount = count(), dCountSourceIps = dcount(SourceIp), AffectedIps = make_set(SourceIp) by Fqdn, ThreatDescription 
+  | where array_length(AffectedIps) > MinAffectedThershold | order by TiTrafficCount desc
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -40,5 +45,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
