@@ -56,7 +56,7 @@ For these situations, you can multi-home the data source (eg. Office365) to send
 
 ![image](../Media/AAD_multi-ws.png)
 
-In this case, you would need to apply a filtering trasnformation in the default DCR of all workspaces involved. Each transformation would look something like this (replacing country name):
+In this case, you would need to apply a filtering transformation in the default DCR of all workspaces involved. Each transformation would look something like this (replacing country name):
 
 ```kusto
 OfficeActivity | where OrganizationName == 'contoso-<country_name>.onmicrosoft.com'
