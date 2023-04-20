@@ -34,26 +34,27 @@ query: |
   AZFWApplicationRule
   | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
   | where DestinationPort !in (ExcludedPorts)
+  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn
   | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
-  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn),
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold),
   (AZFWNetworkRule
   | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
   | extend Fqdn = DestinationIp
   | where DestinationPort !in (ExcludedPorts)
+  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn
   | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
-  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn),
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold),
   (AzureDiagnostics
   | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
-  | extend DestinationPort = tostring(DestinationPort)
   | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort ". " * "Action: " Action "." *
+  | extend DestinationPort = toint(DestinationPort)
+  | extend Fqdn = tostring(Fqdn)
   | where DestinationPort !in (ExcludedPorts)
   | where isnotempty(Fqdn) and isnotempty(SourceIp) and isnotempty(DestinationPort)
+  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn
   | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
-  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn)
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold)
   | project bin(TimeGenerated, BinTime), SourceIp, DestinationPort, AlertTimedCountHostsInBinTime
 entityMappings:
   - entityType: IP
@@ -64,5 +65,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.1.0
+version: 1.2.0
 kind: Scheduled
