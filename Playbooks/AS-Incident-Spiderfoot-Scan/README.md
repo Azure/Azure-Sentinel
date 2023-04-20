@@ -2,7 +2,7 @@
 
 Author: Accelerynt
 
-For any technical questions, please contact info@accelerynt.com    
+For any technical questions, please contact info@accelerynt.com  
 
 This playbook is intended to be run from a Microsoft Sentinel incident. It will pull email addresses from the account entities in an incident and use them as targets in a Spiderfoot scan. By default, the scan is created using the HaveIBeenPwned module. The resulting report of that scan will be emailed to a recipient of your choosing.
 
@@ -65,7 +65,7 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 https://github.com/Accelerynt-Security/AS-Incident-Spiderfoot-Scan
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Spiderfoot-Scan%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Spiderfoot-Scan%2Fazuredeploy.json)                                           
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Spiderfoot-Scan%2Fazuredeploy.json)     
 
 From there, click the "**Deploy to Azure**" button at the bottom and it will bring you to the Custom Deployment Template.
 
@@ -83,20 +83,31 @@ In the **Parameters** section:
 
 * **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Spiderfoot-Scan#create-an-azure-key-vault-secret).
 
-* **Email Addresses**:  Enter the desired email addresses here. If entering more than one, separate with a semicolon.
+* **Email Addresses**: Enter the desired email addresses here. If entering more than one, separate with a semicolon.
 
 Towards the bottom, click on "**Review + create**". 
 
-![Spiderfoot_Deploy_1]](Images/Spiderfoot_Deploy_1.png)
+![Spiderfoot_Deploy_1](Images/Spiderfoot_Deploy_1.png)
 
 Once the resources have validated, click on "**Create**".
 
 ![Spiderfoot_Deploy_2](Images/Spiderfoot_Deploy_2.png)
 
 The resources should take around a minute to deploy. Once the deployment is complete, you can expand the "**Deployment details**" section to view them.
-To view the deployed Logic App, click the resource that corresponds to it.
+
+The resource labled "**office365-AS-Incident-Spiderfoot-Scan**" will need to be authorized before the playbook can be run successfully. Open the corresponding resource in a new tab.
 
 ![Spiderfoot_Deploy_3](Images/Spiderfoot_Deploy_3.png)
+
+Click the indicated error message bar, then click the "**Authorize**" button on the "**Edit API connection**" window that appears to the right.
+
+![Spiderfoot_Deploy_4](Images/Spiderfoot_Deploy_4.png)
+
+When prompted, enter your credemtials, then click the "**Save**" button in the "**Edit API connection**"" window. This tab can be closed now.
+
+Returning to the deployments page, to view the deployed Logic App, click the resource that corresponds to it.
+
+![Spiderfoot_Deploy_5](Images/Spiderfoot_Deploy_5.png)
 
 #
 ### Granting Access to Azure Key Vault
