@@ -13,6 +13,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -25,18 +27,31 @@ query: |
   let RunTime = 1h;
   let StartRunTime = 1d;
   let EndRunTime = StartRunTime - RunTime;
-  let MinimumDifferentHostsThreashold = 200;
-  let ExcludedPorts = dynamic([80, 443]);
+  let MinimumDifferentHostsThreshold = 200;
+  let ExcludedPorts = dynamic([80 , 443]);
   let BinTime = 30s;
-  AzureDiagnostics
+  union isfuzzy=true(
+  AZFWApplicationRule
+  | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
+  | where DestinationPort !in (ExcludedPorts)
+  | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold),
+  (AZFWNetworkRule
+  | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
+  | extend Fqdn = DestinationIp
+  | where DestinationPort !in (ExcludedPorts)
+  | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold),
+  (AzureDiagnostics
   | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
-  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport
-  | where dstport !in (ExcludedPorts)
-  | where isnotempty(dsturl) and isnotempty(srcip) and isnotempty(dstport)
-  | summarize AlertTimedCountHostsInBinTime = dcount(dsturl) by srcip, bin(TimeGenerated, BinTime), dstport, dsturl
-  | where AlertTimedCountHostsInBinTime > MinimumDifferentHostsThreashold
-  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
+  | extend DestinationPort = tostring(DestinationPort)
+  | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort ". " * "Action: " Action "." *
+  | where DestinationPort !in (ExcludedPorts)
+  | where isnotempty(Fqdn) and isnotempty(SourceIp) and isnotempty(DestinationPort)
+  | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold)
+  | project bin(TimeGenerated, BinTime), SourceIp, DestinationPort, AlertTimedCountHostsInBinTime
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -46,5 +61,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
