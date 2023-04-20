@@ -4,7 +4,7 @@ description: |
   'Create an incident when an Account is suspected to be compromised. 
   The higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. 
   Level of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'
-severity: Medium
+severity: Informational
 status: Available
 requiredDataConnectors:
   - connectorId: AIVectraDetect
@@ -37,6 +37,8 @@ query: |
   | extend saccount = extract("saccount=(.+?);", 1, AdditionalExtensions)
   | extend type = iff(saccount matches regex upn_has_prefix, tostring(split(saccount,":")[0]) ,"network" ) 
   | extend upn = iff(saccount matches regex upn_has_prefix, tostring(split(saccount,":")[1]) , saccount )
+  | extend name = tostring(split(upn,"@")[0])
+  | extend upn_suffix = tostring(split(upn,"@")[1])
   | project-rename threat_score = FlexNumber1
   | project-rename certainty_score = FlexNumber2
   | project-rename vectra_URL = DeviceCustomString4
@@ -47,15 +49,11 @@ query: |
                         threat_score >= 50 and certainty_score <= 50, "High", 
                         threat_score >= 50 and certainty_score >= 50, "Critical",
                         "UNKNOWN")
-  | extend Severity = case( level == "Low", "Low",
-                            level == "Medium", "Medium",
-                            level == "High", "Medium",
-                            level == "Critical", "High",
-                            "UNKNOWN")
+  | extend Severity = case(level == "Info", "Informational",level == "Critical", "High", level)
   | where level in (configured_level) 
   //keep only the event with the highest threat score per Host
   | summarize arg_max(threat_score, *) by saccount
-  | project TimeGenerated, saccount, level, Severity, upn, type, threat_score, certainty_score, vectra_URL
+  | sort by TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -63,9 +61,9 @@ entityMappings:
         columnName: name
       - identifier: UPNSuffix
         columnName: upn_suffix
-alertDetails:
+alertDetailsOverride:
   alertDisplayNameFormat: Vectra AI Detect - Account {{saccount}} reaches {{level}} severity
-  alertDescriptionFormat: >-
+  alertDescriptionFormat: |
     The account {{saccount}} has a threat score of {{threat_score}} and a
     certainty of {{certainty_score}}
   alertSeverityColumnName: Severity
@@ -73,10 +71,19 @@ alertDetails:
     - alertProperty: AlertLink
       value: vectra_URL
     - alertProperty: ProductName
-      value: DeviceVendor
+      value: DeviceProduct
     - alertProperty: ProviderName
       value: DeviceVendor
     - alertProperty: ConfidenceScore
       value: certainty_score
-version: 1.0.4
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 7d
+    matchingMethod: AllEntities
+customDetails:
+  ScoreDecrease: score_decreases
+version: 1.0.5
 kind: Scheduled
