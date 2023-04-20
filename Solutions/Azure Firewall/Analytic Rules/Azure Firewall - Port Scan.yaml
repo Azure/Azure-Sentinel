@@ -13,6 +13,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -27,14 +29,23 @@ query: |
   let EndRunTime = StartRunTime - RunTime;
   let MinimumDifferentPortsThreshold = 100;
   let BinTime = 30s;
-  AzureDiagnostics
+  union isfuzzy=true(
+  AZFWApplicationRule
+  | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
+  | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold
+  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn),
+  (AZFWNetworkRule
+  | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), DestinationIp
+  | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold
+  | extend IPCustomEntity = SourceIp, URLCustomEntity = DestinationIp),
+  (AzureDiagnostics
   | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
-  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport
-  | where isnotempty(dsturl) and isnotempty(srcip)
-  | summarize AlertTimedCountPortsInBinTime = dcount(dstport) by srcip, bin(TimeGenerated, BinTime), dsturl
+  | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort
+  | where isnotempty(Fqdn) and isnotempty(SourceIp))
+  | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
   | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold
-  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
+  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -44,5 +55,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
