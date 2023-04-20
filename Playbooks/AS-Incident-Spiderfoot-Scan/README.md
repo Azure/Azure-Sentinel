@@ -47,7 +47,7 @@ Navigate to an existing Key Vault or create a new one. From the Key Vault overvi
 
 ![Spiderfoot_Key_Vault_1](Images/Spiderfoot_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**AS-Incident-Spiderfoot-Scan**", and enter the Spiderfoot API key copied previously in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Spiderfoot-Scan#spiderfoot-api-key). All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**AS-Incident-Spiderfoot-Scan-API-Key**", and enter the Spiderfoot API key copied previously in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Spiderfoot-Scan#spiderfoot-api-key). All other settings can be left as is. Click "**Create**". 
 
 ![Spiderfoot_Key_Vault_2](Images/Spiderfoot_Key_Vault_2.png)
 
