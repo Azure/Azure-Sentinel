@@ -116,7 +116,7 @@ Before the Logic App can run successfully, the Key Vault connection created duri
 
 From the Key Vault "**Access policies**" page, click "**Create**".
 
-![Spiderfoot_Access_1](Images/Opsgenie_Access_1.png)
+![Spiderfoot_Access_1](Images/Spiderfoot_Access_1.png)
 
 Select the "**Get**" checkbox under "**Secret permissions**", then click "**Next**".
 
