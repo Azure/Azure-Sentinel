@@ -2,11 +2,13 @@
 
 Author: Accelerynt
 
-For any technical questions, please contact info@accelerynt.com  
+For any technical questions, please contact info@accelerynt.com   
 
 This playbook is intended to be run from a Microsoft Sentinel incident. It will pull email addresses from the account entities in an incident and use them as targets in a Spiderfoot scan. By default, the scan is created using the HaveIBeenPwned module. The resulting report of that scan will be emailed to a recipient of your choosing.
 
 ![Spiderfoot_Demo_1](Images/Spiderfoot_Demo_1.png)
+
+![Spiderfoot_Demo_2](Images/Spiderfoot_Demo_2.png)
 
 #
 ### Requirements
@@ -65,7 +67,7 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 https://github.com/Accelerynt-Security/AS-Incident-Spiderfoot-Scan
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Spiderfoot-Scan%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Spiderfoot-Scan%2Fazuredeploy.json)     
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Spiderfoot-Scan%2Fazuredeploy.json)                                            
 
 From there, click the "**Deploy to Azure**" button at the bottom and it will bring you to the Custom Deployment Template.
 
@@ -95,7 +97,7 @@ Once the resources have validated, click on "**Create**".
 
 The resources should take around a minute to deploy. Once the deployment is complete, you can expand the "**Deployment details**" section to view them.
 
-The resource labled "**office365-AS-Incident-Spiderfoot-Scan**" will need to be authorized before the playbook can be run successfully. Open the corresponding resource in a new tab.
+The resource labeled "**office365-AS-Incident-Spiderfoot-Scan**" will need to be authorized before the playbook can be run successfully. Open the corresponding resource in a new tab.
 
 ![Spiderfoot_Deploy_3](Images/Spiderfoot_Deploy_3.png)
 
@@ -103,7 +105,7 @@ Click the indicated error message bar, then click the "**Authorize**" button on 
 
 ![Spiderfoot_Deploy_4](Images/Spiderfoot_Deploy_4.png)
 
-When prompted, enter your credemtials, then click the "**Save**" button in the "**Edit API connection**"" window. This tab can be closed now.
+When prompted, enter your credentials, then click the "**Save**" button in the "**Edit API connection**" window. This tab can be closed now.
 
 Returning to the deployments page, to view the deployed Logic App, click the resource that corresponds to it.
 
@@ -141,14 +143,12 @@ Select a workspace, then click on "**Incidents**" in the left menu blade, locate
 
 From there you can select an incident that has one or more account entities.
 
-![Spiderfoot_Run_Playbook_2](Images/Spiderfoot_Run_Playbook_2.png)
-
 Click the "**Actions**" dropdown button in the bottom right-hand corner. Then click "**Run playbook**".
 
-![Spiderfoot_Run_Playbook_3](Images/Spiderfoot_Run_Playbook_3.png)
+![Spiderfoot_Run_Playbook_2](Images/Spiderfoot_Run_Playbook_2.png)
 
 Enter "**AS-Incident-Spiderfoot-Scan**" into the search bar, then click "**Run**".
 
-![Spiderfoot_Run_Playbook_4](Images/Spiderfoot_Run_Playbook_4.png)
+![Spiderfoot_Run_Playbook_3](Images/Spiderfoot_Run_Playbook_3.png)
 
 The playbook will run until the Spiderfoot scan it initiates is completed. Once the scan is finished, an email will be sent to the addresses specified in the deployment parameters. The email will contain the account entities pulled from the incident, the modules used in the Spiderfoot scan, and a link to the completed Spiderfoot report.
