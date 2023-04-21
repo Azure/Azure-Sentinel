@@ -15,27 +15,83 @@ tactics: []
 relevantTechniques: []
 query:
   AWSGuardDuty
-  | extend tokens = split(ActivityType,":")
-  | extend ThreatPurpose = tokens[0], tokens= split(tokens[1],"/")
-  | extend ResourceTypeAffected = tokens[0], ThreatFamilyName= tokens[1]
+  | extend findingTokens = split(ActivityType, ":")
+  | extend ThreatPurpose=findingTokens[0], findingTokens=split(findingTokens[1], "/")
+  | extend ResourceTypeAffected=findingTokens[0], findingTokens= split(findingTokens[1], ".")
+  | extend ThreatFamilyName=findingTokens[0], findingTokens=split(findingTokens[1], "!")
+  | extend DetectionMechanism=findingTokens[0], Artifact=findingTokens[1]
   | extend UniqueFindingId = Id
   | extend AWSAcoundId = AccountId
-  | project-away tokens,ActivityType, Id, AccountId
-  | project-away TimeGenerated, TenantId, SchemaVersion, Region, Partition
-  | extend Severity= iff(Severity between (7.0..8.9),"High",iff(Severity between
-  (4.0..6.9), "Medium", iff(Severity between (1.0..3.9),"Low","Unknown")))
-version: 1.0.2
+  | extend Severity=case(
+    Severity > 7.0, "High",
+    Severity between (4.0 .. 6.9), "Medium",
+    Severity between (1.0 .. 3.9), "Low",
+    "Unknown"
+    )
+  // Pull out resource details we can extract entities from
+  // https://docs.aws.amazon.com/guardduty/latest/APIReference/API_Resource.html
+  | extend ResourceDetailsObject=case(
+    isnotempty(ResourceDetails.accessKeyDetails), ResourceDetails.accessKeyDetails,
+    isnotempty(ResourceDetails.containerDetails), ResourceDetails.containerDetails,
+    isnotempty(ResourceDetails.ebsVolumeDetails), ResourceDetails.ebsVolumeDetails,
+    isnotempty(ResourceDetails.ecsClusterDetails), ResourceDetails.ecsClusterDetails,
+    isnotempty(ResourceDetails.eksClusterDetails), ResourceDetails.eksClusterDetails,
+    isnotempty(ResourceDetails.instanceDetails), ResourceDetails.instanceDetails,
+    isnotempty(ResourceDetails.kubernetesDetails), ResourceDetails.kubernetesDetails,
+    isnotempty(ResourceDetails.lambdaDetails), ResourceDetails.lambdaDetails,
+    isnotempty(ResourceDetails.rdsDbInstanceDetails), ResourceDetails.rdsDbInstanceDetails,
+    isnotempty(ResourceDetails.rdsDbUserDetails), ResourceDetails.rdsDbUserDetails,
+    isnotempty(ResourceDetails.s3BucketDetails), ResourceDetails.s3BucketDetails,
+    dynamic(null)
+    )
+  // Pull out service action details we can extract entities from
+  // https://docs.aws.amazon.com/guardduty/latest/APIReference/API_Action.html
+  | extend ActionDetailsObject=case(
+    isnotempty(ServiceDetails.action.awsApiCallAction), ServiceDetails.action.awsApiCallAction,
+    isnotempty(ServiceDetails.action.dnsRequestAction), ServiceDetails.action.dnsRequestAction,
+    isnotempty(ServiceDetails.action.kubernetesApiCallAction), ServiceDetails.action.kubernetesApiCallAction,
+    isnotempty(ServiceDetails.action.networkConnectionAction), ServiceDetails.action.networkConnectionAction,
+    isnotempty(ServiceDetails.action.portProbeAction), ServiceDetails.action.portProbeAction,
+    isnotempty(ServiceDetails.action.rdsLoginAttemptAction), ServiceDetails.action.rdsLoginAttemptAction,
+    dynamic(null)
+    )
+  | extend RemoteIpAddress = ActionDetailsObject.remoteIpDetails.ipAddressV4
+  | extend LocalIpAddress = ActionDetailsObject.localIpDetails.ipAddressV4
+  | extend RemoteAWSAccountId = ActionDetailsObject.remoteAccountDetails.accountId
+  | extend AWSUserName = ResourceDetailsObject.userName
+  // Clean up the output
+  | project-away
+    findingTokens,
+    ActivityType,
+    Id,
+    AccountId,
+    TimeGenerated,
+    TenantId,
+    SchemaVersion,
+    Region,
+    Partition
+version: 1.0.3
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: Arn
+        columnName: AWSUserName
       - identifier: ObjectGuid
         columnName: AWSAcoundId
+      - identifier: ObjectGuid
+        columnName: RemoteAWSAccountId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIpAddress
+      - identifier: Address
+        columnName: LocalIpAddress
 customDetails:
   ThreatPurpose: ThreatPurpose
   ResourceTypeAffected: ResourceTypeAffected
   UniqueFindingId: UniqueFindingId
+  ThreatFamilyName: ThreatFamilyName
+  DetectionMechanism: DetectionMechanism
 alertDetailsOverride:
   alertDisplayNameFormat: '{{Title}}'
   alertDescriptionFormat: '{{Description}}'
