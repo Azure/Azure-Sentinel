@@ -6,6 +6,12 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 tactics:
   - InitialAccess
 relevantTechniques:
@@ -18,10 +24,26 @@ query: |
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by AppDisplayName, UserPrincipalName
   | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName
   | order by count_ desc
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags),
+          GroupMembership = make_set(GroupMembership),
+          AssignedRoles = make_set(AssignedRoles),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType),
+          UserAccountControl = make_set(UserType)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+  ) on UserPrincipalName
+  | where BlastRadiusInt > 20 // adjust based on volume of results
 
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
-version: 1.0.1
+version: 2.0.1

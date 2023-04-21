@@ -8,6 +8,12 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 tactics:
   - InitialAccess
 relevantTechniques:
@@ -37,12 +43,28 @@ query: |
   | where distinctAccountCount > countThreshold
   | mv-expand todynamic(identityList)
   | extend timestamp = StartTime, AccountCustomEntity = identityList
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags),
+          GroupMembership = make_set(GroupMembership),
+          AssignedRoles = make_set(AssignedRoles),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType),
+          UserAccountControl = make_set(UserType)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+      | project-rename AccountCustomEntity = AccountUPN
+  ) on AccountCustomEntity
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: identityList
-version: 1.0.0
+version: 2.0.0
 metadata:
     source:
         kind: Community

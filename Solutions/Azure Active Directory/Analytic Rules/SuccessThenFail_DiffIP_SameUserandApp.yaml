@@ -11,6 +11,12 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -23,27 +29,54 @@ relevantTechniques:
   - T1110
   - T1078
 query: |
-  let logonDiff = 10m;
-  let aadFunc = (tableName:string){
-  table(tableName)
+  let logonDiff = 10m; let aadFunc = (tableName:string){ table(tableName)
   | where ResultType == "0"
-  | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online") // To remove false-positives, add more Apps to this array
+  | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
   | project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, AppDisplayName, SuccessIPBlock = strcat(split(IPAddress, ".")[0], ".", split(IPAddress, ".")[1]), Type
-  | join kind= inner (
+  | join kind= inner ( 
       table(tableName)
       | where ResultType !in ("0", "50140")
       | where ResultDescription !~ "Other"
-      | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online") // To remove false-positives, add more Apps to this array
-      | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription, Type
+      | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
+      | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription, Type 
   ) on UserPrincipalName, AppDisplayName
   | where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock
   | summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription, Type
   | extend timestamp = SuccessLogonTime
-  };
+  | extend UserPrincipalName = tolower(UserPrincipalName)};
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
   union isfuzzy=true aadSignin, aadNonInt
-  | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags),
+          GroupMembership = make_set(GroupMembership),
+          AssignedRoles = make_set(AssignedRoles),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType),
+          UserAccountControl = make_set(UserType)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+  ) on UserPrincipalName
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename FailedIPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by FailedIPAddress)
+  on FailedIPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | where  UEBARiskScore > 20 //Can be adjusted based on volume of results
+  | sort by UEBARiskScore desc 
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -59,5 +92,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: FailedIPAddress
-version: 1.1.2
+version: 2.1.2
 kind: Scheduled

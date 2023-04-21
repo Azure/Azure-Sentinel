@@ -8,6 +8,12 @@ requiredDataConnectors:
     dataTypes:
       - AuditLogs
       - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 tactics:
   - Persistence
 relevantTechniques:
@@ -40,6 +46,36 @@ query: |
   | where  MfaAddedTimestamp - SignInTimestamp < timeDelta //Time delta between risky sign-in and device registration less than 6h 
   | project-away AccountObjectId1
   | extend timestamp = MfaAddedTimestamp, AccountCustomEntity = AccountUpn, IPCustomEntity = IPAddress
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags),
+          GroupMembership = make_set(GroupMembership),
+          AssignedRoles = make_set(AssignedRoles),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType),
+          UserAccountControl = make_set(UserType)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+      | project-rename AccountCustomEntity = AccountUPN
+  ) on AccountCustomEntity
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename IPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPAddress)
+  on IPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | sort by UEBARiskScore desc 
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -51,4 +87,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.0
+version: 2.0.0

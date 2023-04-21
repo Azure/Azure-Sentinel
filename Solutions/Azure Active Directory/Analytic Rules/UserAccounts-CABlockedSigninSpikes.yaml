@@ -12,6 +12,12 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -60,6 +66,36 @@ query: |
   ) on UserPrincipalName, $left.AnomalyHour == $right.DateHour
   | project LatestAnomalyTime, OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = DailyCount, baseline, anomalies, score
   | extend timestamp = LatestAnomalyTime, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags),
+          GroupMembership = make_set(GroupMembership),
+          AssignedRoles = make_set(AssignedRoles),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType),
+          UserAccountControl = make_set(UserType)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+  ) on UserPrincipalName
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename IPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPAddress)
+  on IPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | where UEBARiskScore > 20 //Can be adjusted based on volume of results
+  | sort by UEBARiskScore desc 
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -71,5 +107,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.2
+version: 2.0.2
 kind: Scheduled

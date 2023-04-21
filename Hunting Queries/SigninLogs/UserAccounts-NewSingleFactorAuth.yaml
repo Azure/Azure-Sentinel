@@ -10,6 +10,12 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 tactics:
   - InitialAccess
 relevantTechniques:
@@ -30,6 +36,18 @@ query: |
     | where AuthenticationDetails != "[]"
     | extend AuthenticationMethod = tostring(todynamic(AuthenticationDetails)[0].authenticationMethod)
     | where AuthenticationMethod != "Previously satisfied"
+    | join kind=leftouter (
+        BehaviorAnalytics
+        | where ActivityType in ("FailedLogOn", "LogOn")
+        | where isnotempty(SourceIPAddress)
+        | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+        | project-rename IPAddress = SourceIPAddress
+        | summarize
+            UsersInsights = make_set(UsersInsights, 1000),
+            DevicesInsights = make_set(DevicesInsights, 1000),
+            IPInvestigationPriority = sum(InvestigationPriority)
+        by IPAddress
+    ) on IPAddress
     | summarize count(), make_set(AuthenticationRequirement), make_set(AuthenticationMethod), make_set(IPAddress), make_set(Location), LastLogin = max(TimeGenerated) by UserPrincipalName
     | extend noofAuthMehods = array_length(set_AuthenticationMethod), noofAuthReqs = array_length(set_AuthenticationRequirement)
     | where noofAuthMehods > 1 or noofAuthReqs > 1
@@ -38,6 +56,21 @@ query: |
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
   union isfuzzy=true aadSignin, aadNonInt 
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename IPCustomEntity = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPCustomEntity
+  ) on IPCustomEntity
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | sort by UEBARiskScore desc
+
 entityMappings:
   - entityType: Account
     fieldMappings:
