@@ -55,7 +55,19 @@ query:
     isnotempty(ServiceDetails.action.rdsLoginAttemptAction), ServiceDetails.action.rdsLoginAttemptAction,
     dynamic(null)
     )
-  | extend RemoteIpAddress = ActionDetailsObject.remoteIpDetails.ipAddressV4
+  | extend RemoteIpAddress = max_of(
+    tostring(ServiceAction.remoteIpDetails.ipAddressV4),
+    tostring(parse_json(ServiceAction.sourceIPs)[0])
+    )
+  | extend AccountUpn = case(
+    AccessKeyDetails.userType == "IAMUser", AccessKeyDetails.userName,
+    AccessKeyDetails.userType == "AssumedRole", split(AccessKeyDetails.principalId, ":", 1)[0],
+    isnotempty(RdsDbUserDetails.user), RdsDbUserDetails.user,
+    isnotempty(KubernetesDetails.kubernetesUserDetails.username), KubernetesDetails.kubernetesUserDetails.username,
+    ""
+    )
+  | extend AccountName = split(AccountUpn, "@", 0)[0]
+  | extend UPNSuffix = split(AccountUpn, "@", 1)[0]
   | extend LocalIpAddress = ActionDetailsObject.localIpDetails.ipAddressV4
   | extend RemoteAWSAccountId = ActionDetailsObject.remoteAccountDetails.accountId
   | extend AWSUserName = ResourceDetailsObject.userName
@@ -75,9 +87,9 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: AWSUserName
-      - identifier: ObjectGuid
-        columnName: AWSAcoundId
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
       - identifier: ObjectGuid
         columnName: RemoteAWSAccountId
   - entityType: IP
