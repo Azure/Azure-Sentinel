@@ -1,49 +1,13 @@
 id: 0fe6bde4-b215-480c-99b4-84a96edcdbd7
 name: Rare client observed with high reverse DNS lookup count - Anomaly based (ASIM DNS Solution)
 description: |
-  'This rule makes use of the series decompose anomaly method to identify clients with high reverse DNS counts. This helps in detecting the possible initial phases of an attack, like discovery and reconnaissance. \n\nIt utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+  'This rule makes use of the series decompose anomaly method to identify clients with high reverse DNS counts. This helps in detecting the possible initial phases of an attack, like discovery and reconnaissance. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
 severity: Medium
 status: Available 
 tags:
   - Schema: ASimDns
     SchemaVersion: 0.1.6
-requiredDataConnectors:
-  - connectorId: ASimDnsActivityLogs
-    dataTypes:
-      - ASimDnsActivityLogs
-  - connectorId: GCPDNSDataConnector
-    dataTypes:
-      - GCP_DNS_CL
-  - connectorId: AzureFirewall
-    dataTypes:
-      - AzureDiagnostics
-  - connectorId: CiscoUmbrellaDataConnector
-    dataTypes:
-      - Cisco_Umbrella_proxy_CL
-  - connectorId: Corelight
-    dataTypes:
-      - Corelight_CL
-  - connectorId: InfobloxNIOS
-    dataTypes:
-      - Syslog
-  - connectorId: NXLogDnsLogs
-    dataTypes:
-      - NXLog_DNS_Server_CL
-  - connectorId: DNS
-    dataTypes:
-      - DnsEvents
-  - connectorId: AIVectraStream
-    dataTypes:
-      - VectraStream_CL
-  - connectorId: WindowsForwardedEvents
-    dataTypes:
-      - WindowsEvents
-  - connectorId: Zscaler
-    dataTypes:
-      - CommonSecurityLog
-  - connectorId: ISCBind
-    dataTypes:
-      - Syslog
+requiredDataConnectors: []
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -53,10 +17,7 @@ tactics:
 relevantTechniques:
   - T1590
 query: |
-  let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
-    | where wl_RuleName == 'Anomaly - Rare client observed with high reverse DNS lookup'
-        and wl_Type == 'Detection'
-    | project todouble(wl_AnomalyThreshold));
+  let threshold = 2.5;
   let SearchDomain = dynamic(["in-addr.arpa"]);
   let min_t = ago(14d);
   let max_t = now();
@@ -66,7 +27,7 @@ query: |
   };
   DNSEvents(stime=min_t, etime=max_t)
   | make-series QueryCount=dcount(DnsQuery) on TimeGenerated from min_t to max_t step timeframe by SrcIpAddr
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, toscalar(threshold), -1, 'linefit')
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, threshold, -1, 'linefit')
   | mv-expand anomalies, score, baseline, TimeGenerated, QueryCount
   | extend
     anomalies = toint(anomalies),
@@ -75,7 +36,7 @@ query: |
     EventTime = todatetime(TimeGenerated),
     Total = tolong(QueryCount)
   | where EventTime >= ago(timeframe)
-  | where score >= (toscalar(threshold) * 2)
+  | where score >= threshold * 2
   | join kind = inner (DNSEvents(stime=ago(timeframe), etime=max_t)
     | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)
     on SrcIpAddr
@@ -95,5 +56,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: "[Anomaly] Rare client has been observed as making high reverse DNS lookup count  - client IP: '{{SrcIpAddr}}'"
   alertDescriptionFormat: "Client has been identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nReverse DNS lookup count baseline for this client: '{{baseline}}'\n\nCurrent reverse DNS lookup count by this client showing as: '{{Total}}'\n\nDNS queries requested by this client inlcude: '{{DNSQueries}}'"
-version: 1.0.0
+version: 1.0.2
 kind: Scheduled
