@@ -156,6 +156,16 @@ class ImpervaFilesHandler:
                 parsed_cef[(parsed_cef[f'{elem}Label']).replace(" ", "")] = parsed_cef[elem]
                 parsed_cef.pop(f'{elem}Label')
                 parsed_cef.pop(elem)
+
+        if 'start' in parsed_cef.keys() and parsed_cef['start'] is not None and parsed_cef['start']!="":
+            try:
+                timestamp = datetime.datetime.utcfromtimestamp(int(parsed_cef['start'])/1000.0).isoformat()
+                parsed_cef['EventGeneratedTime'] = timestamp
+            except:
+                parsed_cef['EventGeneratedTime'] = ""
+        else:
+            parsed_cef['EventGeneratedTime'] = ""
+
         return parsed_cef
                 
     def gen_chunks_to_object(self, object, chunksize=100):
@@ -195,7 +205,8 @@ class ProcessToSentinel:
             'content-type': content_type,
             'Authorization': signature,
             'Log-Type': 'ImpervaWAFCloud',
-            'x-ms-date': rfc1123date
+            'x-ms-date': rfc1123date,
+            'time-generated-field':'EventGeneratedTime'
         }
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
