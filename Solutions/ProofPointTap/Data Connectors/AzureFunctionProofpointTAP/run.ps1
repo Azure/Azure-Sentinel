@@ -111,6 +111,8 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     return $response.StatusCode
 
 }
+
+Write-Host("Powershell Output encoding is : " + $OutputEncoding)
 Write-Host ($response)
 
 # Iterate through the ProofPoint API response and if there are log events present, POST the events to the Log Analytics API into the respective tables.
