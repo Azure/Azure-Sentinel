@@ -111,6 +111,8 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     return $response.StatusCode
 
 }
+Write-Host ($response)
+
 # Iterate through the ProofPoint API response and if there are log events present, POST the events to the Log Analytics API into the respective tables.
 ForEach ($PPLogType in $ProofpointLogTypes) {
     if ($response.$PPLogType.Length -eq 0 ){ 
@@ -121,8 +123,8 @@ ForEach ($PPLogType in $ProofpointLogTypes) {
             Write-Host ("ProofPointTAP$($PPLogType) null line excluded")    # exclude it from being posted
         } 
         else {            
-            Write-Host ("ProofPointTAP logs before json conversion:$($response.$PPLogType)")
-            $json = Get-Content $response.$PPLogType -Encoding utf8 | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
+            # Write-Host ("ProofPointTAP logs before json conversion:$($($response.$PPLogType))")
+            $json = $response.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
             Write-Host ("ProofPointTAP logs after json conversion$($json)")
             Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
             }
