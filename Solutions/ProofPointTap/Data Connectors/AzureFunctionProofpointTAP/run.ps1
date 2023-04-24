@@ -40,9 +40,15 @@ $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $headers.Add("au", "")
 $headers.Add("Authorization", "Basic " + $base64AuthInfo)
+$headers.Add("charset","utf-8")
 
 # Invoke the API Request and assign the response to a variable ($response)
 $response = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
+Write-Host('Response from Invoke-RestMethod')
+Write-Host($response)
+
+Write-Host('Using Invoke-WebRequest method')
+Write-Host [system.Text.Encoding]::UTF8.GetString((Invoke-WebRequest $uri -Method 'Get' -Headers $headers).RawContentStream.ToArray())
 
 # Define the Log Analytics Workspace ID and Key
 $CustomerId = $env:workspaceId
@@ -114,7 +120,6 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 
 Write-Host("Powershell version is : " + $PSVersionTable.PSVersion)
 Write-Host("Default Encoding is : " + [System.Text.Encoding]::Default.EncodingName)
-Write-Host ($response)
 
 # Iterate through the ProofPoint API response and if there are log events present, POST the events to the Log Analytics API into the respective tables.
 ForEach ($PPLogType in $ProofpointLogTypes) {
