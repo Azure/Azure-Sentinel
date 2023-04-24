@@ -1,43 +1,25 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
-        "comments": "This playbook will enrich the Client machine that is part of sentinel incident with thread vulnerabilities data (TVM) with CVE that their score is grater then 7.5. Also it automatically add this information to the incident as comments and change the incident severity to High.",
-        "author": "Yaniv Shasha"
-    },
     "parameters": {
-        "PlaybookName": {
+        "workflows_Enrich_SentinelIncident_MDATPTVM_name": {
             "defaultValue": "Enrich-SentinelIncident-MDATPTVM",
             "type": "String"
         }
     },
-    "variables": {
-         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
-    },
+    "variables": {},
     "resources": [
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('AzureSentinelConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "properties": {              
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                }
-            }
-        },
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[parameters('PlaybookName')]",
-            "location": "[resourceGroup().location]",
+            "name": "[parameters('workflows_Enrich_SentinelIncident_MDATPTVM_name')]",
+            "location": "westeurope",
             "tags": {
                 "LogicAppsCategory": "security"
             },
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
-            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -50,7 +32,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_alert": {
+                        "Microsoft_Sentinel_incident": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -61,40 +43,23 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             }
                         }
                     },
                     "actions": {
                         "Alert_-_Get_hosts": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        "name": "@parameters('$connections')['azuresentinel_3']['connectionId']"
                                     }
                                 },
                                 "method": "post",
                                 "path": "/entities/host"
-                            }
-                        },
-                        "Alert_-_Get_incident": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
                             }
                         },
                         "For_each_2": {
@@ -102,37 +67,42 @@
                             "actions": {
                                 "Condition_2": {
                                     "actions": {
-                                        "Add_comment_to_incident_(V2)": {
+                                        "Add_comment_to_incident_(V3)": {
                                             "runAfter": {},
                                             "type": "ApiConnection",
                                             "inputs": {
                                                 "body": {
-                                                    "Value": "We found list of CVE's for Host @{items('For_each_2')?['HostName']}\n @{variables('CVE''s')}"
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>We found list of CVE's for Host @{items('For_each_2')?['HostName']}<br>\n @{variables('CVE''s')}</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
                                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                                     }
                                                 },
-                                                "method": "put",
-                                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}"
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
                                             }
                                         },
-                                        "Change_incident_severity_to_High": {
+                                        "Update_incident": {
                                             "runAfter": {
-                                                "Add_comment_to_incident_(V2)": [
+                                                "Add_comment_to_incident_(V3)": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "ApiConnection",
                                             "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "severity": "High"
+                                                },
                                                 "host": {
                                                     "connection": {
                                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                                     }
                                                 },
                                                 "method": "put",
-                                                "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}/Severity/@{encodeURIComponent('High')}"
+                                                "path": "/Incidents"
                                             }
                                         }
                                     },
@@ -206,7 +176,7 @@
                                             "type": "ActiveDirectoryOAuth"
                                         },
                                         "method": "GET",
-                                        "uri": "https://api.securitycenter.windows.com/api/machines/@{body('Parse_JSON')['MachineId']}/vulnerabilities"
+                                        "uri": "https://api.securitycenter.windows.com/api/machines/@{body('Parse_JSON')?['additionalData']?['MdatpDeviceId']}/vulnerabilities"
                                     }
                                 },
                                 "Parse_JSON": {
@@ -216,37 +186,60 @@
                                         "content": "@items('For_each_2')",
                                         "schema": {
                                             "properties": {
-                                                "$id": {
-                                                    "type": "string"
-                                                },
-                                                "DnsDomain": {
-                                                    "type": "string"
-                                                },
-                                                "HostName": {
-                                                    "type": "string"
-                                                },
-                                                "IsDomainJoined": {
-                                                    "type": "boolean"
-                                                },
-                                                "MachineId": {
-                                                    "type": "string"
-                                                },
-                                                "MachineIdType": {
-                                                    "type": "integer"
-                                                },
                                                 "Type": {
+                                                    "type": "string"
+                                                },
+                                                "additionalData": {
+                                                    "properties": {
+                                                        "AvStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "FQDN": {
+                                                            "type": "string"
+                                                        },
+                                                        "HealthStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "LastExternalIpAddress": {
+                                                            "type": "string"
+                                                        },
+                                                        "LastIpAddress": {
+                                                            "type": "string"
+                                                        },
+                                                        "LastSeen": {
+                                                            "type": "string"
+                                                        },
+                                                        "LoggedOnUsers": {
+                                                            "type": "string"
+                                                        },
+                                                        "MdatpDeviceId": {
+                                                            "type": "string"
+                                                        },
+                                                        "OnboardingStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "RiskScore": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "dnsDomain": {
+                                                    "type": "string"
+                                                },
+                                                "friendlyName": {
+                                                    "type": "string"
+                                                },
+                                                "hostName": {
+                                                    "type": "string"
+                                                },
+                                                "osFamily": {
+                                                    "type": "string"
+                                                },
+                                                "osVersion": {
                                                     "type": "string"
                                                 }
                                             },
-                                            "required": [
-                                                "$id",
-                                                "DnsDomain",
-                                                "HostName",
-                                                "IsDomainJoined",
-                                                "Type",
-                                                "MachineId",
-                                                "MachineIdType"
-                                            ],
                                             "type": "object"
                                         }
                                     }
@@ -367,6 +360,7 @@
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+
                             }
                         }
                     }
