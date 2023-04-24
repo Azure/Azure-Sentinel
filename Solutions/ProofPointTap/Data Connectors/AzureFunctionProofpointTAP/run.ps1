@@ -113,6 +113,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 }
 
 Write-Host("Powershell version is : " + $PSVersionTable.PSVersion)
+Write-Host("Default Encoding is : " + [System.Text.Encoding]::Default.EncodingName)
 Write-Host ($response)
 
 # Iterate through the ProofPoint API response and if there are log events present, POST the events to the Log Analytics API into the respective tables.
