@@ -27,12 +27,19 @@ function removePropertiesRecursively ($resourceObj) {
         $key = $prop.Name
         $val = $prop.Value
         if ($null -eq $val) {
-            $resourceObj.PsObject.Properties.Remove($key)
+            $resourceObj.$key = "[variables('blanks')]";
+                                            if (!$baseMainTemplate.variables.blanks) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                                }   
         }
         elseif ($val -is [System.Object[]]) {
-            if ($val.Count -eq 0 -and $key -ne "value") {
-                $resourceObj.PsObject.Properties.Remove($key)
-            }
+            if ($val.Count -eq 0) {
+                 #$resourceObj.PsObject.Properties.Remove($key)
+                 $resourceObj.$key = "[variables('emptyarray')]";
+                                            if (!$baseMainTemplate.variables.emptyarray) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "emptyarray" -NotePropertyValue "[replace('b', 'b', '[]']"
+                                            }
+        }
             else {
                 foreach ($item in $val) {
                     $itemIndex = $val.IndexOf($item)
@@ -762,6 +769,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         if($resourceObj.$key -eq "")
                                         {
                                             $resourceObj.$key = "[variables('blanks')]";
+                                            if (!$baseMainTemplate.variables.blanks) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                                }
                                         }
                                     }
                                     elseif ($prop.Value -is [System.Array]) {
