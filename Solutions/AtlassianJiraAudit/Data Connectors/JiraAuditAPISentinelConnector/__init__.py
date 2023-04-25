@@ -77,6 +77,8 @@ def get_result(time_range):
         result = get_result_request(offset,limit,from_time,to_time)
         if result is not None:
             element_count = len(result)
+        else:
+            element_count = 0
         if offset == 0 and element_count == 0:
             logging.info("Logs not founded. Time period: from {} to {}.".format(from_time,to_time))
         elif offset != 0 and element_count != 0:
