@@ -32,6 +32,34 @@ $ProofPointlogTypes = @(
     "MessagesBlocked", 
     "MessagesDelivered")
 
+function ConvertTo-BodyWithEncoding {
+    [CmdletBinding(PositionalBinding=$false)]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [Microsoft.PowerShell.Commands.WebResponseObject] $InputObject,
+        # The encoding to use; defaults to UTF-8
+        [Parameter(Position=0)]
+        $Encoding = [System.Text.Encoding]::Utf8
+    )
+    begin {
+        if ($Encoding -isnot [System.Text.Encoding]) {
+        try {
+            $Encoding = [System.Text.Encoding]::GetEncoding($Encoding)
+        }
+        catch { 
+            throw
+        }
+        }
+    }
+    
+    process {
+        $Encoding.GetString(
+            $InputObject.RawContentStream.ToArray()
+        )
+    }
+    
+    }
+
 # Build the headers for the ProofPoint API request
 $username = $env:apiUserName
 $password = $env:apiPassword
@@ -44,14 +72,18 @@ $headers.Add("Authorization", "Basic " + $base64AuthInfo)
 $headers.Add("Content-Type", "application/json; charset=utf-8")
 
 # Invoke the API Request and assign the response to a variable ($response)
-$response = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
+$result = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
 Write-Host('Response from Invoke-RestMethod')
-Write-Host($response)
+Write-Host($result.headers)
+Write-Host($result)
+
 
 Write-Host('Using Invoke-WebRequest method')
-$result = Invoke-WebRequest $uri -Method 'Get' -Headers $headers
-Write-Host($result.headers.'Content-Type')
-Write-Host([system.Text.Encoding]::UTF8.GetString($result.Content))
+$response = Invoke-WebRequest $uri -Method 'Get' -Headers $headers | ConvertTo-BodyWithEncoding
+Write-Host($response.GetType())
+Write-Host($response)
+Write-Host($response.headers)
+# Write-Host([system.Text.Encoding]::UTF8.GetString($response.RawContentStream.ToArray()))
 
 # Define the Log Analytics Workspace ID and Key
 $CustomerId = $env:workspaceId
