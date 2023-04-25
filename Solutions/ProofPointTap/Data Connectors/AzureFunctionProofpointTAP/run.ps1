@@ -49,7 +49,7 @@ Write-Host('Response from Invoke-RestMethod')
 Write-Host($response)
 
 Write-Host('Using Invoke-WebRequest method')
-Write-Host [system.Text.Encoding]::UTF8.GetString((Invoke-WebRequest $uri -Method 'Get' -Headers $headers).RawContentStream.ToArray())
+Write-Host([system.Text.Encoding]::UTF8.GetString((Invoke-WebRequest $uri -Method 'Get' -Headers $headers).Content))
 
 # Define the Log Analytics Workspace ID and Key
 $CustomerId = $env:workspaceId
