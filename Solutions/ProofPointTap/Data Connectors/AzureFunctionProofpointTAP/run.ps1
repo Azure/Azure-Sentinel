@@ -156,20 +156,25 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 Write-Host("Powershell version is : " + $PSVersionTable.PSVersion)
 Write-Host("Default Encoding is : " + [System.Text.Encoding]::Default.EncodingName)
 
+$responseObject = ConvertFrom-JSON -InputObject $response
+Write-Host($responseObject.GetType())
+Write-Host($responseObject)
+
 # Iterate through the ProofPoint API response and if there are log events present, POST the events to the Log Analytics API into the respective tables.
 ForEach ($PPLogType in $ProofpointLogTypes) {
-    if ($response.$PPLogType.Length -eq 0 ){ 
+    if ($responseObject.$PPLogType.Length -eq 0 ){ 
         Write-Host ("ProofPointTAP$($PPLogType) reported no new logs for the time interval configured.")
     }
     else {
-        if($response.$PPLogType -eq $null) {                            # if the log entry is a null, this occurs on the last line of each LogType. Should only be one per log type
+        if($responseObject.$PPLogType -eq $null) {                            # if the log entry is a null, this occurs on the last line of each LogType. Should only be one per log type
             Write-Host ("ProofPointTAP$($PPLogType) null line excluded")    # exclude it from being posted
         } 
         else {            
             # Write-Host ("ProofPointTAP logs before json conversion:$($($response.$PPLogType))")
-            $json = $response.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
+            $json = $responseObject.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
             Write-Host ("ProofPointTAP logs after json conversion$($json)")
             Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
+            Write-Host("Logs ingested to LA is : " + $json.Length)
             }
         }
 }
