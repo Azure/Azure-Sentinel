@@ -66,7 +66,8 @@ Add access policy for playbook's managed identity to read, write secrets of keyv
 #### d. Configurations in Microsoft Sentinel
 
 1. In Microsoft Sentinel, one should have deployed [ASimNetworkSession](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession), [ASimDns](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession), [ASimWebSession](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession) & [imFileEvent](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession) ASIM parsers. 
-2. In Microsoft Sentinel, Configure the automation rules to trigger the playbook. 
+2. In Microsoft Sentinel, Configure the analytic rules to trigger an incident based on data available in ASimNetworkSession, ASimDns, ASimWebSession & imFileEvent.
+3. In Microsoft Sentinel, Configure the automation rules to trigger the playbook. 
   >> * Go to Microsoft Sentinel -> <your workspace> -> Automation 
   >> * Click on **Create** -> **Automation rule**
   >> * Provide name for your rule
