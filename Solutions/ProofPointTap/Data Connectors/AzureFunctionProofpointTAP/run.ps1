@@ -40,7 +40,8 @@ $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $headers.Add("au", "")
 $headers.Add("Authorization", "Basic " + $base64AuthInfo)
-$headers.Add("charset","utf-8")
+# $headers.Add("charset","utf-8")
+$headers.Add("Content-Type", "application/json; charset=utf-8")
 
 # Invoke the API Request and assign the response to a variable ($response)
 $response = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
