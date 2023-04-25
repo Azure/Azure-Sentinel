@@ -30,6 +30,8 @@ match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
+logging.info("Jira Audit Uri: {}".format(jira_uri_audit))
+
 def generate_date():
     current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
     state = StateManager(connection_string=connection_string)
