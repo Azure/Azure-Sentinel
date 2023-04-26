@@ -35,9 +35,9 @@ function removePropertiesRecursively ($resourceObj) {
         elseif ($val -is [System.Object[]]) {
             if ($val.Count -eq 0) {
                  #$resourceObj.PsObject.Properties.Remove($key)
-                 $resourceObj.$key = "[variables('emptyarray')]";
-                                            if (!$baseMainTemplate.variables.emptyarray) {
-                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "emptyarray" -NotePropertyValue "[json('[]')]"
+                 $resourceObj.$key = "[variables('TemplateEmptyArray')]";
+                                            if (!$baseMainTemplate.variables.TemplateEmptyArray) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue (@())
                                             }
         }
             else {
@@ -808,7 +808,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             $playbookData.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
                                             $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
                                         }
-                                        if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")) -and ($resourceObj.$key -ne "[variables('emptyarray')]"))
+                                        if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")) -and ($resourceObj.$key -ne "[variables('TemplateEmptyArray')]"))
                                         {
                                             $resourceObj.$key = "[" + $resourceObj.$key;
                                         }
