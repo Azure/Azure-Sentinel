@@ -37,7 +37,7 @@ function removePropertiesRecursively ($resourceObj) {
                  #$resourceObj.PsObject.Properties.Remove($key)
                  $resourceObj.$key = "[variables('emptyarray')]";
                                             if (!$baseMainTemplate.variables.emptyarray) {
-                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "emptyarray" -NotePropertyValue "[replace('b', 'b', '[]')]"
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "emptyarray" -NotePropertyValue "[json('[]')]"
                                             }
         }
             else {
@@ -808,7 +808,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             $playbookData.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
                                             $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
                                         }
-                                        if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")))
+                                        if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")) -and ($resourceObj.$key -ne "[variables('emptyarray')]"))
                                         {
                                             $resourceObj.$key = "[" + $resourceObj.$key;
                                         }
