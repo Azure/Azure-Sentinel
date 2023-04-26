@@ -1,0 +1,87 @@
+id: ce54b5d3-4c31-4eaf-a73e-31412270b6ab
+name: Vectra Account's Behaviors
+description: |
+  'This analytic rule is looking for new attacker behaviors observed by the Vectra Platform. This rule is focused on account's detections.'
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: AIVectraDetect
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+tactics:
+  - CredentialAccess
+  - Discovery
+  - LateralMovement
+  - Collection
+  - CommandAndControl
+  - Exfiltration
+  - Impact
+relevantTechniques:
+query: |
+  CommonSecurityLog
+  | where DeviceVendor == "Vectra Networks"
+  | where DeviceProduct == "X Series"
+  | where DeviceEventClassID != "campaigns"
+      and DeviceEventClassID != "hsc"
+      and DeviceEventClassID != "audit"
+      and DeviceEventClassID != "health"
+      and DeviceEventClassID != "asc"
+  | extend Category = coalesce(
+      column_ifexists("DeviceEventCategory", ""), 
+      extract("cat=(.+?)(;|$)", 1, AdditionalExtensions), 
+      ""
+      )
+  | project-rename threat_score = FlexNumber1
+  | project-rename certainty_score = FlexNumber2
+  | project-rename vectra_URL = DeviceCustomString4
+  | project-rename detection_name = DeviceEventClassID
+  | project-rename triaged = DeviceCustomString5
+  | where triaged != "True" and AdditionalExtensions contains "account"
+  | extend account = extract("account=(.+?);", 1, AdditionalExtensions)
+  | extend upn = iff(account matches regex ":", tostring(split(account, ":")[1]), tostring(split(account, ":")[0]))
+  | extend name = tostring(split(upn, "@")[0])
+  | extend upn_suffix = tostring(split(upn, "@")[1])
+  | extend source_entity = case(isnotempty(upn), upn,
+      isnotempty(SourceHostName), SourceHostName,
+      "UNKNWON")
+  | extend level = case(threat_score == 0 and certainty_score == 0, "Info",
+      threat_score < 50 and certainty_score < 50, "Low",
+      threat_score < 50 and certainty_score >= 50, "Medium", 
+      threat_score >= 50 and certainty_score <= 50, "High", 
+      threat_score >= 50 and certainty_score >= 50, "Critical",
+      "UNKNOWN")
+  | extend Severity = case(level == "Info", "Informational",level == "Critical", "High", level)
+  | summarize arg_max(threat_score, *) by source_entity, Activity
+  | sort by TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: name
+      - identifier: UPNSuffix
+        columnName: upn_suffix
+alertDetailsOverride:
+  alertDisplayNameFormat: Vectra AI - {{Activity}} Detected
+  alertDescriptionFormat: |
+    Entity is an account. Category is {{Category}}. Threat score is {{threat_score}} and certainty score is {{certainty_score}}.
+  alertSeverityColumnName: Severity
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: vectra_URL
+    - alertProperty: ProductName
+      value: DeviceProduct
+    - alertProperty: ProviderName
+      value: DeviceVendor
+    - alertProperty: ConfidenceScore
+      value: certainty_score
+customDetails:
+  AttackType: Activity
+  AttackCategory: Category
+version: 1.0.1
+kind: Scheduled
