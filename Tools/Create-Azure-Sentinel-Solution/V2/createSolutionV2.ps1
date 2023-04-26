@@ -1989,6 +1989,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             {
                                 $alertRule | Add-Member -NotePropertyName status -NotePropertyValue ($yaml.status ? $yaml.status : "Available") # Add requiredDataConnectors property if exists
                             }
+                            
 
                             if($yaml.requiredDataConnectors)
                             {
@@ -1997,6 +1998,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 {
                                     $alertRule.requiredDataConnectors[$i].connectorId = ($yaml.requiredDataConnectors[$i].connectorId.GetType().Name -is [object]) ? ($yaml.requiredDataConnectors[$i].connectorId -join ',') : $yaml.requiredDataConnectors[$i].connectorId;
                                 }
+                            }
+                            else
+                            {
+                                $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue "[variables('TemplateEmptyArray')]";
+                                    if (!$baseMainTemplate.variables.TemplateEmptyArray) {                                        
+                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                                        }
                             }
 
                             if (!$yaml.severity) {
