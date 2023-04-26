@@ -37,7 +37,7 @@ function removePropertiesRecursively ($resourceObj) {
                  #$resourceObj.PsObject.Properties.Remove($key)
                  $resourceObj.$key = "[variables('emptyarray')]";
                                             if (!$baseMainTemplate.variables.emptyarray) {
-                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "emptyarray" -NotePropertyValue "[replace('b', 'b', '[]']"
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "emptyarray" -NotePropertyValue "[replace('b', 'b', '[]')]"
                                             }
         }
             else {
