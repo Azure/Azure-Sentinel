@@ -13,7 +13,8 @@
 // LOG SAMPLES:
 // This parser assumes the raw log are formatted as follows:
 // 
-//      07-Apr-2013 20:16:49.083 client 10.120.20.198#57398 UDP: query: a2.foo.com IN A response: NOERROR +AED a2.foo.com. 28800 IN A 1.1.1.2;
+//      07-Apr-2013 20:16:49.083 client 10.120.20.198#57398 UDP: query: a2.foo.com IN A response: NOERROR +AED a2.foo.com. 28800 IN A 1.1.1.2
+//      22-Mar-2023 08:59:34.790 client 1.1.1.1#50164: UDP: query: 2.2.2.2.in-addr.arpa IN PTR response: NOERROR +A 3.3.3.3.in-addr.arpa. 3600 IN PTR myhost.mydomain.local
 //      30-Apr-2013 13:35:02.187 client 10.120.20.32#42386: query: foo.com IN A + (100.90.80.102)
 //
 // Update 'Sources_by_SourceType' Watchlist by adding names of your Infoblox NIOS servers. This Watchlist would get created as part Infoblox NIOS solution.
@@ -25,7 +26,7 @@ let response =
     | where SyslogMessage has_all ("client", "query:", "response:")
     | parse SyslogMessage with *
         "client " SrcIpAddr: string
-        "#" SrcPortNumber: int
+        "#" SrcPortNumber: string
         " " NetworkProtocol: string
         ": query: " DnsQuery: string
         " " DnsQueryClassName: string
@@ -35,9 +36,10 @@ let response =
     | extend DnsResponseNameIndex= indexof(DnsFlags, " ")
     | extend EventMessage =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
     | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
+    | extend SrcPortNumber = iif(SrcPortNumber has ':',replace_string(SrcPortNumber,':',''),SrcPortNumber)
+    | extend SrcPortNumber = toint(SrcPortNumber)
     | extend EventSubType = "response"
-    | project-away DnsResponseNameIndex,SyslogMessage
-    ;
+    | project-away DnsResponseNameIndex,SyslogMessage;
 //
 // Parse Request Logs
 //
