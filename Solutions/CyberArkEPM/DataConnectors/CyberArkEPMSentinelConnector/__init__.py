@@ -5,7 +5,7 @@ import hmac
 import base64
 import logging
 from .pyepm import getAggregatedEvents, getDetailedRawEvents, epmAuth, getSetsList, getPolicyAuditRawEventDetails, \
-    getAggregatedPolicyAudits
+    getAggregatedPolicyAudits, getAdminAuditEvents, samlAuth
 import os
 from datetime import datetime, timedelta
 import json
@@ -18,6 +18,10 @@ username = os.environ['CyberArkEPMUsername']
 password = os.environ['CyberArkEPMPassword']
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
+use_saml_auth = os.environ['UseSAMLAuth']
+identity_tenant_url = os.environ['IdentityTenantURL']
+identity_tenant_id = os.environ['IdentityTenantID']
+identity_appkey = os.environ['IdentityAppKey']
 log_type = "CyberArkEPM"
 connection_string = os.environ['AzureWebJobsStorage']
 chunksize = 2000
@@ -133,7 +137,10 @@ def main(mytimer: func.TimerRequest) -> None:
     start_time, end_time = generate_date()
     logging.info('Data processing. Period(UTC): {} - {}'.format(start_time, end_time))
     try:
-        auth = epmAuth(dispatcher=dispatcher, username=username, password=password)
+        if(str(use_saml_auth).lower() == "true"):
+            auth = samlAuth(dispatcher=dispatcher, username=username, password=password, identityTenantID=identity_tenant_id, identityTenantURL=identity_tenant_url, identityAppKey=identity_appkey)
+        else:
+            auth = epmAuth(dispatcher=dispatcher, username=username, password=password)
         if auth.status_code == 401:
             logging.error(
                 "The authentication credentials are incorrect or missing. Error code: {}".format(auth.status_code))
@@ -160,6 +167,8 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("Collecting policy audit raw event details from {}".format(set_id["Name"]))
         policy_audit_raw_event_details += get_events(func_name=getPolicyAuditRawEventDetails,
                                                      auth=auth, filter_date=filter_date, set_id=set_id)["events"]
+        logging.info("Collecting Admin Audit Data from {}".format(set_id["Name"]))
+        admin_audit_data = getAdminAuditEvents(epmserver=dispatcher, epmToken=auth.json()['EPMAuthenticationResult'], authType='EPM', setid=set_id['Id'], start_time=start_time, end_time=end_time, limit=100)
 
     # Send data via data collector API
     for aggregated_event in aggregated_events:
@@ -170,4 +179,4 @@ def main(mytimer: func.TimerRequest) -> None:
         aggregated_policy_audit["event_type"] = "aggregated_policy_audits"
     for policy_audit_raw_event_detail in policy_audit_raw_event_details:
         policy_audit_raw_event_detail["event_type"] = "policy_audit_raw_event_details"
-    gen_chunks(aggregated_events + raw_events + aggregated_policy_audits + policy_audit_raw_event_details)
+    gen_chunks(aggregated_events + raw_events + aggregated_policy_audits + policy_audit_raw_event_details + admin_audit_data)

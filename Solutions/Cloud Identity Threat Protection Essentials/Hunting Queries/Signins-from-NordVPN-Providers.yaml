@@ -1,8 +1,8 @@
 ﻿id: cdc9b092-8a16-4559-9e5e-831877e8209a
-name: Signins from Nord VPN Providers
+name: Sign-ins from Nord VPN Providers
 description: |
-  'This query looks for sign-in activity from Nord VPN providers using the Public feed leveraging NordVPN API which is updated daily. 
-  Investigation any unknown sign-in attempts from VPN providers such as Nord VPN unless it is commonly seen from users in the organization'
+  'This query searches for sign-in activity from Nord VPN providers, using Nord VPN's Public feed API which is updated on a daily basis.
+  The purpose is to identify any unfamiliar sign-in attempts from VPN providers, such as Nord VPN, that are not typically observed among users in the organization.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -17,29 +17,23 @@ query: |
   let nord_vpn_feed = (externaldata(id:int,ip_address: string,search_keywords: dynamic,categories:dynamic,name: string,domain:string,price:int,flag:string,country:string,location:dynamic ,load: int ,features:dynamic)
     [@"https://raw.githubusercontent.com/microsoft/mstic/master/nordvpn-servers.csv"] with (format="csv", ignoreFirstRecord=True));
   SigninLogs 
-    | where TimeGenerated > ago(4h) 
     | where ResultType == 0 
-    | summarize TotalEvents = count(), AppList = make_set(AppDisplayName),  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by IPAddress, UserPrincipalName, ClientAppUsed, ConditionalAccessStatus, AuthenticationRequirement, RiskDetail 
+    | summarize TotalEvents = count(), AppList = make_set(AppDisplayName, 100),  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by IPAddress, UserPrincipalName, ClientAppUsed, ConditionalAccessStatus, AuthenticationRequirement, RiskDetail 
     | join kind= inner nord_vpn_feed on $left.IPAddress == $right.ip_address
     | project StartTime , EndTime, IPAddress, UserPrincipalName, AppList, ClientAppUsed, ConditionalAccessStatus, AuthenticationRequirement, RiskDetail, categories, domain, country
-    | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
-
+    | extend timestamp = StartTime, UserName = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+    | extend Account_0_Name = UserName
+    | extend Account_0_UPNSuffix = UPNSuffix
+    | extend IP_0_Address = IPAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
-metadata:
-    source:
-        kind: Community
-    author:
-        name: Ashwin Patil
-    support:
-        tier: Community
-    categories:
-        domains: [ "Security - Network", "Identity" ]
+        columnName: IPAddress
+version: 1.0.2

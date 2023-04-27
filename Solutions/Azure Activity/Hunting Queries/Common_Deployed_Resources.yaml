@@ -14,25 +14,29 @@ tactics:
 relevantTechniques:
   - T1496
 query: |
-
   AzureActivity
   | where OperationNameValue has_any (@"deployments/write", @"virtualMachines/write")  
-  | where ActivityStatusValue == "Succeeded"
+  | where ActivityStatusValue =~ "Succeeded"
   | summarize by bin(TimeGenerated,1d), Resource, ResourceGroup, ResourceId, OperationNameValue, Caller
   | evaluate basket()
   | where isnotempty(Caller) and isnotempty(Resource) and isnotempty(TimeGenerated)
   | order by Percent desc, TimeGenerated desc
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Caller, ResourceCustomEntity = ResourceId
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend AzureResource_0_ResourceId = ResourceId
   // remove comments below on filters if the goal is to see more common or more rare Resource, Resource Group and Caller combinations
   //| where Percent <= 40 // <-- more rare
   //| where Percent >= 60 // <-- more common
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Caller
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: AzureResource
     fieldMappings:
       - identifier: ResourceId
         columnName: ResourceId
-version: 2.0.0
+version: 2.0.1
