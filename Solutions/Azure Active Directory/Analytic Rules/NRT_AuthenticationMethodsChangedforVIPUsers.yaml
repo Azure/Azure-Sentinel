@@ -1,0 +1,44 @@
+id: 29e99017-e28d-47be-8b9a-c8c711f8a903
+name: NRT Authentication Methods Changed for VIP Users 
+description: |
+  'Identifies authentication methods being changed for a list of VIP users watchlist. This could be an indication of an attacker adding an auth method to the account so they can have continued access.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+tags:
+  - AADSecOpsGuide
+query: |
+  let security_info_actions = dynamic(["User registered security info", "User changed default security info", "User deleted security info", "Admin updated security info", "User reviewed security info", "Admin deleted security info", "Admin registered security info"]);
+  let VIPUsers = (_GetWatchlist('VIPUsers') | distinct ["User Principal Name"]);
+  AuditLogs
+  | where Category =~ "UserManagement"
+  | where ActivityDisplayName in (security_info_actions)
+  | extend Initiator = tostring(InitiatedBy.user.userPrincipalName)
+  | extend IP = tostring(InitiatedBy.user.ipAddress)
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend Target = trim(@'"',tolower(tostring(TargetResource.userPrincipalName)))
+    )
+  | where Target in~ (VIPUsers)
+  | summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions = make_set(ResultReason) by Initiator, IP, Result, Target
+  | extend Name = tostring(split(Target,'@',0)[0]), UPNSuffix = tostring(split(Target,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IP
+version: 1.0.1
+kind: NRT

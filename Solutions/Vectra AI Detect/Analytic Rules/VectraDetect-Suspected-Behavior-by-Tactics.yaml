@@ -1,9 +1,9 @@
 id: 6cb75f65-231f-46c4-a0b3-50ff21ee6ed3
-name: Vectra AI Detect - Suspicious Behaviors
+name: Vectra AI Detect - Suspicious Behaviors by Category
 description: |
-  'Create an incident for each new malicious behavior detected by Vectra Detect. 
+  'Create an incident for each new malicious behavior detected by Vectra Detect for a specific Category. 
   By default, it looks through all tactics. This can be modified to create incident only for a subset of tactics.'
-severity: Medium
+severity: Informational
 status: Available
 requiredDataConnectors:
   - connectorId: AIVectraDetect
@@ -39,6 +39,7 @@ query: |
   | project-rename threat_score = FlexNumber1
   | project-rename certainty_score = FlexNumber2
   | project-rename triaged = DeviceCustomString5
+  | where triaged != "True"
   | project-rename vectra_URL = DeviceCustomString4
   | project-rename detection_name = DeviceEventClassID
   | extend Tactic = case( Category == "COMMAND & CONTROL", "CommandAndControl",
@@ -52,19 +53,15 @@ query: |
                          threat_score >= 50 and certainty_score <= 50, "High", 
                          threat_score >= 50 and certainty_score >= 50, "Critical",
                          "UNKNOWN")
-  | extend Severity = case( level == "Low", "Low",
-                            level == "Medium", "Medium",
-                            level == "High", "Medium",
-                            level == "Critical", "High",
-                            "UNKNOWN")
+  | extend Severity = case(level == "Info", "Informational",level == "Critical", "High", level)
   | extend account = extract("account=(.+?);", 1, AdditionalExtensions)
-  | extend upn = iff(account matches regex ":", tostring(split(account,":")[1]) ,tostring(split(account,":")[0])) 
-  | extend source_entity = case( isnotempty(upn), upn,
-                                 isnotempty(SourceHostName), SourceHostName,
-                                 "UNKNWON") 
+  | extend upn = iff(account matches regex ":", tostring(split(account,":")[1]) ,tostring(split(account,":")[0]))
+  | extend name = tostring(split(upn, "@")[0])
+  | extend upn_suffix = tostring(split(upn, "@")[1])
+  | extend source_entity = case(level == "Info", "Informational",level == "Critical", "High", level)
   | where Category in (configured_tactics) 
   | summarize arg_max(threat_score, *) by source_entity , Activity
-  | project  TimeGenerated, source_entity, SourceHostName, SourceIP, upn, Activity, Tactic, Severity, threat_score, certainty_score, triaged, vectra_URL
+  | sort by TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -84,10 +81,13 @@ alertDetailsOverride:
     - alertProperty: AlertLink
       value: vectra_URL
     - alertProperty: ProductName
-      value: DeviceVendor
+      value: DeviceProduct
     - alertProperty: ProviderName
       value: DeviceVendor
     - alertProperty: ConfidenceScore
       value: certainty_score
-version: 1.0.6
+customDetails:
+  AttackType: Activity
+  AttackCategory: Category
+version: 1.0.7
 kind: Scheduled
