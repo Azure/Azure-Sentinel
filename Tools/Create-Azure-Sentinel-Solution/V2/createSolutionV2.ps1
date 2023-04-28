@@ -1991,7 +1991,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             
 
-                            if($yaml.requiredDataConnectors)
+                            if($yaml.requiredDataConnectors -and $yaml.requiredDataConnectors.count -gt 0)
                             {
                                 $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
                                 for($i=0; $i -lt $yaml.requiredDataConnectors.connectorId.count; $i++)
