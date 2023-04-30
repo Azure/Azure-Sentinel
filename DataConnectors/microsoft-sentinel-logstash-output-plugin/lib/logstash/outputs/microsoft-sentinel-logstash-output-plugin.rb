@@ -47,8 +47,11 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # it this is set with amount_resizing=false --> each message will have max_items
   config :max_items, :validate => :number, :default => 2000
 
-  # Setting proxy to be used for the Azure LogAnalytics REST client
-  config :proxy, :validate => :string, :default => ''
+  # Setting proxy_aad to be used for communicating with azure active directory service
+  config :proxy_aad, :validate => :string, :default => ''
+  
+  # Setting proxy to be used for the LogAnalytics endpoint REST client
+  config :proxy_endpoint, :validate => :string, :default => ''
 
   # This will set the amount of time given for retransmitting messages once sending is failed
   config :retransmission_time, :validate => :number, :default => 10
@@ -94,7 +97,8 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
     logstash_configuration.decrease_factor = @decrease_factor
     logstash_configuration.amount_resizing = @amount_resizing
     logstash_configuration.max_items = @max_items
-    logstash_configuration.proxy = @proxy
+    logstash_configuration.proxy_aad = @proxy_aad
+    logstash_configuration.proxy_endpoint = @proxy_endpoint
     logstash_configuration.retransmission_time = @retransmission_time
 
     return logstash_configuration

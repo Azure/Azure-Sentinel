@@ -1,5 +1,6 @@
 # encoding: utf-8
 require "logstash/sentinel/logstashLoganalyticsConfiguration"
+require "logstash/sentinel/utils"
 require 'rest-client'
 require 'json'
 require 'openssl'
@@ -9,7 +10,6 @@ require 'time'
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsAadTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
-    set_proxy(logstashLoganalyticsConfiguration.proxy)
     scope = CGI.escape("https://monitor.azure.com//.default")
     @token_request_body = sprintf("client_id=%s&scope=%s&client_secret=%s&grant_type=client_credentials", logstashLoganalyticsConfiguration.client_app_Id, scope, logstashLoganalyticsConfiguration.client_app_secret)
     @token_request_uri = sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/token", logstashLoganalyticsConfiguration.tenant_id)
@@ -19,6 +19,7 @@ class LogAnalyticsAadTokenProvider
       :token_details_mutex => Mutex.new,
     }
     @logger = logstashLoganalyticsConfiguration.logger
+    @logstashLoganalyticsConfiguration = logstashLoganalyticsConfiguration
   end # def initialize
 
   # Public methods
@@ -62,7 +63,9 @@ class LogAnalyticsAadTokenProvider
     header = get_header()
     begin
         # Post REST request 
-        response = RestClient.post(@token_request_uri, @token_request_body, header)        
+        response = Utils::post_data_optional_proxy(@token_request_uri, @token_request_body, header,
+                   @logstashLoganalyticsConfiguration.proxy_aad)
+                   
         if (response.code == 200 || response.code == 201)
           return JSON.parse(response.body)
         else
@@ -81,13 +84,6 @@ class LogAnalyticsAadTokenProvider
       'Content-Type' => 'application/x-www-form-urlencoded',
     }
   end # def get_header
-
-  # Setting proxy for the REST client.
-  # This option is not used in the output plugin and will be used 
-  #  
-  def set_proxy(proxy='')
-    RestClient.proxy = proxy.empty? ? ENV['http_proxy'] : proxy
-  end # def set_proxy
 
 end # end of class
 end ;end ;end 

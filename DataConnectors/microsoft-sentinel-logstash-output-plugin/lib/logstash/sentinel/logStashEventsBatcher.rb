@@ -53,7 +53,8 @@ class LogStashEventsBatcher
                 response = @client.post_data(call_payload)
                 
                 if LogAnalyticsClient.is_successfully_posted(response)
-                    @logger.info("Successfully posted #{amount_of_documents} logs into log analytics DCR stream [#{@logstashLoganalyticsConfiguration.dcr_stream_name}].")
+                    request_id = get_request_id_from_response(response)
+                    @logger.info("Successfully posted #{amount_of_documents} logs into log analytics DCR stream [#{@logstashLoganalyticsConfiguration.dcr_stream_name}] x-ms-request-id [#{request_id}].")
                     return
                 else
                     @logger.error("#{api_name} request failed. Error code: #{response.code} #{try_get_info_from_error_response(response)}")
@@ -97,6 +98,14 @@ class LogStashEventsBatcher
         else
             "Posting"
         end
+    end
+
+    def get_request_id_from_response(response)
+        output =""
+        if response.headers.include?(:x_ms_request_id)
+            output += response.headers[:x_ms_request_id]
+        end
+       return output
     end
 
     # Try to get the values of the x-ms-error-code and x-ms-request-id headers and content of body, decorate it for printing

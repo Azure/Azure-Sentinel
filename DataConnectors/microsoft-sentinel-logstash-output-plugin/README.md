@@ -3,8 +3,8 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.0.0  
-Released on: 2022-11-14
+Plugin version: v1.0.2  
+Released on: 2023-04-27
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -121,7 +121,10 @@ output {
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
-- **proxy** - String, Empty by default. Specify which proxy URL to use for all API calls.
+- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service.
+- **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint.
+
+#### Note: When setting an empty string as a value for a proxy setting, it will unset any system wide proxy setting.
 
 Security notice: We recommend not to implicitly state client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, and dcr_immutable_id in your Logstash configuration for security reasons.
                  It is best to store this sensitive information in a Logstash KeyStore as described here- ['Secrets Keystore'](<https://www.elastic.co/guide/en/logstash/current/keystore.html>)
@@ -151,7 +154,7 @@ output {
       data_collection_endpoint => "https://my-customlogsv2-test-jz2a.eastus2-1.ingest.monitor.azure.com"
       dcr_immutable_id => "dcr-xxxxxxxxxxxxxxxxac23b8978251433a"
       dcr_stream_name => "Custom-MyTableRawData"
-      proxy => "http://proxy.example.com"
+      proxy_aad => "http://proxy.example.com"
     }
 }
 
