@@ -14,7 +14,7 @@ It is encapsulated in other Logic app to enrich Sentinel incident (like Enrich-A
 ## Prerequisites
 
 * AzureResourceGraph data access requires Reader access for targeted scope
-* Service principal client id and secret stored in Azure keyvault (Possible change to Managed Identity as supported by HTTP block)
+* Service principal client id and secret stored in Azure keyvault as 'azureresourcegraph-clientid' and 'azureresourcegraph-clientsecret' (Possible change to Managed Identity as supported by HTTP block)
 
 ## Screenshots
 ![Enrich-AzureResourceGraph](./images/Enrich-AzureResourceGraph.png)
