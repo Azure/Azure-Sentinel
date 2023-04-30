@@ -4,7 +4,9 @@ This logicapp calls Enrich-AzureResourceGraph to comment Sentinel Incident based
 
 ## Quick Deployment
 
-After deployment, attach this playbook to an **automation rule** so it runs when the incident is created.
+After deployment,
+* Allow logicapp managed identity to update incident by adding IAM role [Sentinel Responder or above](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-responder)
+* attach this playbook to an **automation rule** so it runs when the incident is created.
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
