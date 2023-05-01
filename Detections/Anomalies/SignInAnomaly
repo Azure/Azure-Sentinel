@@ -1,0 +1,37 @@
+id: 9c1e9381-79dd-4ddf-9570-b73a1dc59fe0
+name: Anomaly Sign In Event from an IP
+description: |
+  'Identifies anomalies event from a given IP address to an Application in the last hour.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs 
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  SigninLogs
+  | where TimeGenerated >= ago(1h)
+  | summarize SuccessCount = countif(ResultType == 0), FailureCount = countif(ResultType !=0),EventCount = count() by AppDisplayName, IPAddress, bin(TimeGenerated,15m)
+  | order by TimeGenerated
+  | summarize EventCount = make_list(EventCount), TimeGenerated = make_list(TimeGenerated), SuccessCount = make_list(SuccessCount), FailureCount = make_list(FailureCount) by IPAddress, AppDisplayName
+  | extend Outliers = series_decompose_anomalies(EventCount)
+  | mv-expand TimeGenerated,EventCount, Outliers, SuccessCount, FailureCount
+  | where Outliers == 1
+  | project-reorder TimeGenerated, AppDisplayName,IPAddress, EventCount,SuccessCount,FailureCount
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AppDisplayName
+version: 1.0.0
