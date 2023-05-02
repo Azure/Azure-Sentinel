@@ -31,8 +31,8 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 
 ## Prerequisites
-
-- You will need to grant User.ReadWrite.All permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
+1. Assign Microsoft Sentinel Responder role to the managed identity. To do so, choose Identity blade under Settings of the Logic App.
+2. You will need to grant User.ReadWrite.All permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
 ```powershell
 $MIGuid = "<Enter your managed identity guid here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
