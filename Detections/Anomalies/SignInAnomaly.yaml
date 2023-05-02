@@ -21,10 +21,9 @@ query: |
   | summarize SuccessCount = countif(ResultType == 0), FailureCount = countif(ResultType !=0),EventCount = count() by AppDisplayName, IPAddress, bin(TimeGenerated,15m)
   | order by TimeGenerated
   | summarize EventCount = make_list(EventCount), TimeGenerated = make_list(TimeGenerated), SuccessCount = make_list(SuccessCount), FailureCount = make_list(FailureCount) by IPAddress, AppDisplayName
-  | extend Outliers = series_decompose_anomalies(EventCount)
-  | mv-expand TimeGenerated,EventCount, Outliers, SuccessCount, FailureCount
-  | where Outliers == 1
-  | project-reorder TimeGenerated, AppDisplayName,IPAddress, EventCount,SuccessCount,FailureCount
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(EventCount,1.5,-1,'linefit')
+  | mv-expand EventCount,TimeGenerated,Anomalies,Baseline,Score
+  | where Anomalies == 1
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -34,4 +33,8 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: AppDisplayName
+customDetails:
+  Score: Score
+  Baseline: Baseline
 version: 1.0.0
+kind: Scheduled
