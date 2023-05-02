@@ -3,6 +3,8 @@ import logging
 import requests
 import base64
 from urllib.parse import urlparse
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 logger = logging.getLogger("DS_api")
 
@@ -25,6 +27,19 @@ class api:
             "searchlight-account-id": "%s" % self.id,
             "User-Agent": "DigitalShadowsAzureSentinelIntegration"
         })
+
+        # Add retry logic to the session object
+        retries = Retry(
+            total=3,
+            status_forcelist=frozenset({429, 500, 502, 503, 504}),
+            allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"],
+            backoff_factor=1,
+            raise_on_status=False,
+            connect=3,
+            read=2,
+        )
+        adapter = HTTPAdapter(max_retries=retries)
+        self.session.mount("https://", adapter)
 
     def get_alerts(self, alert_ids):
         """ 
@@ -53,7 +68,7 @@ class api:
             send only the DS converted dates using state serializer functions to get triage events
         """
         params = self._get_classification_list(classification_filter_operation, classification_list)
-        triage_url = self.url + "triage-item-events?limit=20&event-created-before=" + str(before_date) + "&event-created-after=" +  str(after_date)
+        triage_url = self.url + "triage-item-events?limit=1000&event-created-before=" + str(before_date) + "&event-created-after=" +  str(after_date)
         response = self.session.get(triage_url, params=params)
         logger.info("Response for url: %s \t is : %s" % (triage_url, response.text))
         response.raise_for_status()
@@ -84,7 +99,7 @@ class api:
         """
             gets triage events by number
         """
-        triage_url = self.url + "triage-item-events?limit=20&event-num-after=" + str(event)
+        triage_url = self.url + "triage-item-events?limit=1000&event-num-after=" + str(event)
         params = self._get_classification_list(classification_filter_operation, classification_list)
         response = self.session.get(triage_url, params=params)
         return response.json()
@@ -93,11 +108,11 @@ class api:
         params = None
         if classification_filter_operation == "include" and len(classification_list) > 0:
             params = {
-                "classification": classification_list
+                "risk-type": classification_list
             }
         elif classification_filter_operation == "exclude" and len(classification_list) > 0:
             params = {
-                "classification-exclusion": classification_list,
+                "risk-type-exclusion": classification_list,
             }
         else:
             raise Exception("Invalid Classification Filter Operation: %s. Valid operations can be one of (include, exclude)" % classification_filter_operation)
