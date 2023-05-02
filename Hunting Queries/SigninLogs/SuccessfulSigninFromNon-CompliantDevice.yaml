@@ -3,7 +3,8 @@ name: Successful Signin From Non-Compliant Device
 description: |
   'Detects successful sign ins from devices marked non-compliant.
     Best practice is to block sign ins from non-complaint devices, however if allowed monitor these events to ensure they do not lead to other risky activity.
-    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-devices#non-compliant-device-sign-in'
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-devices#non-compliant-device-sign-in
+    This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -22,18 +23,19 @@ query: |
   SigninLogs
     | where ResultType == 0
     | where tostring(DeviceDetail.isCompliant) == "false"
+    | extend UserPrincipalName = tolower(UserPrincipalName)
     | join kind=leftouter (
         IdentityInfo
         | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
         | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
         | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
         | summarize
-            Tags = make_set(Tags),
-            GroupMembership = make_set(GroupMembership),
-            AssignedRoles = make_set(AssignedRoles),
-            BlastRadiusInt = sum(BlastRadiusInt),
-            UserType = make_set(UserType),
-            UserAccountControl = make_set(UserType)
+            Tags = make_set(Tags, 1000),
+            GroupMembership = make_set(GroupMembership, 1000),
+            AssignedRoles = make_set(AssignedRoles, 1000),
+            BlastRadiusInt = sum(BlastRadiusInt, 1000),
+            UserType = make_set(UserType, 1000),
+            UserAccountControl = make_set(UserType, 1000)
         by AccountUPN
         | extend UserPrincipalName=tolower(AccountUPN)
     ) on UserPrincipalName

@@ -3,7 +3,8 @@ name: Login attempts using Legacy Auth
 description: |
   'This query over Azure AD sign-in activity highlights use of legacy authentication protocol in the
   environment. Because conditional access policies are not evaluated when legacy authentication is used,
-  legacy authentication can be used to circumvent all Azure Conditional Access policies.'
+  legacy authentication can be used to circumvent all Azure Conditional Access policies.
+  This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -22,6 +23,7 @@ relevantTechniques:
   - T1098
 query: |
 
+  let riskScoreCutoff = 20; //Adjust this based on volume of results
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = totimespan((endtime-starttime)*7);
@@ -47,19 +49,19 @@ query: |
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), AttemptCount = count()
   by UserPrincipalName, ClientAppUsed, AppDisplayName, IPAddress, isLegacyAuth, tostring(OS), tostring(Browser), LocationString
   | sort by AttemptCount desc nulls last
-  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | extend timestamp = StartTime, UserPrincipalName = tolower(UserPrincipalName), AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
   | join kind=leftouter (
       IdentityInfo
       | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
       | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
       | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
       | summarize
-          Tags = make_set(Tags),
-          GroupMembership = make_set(GroupMembership),
-          AssignedRoles = make_set(AssignedRoles),
-          BlastRadiusInt = sum(BlastRadiusInt),
-          UserType = make_set(UserType),
-          UserAccountControl = make_set(UserType)
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt, 1000),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
       by AccountUPN
       | extend UserPrincipalName=tolower(AccountUPN)
   ) on UserPrincipalName
@@ -76,7 +78,7 @@ query: |
       by IPAddress
   ) on IPAddress
   | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
-  | where UEBARiskScore > 20 //Can be adjusted based on volume of results
+  | where UEBARiskScore > riskScoreCutoff
   | sort by UEBARiskScore desc
 
 entityMappings:

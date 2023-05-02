@@ -2,7 +2,8 @@
 name: Signins from Nord VPN Providers
 description: |
   'This query looks for sign-in activity from Nord VPN providers using the Public feed leveraging NordVPN API which is updated daily. 
-  Investigation any unknown sign-in attempts from VPN providers such as Nord VPN unless it is commonly seen from users in the organization'
+  Investigation any unknown sign-in attempts from VPN providers such as Nord VPN unless it is commonly seen from users in the organization.
+  This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -28,19 +29,19 @@ query: |
     | summarize TotalEvents = count(), AppList = make_set(AppDisplayName),  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by IPAddress, UserPrincipalName, ClientAppUsed, ConditionalAccessStatus, AuthenticationRequirement, RiskDetail 
     | join kind= inner nord_vpn_feed on $left.IPAddress == $right.ip_address
     | project StartTime , EndTime, IPAddress, UserPrincipalName, AppList, ClientAppUsed, ConditionalAccessStatus, AuthenticationRequirement, RiskDetail, categories, domain, country
-    | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+    | extend timestamp = StartTime, UserPrincipalName = tolower(UserPrincipalName), AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
     | join kind=leftouter (
         IdentityInfo
         | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
         | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
         | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
         | summarize
-            Tags = make_set(Tags),
-            GroupMembership = make_set(GroupMembership),
-            AssignedRoles = make_set(AssignedRoles),
-            BlastRadiusInt = sum(BlastRadiusInt),
-            UserType = make_set(UserType),
-            UserAccountControl = make_set(UserType)
+            Tags = make_set(Tags, 1000),
+            GroupMembership = make_set(GroupMembership, 1000),
+            AssignedRoles = make_set(AssignedRoles, 1000),
+            BlastRadiusInt = sum(BlastRadiusInt, 1000),
+            UserType = make_set(UserType, 1000),
+            UserAccountControl = make_set(UserType, 1000)
         by AccountUPN
         | extend UserPrincipalName=tolower(AccountUPN)
     ) on UserPrincipalName
@@ -48,6 +49,7 @@ query: |
         BehaviorAnalytics
         | where ActivityType in ("FailedLogOn", "LogOn")
         | where isnotempty(SourceIPAddress)
+        | where ActivityInsights["ISPUncommonlyUsedInTenant"] == True
         | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
         | project-rename IPAddress = SourceIPAddress
         | summarize

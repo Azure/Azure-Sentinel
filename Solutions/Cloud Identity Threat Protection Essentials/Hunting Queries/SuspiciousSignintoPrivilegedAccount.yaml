@@ -4,6 +4,7 @@ description: |
   'This query will help detect any Sign-in's from non-compliant device/device registered without MFA(Multi-factor Authentication)/unknown device to privileged account using pre-built watchlist to identify accounts.
   Microsoft Sentinel now provides built-in watchlist templates, that can be customized for your environment and used during investigations.
   Reference: https://techcommunity.microsoft.com/t5/azure-sentinel/what-s-new-watchlists-templates-are-now-in-public-preview/ba-p/2614340'
+  This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -45,19 +46,19 @@ query: |
   | where AccountName in (priv_users)
   | project-rename  ServiceOrSystem = AppDisplayName, ClientIP = IPAddress)
   )
-  | project AccountCustomEntity = AccountName, AppId, Category, IPCustomEntity = ClientIP, CorrelationId, ResourceCustomEntity = ResourceId, Identity
+  | project AccountCustomEntity =tolower(AccountName), AppId, Category, IPCustomEntity = ClientIP, CorrelationId, ResourceCustomEntity = ResourceId, Identity
   | join kind=leftouter (
         IdentityInfo
         | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
         | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
         | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
         | summarize
-            Tags = make_set(Tags),
-            GroupMembership = make_set(GroupMembership),
-            AssignedRoles = make_set(AssignedRoles),
-            BlastRadiusInt = sum(BlastRadiusInt),
-            UserType = make_set(UserType),
-            UserAccountControl = make_set(UserType)
+            Tags = make_set(Tags, 1000),
+            GroupMembership = make_set(GroupMembership, 1000),
+            AssignedRoles = make_set(AssignedRoles, 1000),
+            BlastRadiusInt = sum(BlastRadiusInt, 1000),
+            UserType = make_set(UserType, 1000),
+            UserAccountControl = make_set(UserType, 1000)
         by AccountUPN
         | extend AccountCustomEntity = tolower(AccountUPN)
   ) on AccountCustomEntity

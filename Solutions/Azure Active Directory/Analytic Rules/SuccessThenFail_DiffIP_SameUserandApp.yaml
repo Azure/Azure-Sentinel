@@ -2,8 +2,9 @@ id: 02ef8d7e-fc3a-4d86-a457-650fa571d8d2
 name: Successful logon from IP and failure from a different IP
 description: |
   'Identifies when a user account successfully logs onto an Azure App from one IP and within 10 mins failed to logon to the same App via a different IP.
-  This may indicate a malicious attempt at password guessing based on knowledge of the users account.'
-severity: Medium
+  This may indicate a malicious attempt at password guessing based on knowledge of the users account. This query has also been updated to include UEBA 
+  logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
+severity: Medium 
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -29,6 +30,7 @@ relevantTechniques:
   - T1110
   - T1078
 query: |
+  let riskScoreCutoff = 20; //Adjust this based on volume of results
   let logonDiff = 10m; let aadFunc = (tableName:string){ table(tableName)
   | where ResultType == "0"
   | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
@@ -53,12 +55,12 @@ query: |
       | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
       | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
       | summarize
-          Tags = make_set(Tags),
-          GroupMembership = make_set(GroupMembership),
-          AssignedRoles = make_set(AssignedRoles),
-          BlastRadiusInt = sum(BlastRadiusInt),
-          UserType = make_set(UserType),
-          UserAccountControl = make_set(UserType)
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt, 1000),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
       by AccountUPN
       | extend UserPrincipalName=tolower(AccountUPN)
   ) on UserPrincipalName
@@ -75,7 +77,7 @@ query: |
       by FailedIPAddress)
   on FailedIPAddress
   | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
-  | where  UEBARiskScore > 20 //Can be adjusted based on volume of results
+  | where  UEBARiskScore > riskScoreCutoff
   | sort by UEBARiskScore desc 
 entityMappings:
   - entityType: Account

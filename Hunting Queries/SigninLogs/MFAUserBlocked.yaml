@@ -1,7 +1,8 @@
 id: 75fd68a2-9ed4-4a1c-8bd7-18efe4c99081
 name: Login attempt by Blocked MFA user
 description: |
-  'An account could be blocked if there are too many failed authentication attempts in a row. This hunting query identifies if a MFA user account that is set to blocked tries to login to Azure AD.'
+  'An account could be blocked if there are too many failed authentication attempts in a row. This hunting query identifies if a MFA user account that is set to blocked tries to login to Azure AD.
+   This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -18,6 +19,7 @@ relevantTechniques:
   - T1078
 query: |
 
+  let riskScoreCutoff = 20; //Adjust this based on volume of results
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 7d;
@@ -50,19 +52,19 @@ query: |
   | extend TimeGenerated = todatetime(tostring(TimeGenerated)), IPAddress = tostring(IPAddresses), Status = tostring(Status)
   | project-away IPAddresses
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, UserId, UserDisplayName, Status,  IPAddress, IPAddressCount, AppDisplayName, Browser, OS, FullLocation
-  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | extend timestamp = StartTime, UserPrincipalName = tolower(UserPrincipalName), AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
   | join kind=leftouter (
       IdentityInfo
       | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
       | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
       | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
       | summarize
-          Tags = make_set(Tags),
-          GroupMembership = make_set(GroupMembership),
-          AssignedRoles = make_set(AssignedRoles),
-          BlastRadiusInt = sum(BlastRadiusInt),
-          UserType = make_set(UserType),
-          UserAccountControl = make_set(UserType)
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt, 1000),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
       by AccountUPN
       | extend UserPrincipalName=tolower(AccountUPN)
   ) on UserPrincipalName
@@ -79,7 +81,7 @@ query: |
       by IPAddress
   ) on IPAddress
   | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
-  | where UEBARiskScore > 20 //Can be adjusted based on volume of results
+  | where UEBARiskScore > riskScoreCutoff
   | sort by UEBARiskScore desc
 
 entityMappings:
