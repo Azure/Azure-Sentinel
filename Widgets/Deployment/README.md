@@ -29,4 +29,4 @@ python CreateKV.py --subscription-id <subscription id> --resource-group-name <re
 
 For each widget, configure the secrets and other parameters it reqruies using the links below, which will help you to store them in the workspace Key Vault.
 
-- [Configure Anomaly](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fwidgets%2FWidgets%2FDeployment%2FAddAnomaliConnection.json)
+- [Configure Anomali](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fwidgets%2FWidgets%2FDeployment%2FAddAnomaliConnection.json)
