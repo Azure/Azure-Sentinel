@@ -4,10 +4,6 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Edgescan-Integration%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Edgescan-Integration%2Fmaster%2Fazuredeploy.json)     
-
-
 This playbook will create a unidirectional integration with Microsoft Sentinel. It will pull Edgescan assets, hosts, and vulnerabilities into Microsoft Sentinel custom logs where they can be tracked and queried.
 
 ![Edgescan_Integration_Demo_1](Images/Edgescan_Integration_Demo_1.png)
@@ -22,7 +18,8 @@ For each Edgescan object, there is a corresponding logic app:
 
 The logic app templates you will deploy are set up for their initial runs, which are designed to pull in all Edgescan data. After pulling in all initial data, the logic apps will need to be updated to use a rolling lookback window and a duplicate ID check before any subsequent runs. This documentation will cover not only the deployment and initial runs of the logic apps, but also the steps needed to update each playbook after each initial run.
 
-Entries will be stored in Microsoft Sentinel [custom logs](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#viewing-custom-logs) with the following table names:
+Entries will be stored in Microsoft Sentinel [custom logs](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#viewing-custom-logs) with the following table names:
+
 * **Edgescan_Assets_CL**
 * **Edgescan_Hosts_CL**
 * **Edgescan_Vulnerabilities_CL**
@@ -32,8 +29,8 @@ Entries will be stored in Microsoft Sentinel [custom logs](https://github.com/Ac
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* Your Edgescan [URL](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#edgescan-url)
-* An Edgescan [API token](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#create-an-edgescan-api-token)
+* Your Edgescan [URL](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#edgescan-url)
+* An Edgescan [API token](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#create-an-edgescan-api-token)
 * Pre-existing asset, host, and vulnerability data in your Edgescan org
 
 
@@ -68,11 +65,11 @@ Navigate to an existing Key Vault or create a new one. From the Key Vault overvi
 
 ![Edgescan_Integration_Key_Vault_1](Images/Edgescan_Integration_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**AS-Edgescan-Integration-API-Token**", and enter the Edgescan API token copied previously in the [previous section](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#create-an-edgescan-api-token). All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**AS-Edgescan-Integration-API-Token**", and enter the Edgescan API token copied previously in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#create-an-edgescan-api-token). All other settings can be left as is. Click "**Create**". 
 
 ![Edgescan_Integration_Key_Vault_2](Images/Edgescan_Integration_Key_Vault_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#granting-access-to-azure-key-vault).
 
 ![Edgescan_Integration_Key_Vault_3](Images/Edgescan_Integration_Key_Vault_3.png)
 
@@ -86,28 +83,28 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 https://github.com/Accelerynt-Security/AS-Edgescan-Integration
 
 
-For each of these templates, the password parameter will be the value of your Edgescan [API token](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#create-an-edgescan-api-token).
+For each of these templates, the password parameter will be the value of your Edgescan [API token](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#create-an-edgescan-api-token).
 
 
 #### AS-Edgescan-Integration-Assets
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Edgescan-Integration%2Fmain%2Fazuredeploy1.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Edgescan-Integration%2Fmain%2Fazuredeploy1.json)    
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Edgescan-Integration%2Fazuredeploy1.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Edgescan-Integration%2Fazuredeploy1.json)    
 
 
 #### AS-Edgescan-Integration-Hosts
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Edgescan-Integration%2Fmain%2Fazuredeploy2.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Edgescan-Integration%2Fmain%2Fazuredeploy2.json)    
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Edgescan-Integration%2Fazuredeploy2.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Edgescan-Integration%2Fazuredeploy2.json)    
                                                 
 
 #### AS-Edgescan-Integration-Vulnerabilities
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Edgescan-Integration%2Fmain%2Fazuredeploy3.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Edgescan-Integration%2Fmain%2Fazuredeploy3.json)    
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Edgescan-Integration%2Fazuredeploy3.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Edgescan-Integration%2Fazuredeploy3.json)    
 
 
 Each of these logic apps are disabled upon deployment, meaning they will not run until you enable them.
@@ -121,13 +118,13 @@ Each of these logic apps are disabled upon deployment, meaning they will not run
 >
 >* **Playbook Name**: This can be left as "**AS-Edgescan-Integration**" or you may change it.  
 >
->* **Edgescan URL**: Enter the name of your Edgescan URL referenced in [Edgescan URL](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#edgescan-url). You do not need to include "https://".
+>* **Edgescan URL**: Enter the name of your Edgescan URL referenced in [Edgescan URL](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#edgescan-url). You do not need to include "https://".
 >
 >* **Edgescan Username**: Enter the username of the Edgescan account used to create the API token.
 >
->* **Key Vault Name**: Enter the name of the Key Vault used to store your API token, referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#create-an-azure-key-vault-secret).
+>* **Key Vault Name**: Enter the name of the Key Vault used to store your API token, referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#create-an-azure-key-vault-secret).
 >
->* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#create-an-azure-key-vault-secret).
+>* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#create-an-azure-key-vault-secret).
 >
 >Towards the bottom, click on "**Review + create**". 
 >
@@ -175,7 +172,7 @@ Each of these logic apps are disabled upon deployment, meaning they will not run
 #
 ### Limit Initial Data Ingestion
 
-The initial run of each logic app is set up so that all existing Edgescan data is pulled into Microsoft Sentinel custom logs. If you wish to limit the data initially ingested from Edgescan, follow the steps in this section. If not, skip ahead to the next section: [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-Edgescan-Integration#granting-access-to-azure-key-vault).
+The initial run of each logic app is set up so that all existing Edgescan data is pulled into Microsoft Sentinel custom logs. If you wish to limit the data initially ingested from Edgescan, follow the steps in this section. If not, skip ahead to the next section: [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Edgescan-Integration#granting-access-to-azure-key-vault).
 
 To limit the ingestion of data before your initial run, for each logic app, click edit and expand the HTTP Request section.
 
