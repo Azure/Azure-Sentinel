@@ -3,6 +3,7 @@ import time
 import select
 import sys
 import re
+import argparse
 
 # GENERAL SCRIPT CONSTANTS
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
@@ -12,11 +13,10 @@ PATH_FOR_CSS_TICKET = {
     "MK": "https://portal.azure.cn/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview",
     "Gov": "https://portal.azure.us/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"}
 AGENT_CONF_FILE = "/etc/opt/microsoft/azuremonitoragent/config-cache/mdsd.hr.json"
-MACHINE_ENV = "Prod"  # Default value is Prod
 FAILED_TESTS_COUNT = 0
 WARNING_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
-SCRIPT_VERSION = 1.2
+SCRIPT_VERSION = 2.0
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generates a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
                       "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
@@ -736,46 +736,38 @@ def find_dcr_cloud_environment():
     """
     Use the agent config on the machine to determine the cloud environment we are running in
     """
-    global MACHINE_ENV
+    default_machine_env = "Prod"
     command_to_run = "if grep -qs \"azure.cn\" {0}; then echo \"MK\"; elif grep -qs \"azure.us\" {0}; then echo \"Gov\"; else echo \"Prod\"; fi".format(
         AGENT_CONF_FILE)
     try:
         command_result, command_result_err = subprocess.Popen(command_to_run, shell=True,
                                                               stdout=subprocess.PIPE,
                                                               stderr=subprocess.STDOUT).communicate()
-        MACHINE_ENV = command_result.decode('utf-8').strip("\n")
+        machine_env = command_result.decode('utf-8').strip("\n")
+        return machine_env if machine_env is not None else default_machine_env
     except Exception:
-        pass
+        return default_machine_env
 
 
 def main():
-    collection_feature_flag = "collect"
-    running_in_collect_mode = False
-    help_feature_flag = ['-h', '-H', '-help', '--help', '-Help', '--Help']
+    parser = argparse.ArgumentParser(description=SCRIPT_HELP_MESSAGE)
+    parser.add_argument('collect', nargs='?', help='collect syslog message samples to file')
+    args = parser.parse_args()
     verify_root_privileges()
-    find_dcr_cloud_environment()
-    if len(sys.argv) > 1:
-        if str(sys.argv[1]) == collection_feature_flag:
-            running_in_collect_mode = True
-            print_notice("Starting to collect data. This may take a couple of seconds")
-            time.sleep(2)
-            subprocess.Popen(['rm', '-f', COLLECT_OUTPUT_FILE],
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
-            system_info = SystemInfo()
-            system_info.handle_commands()
-            print(
-                "Finished collecting data \nPlease provide CSS with this file for further investigation- {} \n"
-                "In order to open a support case please browse: {}".format(
-                    COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET[MACHINE_ENV]))
-            time.sleep(1)
-        # Print help message on how to use the script
-        elif str(sys.argv[1]) in help_feature_flag:
-            print(SCRIPT_HELP_MESSAGE)
-            exit()
-        else:
-            print("python cef_AMA_troubleshoot.py: unrecognized option '{}'\n"
-                  "Try 'python cef_AMA_troubleshoot.py --help' for more information.".format(str(sys.argv[1])))
-            exit()
+    if args.collect:
+        print_notice("Starting to collect data. This may take a couple of seconds")
+        machine_env = find_dcr_cloud_environment()
+        time.sleep(2)
+        subprocess.Popen(['rm', '-f', COLLECT_OUTPUT_FILE],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
+        system_info = SystemInfo()
+        system_info.handle_commands()
+        print(
+            "Finished collecting data \nPlease provide CSS with this file for further investigation- {} \n"
+            "In order to open a support case please browse: {}".format(
+                COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET[machine_env]))
+        time.sleep(1)
+
     class_tests_array = [
         (AgentInstallationVerifications(), "Starting validation tests for AMA"),
         (DCRConfigurationVerifications(), "Starting validation tests for data collection rules"),
@@ -801,7 +793,7 @@ def main():
         print_ok("All tests passed successfully")
         print_notice("This script generated an output file located here - {}"
                      "\nPlease review it if you would like to get more information on failed tests.".format(LOG_OUTPUT_FILE))
-    if not running_in_collect_mode:
+    if not args.collect:
         print_notice(
             "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
             "\'python cef_AMA_troubleshoot.py collect\'")
