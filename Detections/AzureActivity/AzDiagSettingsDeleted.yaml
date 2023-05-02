@@ -19,27 +19,38 @@ relevantTechniques:
   - T1562.008
 query: |
   AzureActivity
-    | where OperationNameValue == 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and ActivityStatusValue == "Start"
-    | extend ParentResource_a = split(_ResourceId,"/")
-    | extend ParentResourceLength = array_length(ParentResource_a)-4
-    | extend ParentResourceSplit = array_split(ParentResource_a,ParentResourceLength)
-    | extend resource = strcat_array(ParentResourceSplit[0],"/")
-    | project Diagdelete = TimeGenerated, Caller, ResourceProviderValue, _ResourceId, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated, resource, CallerIpAddress
-    | join kind=leftanti  ( AzureActivity
-    | where OperationNameValue != 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and OperationNameValue endswith "/DELETE"
-    | where ActivityStatusValue == 'Start'
-    | project Caller, ResourceProviderValue, resource = tostring(parse_json(Properties).resource), SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated) on $left.resource == $right.resource
-    | project Caller, ResourceProviderValue, resource, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start, CallerIpAddress
+  | where OperationNameValue =~ "MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE"
+  | summarize
+      TimeGenerated = arg_max(TimeGenerated, Properties),
+      ActivityStatusValue = make_set(ActivityStatusValue, 5),
+      take_any(Caller, CallerIpAddress, OperationName, ResourceGroup, Resource)
+      by CorrelationId, _ResourceId, OperationNameValue
+  | extend ResourceHierarchy = split(_ResourceId, "/")
+  | extend MonitoredResourcePath = strcat_array(array_slice(ResourceHierarchy, 0, array_length(ResourceHierarchy)-5), "/")
+  | join kind=leftanti (
+      AzureActivity
+      | where OperationNameValue !~ "MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE" and OperationNameValue endswith "/DELETE" and ActivityStatusValue has_any ("Success", "Succeeded")
+      | project _ResourceId
+  ) on $left.MonitoredResourcePath == $right._ResourceId
+  | extend
+      Name = iif(Caller has "@", tostring(split(Caller, "@")[0]), ""),
+      UPNSuffix = iif(Caller has "@", tostring(split(Caller, "@")[1]), ""),
+      AadUserId = iif(Caller has "@", "", Caller)
+  | project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, OperationName, ActivityStatusValue, ResourceGroup, MonitoredResourcePath, Resource, Properties, Name, UPNSuffix, AadUserId, _ResourceId, CorrelationId
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: Caller
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: AadUserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: CallerIpAddress
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
 metadata:
     source:

@@ -1,0 +1,67 @@
+id: 6ab1f7b2-61b8-442f-bc81-96afe7ad8c53
+name: Guest accounts added in AAD Groups other than the ones specified
+description: |
+  'Guest Accounts are added in the Organization Tenants to perform various tasks i.e projects execution, support etc.. This detection notifies when guest users are added to Azure AD Groups other than the ones specified and poses a risk to gain access to sensitive apps or data.'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - Persistence
+  - Discovery
+relevantTechniques:
+  - T1078.004
+  - T1136.003
+  - T1087.004
+query: |
+  // OBJECT ID of AAD Groups can be found by navigating to Azure Active Directory then from menu on the left, select Groups and from the list shown of AAD Groups, the Second Column shows the ObjectID of each
+  let GroupIDs = dynamic(["List with Custom AAD GROUP OBJECT ID 1","Custom AAD GROUP OBJECT ID 2"]);
+  AuditLogs
+  | where OperationName in ('Add member to group', 'Add owner to group')
+  | extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
+  | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress 
+  // Uncomment the following line to filter events where the inviting user was a guest user
+  //| where InitiatedBy has_any ("CUSTOM DOMAIN NAME#", "#EXT#")
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend InvitedUser = trim(@'"',tostring(TargetResource.userPrincipalName)),
+                 Properties = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = Properties on 
+    (
+        where Property.displayName =~ "Group.DisplayName"
+        | extend AADGroup = trim('"',tostring(Property.newValue))
+    )
+  | where InvitedUser has_any ("CUSTOM DOMAIN NAME#", "#EXT#")
+  | mv-apply Property = Properties on
+     (
+       where Property.displayName =~ "Group.ObjectID"
+       | extend AADGroupId = trim('"',tostring(Property.newValue))
+     )
+  | where AADGroupId !in (GroupIDs)
+  | extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InvitedUser
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatedByIPAdress
+version: 1.0.2
+kind: Scheduled
