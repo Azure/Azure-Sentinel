@@ -60,7 +60,7 @@ def print_notice(input_str):
     print("\033[0;30;47m" + input_str + "\033[0m")
 
 
-class CommandShellExecution:
+class CommandShellExecution(object):
     """
     This class is for executing all the shell related commands in the terminal for each test.
     """
@@ -113,14 +113,14 @@ class CommandVerification(CommandShellExecution):
                  command_result=None,
                  command_result_err=None,
                  is_successful=False):
-        super().__init__(command_name, command_to_run, result_keywords_array, fault_keyword, command_result, command_result_err)
+        super(CommandVerification, self).__init__(command_name, command_to_run, result_keywords_array, fault_keyword, command_result, command_result_err)
         self.is_successful = is_successful
 
     def __repr__(self):
         """
         Printing the command details in a built-in format
         """
-        command_repr = super().__repr__()
+        command_repr = super(CommandVerification, self).__repr__()
         return str(command_repr + "Is successful: " + str(self.is_successful) + DELIMITER + '\n').replace(
             '%', '%%').replace('\\n', '\n')
 
