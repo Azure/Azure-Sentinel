@@ -57,8 +57,8 @@ A total of 1 test files matched the specified pattern.
    Expected object to be <null>, but found System.ComponentModel.DataAnnotations.ValidationException with message "An old mapping for entity 'AccountCustomEntity' does not have a matching new mapping entry."
 ```
 
-### Pull Request Kql Validation Check
-As part of the PR checks we run a syntax validation of the kql queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
+### Pull Request KQL Validation Check
+As part of the PR checks we run a syntax validation of the KQL queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
 ![Azurepipeline](.github/Media/Azurepipeline.png)
 In the pipeline you can see which test failed and what is the cause:
 ![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
@@ -94,8 +94,8 @@ your table schema is defined in json file in the folder *Azure-Sentinel\\.script
   ]
 }
 ```
-### Run Kql Validation Locally
-In order to run the kql validation before submitting Pull Request in you local machine:
+### Run KQL Validation Locally
+In order to run the KQL validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
 * Open Shell and navigate to  `Azure-Sentinel\\.script\tests\KqlvalidationsTests\`
 * Execute `dotnet test`
@@ -140,7 +140,7 @@ The schema validation includes the detection's frequency and period, the detecti
 A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
 
 ### Run Detection Schema Validation Locally
-In order to run the kql validation before submitting Pull Request in you local machine:
+In order to run the KQL validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
 * Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateSchemaValidation\`
 * Execute `dotnet test`
