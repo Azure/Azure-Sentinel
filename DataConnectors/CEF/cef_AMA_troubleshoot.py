@@ -609,7 +609,7 @@ class IncomingEventsVerifications:
             tcpdump_time_restriction) + " seconds.")
         tcp_dump = subprocess.Popen(command_object.command_to_run, shell=True, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT)
-        line = str(tcp_dump.stdout.readline())
+        line = str(tcp_dump.stdout.readline().decode('utf-8').strip("\n"))
         # Handle command not found
         if "command not found" in line:
             print(self.TCPDUMP_NOT_INSTALLED_ERROR_MESSAGE)
@@ -625,7 +625,7 @@ class IncomingEventsVerifications:
                 self.send_cef_message_local(514, 1)
             poll_result = poll_obj.poll(0)
             if poll_result:
-                line = str(tcp_dump.stdout.readline())
+                line = str(tcp_dump.stdout.readline().decode('utf-8').strip("\n"))
                 if self.handle_tcpdump_line(line):
                     command_object.command_result = line
                     command_object.run_full_verification()
