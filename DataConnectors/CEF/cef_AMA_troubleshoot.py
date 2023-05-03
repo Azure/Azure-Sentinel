@@ -4,6 +4,8 @@ import select
 import re
 import argparse
 
+SCRIPT_VERSION = 2.0
+
 # GENERAL SCRIPT CONSTANTS
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
@@ -15,7 +17,6 @@ AGENT_CONF_FILE = "/etc/opt/microsoft/azuremonitoragent/config-cache/mdsd.hr.jso
 FAILED_TESTS_COUNT = 0
 WARNING_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
-SCRIPT_VERSION = 2.0
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generates a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
                       "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
@@ -749,14 +750,15 @@ def find_dcr_cloud_environment():
 
 def getargs(should_print=True):
     parser = argparse.ArgumentParser(description=SCRIPT_HELP_MESSAGE)
-    parser.add_argument('--collect', action='store_true', default=False, help='Collect syslog message samples to file')
-    parser.add_argument('--CEF', action='store_true', default=False, help='Validate CEF DCR and events')
-    parser.add_argument('--ASA', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
+    parser.add_argument('-c', '-C', '--collect', '--COLLECT', action='store_true', default=False, help='Collect syslog message samples to file')
+    parser.add_argument('--CEF', '--cef', action='store_true', default=False, help='Validate CEF DCR and events')
+    parser.add_argument('--ASA', '--asa', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
     args = parser.parse_args()
     if should_print:
         for arg in vars(args):
             if getattr(args, arg):
                 print_notice(arg)
+        print('\n')
     return args
 
 
