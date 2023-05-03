@@ -1,0 +1,18 @@
+id: fe4f4336-a2e7-4cae-af43-3211116475be
+name: Suspicious network connection to Google APIs resulting in file creation
+description: |
+  This query will look for connections made to several Google cloud service API endpoints which are not associated with a legitimate browser or application, which then result in file creation which could indicate second stage malware or ingress tool transfer. The query was inspired by the GC2-Sheet project: https://github.com/looCiprian/GC2-sheet. GC2-Sheet is a C2 platform designed to leverage Google Sheets and Google Drive SaaS applications.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+tactics:
+- Command and control
+query: |
+  let excludedProcessFileNames = datatable (browser:string)["teams.exe","GoogleUpdate.exe","outlook.exe","msedge.exe","chrome.exe","iexplorer.exe","brave.exe","firefox.exe"]; //add additional browsers, mail clients, and legitimate google desktop applications where needed for exclusion in your environment
+  let processComWithGoogleAPI = DeviceNetworkEvents 
+  | where not(InitiatingProcessFileName has_any (excludedProcessFileNames))
+  | where RemoteUrl has_any ("oauth2.googleapis.com","sheets.googleapis.com","drive.googleapis.com") and isnotempty(InitiatingProcessFileName)
+  | distinct InitiatingProcessFileName;
+  DeviceFileEvents
+  | where ActionType == "FileCreated" and InitiatingProcessFileName in~ (processComWithGoogleAPI)
