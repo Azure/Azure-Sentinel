@@ -25,6 +25,7 @@ SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
                       "     python cef_AMA_troubleshoot.py\n" \
                       "     python cef_AMA_troubleshoot.py collect\n\n" \
                       "This script verifies the installation of the CEF connector on the collector machine. It returns a status for each test and action items to fix detected issues."
+DELIMITER = "\n" + "-" * 20 + "\n"
 
 
 def print_error(input_str):
@@ -63,33 +64,28 @@ class CommandShellExecution:
     """
     This class is for executing all the shell related commands in the terminal for each test.
     """
-
     def __init__(self, command_name, command_to_run, result_keywords_array=None, fault_keyword=None,
                  command_result=None,
-                 command_result_err=None,
-                 is_successful=False):
+                 command_result_err=None):
         self.command_name = command_name
         self.command_to_run = command_to_run
         self.result_keywords_array = result_keywords_array if result_keywords_array is not None else []
         self.fault_keyword = fault_keyword
         self.command_result = command_result
         self.command_result_err = command_result_err
-        self.is_successful = is_successful
 
     def __repr__(self):
         """
         Printing the command details in a built-in format
         """
-        delimiter = "\n" + "-" * 20 + "\n"
         return str(
-            delimiter + str(self.command_name) + '\n' + "command to run: " + str(
+            DELIMITER + str(self.command_name) + '\n' + "command to run: " + str(
                 self.command_to_run) + '\n' +
             "command output:" + '\n' + str(self.command_result) + '\n' + "command error output: " + str(
                 self.command_result_err) + '\n' +
             "command array verification: " + str(self.result_keywords_array) + '\n' + "fault key word: " + str(
-                self.fault_keyword) + '\n' + "Is successful: " + str(
-                self.is_successful) +
-            delimiter).replace(
+                self.fault_keyword) +
+            DELIMITER).replace(
             '%', '%%').replace('\\n', '\n')
 
     def run_command(self):
@@ -106,45 +102,25 @@ class CommandShellExecution:
             self.command_result_err = "Error running command: {}. Command does not exist. Please install it and run again.".format(
                 self.command_to_run)
 
-    def print_result_to_prompt(self):
-        """
-        Printing the test's name and success status to the customer's prompt
-        """
-        max_length = 47
-        if self.is_successful == "Skip":
-            print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failed to check")
-        elif self.is_successful == "Warn":
-            print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Warning")
-        elif self.is_successful:
-            print_ok(self.command_name + "-" * (max_length - len(self.command_name)) + "> Success")
-        else:
-            print_error(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failure")
 
-    def document_result(self):
-        """
-        A simple way to only document the response to prompt and to the log file
-        Can be used in case some special commands that don't require a verification to be ran
-        """
-        self.print_result_to_prompt()
-        self.log_result_to_file()
-
-    def log_result_to_file(self):
-        """
-        Logging each test to a log file that can be used for troubleshooting. Is done by the use of the object repr function
-        """
-        output = self.__repr__()
-        output_file = open(LOG_OUTPUT_FILE, 'a')
-        try:
-            output_file.write(output)
-        except Exception:
-            print(str(self.command_name) + "was not documented successfully")
-        output_file.close()
-
-
-class CommandShellExecutionVerification(CommandShellExecution):  # TODO: Remove inheritance
+class CommandVerification(CommandShellExecution):
     """
     This class is running all the necessary verifications for the running test.
     """
+    def __init__(self, command_name, command_to_run, result_keywords_array=None, fault_keyword=None,
+                 command_result=None,
+                 command_result_err=None,
+                 is_successful=False):
+        super().__init__(command_name, command_to_run, result_keywords_array, fault_keyword, command_result, command_result_err)
+        self.is_successful = is_successful
+
+    def __repr__(self):
+        """
+        Printing the command details in a built-in format
+        """
+        command_repr = super().__repr__()
+        return str(command_repr + "Is successful: " + str(self.is_successful) + DELIMITER + '\n').replace(
+            '%', '%%').replace('\\n', '\n')
 
     def is_command_successful(self, exclude=False, should_fail=False, should_increase=True, should_warn=False):
         """
@@ -199,6 +175,40 @@ class CommandShellExecutionVerification(CommandShellExecution):  # TODO: Remove 
             return True
         return False
 
+    def print_result_to_prompt(self):
+        """
+        Printing the test's name and success status to the customer's prompt
+        """
+        max_length = 47
+        if self.is_successful == "Skip":
+            print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failed to check")
+        elif self.is_successful == "Warn":
+            print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Warning")
+        elif self.is_successful:
+            print_ok(self.command_name + "-" * (max_length - len(self.command_name)) + "> Success")
+        else:
+            print_error(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failure")
+
+    def document_result(self):
+        """
+        A simple way to only document the response to prompt and to the log file
+        Can be used in case some special commands that don't require a verification to be ran
+        """
+        self.print_result_to_prompt()
+        self.log_result_to_file()
+
+    def log_result_to_file(self):
+        """
+        Logging each test to a log file that can be used for troubleshooting. Is done by the use of the object repr function
+        """
+        output = self.__repr__()
+        output_file = open(LOG_OUTPUT_FILE, 'a')
+        try:
+            output_file.write(output)
+        except Exception:
+            print(str(self.command_name) + "was not documented successfully")
+        output_file.close()
+
     def run_full_verification(self, exclude=False, should_fail=False):
         """
         A simple way to run only the verification on documentation steps of the test.
@@ -246,7 +256,7 @@ class AgentInstallationVerifications:
         command_name = "verify_ama_agent_service_is_running"
         command_to_run = "sudo systemctl status azuremonitoragent"
         result_keywords_array = ["azuremonitoragent.service", "Azure", "Monitor", "Agent", "active", "running"]
-        command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
             if ("could not be found" or "no such service") in command_object.command_result:
@@ -268,7 +278,7 @@ class AgentInstallationVerifications:
         """
         command_name = "print_arc_version"
         command_to_run = "azcmagent version"
-        command_object = CommandShellExecutionVerification(command_name, command_to_run)
+        command_object = CommandVerification(command_name, command_to_run)
         command_object.run_command()
         if "azcmagent version" in str(command_object.command_result) and "command not found" not in str(
                 command_object.command_result):
@@ -282,7 +292,7 @@ class AgentInstallationVerifications:
         command_name = "verify_oms_agent_not_running"
         command_to_run = "sudo netstat -lnpvt | grep ruby"
         result_keywords_array = ["25226", "LISTEN", "tcp"]
-        command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test(exclude=True)
         if command_object.is_successful == "Skip":
             print_warning(command_object.command_result_err)
@@ -322,7 +332,7 @@ class DCRConfigurationVerifications:
         command_name = "verify_DCR_exists"
         command_to_run = "sudo ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
         result_keywords_array = [".json"]
-        command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
             print_error(self.DCR_MISSING_ERR)
@@ -337,7 +347,7 @@ class DCRConfigurationVerifications:
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
             self.CEF_STREAM_NAME)
         result_keywords_array = [self.CEF_STREAM_NAME]
-        command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
             print_error(self.DCR_MISSING_CEF_STREAM_ERR)
@@ -354,7 +364,7 @@ class DCRConfigurationVerifications:
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "opinsights.azure", "id"]
-        command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_command()
         command_object.command_result = command_object.command_result.decode('UTF-8').split('\n')[:-1]
         for dcr in command_object.command_result:
@@ -376,7 +386,7 @@ class DCRConfigurationVerifications:
         command_name = "check_cef_multi_homing"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
             self.CEF_STREAM_NAME)
-        command_object = CommandShellExecutionVerification(command_name, command_to_run)
+        command_object = CommandVerification(command_name, command_to_run)
         command_object.run_command()
         try:
             if int(command_object.command_result) > 1:
@@ -418,10 +428,8 @@ class SyslogDaemonVerifications:
         """
         This function is in order to determine what Syslog daemon is running on the machine (Rsyslog or Syslog-ng)
         """
-        is_rsyslog_running = CommandShellExecutionVerification("find_Rsyslog_daemon",
-                                                               "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
-        is_syslog_ng_running = CommandShellExecutionVerification("find_Syslog-ng_daemon",
-                                                                 "if [ `ps -ef | grep syslog-ng | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
+        is_rsyslog_running = CommandVerification("find_Rsyslog_daemon", "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
+        is_syslog_ng_running = CommandVerification("find_Syslog-ng_daemon", "if [ `ps -ef | grep syslog-ng | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
         is_rsyslog_running.run_command(), is_syslog_ng_running.run_command()
         if "True" in str(is_rsyslog_running.command_result):
             self.SYSLOG_DAEMON = "rsyslog"
@@ -439,7 +447,7 @@ class SyslogDaemonVerifications:
         """
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
         result_keywords_array = [self.SYSLOG_DAEMON, ":514 "]
-        command_object = CommandShellExecutionVerification(self.command_name, command_to_run, result_keywords_array)
+        command_object = CommandVerification(self.command_name, command_to_run, result_keywords_array)
         command_object.run_command()
         command_object.is_command_successful(should_increase=False)
         if command_object.is_successful is not False:
@@ -449,7 +457,7 @@ class SyslogDaemonVerifications:
         else:
             # In case we don't find any daemon on port 514 we will make sure it's not listening to TLS port: 6514
             result_keywords_array = [self.SYSLOG_DAEMON, ":6514 "]
-            command_object = CommandShellExecutionVerification(self.command_name, command_to_run, result_keywords_array)
+            command_object = CommandVerification(self.command_name, command_to_run, result_keywords_array)
             command_object.run_full_test(should_warn=True)
             if command_object.is_successful == "Warn":
                 print_warning(self.Syslog_daemon_not_listening_warning.format(self.SYSLOG_DAEMON))
@@ -466,7 +474,7 @@ class SyslogDaemonVerifications:
             command_name = "verify_Syslog_daemon_forwarding_configuration"
             command_to_run = "sudo cat " + self.syslog_daemon_forwarding_path[self.SYSLOG_DAEMON]
             result_keywords_array = syslog_daemon_forwarding_keywords[self.SYSLOG_DAEMON]
-            command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+            command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
             command_object.run_full_test()
             if not command_object.is_successful:
                 print_error(self.Syslog_daemon_not_forwarding_error.format(self.SYSLOG_DAEMON,
@@ -482,7 +490,7 @@ class SyslogDaemonVerifications:
             self.verify_syslog_daemon_listening()
             self.verify_syslog_daemon_forwarding_configuration()
         else:
-            mock_command = CommandShellExecutionVerification(self.command_name, "")
+            mock_command = CommandVerification(self.command_name, "")
             mock_command.print_result_to_prompt()
             print_error(self.No_Syslog_daemon_error_message)
             FAILED_TESTS_COUNT += 1
@@ -510,7 +518,7 @@ class OperatingSystemVerifications:
         command_name = "verify_selinux_disabled"
         command_to_run = "sudo getenforce 2> /dev/null; if [ $? != 0 ]; then echo 'Disabled'; fi"
         result_keywords_array = ["Enforcing"]
-        command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test(True)
         if not command_object.is_successful:
             print_error(self.SELINUX_RUNNING_ERROR_MESSAGE)
@@ -522,14 +530,14 @@ class OperatingSystemVerifications:
         command_name = "verify_iptables_policy_permissive"
         command_to_run = "sudo iptables -S | grep \\\\-P | grep -E 'INPUT|OUTPUT'"
         result_keywords_array = ["DROP", "REJECT"]
-        policy_command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        policy_command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         policy_command_object.run_full_test(exclude=True)
         if policy_command_object.is_successful == "Skip":
             print_warning(policy_command_object.command_result_err)
             return True
         command_name = "verify_iptables_rules_permissive"
         command_to_run = "sudo iptables -S | grep -E '514' | grep INPUT"
-        rules_command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        rules_command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         rules_command_object.run_full_test(exclude=True)
         if (not rules_command_object.is_successful or (not policy_command_object.is_successful and (
                 not rules_command_object.is_successful or rules_command_object.command_result == ""))):
@@ -542,7 +550,7 @@ class OperatingSystemVerifications:
         minimal_free_space_kb = 1048576
         command_name = "verify_free_disk_space"
         command_to_run = "sudo df --output=avail / | head -2 | tail -1"
-        command_object = CommandShellExecutionVerification(command_name, command_to_run)
+        command_object = CommandVerification(command_name, command_to_run)
         command_object.run_command()
         if int(command_object.command_result) < minimal_free_space_kb:
             command_object.run_full_verification(should_fail=True)
@@ -595,7 +603,7 @@ class IncomingEventsVerifications:
         command_name = "listen_to_incoming_cef_events"
         command_to_run = "sudo tcpdump -A -ni any port 514 -vv"
         result_keywords_array = ["CEF"]
-        command_object = CommandShellExecutionVerification(command_name, command_to_run, result_keywords_array)
+        command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         print("Attempting to capture CEF events using tcpdump. This could take up to " + str(
             tcpdump_time_restriction) + " seconds.")
         tcp_dump = subprocess.Popen(command_object.command_to_run, shell=True, stdout=subprocess.PIPE,
@@ -693,11 +701,10 @@ class SystemInfo:
     }
 
     @staticmethod
-    def format(command_object):
-        delimiter = "\n" + "-" * 20 + "\n"
+    def format_command(command_object):
         return str(
-            delimiter + "command: " + str(command_object.command_name) + '\n' + "output: " + str(
-                command_object.command_result) + delimiter).replace(
+            DELIMITER + "command: " + str(command_object.command_name) + '\n' + "output: " + str(
+                command_object.command_result) + DELIMITER).replace(
             '%', '%%').replace('\\n', '\n')
 
     def append_content_to_file(self, command_object, file_path=COLLECT_OUTPUT_FILE):
@@ -705,7 +712,7 @@ class SystemInfo:
         :param command_object: consists of the name and the output
         :param file_path: a file to share the commands outputs
         """
-        output = self.format(command_object)
+        output = self.format_command(command_object)
         cef_get_info_file = open(file_path, 'a')
         try:
             cef_get_info_file.write(output)
@@ -718,7 +725,7 @@ class SystemInfo:
         This function handles the whole command flow from running to documenting.
         """
         for command_name in self.commands_dict.keys():
-            command_object = CommandShellExecutionVerification(command_name, self.commands_dict[command_name])
+            command_object = CommandVerification(command_name, self.commands_dict[command_name])
             command_object.run_command()
             self.append_content_to_file(command_object)
 
@@ -750,9 +757,9 @@ def find_dcr_cloud_environment():
 
 def getargs(should_print=True):
     parser = argparse.ArgumentParser(description=SCRIPT_HELP_MESSAGE)
-    parser.add_argument('-c', '-C', '--collect', '--COLLECT', action='store_true', default=False, help='Collect syslog message samples to file')
-    parser.add_argument('--CEF', '--cef', action='store_true', default=False, help='Validate CEF DCR and events')
-    parser.add_argument('--ASA', '--asa', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
+    parser.add_argument('collect', nargs='?', help='Collect syslog message samples to file')
+    # parser.add_argument('--CEF', '--cef', action='store_true', default=False, help='Validate CEF DCR and events')
+    # parser.add_argument('--ASA', '--asa', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
     args = parser.parse_args()
     if should_print:
         for arg in vars(args):
