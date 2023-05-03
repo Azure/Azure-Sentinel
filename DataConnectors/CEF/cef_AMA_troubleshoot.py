@@ -88,7 +88,7 @@ class CommandShellExecution:
             DELIMITER).replace(
             '%', '%%').replace('\\n', '\n')
 
-    def run_command(self):
+    def run_command(self, should_decode=True):
         """
         Running the bash commands using the subprocess library
         """
@@ -96,6 +96,8 @@ class CommandShellExecution:
             self.command_result, self.command_result_err = subprocess.Popen(self.command_to_run, shell=True,
                                                                             stdout=subprocess.PIPE,
                                                                             stderr=subprocess.STDOUT).communicate()
+            if should_decode:
+                self.command_result = self.command_result.decode('UTF-8').strip('\n')
         except Exception:
             self.command_result_err = "Error processing command"
         if "not found" in str(self.command_result):
@@ -269,7 +271,7 @@ class AgentInstallationVerifications:
             command_object.command_to_run = "sudo /opt/microsoft/azuremonitoragent/bin/mdsd -V"
             command_object.run_command()
             print_ok(
-                "Detected AMA running version- {}".format(command_object.command_result.decode('UTF-8').strip('\n')))
+                "Detected AMA running version- {}".format(command_object.command_result))
 
     @staticmethod
     def print_arc_version():
@@ -283,7 +285,7 @@ class AgentInstallationVerifications:
         if "azcmagent version" in str(command_object.command_result) and "command not found" not in str(
                 command_object.command_result):
             print_notice("Detected ARC installed on the machine: {}".format(
-                command_object.command_result.decode('UTF-8').strip('\n')))
+                command_object.command_result))
 
     def verify_oms_not_running(self):
         """
@@ -365,11 +367,10 @@ class DCRConfigurationVerifications:
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "opinsights.azure", "id"]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
-        command_object.run_command()
+        command_object.run_command(should_decode=False)
         command_object.command_result = command_object.command_result.decode('UTF-8').split('\n')[:-1]
         for dcr in command_object.command_result:
-            dcr_path = re.search("(/etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/.*.json)",
-                                 str(dcr)).group()
+            dcr_path = re.search("(/etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/.*.json)", str(dcr)).group()
             for key_word in command_object.result_keywords_array:
                 if str(key_word) not in str(dcr):
                     command_object.is_command_successful(should_fail=True)
