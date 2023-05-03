@@ -119,15 +119,8 @@ class poller:
 
 
             # Determine how many items to return
-            if num_items <= 150:
-                id = unique_triage_id_list
-                logger.info('length is less than 150: {}'.format(len(id)))
-                state_serializer_obj.post_triage_items('')
-            else:
-                id = unique_triage_id_list[:150]
-                #logger.info('length is greater than 150: {}'.format(id))
-                logger.info('length is greater than 150: {}'.format(len(id)))
-                state_serializer_obj.post_triage_items('\n'.join(unique_triage_id_list[150:]))
+            id = unique_triage_id_list[:150]
+            state_serializer_obj.post_triage_items('\n'.join(unique_triage_id_list[150:]))
             return id
         
         except Exception as e:

@@ -67,12 +67,22 @@ class api:
             function for getting triage events,
             send only the DS converted dates using state serializer functions to get triage events
         """
-        params = self._get_classification_list(classification_filter_operation, classification_list)
-        triage_url = self.url + "triage-item-events?limit=1000&event-created-before=" + str(before_date) + "&event-created-after=" +  str(after_date)
-        response = self.session.get(triage_url, params=params)
-        logger.info("Response for url: %s \t is : %s" % (triage_url, response.text))
-        response.raise_for_status()
-        return response.json()
+        def _get_triage_events_by_date(before_date, after_date, classification_filter_operation, classification_list):
+            params = self._get_classification_list(classification_filter_operation, classification_list)
+            triage_url = self.url + "triage-item-events?limit=1000&event-created-before=" + str(before_date) + "&event-created-after=" +  str(after_date)
+            response = self.session.get(triage_url, params=params)
+            logger.info("Response for url: %s \t is : %s" % (triage_url, response.text))
+            response.raise_for_status()
+            return response.json()
+        triage_events = _get_triage_events_by_date(before_date, after_date, classification_filter_operation, classification_list)
+
+        if len(triage_events) > 0:
+            last_event_num = triage_events[len(triage_events) - 1].get("event-num")
+            next_triage_events =self.get_triage_events_by_num(last_event_num, classification_filter_operation, classification_list)
+            triage_events.extend(next_triage_events)
+        
+        return triage_events
+
 
     def get_triage_items(self, triage_ids):
         """  
@@ -99,10 +109,26 @@ class api:
         """
             gets triage events by number
         """
-        triage_url = self.url + "triage-item-events?limit=1000&event-num-after=" + str(event)
-        params = self._get_classification_list(classification_filter_operation, classification_list)
-        response = self.session.get(triage_url, params=params)
-        return response.json()
+        def _get_triage_events_by_num_in_chunck(event, classification_filter_operation, classification_list):
+            triage_url = self.url + "triage-item-events?limit=1000&event-num-after=" + str(event)
+            params = self._get_classification_list(classification_filter_operation, classification_list)
+            response = self.session.get(triage_url, params=params)
+            return response.json()
+        triage_events = _get_triage_events_by_num_in_chunck(event, classification_filter_operation, classification_list)
+
+        if len(triage_events) > 0:
+            triage_event_exists = True
+            while triage_event_exists:
+                event = event + 1000
+                next_triage_events = _get_triage_events_by_num_in_chunck(event, classification_filter_operation, classification_list)
+                if len(next_triage_events) > 0:
+                    triage_events.extend(next_triage_events)
+                else:
+                    triage_event_exists = False
+        
+        return triage_events
+        
+
 
     def _get_classification_list(self, classification_filter_operation, classification_list):
         params = None
