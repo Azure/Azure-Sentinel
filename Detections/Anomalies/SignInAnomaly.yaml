@@ -16,28 +16,28 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-let LookBack = 1h;
-let Data = (
-SigninLogs
-| where TimeGenerated >= ago(LookBack)
-| where parse_json(NetworkLocationDetails)[0].networkType != "trustedNamedLocation" // Excludes known tagged networks
-// Counts the number of sign in events in the last hour every 15 minutes by IP
-| make-series EventCounts = count() on TimeGenerated from ago(LookBack) to now() step 15m by IPAddress 
-);
-let AnomalyAlert = (
-Data
-| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(EventCounts,1.5,-1,'linefit')
-| mv-expand EventCounts,TimeGenerated,Anomalies to typeof(double),Baseline to typeof(long),Score to typeof(double)
-| where Anomalies > 0
-);
-AnomalyAlert
-| join kind = inner (SigninLogs
-| where TimeGenerated between (ago(LookBack) .. now())
-| where parse_json(NetworkLocationDetails)[0].networkType != "trustedNamedLocation"
-| extend PasswordResult = tostring(parse_json(AuthenticationDetails).authenticationStepResultDetail)
-| summarize UserCount = dcount(UserPrincipalName), UserList = make_set(UserPrincipalName), AppName = make_set(AppDisplayName), PasswordResult = make_list(PasswordResult) by IPAddress) on IPAddress
-| where PasswordResult has "Correct Password"
-| where UserCount > 1 // looks for events targeting more than one user.
+  let LookBack = 1h;
+  let Data = (
+  SigninLogs
+  | where TimeGenerated >= ago(LookBack)
+  | where parse_json(NetworkLocationDetails)[0].networkType != "trustedNamedLocation" // Excludes known tagged networks
+  // Counts the number of sign in events in the last hour every 15 minutes by IP
+  | make-series EventCounts = count() on TimeGenerated from ago(LookBack) to now() step 15m by IPAddress 
+  );
+  let AnomalyAlert = (
+  Data
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(EventCounts,1.5,-1,'linefit')
+  | mv-expand EventCounts,TimeGenerated,Anomalies to typeof(double),Baseline to typeof(long),Score to typeof(double)
+  | where Anomalies > 0
+  );
+  AnomalyAlert
+  | join kind = inner (SigninLogs
+  | where TimeGenerated between (ago(LookBack) .. now())
+  | where parse_json(NetworkLocationDetails)[0].networkType != "trustedNamedLocation"
+  | extend PasswordResult = tostring(parse_json(AuthenticationDetails).authenticationStepResultDetail)
+  | summarize UserCount = dcount(UserPrincipalName), UserList = make_set(UserPrincipalName), AppName = make_set(AppDisplayName), PasswordResult = make_list(PasswordResult) by IPAddress) on IPAddress
+  | where PasswordResult has "Correct Password"
+  | where UserCount > 1 // looks for events targeting more than one user.
 entityMappings:
   - entityType: IP
     fieldMappings:
