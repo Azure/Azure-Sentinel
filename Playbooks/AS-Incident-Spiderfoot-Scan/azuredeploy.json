@@ -1,36 +1,53 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "comments": "This playbook is intended to be run from an Azure Sentinel alert. It will pull email addresses from the alert and use them as targets in a Spiderfoot scan. The resulting report of that scan will be emailed to a recipient specified upon deployment of this template.",
-        "author": "Accelerynt"
+        "title": "AS-Incident-Spiderfoot-Scan", 
+        "description": "This playbook will pull email addresses from the account entities in a Microsoft Sentinel incident and use them as targets in a Spiderfoot scan. By default, the scan is created using the HaveIBeenPwned module. The resulting report of that scan will be emailed to a recipient specified upon deployment.",
+        "prerequisites": "1. A Spiderfoot account is needed, along with an API key for this account. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Incident-Spiderfoot-Scan",
+        "lastUpdateTime": "2023-04-21T1:38:11Z",
+        "entities": ["Account"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Spiderfoot"], 
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "AS_Alert_Spiderfoot_Scan",
+            "defaultValue": "AS-Incident-Spiderfoot-Scan",
             "type": "string"
         },
-        "SpiderfootURL": {
+        "SpiderfootSubdomain": {
             "type": "string",
-             "metadata": {
-                "description": "example.hx.spiderfoot.net"
-            } 
+            "metadata" : {
+                "description" : "Enter the name of your unique Spiderfoot subdomain"
+            }
         },
-        "SpiderfootAPIKey": {
-            "type": "securestring",
-             "metadata": {
-                "description": "Enter your Spiderfoot API key"
-            } 
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the name of the key vault that stores your Spiderfoot API key"
+            }
+        },
+        "KeySecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of the key vault Secret that contains the value of your Spiderfoot API key"
+            }
         },
         "RecipientEmail": {
             "type": "string",
-             "metadata": {
-                "description": "username@example.com"
-            } 
+            "metadata" : {
+                "description" : "Enter the email address you would like the Spiderfoot report sent to"
+            }
         }
     },
     "variables": {
         "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]",
         "office365": "[concat('office365-', parameters('PlaybookName'))]"
     },
     "resources": [
@@ -39,12 +56,30 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('azuresentinel')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
                 "displayName": "[parameters('PlaybookName')]",
-                "customParameterValues": {
-                },
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
                 }
             }
         },
@@ -67,8 +102,15 @@
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
                 "[resourceId('Microsoft.Web/connections', variables('office365'))]"
             ],
             "properties": {
@@ -83,7 +125,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_alert": {
+                        "Microsoft_Sentinel_incident": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -94,11 +136,24 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             }
                         }
                     },
                     "actions": {
+                        "Get_Secret_API_Key": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeySecretName'), ''')}/value')]"
+                            }
+                        },
                         "Entities_-_Get_Accounts": {
                             "runAfter": {
                                 "Initialize_variable-_Scan_Targets_Final": [
@@ -107,7 +162,7 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -171,8 +226,7 @@
                             "type": "Http",
                             "inputs": {
                                 "method": "GET",
-                                "uri": "https://@{variables('SpiderfootURL')}/api?func=scanstart&apikey=@{variables('SpiderfootAPIKey')}&name=ScanFromSentinel@{formatDateTime(utcNow(), 'MMddyyyy')}&target=@{variables('Scan Targets')}&options=iterate_names=0,correlations=1&modules=sfp_haveibeenpwned"
-                                
+                                "uri": "[concat('https://', parameters('SpiderfootSubdomain'), '.hx.spiderfoot.net/api?func=scanstart&apikey=@{body(''Get_Secret_API_Key'')?[''value'']}&name=ScanFromSentinel@{formatDateTime(utcNow(), ''MMddyyyy'')}&target=@{variables(''Scan Targets'')}&options=iterate_names=0,correlations=1&modules=sfp_haveibeenpwned')]"
                             }
                         },
                         "Initialize_variable-_Scan_Status": {
@@ -208,39 +262,9 @@
                                 ]
                             }
                         },
-                        "Initialize_variable-_SpiderfootURL": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "SpiderfootURL",
-                                        "type": "string",
-                                        "value": "[parameters('SpiderfootURL')]"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable-_SpiderfootAPIKey": {
-                            "runAfter": {
-                                "Initialize_variable-_SpiderfootURL": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "SpiderfootAPIKey",
-                                        "type": "string",
-                                        "value": "[parameters('SpiderfootAPIKey')]"
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_variable-_Scan_Targets_Initial": {
                             "runAfter": {
-                                "Initialize_variable-_SpiderfootAPIKey": [
+                                "Get_Secret_API_Key": [
                                     "Succeeded"
                                 ]
                             },
@@ -321,7 +345,7 @@
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                    "Body": "<p>Scan on the following targets is complete:<br>\n@{variables('Scan Targets')}<br>\n<br>\n<br>\nThese entities were run against the following modules:<br>\nHaveIBeenPwned<br>\n<br>\nSpiderfoot report:<br>\nhttps://@{variables('SpiderfootURL')}/scaninfo?id=@{variables('Scan ID')}<br>\n</p>",
+                                    "Body": "[concat('<p>Scan on the following targets is complete:<br>\n@{variables(''Scan Targets'')}<br>\n<br>\n<br>\nThese entities were run against the following modules:<br>\nHaveIBeenPwned<br>\n<br>\nSpiderfoot report:<br>\nhttps://', parameters('SpiderfootSubdomain'), '/scaninfo?id=@{variables(''Scan ID'')}<br>\n</p>')]",
                                     "Subject": "Spiderfoot Scan Report ",
                                     "To": "[parameters('RecipientEmail')]"
                                 },
@@ -353,7 +377,7 @@
                                     "type": "Http",
                                     "inputs": {
                                         "method": "GET",
-                                        "uri": "https://@{variables('SpiderfootURL')}/api?func=scanstatus&apikey=@{variables('SpiderfootAPIKey')}&id=@{variables('Scan ID')}"
+                                        "uri": "[concat('https://', parameters('SpiderfootSubdomain'), '.hx.spiderfoot.net/api?func=scanstatus&apikey=@{body(''Get_Secret_API_Key'')?[''value'']}&id=@{variables(''Scan ID'')}')]"
                                     }
                                 },
                                 "Parse_JSON-_Status": {
@@ -424,7 +448,22 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
                                 "connectionName": "[variables('azuresentinel')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             },
                             "office365": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('office365'))]",
