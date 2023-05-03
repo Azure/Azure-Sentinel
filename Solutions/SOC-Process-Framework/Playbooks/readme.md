@@ -16,10 +16,11 @@ This playbook does a watchlist lookup using an API connection created with in th
 </a>
 
 ### Post-Deployment Instructions
-After deploying the playbook, you must authorize the connections leveraged.
+After deploying the playbook, you must authorize the connections leveraged and assign permissions
 
 1. Visit the playbook resource.
 2. Under "Development Tools" (located on the left), click "API Connections".
 3. Ensure each connection has been authorized.
+4. Assign Microsoft Sentinel Responder role to the managed identity. To do so, choose Identity blade under Settings of the Logic App.
 
 **Note: If you've deployed the [Get-SOCActions Playbook](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SOC-Process-Framework/Playbooks/Get-SOCActions/azuredeploy.json) playbook, you will only need to authorize the Microsoft Sentinel connection.**
