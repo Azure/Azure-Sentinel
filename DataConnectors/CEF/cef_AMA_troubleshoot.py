@@ -372,7 +372,6 @@ class DCRConfigurationVerifications:
         """
         Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
         """
-
         command_name = "check_cef_multi_homing"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
             self.CEF_STREAM_NAME)
@@ -405,7 +404,6 @@ class SyslogDaemonVerifications:
     """
     This class is for Syslog daemon related verifications
     """
-
     def __init__(self):
         self.command_name = "verify_Syslog_daemon_listening"
         self.SYSLOG_DAEMON = ""
@@ -749,10 +747,21 @@ def find_dcr_cloud_environment():
         return default_machine_env
 
 
-def main():
+def getargs(should_print=True):
     parser = argparse.ArgumentParser(description=SCRIPT_HELP_MESSAGE)
-    parser.add_argument('collect', nargs='?', help='collect syslog message samples to file')
+    parser.add_argument('--collect', action='store_true', default=False, help='Collect syslog message samples to file')
+    parser.add_argument('--CEF', action='store_true', default=False, help='Validate CEF DCR and events')
+    parser.add_argument('--ASA', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
     args = parser.parse_args()
+    if should_print:
+        for arg in vars(args):
+            if getattr(args, arg):
+                print_notice(arg)
+    return args
+
+
+def main():
+    args = getargs()
     verify_root_privileges()
     if args.collect:
         print_notice("Starting to collect data. This may take a couple of seconds")
