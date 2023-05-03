@@ -12,6 +12,7 @@ from .sentinel_connector_async import AzureSentinelConnectorAsync
 
 
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
+logging.getLogger('charset_normalizer').setLevel(logging.ERROR)
 
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
