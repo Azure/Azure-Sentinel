@@ -1,7 +1,6 @@
 import subprocess
 import time
 import select
-import sys
 import re
 import argparse
 
@@ -141,7 +140,7 @@ class CommandShellExecution:
         output_file.close()
 
 
-class CommandShellExecutionVerification(CommandShellExecution):
+class CommandShellExecutionVerification(CommandShellExecution):  # TODO: Remove inheritance
     """
     This class is running all the necessary verifications for the running test.
     """
@@ -694,7 +693,8 @@ class SystemInfo:
         "top_processes": ["sudo top -bcn1 -w512 | head -n 20"],
     }
 
-    def __repr__(self, command_object):
+    @staticmethod
+    def format(command_object):
         delimiter = "\n" + "-" * 20 + "\n"
         return str(
             delimiter + "command: " + str(command_object.command_name) + '\n' + "output: " + str(
@@ -706,12 +706,12 @@ class SystemInfo:
         :param command_object: consists of the name and the output
         :param file_path: a file to share the commands outputs
         """
-        output = self.__repr__(command_object)
+        output = self.format(command_object)
         cef_get_info_file = open(file_path, 'a')
         try:
             cef_get_info_file.write(output)
         except Exception:
-            print(str(command_object.command) + "was not documented successfully")
+            print(str(command_object.command_name) + "was not documented successfully")
         cef_get_info_file.close()
 
     def handle_commands(self):
