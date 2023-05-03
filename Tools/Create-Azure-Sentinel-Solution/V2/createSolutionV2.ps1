@@ -27,12 +27,19 @@ function removePropertiesRecursively ($resourceObj) {
         $key = $prop.Name
         $val = $prop.Value
         if ($null -eq $val) {
-            $resourceObj.PsObject.Properties.Remove($key)
+            $resourceObj.$key = "[variables('blanks')]";
+                                            if (!$baseMainTemplate.variables.blanks) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                                }   
         }
         elseif ($val -is [System.Object[]]) {
             if ($val.Count -eq 0) {
-                $resourceObj.PsObject.Properties.Remove($key)
-            }
+                 #$resourceObj.PsObject.Properties.Remove($key)
+                 $resourceObj.$key = "[variables('TemplateEmptyArray')]";
+                                            if (!$baseMainTemplate.variables.TemplateEmptyArray) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                                            }
+        }
             else {
                 foreach ($item in $val) {
                     $itemIndex = $val.IndexOf($item)
@@ -762,6 +769,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         if($resourceObj.$key -eq "")
                                         {
                                             $resourceObj.$key = "[variables('blanks')]";
+                                            if (!$baseMainTemplate.variables.blanks) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                                }
                                         }
                                     }
                                     elseif ($prop.Value -is [System.Array]) {
@@ -798,7 +808,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             $playbookData.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
                                             $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
                                         }
-                                        if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")))
+                                        if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")) -and ($resourceObj.$key -ne "[variables('TemplateEmptyArray')]"))
                                         {
                                             $resourceObj.$key = "[" + $resourceObj.$key;
                                         }
@@ -1279,8 +1289,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
                                 if($existingFunctionApp)
                                 {
-                                    $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Function")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Function)"
-                                    #$templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Function)";
+                                    $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
+                                    #$templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Functions)";
                                 }
                             }
                             # Data Connector Content -- *Assumes GenericUI
@@ -1979,14 +1989,22 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             {
                                 $alertRule | Add-Member -NotePropertyName status -NotePropertyValue ($yaml.status ? $yaml.status : "Available") # Add requiredDataConnectors property if exists
                             }
+                            
 
-                            if($yaml.requiredDataConnectors)
+                            if($yaml.requiredDataConnectors -and $yaml.requiredDataConnectors.count -gt 0)
                             {
                                 $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
                                 for($i=0; $i -lt $yaml.requiredDataConnectors.connectorId.count; $i++)
                                 {
                                     $alertRule.requiredDataConnectors[$i].connectorId = ($yaml.requiredDataConnectors[$i].connectorId.GetType().Name -is [object]) ? ($yaml.requiredDataConnectors[$i].connectorId -join ',') : $yaml.requiredDataConnectors[$i].connectorId;
                                 }
+                            }
+                            else
+                            {
+                                $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue "[variables('TemplateEmptyArray')]";
+                                    if (!$baseMainTemplate.variables.TemplateEmptyArray) {                                        
+                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                                        }
                             }
 
                             if (!$yaml.severity) {
