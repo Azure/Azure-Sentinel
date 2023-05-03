@@ -3,8 +3,10 @@ import time
 import select
 import re
 import argparse
+import sys
 
 SCRIPT_VERSION = 2.0
+PY3 = sys.version_info[0] == 3
 
 # GENERAL SCRIPT CONSTANTS
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
@@ -96,7 +98,7 @@ class CommandShellExecution(object):
             self.command_result, self.command_result_err = subprocess.Popen(self.command_to_run, shell=True,
                                                                             stdout=subprocess.PIPE,
                                                                             stderr=subprocess.STDOUT).communicate()
-            if should_decode:
+            if should_decode and PY3:
                 self.command_result = self.command_result.decode('UTF-8').strip('\n')
         except Exception:
             self.command_result_err = "Error processing command"
