@@ -7,5 +7,6 @@ Please go over the following steps to generate a solution template:
 For Example: 
    - the ConnectorDefinition has 'organization' input text
    - the "request.apiEndpoint" property value in the connection(data connector) can use this parameter </br>
-   "[concat('https://api.meraki.com/api/v1/organizations/',parameters('organization'),'/networks']"
+   "[[concat('https://api.meraki.com/api/v1/organizations/',parameters('organization'),'/networks']" </br>
+   Note: the string with a parameter reference start with double '[' and end with one ']', this is due to template spec syntax for using parameters in nestead template
 - Execute the createSolutionV3.ps script, the script will generate a new file "mainTemplate.json" for the template.
