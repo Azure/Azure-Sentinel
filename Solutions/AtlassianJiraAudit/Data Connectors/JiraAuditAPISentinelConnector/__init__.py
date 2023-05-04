@@ -63,6 +63,7 @@ def get_result_request(offset,limit,from_time,to_time):
         elif r.status_code == 403:
             logging.error("The user does not have the required permissions or Jira products are on free plans. Audit logs are available when at least one Jira product is on a paid plan. Error code: {}".format(r.status_code))
         else:
+            logging.info("Jira Audit Uri: {}".format(jira_uri_audit))
             logging.error("Something wrong. Error code: {}".format(r.status_code))
     except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
