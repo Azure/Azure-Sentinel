@@ -76,7 +76,7 @@ class api:
             return response.json()
         triage_events = _get_triage_events_by_date(before_date, after_date, classification_filter_operation, classification_list)
 
-        if len(triage_events) > 0:
+        if len(triage_events) == 1000:
             last_event_num = triage_events[len(triage_events) - 1].get("event-num")
             next_triage_events =self.get_triage_events_by_num(last_event_num, classification_filter_operation, classification_list)
             triage_events.extend(next_triage_events)
@@ -116,7 +116,7 @@ class api:
             return response.json()
         triage_events = _get_triage_events_by_num_in_chunck(event, classification_filter_operation, classification_list)
 
-        if len(triage_events) > 0:
+        if len(triage_events) == 1000:
             triage_event_exists = True
             while triage_event_exists:
                 event = event + 1000

@@ -206,7 +206,8 @@ class poller:
                 max_event_num = self.event
 
             #saving event num for next invocation
-            self.date.post_event(max_event_num)
+            if max_event_num != -1:
+                self.date.post_event(max_event_num)
         except Exception:
             logger.exception("Error polling: ")
             
