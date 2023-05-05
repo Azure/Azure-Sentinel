@@ -65,12 +65,14 @@ def main(exportJobId: str) -> object:
         f'received a response from assets/{exportJobId}/status')
     logging.info(job_details)
 
-    try:
-        job_details['exportJobId'] = exportJobId
-        send_chunks_to_queue(job_details)
-    except Exception as e:
-        logging.warn('error while sending chunks to queue')
-        logging.warn(job_details)
-        logging.warn(e)
+    tio_status = ['ERROR', 'CANCELLED']
+    if job_details['status'] not in tio_status:
+        try:
+            job_details['exportJobId'] = exportJobId
+            send_chunks_to_queue(job_details)
+        except Exception as e:
+            logging.warn('error while sending chunks to queue')
+            logging.warn(job_details)
+            logging.warn(e)
 
     return job_details
