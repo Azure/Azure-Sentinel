@@ -403,7 +403,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add base templateSpec
                             $baseWorkbookTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2021-05-01";
+                                apiVersion = "2022-02-01";
                                 name       = "[variables('workbookTemplateSpecName$workbookCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -457,7 +457,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add templateSpecs/versions resource to hold actual content
                             $workbookTemplateSpecContent = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2021-05-01";
+                                apiVersion = "2022-02-01";
                                 name       = "[concat(variables('workbookTemplateSpecName$workbookCounter'),'/',variables('workbookVersion$workbookCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1024,7 +1024,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add base templateSpec
                             $basePlaybookTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2021-05-01";
+                                apiVersion = "2022-02-01";
                                 name       = "[variables('playbookTemplateSpecName$playbookCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1114,7 +1114,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add templateSpecs/versions resource to hold actual content
                             $playbookTemplateSpecContent = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2021-05-01";
+                                apiVersion = "2022-02-01";
                                 name       = "[concat(variables('playbookTemplateSpecName$playbookCounter'),'/',variables('playbookVersion$playbookCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1268,7 +1268,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add base templateSpec
                             $baseDataConnectorTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2021-05-01";
+                                apiVersion = "2022-02-01";
                                 name       = "[variables('dataConnectorTemplateSpecName$connectorCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1348,7 +1348,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add templateSpecs/versions resource to hold actual content
                             $dataConnectorTemplateSpecContent = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2021-05-01";
+                                apiVersion = "2022-02-01";
                                 name       = "[concat(variables('dataConnectorTemplateSpecName$connectorCounter'),'/',variables('dataConnectorVersion$connectorCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1797,7 +1797,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                                 $baseHuntingQueryTemplateSpec = [PSCustomObject]@{
                                     type       = "Microsoft.Resources/templateSpecs";
-                                    apiVersion = "2021-05-01";
+                                    apiVersion = "2022-02-01";
                                     name       = "[variables('huntingQueryTemplateSpecName$huntingQueryCounter')]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -1846,7 +1846,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                  # Add templateSpecs/versions resource to hold actual content
                                 $huntingQueryTemplateSpecContent = [PSCustomObject]@{
                                     type       = "Microsoft.Resources/templateSpecs/versions";
-                                    apiVersion = "2021-05-01";
+                                    apiVersion = "2022-02-01";
                                     name       = "[concat(variables('huntingQueryTemplateSpecName$huntingQueryCounter'),'/',variables('huntingQueryVersion$huntingQueryCounter'))]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -2101,7 +2101,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                                 $baseAnalyticRuleTemplateSpec = [PSCustomObject]@{
                                     type       = "Microsoft.Resources/templateSpecs";
-                                    apiVersion = "2021-05-01";
+                                    apiVersion = "2022-02-01";
                                     name       = "[variables('analyticRuleTemplateSpecName$analyticRuleCounter')]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -2152,7 +2152,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                  # Add templateSpecs/versions resource to hold actual content
                                 $analyticRuleTemplateSpecContent = [PSCustomObject]@{
                                     type       = "Microsoft.Resources/templateSpecs/versions";
-                                    apiVersion = "2021-05-01";
+                                    apiVersion = "2022-02-01";
                                     name       = "[concat(variables('analyticRuleTemplateSpecName$analyticRuleCounter'),'/',variables('analyticRuleVersion$analyticRuleCounter'))]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -2250,7 +2250,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add base templateSpec
                             $baseParserTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2021-05-01";
+                                apiVersion = "2022-02-01";
                                 name       = "[variables('parserTemplateSpecName$parserCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -2318,7 +2318,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add templateSpecs/versions resource to hold actual content
                             $parserTemplateSpecContent = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2021-05-01";
+                                apiVersion = "2022-02-01";
                                 name       = "[concat(variables('parserTemplateSpecName$parserCounter'),'/',variables('parserVersion$parserCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
