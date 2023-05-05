@@ -32,6 +32,34 @@ $ProofPointlogTypes = @(
     "MessagesBlocked", 
     "MessagesDelivered")
 
+function ConvertTo-BodyWithEncoding {
+    [CmdletBinding(PositionalBinding=$false)]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [Microsoft.PowerShell.Commands.WebResponseObject] $InputObject,
+        # The encoding to use; defaults to UTF-8
+        [Parameter(Position=0)]
+        $Encoding = [System.Text.Encoding]::Utf8
+    )
+    begin {
+        if ($Encoding -isnot [System.Text.Encoding]) {
+        try {
+            $Encoding = [System.Text.Encoding]::GetEncoding($Encoding)
+        }
+        catch { 
+            throw
+        }
+        }
+    }
+    
+    process {
+        $Encoding.GetString(
+            $InputObject.RawContentStream.ToArray()
+        )
+    }
+    
+    }
+
 # Build the headers for the ProofPoint API request
 $username = $env:apiUserName
 $password = $env:apiPassword
@@ -40,9 +68,22 @@ $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $headers.Add("au", "")
 $headers.Add("Authorization", "Basic " + $base64AuthInfo)
+# $headers.Add("charset","utf-8")
+$headers.Add("Content-Type", "application/json; charset=utf-8")
 
 # Invoke the API Request and assign the response to a variable ($response)
-$response = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
+$result = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
+Write-Host('Response from Invoke-RestMethod')
+Write-Host($result.headers)
+Write-Host($result)
+
+
+Write-Host('Using Invoke-WebRequest method')
+$response = Invoke-WebRequest $uri -Method 'Get' -Headers $headers | ConvertTo-BodyWithEncoding
+Write-Host($response.GetType())
+Write-Host($response)
+Write-Host($response.headers)
+# Write-Host([system.Text.Encoding]::UTF8.GetString($response.RawContentStream.ToArray()))
 
 # Define the Log Analytics Workspace ID and Key
 $CustomerId = $env:workspaceId
@@ -111,17 +152,29 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     return $response.StatusCode
 
 }
+
+Write-Host("Powershell version is : " + $PSVersionTable.PSVersion)
+Write-Host("Default Encoding is : " + [System.Text.Encoding]::Default.EncodingName)
+
+$responseObject = ConvertFrom-JSON -InputObject $response
+Write-Host($responseObject.GetType())
+Write-Host($responseObject)
+
 # Iterate through the ProofPoint API response and if there are log events present, POST the events to the Log Analytics API into the respective tables.
 ForEach ($PPLogType in $ProofpointLogTypes) {
-    if ($response.$PPLogType.Length -eq 0 ){ 
+    if ($responseObject.$PPLogType.Length -eq 0 ){ 
         Write-Host ("ProofPointTAP$($PPLogType) reported no new logs for the time interval configured.")
     }
     else {
-        if($response.$PPLogType -eq $null) {                            # if the log entry is a null, this occurs on the last line of each LogType. Should only be one per log type
+        if($responseObject.$PPLogType -eq $null) {                            # if the log entry is a null, this occurs on the last line of each LogType. Should only be one per log type
             Write-Host ("ProofPointTAP$($PPLogType) null line excluded")    # exclude it from being posted
-        } else {            
-            $json = $response.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
+        } 
+        else {            
+            # Write-Host ("ProofPointTAP logs before json conversion:$($($response.$PPLogType))")
+            $json = $responseObject.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
+            Write-Host ("ProofPointTAP logs after json conversion$($json)")
             Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
+            Write-Host("Logs ingested to LA is : " + $json.Length)
             }
         }
 }
