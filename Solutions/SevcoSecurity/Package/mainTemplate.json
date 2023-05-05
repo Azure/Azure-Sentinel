@@ -1,0 +1,197 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Sevco Security - support@sevco.io",
+    "comments": "Solution template for SevcoSecurity"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "connector1-name": {
+      "type": "string",
+      "defaultValue": "b5474f25-11c1-48c7-bf5c-994476278429"
+    }
+  },
+  "variables": {
+    "connector1-source": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector1-name'))]",
+    "_connector1-source": "[variables('connector1-source')]",
+    "SevcoDevicesConnector": "SevcoDevicesConnector",
+    "_SevcoDevicesConnector": "[variables('SevcoDevicesConnector')]",
+    "sourceId": "azuresentinel.azure-sentinel-solution-sevcosecurity",
+    "_sourceId": "[variables('sourceId')]"
+  },
+  "resources": [
+    {
+      "id": "[variables('_connector1-source')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector1-name'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Sevco Platform - Devices",
+          "publisher": "Sevco Security",
+          "descriptionMarkdown": "The Sevco Platform - Devices connector allows you to easily connect your Sevco Device Assets with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s assets and improves your security operation capabilities.\n\n[For more information >​](https://docs.sev.co/docs/microsoft-sentinel-inventory)",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Sevco Devices CL",
+              "baseQuery": "Sevco_Devices_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Summarize by local IP address",
+              "query": "Sevco_Devices_CL​ \n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n| extend IPs = parse_json(asset_attributes_ips_s), asset_attributes_hostname_s\n\n| mv-expand IPs\n\n| summarize count() by tostring(IPs)"
+            },
+            {
+              "description": "Summarize by public IP address",
+              "query": "Sevco_Devices_CL\n\n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n| extend source = parse_json(asset_source_ids_s), asset_attributes_hostname_s\n\n| mv-expand source\n\n| summarize count() by tostring(source)"
+            },
+            {
+              "description": "Most recent inventory",
+              "query": "Sevco_Devices_CL​ \n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Sevco_Devices_CL",
+              "lastDataReceivedQuery": "Sevco_Devices_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "Sevco_Devices_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": true
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "The Sevco Platform can integrate with and export assets directly to Microsoft Sentinel..​\n\n1.  Go to [Sevco - Microsoft Sentinel Integration](https://docs.sev.co/docs/microsoft-sentinel-inventory), and follow the instructions, using the parameters below to set up the connection:.\n\n",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "Configure and connect to Sevco"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "version": "1.0.0",
+        "kind": "Solution",
+        "contentId": "[variables('_sourceId')]",
+        "parentId": "[variables('_sourceId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SevcoSecurity",
+          "sourceId": "[variables('_sourceId')]"
+        },
+        "author": {
+          "name": "Sevco Security",
+          "email": "support@sevco.io"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_SevcoDevicesConnector')]",
+              "version": "1.0.0"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-05-01",
+        "providers": [
+          "Sevco Security"
+        ],
+        "categories": {
+          "domains": [
+            "IT Operations",
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+    }
+  ],
+  "outputs": {}
+}
