@@ -5,7 +5,7 @@ Credits to @koosg for initial work.
 
 ## Prerequisite:
 
-* Create Azure Integration account in same region than targeted logic app and load the liquid map. (manual only at this point)
+* Create Azure Integration account in same region than targeted logic app and load the liquid map as name 'azuremonitor'. (manual only at this point)
 * Make role assignment "Log Analytics Reader" to managed identity for appropriate scope (target log analytics).
 
 ## Deploy to Azure
