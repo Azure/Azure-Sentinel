@@ -1,0 +1,40 @@
+id: 9367dff0-941d-44e2-8875-cb48570c7add
+name: Registry Persistence via AppInit DLLs Modification
+description: | 
+  'Adversaries may establish persistence and/or elevate privileges by executing malicious content triggered by AppInit DLLs loaded into processes. 
+  Dynamic-link libraries (DLLs) that are specified in the AppInit_DLLs value in the Registry keys HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Windows or HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Windows are loaded by user32.dll into every process that loads user32.dll. In practice this is nearly every program, since user32.dll is a very common library.
+  Ref: https://attack.mitre.org/techniques/T1546/010/'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1546.010
+query: |
+  Event
+  | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
+  | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" * 
+  | where TargetObject has "\\Windows NT\\CurrentVersion\\Windows\\AppInit_DLLs"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer, TargetObject, Details
+  | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+entityMappings:
+  - entityType: RegistryKey
+    fieldMappings:
+      - identifier: Key
+        columnName: TargetObject
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1
+kind: Scheduled

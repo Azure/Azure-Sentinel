@@ -1,0 +1,56 @@
+id: 23de46ea-c425-4a77-b456-511ae4855d69
+name: Rare subscription-level operations in Azure
+description: |
+  'This query looks for a few sensitive subscription-level events based on Azure Activity Logs. For example, this monitors for the operation name 'Create or Update Snapshot', which is used for creating backups but could be misused by attackers to dump hashes or extract sensitive information from the disk.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Persistence
+relevantTechniques:
+  - T1003
+  - T1098
+query: |
+  let starttime = 14d;
+  let endtime = 1d;
+  // The number of operations above which an IP address is considered an unusual source of role assignment operations
+  let alertOperationThreshold = 5;
+  // Add or remove operation names below as per your requirements. For operations lists, please refer to https://learn.microsoft.com/en-us/Azure/role-based-access-control/resource-provider-operations#all
+  let SensitiveOperationList =  dynamic(["microsoft.compute/snapshots/write", "microsoft.network/networksecuritygroups/write", "microsoft.storage/storageaccounts/listkeys/action"]);
+  let SensitiveActivity = AzureActivity
+  | where OperationNameValue in~ (SensitiveOperationList) or OperationNameValue hassuffix "listkeys/action"
+  | where ActivityStatusValue =~ "Success";
+  SensitiveActivity
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | summarize count() by CallerIpAddress, Caller, OperationNameValue, bin(TimeGenerated,1d)
+  | where count_ >= alertOperationThreshold
+  // Returns all the records from the right side that don't have matches from the left
+  | join kind = rightanti (
+  SensitiveActivity
+  | where TimeGenerated >= ago(endtime)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_list(TimeGenerated), ActivityStatusValue = make_list(ActivityStatusValue), CorrelationIds = make_list(CorrelationId), ResourceGroups = make_list(ResourceGroup), ResourceIds = make_list(_ResourceId), ActivityCountByCallerIPAddress = count()
+  by CallerIpAddress, Caller, OperationNameValue
+  | where ActivityCountByCallerIPAddress >= alertOperationThreshold
+  ) on CallerIpAddress, Caller, OperationNameValue
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.0.2
+kind: Scheduled

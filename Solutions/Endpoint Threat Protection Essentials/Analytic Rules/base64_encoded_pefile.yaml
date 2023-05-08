@@ -1,0 +1,66 @@
+id: ca67c83e-7fff-4127-a3e3-1af66d6d4cad
+name: Base64 encoded Windows process command-lines
+description: |
+  'Identifies instances of a base64-encoded PE file header seen in the process command line parameter.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - DefenseEvasion
+relevantTechniques:
+  - T1059
+  - T1027
+  - T1140
+query: |
+  let ProcessCreationEvents=(union isfuzzy=true
+  (SecurityEvent
+  | where EventID==4688
+  | where isnotempty(CommandLine)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,
+  FileName = Process, CommandLine, ParentProcessName
+  ),
+  (WindowsEvent
+  | where EventID==4688
+  | where EventData has "TVqQAAMAAAAEAAA"
+  | extend CommandLine = tostring(EventData.CommandLine)
+  | where isnotempty(CommandLine)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,
+  FileName = Process, CommandLine, ParentProcessName));
+  ProcessCreationEvents
+  | where CommandLine contains "TVqQAAMAAAAEAAA"
+  | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Account
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.1.3
+kind: Scheduled

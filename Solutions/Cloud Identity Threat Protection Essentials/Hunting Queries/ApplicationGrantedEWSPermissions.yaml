@@ -1,0 +1,67 @@
+id: c7941212-4ff9-4d2d-b38d-54d78fa087cc
+name: Application Granted EWS Permissions
+description: |
+  'This query searches for AD applications granted permissions to read users mailboxes via Exchange Web Services (EWS). A threat actor could add these permissions to an application they control in order to gain persistent access to user's mail.
+  Review the applications granted these permissions to ensure they are required and were granted legitimately.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert (IPC)
+tactics:
+  - Collection
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+  - T1114.002
+query: |
+  AuditLogs
+  | where Category =~ "ApplicationManagement"
+  | where OperationName has "Add app role assignment to service principal"
+  | extend UA = tostring(AdditionalDetails[0].value)
+  | mv-expand TargetResources
+  | extend ModifiedProps = TargetResources.modifiedProperties
+  | mv-expand ModifiedProps
+  | where ModifiedProps.newValue has "Use Exchange Web Services with full access to all mailboxes"
+  | extend Action = ModifiedProps.newValue
+  | extend User = tolower(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
+  | join kind=inner AuditLogs on CorrelationId
+  | mv-expand TargetResources1
+  | mv-expand TargetResources1.modifiedProperties
+  | project-reorder TargetResources1_modifiedProperties
+  | extend displayName_ = tostring(TargetResources1_modifiedProperties.displayName)
+  | extend AppId = iff(tostring(TargetResources1_modifiedProperties.displayName) =~ "ServicePrincipal.AppId", tostring(TargetResources1_modifiedProperties.newValue), "")
+  | extend AppName = iff(tostring(TargetResources1_modifiedProperties.displayName) =~ "ServicePrincipal.DisplayName", tostring(TargetResources1_modifiedProperties.newValue), "")
+  | summarize make_set(AppName, 100), make_set(AppId, 100) by TimeGenerated, ActivityDisplayName, UA, User, Result, OperationName, tostring(InitiatedBy), bin(TimeGenerated, 1d), tostring(Action)
+  | where tostring(set_AppId) != '[""]'
+  | project-reorder TimeGenerated, User, set_AppName
+  | join kind=leftouter 
+    (SecurityAlert
+      | where ProviderName =~ "IPC"
+      | extend User = tolower(tostring(parse_json(ExtendedProperties).["User Account"]))
+      | summarize count_AlertName = count() by bin(TimeGenerated, 1d), User
+    ) on TimeGenerated, User
+  | extend NumberofAADAlerts = iif(isnotempty(count_AlertName), count_AlertName, 0)
+  | sort by NumberofAADAlerts desc
+  | extend AppName = tostring(set_AppName[1])
+  | extend AppID = tostring(set_AppId[1])
+  | project-away set_AppName, set_AppId
+  | project-reorder TimeGenerated, ActivityDisplayName, Action, User, NumberofAADAlerts, AppName, AppID
+  | extend timestamp = TimeGenerated, UserName = tostring(split(User, '@', 0)[0]), UserUPNSuffix = tostring(split(User, '@', 1)[0])
+  | extend Account_0_Name = UserName
+  | extend Account_0_UPNSuffix = UserUPNSuffix
+  | extend CloudApplication_0_AppId = AppID
+entityMappings:
+- entityType: Account
+  fieldMappings:
+    - identifier: Name
+      columnName: UserName
+    - identifier: UPNSuffix
+      columnName: UserUPNSuffix
+- entityType: CloudApplication
+  fieldMappings:
+    - identifier: AppId
+      columnName: AppID
+version: 1.0.1

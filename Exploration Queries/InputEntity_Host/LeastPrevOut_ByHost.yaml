@@ -1,32 +1,30 @@
 Id: 8c00a2a0-43d3-45a9-aa2e-f73deb0abfbb
-DisplayName: Least prevalent outbound WireData connections
-Description: Bottom 10 (least prevalent) for WireData outbound event by a given host (set time range to +-30m when running the query)
+DisplayName: Least Prevalent Outbound Network Connection Destinations
+Description: Bottom 10 (least prevalent) outbound network session destinations by a given host (set time range to +-30m when running the query)
 InputEntityType: Host
 InputFields:
   - HostName
 OutputEntityTypes:
   - Ip
-  - Process
+  - DNS
 QueryPeriodBefore: 30m
 QueryPeriodAfter: 30m
 DataSources:
-  - WireData
+  - _Im_NetworkSession
 Tactics:
   - Discovery
   - LateralMovement
   - Collection
 query: |
-
   let GetWireDataOutboundWithHost = (v_Host_HostName:string){
-  WireData
-  | where Direction == 'Outbound' 
-  | where Computer has v_Host_HostName
-  | extend info = pack('Computer', Computer, 'LocalIP', LocalIP, 'LocalPortNumber', LocalPortNumber, 'Direction', Direction, 'ApplicationProtocol', ApplicationProtocol)
-  | summarize Process_Aux_Min_SessionStartTime=min(SessionStartTime), count(), IP_Aux_info = makeset(info) by ProcessName, RemoteIP, ProcessID
-  | extend Process_Aux_info = IP_Aux_info
+  _Im_NetworkSession(hostname_has_any=v_Host_HostName)
+  | where EventResult =~ "success"
+  | where NetworkDirection =~ "Outbound"
+  | extend LocalAppName = column_ifexists("LocalAppName", "")
+  | extend info = pack('Computer', DvcHostname, 'LocalPortNumber', DstPortNumber, 'DstIpAddr', Dst, 'SrcIpAddr', Src,'Direction', NetworkDirection, 'NetworkProtocol', NetworkProtocol, "LocalAppName", LocalAppName, "DstFQDN", DstFQDN)
+  | summarize Process_Aux_Min_SessionStartTime=min(TimeGenerated), Process_Aux_Max_SessionStartTime=max(TimeGenerated), count(), IP_Aux_info = make_set(info, maxSize=1000) by Dst, Dvc, DstFQDN
   | top 10 by count_ asc
-  | project Process_Aux_Min_SessionStartTime, ProcessName, RemoteIP, IP_Aux_info, Process_Aux_info, Process_ProcessId=tostring(ProcessID)
-  | project-rename IP_Address=RemoteIP, Process_ImageFile_FullPath=ProcessName
+  | project-rename IP_Address=Dst, DomainName=DstFQDN
   };
   // change <HostName> value below
   GetWireDataOutboundWithHost('<HostName>')

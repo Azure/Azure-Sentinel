@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM filtering parser for Vectra AI streams
-  Version: '0.1'
-  LastUpdated: Mar 30, 2022
+  Version: '0.2'
+  LastUpdated: Dec 28 2022
 Product:
   Name: Vectra AI Streams
 Normalization:
@@ -49,6 +49,9 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
+  - Name: pack
+    Type: bool
+    Default: false
 
 ParserQuery: |
   let parser = (starttime: datetime = datetime(null),
@@ -59,7 +62,8 @@ ParserQuery: |
                 httpuseragent_has_any: dynamic = dynamic([]),
                 eventresultdetails_in: dynamic = dynamic([]),
                 eventresult: string = '*',
-                disabled: bool = false)
+                disabled: bool = false,
+                pack:bool = false)
   {
     let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)
     [
@@ -159,21 +163,25 @@ ParserQuery: |
     | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
     | lookup NetworkProtocolVersionLookup on id_ip_ver_s
     // -- preserving non-normalized important fields
-    | project-rename 
-        first_orig_resp_data_pkt = first_orig_resp_data_pkt_s,
-        first_resp_orig_data_pkt = first_resp_orig_data_pkt_s,
-        orig_huid = orig_huid_s,
-        resp_huid = resp_huid_s,
-        community_id = community_id_s,
-        resp_multihome = resp_multihomed_b,
-        host_multihomed = host_multihomed_b
-    | extend
-        first_orig_resp_data_pkt_time = unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),
-        first_orig_resp_pkt_time = unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),
-        first_resp_orig_data_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
-        first_resp_orig_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
+    | extend AdditionalFields = iff (
+        pack, 
+        bag_pack (
+          "first_orig_resp_data_pkt", first_orig_resp_data_pkt_s,
+          "first_resp_orig_data_pkt", first_resp_orig_data_pkt_s,
+          "orig_huid", orig_huid_s,
+          "resp_huid", resp_huid_s,
+          "community_id", community_id_s,
+          "resp_multihome", resp_multihomed_b,
+          "host_multihomed", host_multihomed_b,
+          "first_orig_resp_data_pkt_time", unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),
+          "first_orig_resp_pkt_time", unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),
+          "first_resp_orig_data_pkt_time", unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
+          "first_resp_orig_pkt_time", unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
+        ),
+        dynamic([])
+      )
     | project-away
-        *_d, *_s, *_b, *_g, Computer, MG, ManagementGroupName, RawData, SourceSystem
+        *_d, *_s, *_b, *_g, Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
     | extend
         Dst = DstIpAddr,
         Dvc = DvcId,
@@ -187,4 +195,4 @@ ParserQuery: |
         Src = SrcIpAddr,
         UserAgent = HttpUserAgent 
   };
-  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled, pack=pack)

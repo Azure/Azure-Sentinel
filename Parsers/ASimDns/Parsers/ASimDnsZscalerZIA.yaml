@@ -1,7 +1,7 @@
 Parser:
   Title: DNS activity ASIM parser for Zscaler ZIA
-  Version: '0.4'
-  LastUpdated: Jan 17 2022
+  Version: '0.6'
+  LastUpdated: Feb 19 2023
 Product:
   Name: Zscaler ZIA DNS
 Normalization:
@@ -39,7 +39,10 @@ ParserQuery: |
         resaction = DeviceCustomString3, 
         DvcUsername = SourceUserID,
         DvcZone = SourceUserPrivileges,
-        SrcHostname = DeviceName
+        SrcHostname = DeviceName,
+        NetworkProtocol = Protocol,
+        EventOriginalSeverity = LogSeverity,
+        EventMessage = Message
     | extend
         EventCount=int(1), 
         EventStartTime=TimeGenerated,  
@@ -48,17 +51,16 @@ ParserQuery: |
         EventSchema = "Dns", 
         EventSchemaVersion="0.1.3", 
         EventEndTime=TimeGenerated, 
-        SrcUsernameType = "Upn", 
-        SrcHostnameType = "Simple",
+        SrcUsernameType = "UPN", 
         EventSubType = iff(resaction == 'None', 'request', 'response'),  
         DvcAction = iff(resaction == 'None', reqaction, resaction), 
         EventResultDetails = iff (DeviceCustomString6 matches regex @'^([A-Z_]+)$', DeviceCustomString6, 'NOERROR'), 
         EventType = 'Query', 
-        DnsRuleName = strcat (FlexString1, " / ", FlexString2),
+        RuleName = strcat (FlexString1, " / ", FlexString2),
         // -- Adjustment to support both old and new CSL fields.
         UrlCategory = coalesce(column_ifexists("DeviceEventCategory", ""), extract("cat=(.*)", 1, AdditionalExtensions), ""),  
         DnsNetworkDuration = coalesce(
-          toint(column_ifexists ("fieldDeviceCustomNumber1", int(null))), 
+          toint(column_ifexists ("FieldDeviceCustomNumber1", int(null))), 
           toint(column_ifexists ("DeviceCustomNumber1",int(null)))
         )
       | extend 
@@ -77,12 +79,9 @@ ParserQuery: |
         Dst = DstIpAddr,
         DvcHostname = Dvc,
         Duration = DnsNetworkDuration,
-        User = SrcUsername
-    // -- Backward Compatibility
-    | extend
-        Query=DnsQuery, 
-        QueryTypeName=DnsQueryTypeName, 
-        ResponseName=DnsResponseName, 
-        ResponseCodeName=DnsResponseCodeName
+        User = SrcUsername,
+    // -- Entity identifier explicit aliases
+        SrcUserUpn = SrcUsername
+    | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, ReceiptTime, ReceivedBytes, Remote*, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, EventOutcome, FieldDevice*, ExtID, Reason, ApplicationProtocol, ReportReferenceLink, Activity, resaction, reqaction
     };
   ZscalerDNSevents (disabled)

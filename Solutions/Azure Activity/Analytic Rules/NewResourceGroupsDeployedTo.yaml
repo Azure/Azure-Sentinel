@@ -1,0 +1,53 @@
+id: 9fb57e58-3ed8-4b89-afcf-c8e786508b1c
+name: Suspicious Resource deployment
+description: |
+  'Identifies when a rare Resource and ResourceGroup deployment occurs by a previously unseen caller.'
+severity: Low
+status: Available 
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+  // Add or remove operation names below as per your requirements. For operations lists, please refer to https://learn.microsoft.com/en-us/Azure/role-based-access-control/resource-provider-operations#all
+  let szOperationNames = dynamic(["Microsoft.Compute/virtualMachines/write", "Microsoft.Resources/deployments/write", "Microsoft.Resources/subscriptions/resourceGroups/write"]);
+  let starttime = 14d;
+  let endtime = 1d;
+  let RareCaller = AzureActivity
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | where OperationNameValue in~ (szOperationNames)
+  | summarize count() by CallerIpAddress, Caller, OperationNameValue, bin(TimeGenerated,1d)
+  // Returns all the records from the right side that don't have matches from the left.
+  | join kind=rightantisemi (
+  AzureActivity
+  | where TimeGenerated > ago(endtime)
+  | where OperationNameValue in~ (szOperationNames)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated,100), ActivityStatusValue = make_set(ActivityStatusValue,100), CorrelationIds = make_set(CorrelationId,100), ResourceGroups = make_set(ResourceGroup,100), ResourceIds = make_set(_ResourceId,100), ActivityCountByCallerIPAddress = count()
+  by CallerIpAddress, Caller, OperationNameValue) on CallerIpAddress, Caller, OperationNameValue;
+  RareCaller
+  | extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),"")
+  | extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),"")
+  | extend AadUserId = iif(Caller !has '@',Caller,"")
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: AadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.0.2
+kind: Scheduled

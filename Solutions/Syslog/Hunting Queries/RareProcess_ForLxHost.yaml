@@ -1,0 +1,37 @@
+id: d0ae35df-0eaf-491f-b23e-8190e4f3ffe9
+name: Rare process running on a Linux host
+description: |
+  'Looks for rare processes that are running on Linux hosts. Looks for process seen less than 14 times in last 7 days,
+   or observed rate is less than 1% of of the average for the environment and fewer than 100.'
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+tactics:
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T1059
+  - T1053
+  - T1037
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let count_threshold = 100;
+  let perc_threshold = 0.01;
+  let host_threshold = 14;
+  let basic=materialize(
+  Syslog | where TimeGenerated >= lookback
+  | summarize FullCount = count(), Count= countif(TimeGenerated between (starttime .. endtime)), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated) 
+  by Computer, ProcessName
+  | where Count > 0 and Count < count_threshold);
+  let basic_avg = basic
+  | summarize Avg = avg(FullCount) by  ProcessName;
+  basic | project-away FullCount
+  | join kind=inner
+  basic_avg
+  on ProcessName | project-away ProcessName1
+  | where Count < host_threshold or (Count <= Avg*perc_threshold and Count < count_threshold)
+  | extend timestamp = StartTime, HostCustomEntity=Computer

@@ -30,7 +30,7 @@ connection_string = os.environ['AzureWebJobsStorage']
 # Defines how many files can be processed simultaneously
 MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('SimultaneouslyProcessingFiles', 20))
 
-# Defines max number of events that can be sent in one request to Azure Sentinel
+# Defines max number of events that can be sent in one request to Microsoft Sentinel
 MAX_BUCKET_SIZE = int(os.environ.get('EventsBucketSize', 2000))
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
@@ -74,7 +74,7 @@ def customize_event(line):
                         "TargetFileName", "FirewallRule", "TaskName", "TaskExecCommand", "TargetAddress", "TargetProcessId",
                         "SourceFileName", "RegObjectName", "RegValueName", "ServiceObjectName", "RegistryPath", "RawProcessId",
                         "event_platform", "CommandLine", "ParentProcessId", "ParentCommandLine", "ParentBaseFileName",
-                        "GrandParentBaseFileName", "RemotePort", "VolumeDeviceType", "VolumeName", "ClientComputerName", "ProductId"
+                        "GrandParentBaseFileName", "RemotePort", "VolumeDeviceType", "VolumeName", "ClientComputerName", "ProductId", "ComputerName"
                     ]
     required_fields_data = {}
     custom_fields_data = {}

@@ -8,7 +8,7 @@ This playbook gets triggered every day and perform the following actions:
 2. Filter all the indicators whose export in not completed. 
 3. Export the indicators to provided TAXII server. 
 
-<img src="./images/Playbook_AusCtisExportTaggedIndicators.jpg" width="50%"/><br>
+<img src="./images/Playbook_AusCtisExportTaggedIndicators_light.jpg" width="50%"/><br>
 
 ### Prerequisites
 

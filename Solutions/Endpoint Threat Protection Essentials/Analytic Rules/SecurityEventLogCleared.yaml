@@ -1,0 +1,57 @@
+id: 80da0a8f-cfe1-4cd0-a895-8bc1771a720e
+name: Security Event log cleared
+description: |
+  'Checks for event id 1102 which indicates the security event log was cleared.
+  It uses Event Source Name "Microsoft-Windows-Eventlog" to avoid generating false positives from other sources, like AD FS servers for instance.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1070
+query: |
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where EventID == 1102 and EventSourceName =~ "Microsoft-Windows-Eventlog"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+  ),
+  (
+  WindowsEvent
+  | where EventID == 1102 and Provider =~ "Microsoft-Windows-Eventlog"
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend Activity= "1102 - The audit log was cleared."
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+  )
+  )
+  | extend Name=tostring(split(Account, "@")[0]), UPNSuffix=tostring(split(Account, "@")[1])
+  | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.1.4
+kind: Scheduled

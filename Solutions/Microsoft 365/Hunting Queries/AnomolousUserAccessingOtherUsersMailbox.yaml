@@ -1,0 +1,54 @@
+id: 271e8881-3044-4332-a5f4-42264c2e0315
+name: Anomalous access to other user's mailboxes
+description: |
+  'Looks for users accessing multiple other user's mailboxes or accessing multiple folders in another users mailbox'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Collection
+relevantTechniques:
+  - T1114.002
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*2);
+  //Adjust this value to alter how many mailbox (other than their own) a user needs to access before being included in results
+  let user_threshold = 1;
+  //Adjust this value to alter how many mailbox folders in other's email accounts a users needs to access before being included in results.
+  let folder_threshold = 5;
+  //Exclude historical as known good (set lookback and timeframe to same value to skip this)
+  OfficeActivity
+  | where TimeGenerated between(ago(lookback)..starttime)
+  | where Operation =~ "MailItemsAccessed"
+  | where ResultStatus =~ "Succeeded"
+  | where tolower(MailboxOwnerUPN) != tolower(UserId)
+  | join kind=rightanti(
+  OfficeActivity
+  | where TimeGenerated between(starttime..endtime)
+  | where Operation =~ "MailItemsAccessed"
+  | where ResultStatus =~ "Succeeded"
+  | where tolower(MailboxOwnerUPN) != tolower(UserId)) on MailboxOwnerUPN, UserId
+  | where isnotempty(Folders)
+  | mv-expand parse_json(Folders)
+  | extend folders = tostring(Folders.Path)
+  | extend ClientIP = iif(Client_IPAddress startswith "[", extract("\\[([^\\]]*)", 1, Client_IPAddress), Client_IPAddress)
+  | summarize StartTime=max(TimeGenerated), EndTime=min(TimeGenerated), make_set(folders), make_set(ClientInfoString), make_set(ClientIP), make_set(MailboxGuid), make_set(MailboxOwnerUPN)  by UserId
+  | extend folder_count = array_length(set_folders)
+  | extend user_count = array_length(set_MailboxGuid)
+  | where user_count > user_threshold or folder_count > folder_threshold
+  | extend Reason = case(user_count > user_threshold and folder_count > folder_threshold, "Both User and Folder Threshold Exceeded", folder_count > folder_threshold and user_count < user_threshold, "Folder Count Threshold Exceeded","User Threshold Exceeded")
+  | sort by user_count desc
+  | project-reorder UserId, user_count, folder_count, set_MailboxOwnerUPN, set_ClientIP, set_ClientInfoString, set_folders
+  | extend timestamp = StartTime, AccountCustomEntity = UserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 2.0.0

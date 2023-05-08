@@ -1,0 +1,42 @@
+id: 9891684a-1e3a-4546-9403-3439513cbc70
+name: Mail redirect via ExO transport rule
+description: |
+  'Identifies when Exchange Online transport rule configured to forward emails.
+  This could be an adversary mailbox configured to collect mail from multiple user accounts.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Exchange)
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+
+  OfficeActivity
+  | where OfficeWorkload == "Exchange"
+  | where Operation in~ ("New-TransportRule", "Set-TransportRule")
+  | mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))
+  | extend RuleName = case(
+      Operation =~ "Set-TransportRule", OfficeObjectId,
+      Operation =~ "New-TransportRule", ParsedParameters.Name,
+      "Unknown")
+  | mv-expand ExpandedParameters = todynamic(Parameters)
+  | where ExpandedParameters.Name in~ ("BlindCopyTo", "RedirectMessageTo") and isnotempty(ExpandedParameters.Value)
+  | extend RedirectTo = ExpandedParameters.Value
+  | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
+  | project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, Operation, RuleName, Parameters
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = IPAddress
+    
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 2.0.0

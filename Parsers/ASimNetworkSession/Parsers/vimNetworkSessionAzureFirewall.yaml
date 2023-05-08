@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM filtering parser for Azure Firewall logs
-  Version: '0.1'
-  LastUpdated: Feb 07, 2021
+  Version: '0.1.2'
+  LastUpdated: Jan 05 2023
 Product:
   Name: Azure Firewall
 Normalization:
@@ -48,24 +48,6 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let ICMPlookup = datatable (NetworkIcmpCode: int, NetworkIcmpType:string)
-      [
-      0,"Echo Reply",
-      1,"Unassigned",
-      2,"Unassigned",
-      3,"Destination Unreachable",
-      5,"Redirect",
-      8,"Echo",
-      9,"Router Advertisement",
-      10,"Router Solicitation",
-      11,"Time Exceeded",
-      12,"Parameter Problem",
-      13,"Timestamp",
-      14,"Timestamp Reply",
-      40,"Photuris",
-      42,"Extended Echo Request",
-      43,"Extended Echo Reply"
-      ];
   let parser = (
         starttime:datetime=datetime(null), 
         endtime:datetime=datetime(null), 
@@ -87,7 +69,8 @@ ParserQuery: |
             and (isnull(endtime)   or TimeGenerated <= endtime) 
             and not(disabled)
           | where Category == "AzureFirewallNetworkRule"
-          | where isnotempty(msg_s);
+          | where isnotempty(msg_s)
+          | project msg_s, OperationName, SubscriptionId, ResourceId, TimeGenerated, Type, _ResourceId;
       let prefilter = (T: (msg_s:string, TimeGenerated:datetime, OperationName:string)) {
         T | where  
         //(isnull(starttime) or TimeGenerated >= starttime) 
@@ -125,9 +108,9 @@ ParserQuery: |
                 , "No match"
              )
           | project-away temp_*
-          | extend NetworkIcmpCode = iff(NetworkProtocol startswith "ICMP", toint(extract ("type=(\\d+)",1,NetworkProtocol)), toint(0))
+          | extend NetworkIcmpCode = iff(NetworkProtocol startswith "ICMP", toint(extract ("type=(\\d+)",1,NetworkProtocol)), int(null))
+          | extend NetworkIcmpType = iff(isnotnull(NetworkIcmpCode), _ASIM_LookupICMPType(NetworkIcmpCode), "")
           | extend NetworkProtocol = iff(NetworkProtocol startswith "ICMP", "ICMP", NetworkProtocol)
-          | lookup ICMPlookup on NetworkIcmpCode
           | extend EventSeverity = case (
               OperationName  == "AzureFirewallThreatIntelLog", "Medium",
               DvcAction == "Deny", "Low",

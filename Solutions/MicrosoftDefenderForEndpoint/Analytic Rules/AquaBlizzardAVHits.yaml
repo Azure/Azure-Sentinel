@@ -1,0 +1,47 @@
+id: 18dbdc22-b69f-4109-9e39-723d9465f45f
+name: Aqua Blizzard AV hits - Feb 2022
+description: | 
+  'Identifies a match in the Security Alert table for MDATP hits related to the Aqua Blizzard actor'
+severity: High 
+status: Available
+requiredDataConnectors: 
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics: 
+  - Persistence
+relevantTechniques:
+  - T1137
+tags:
+  - Aqua Blizzard
+query: |
+  let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ActiniumIOC.csv"] with (format="csv", ignoreFirstRecord=True);
+  let AVHits = (iocs | where Type =~ "AVDetection"| project IoC);
+  SecurityAlert
+  | where ProviderName == 'MDATP'
+  | extend ThreatName_ = tostring(parse_json(ExtendedProperties).ThreatName)
+  | where ThreatName_ has_any (AVHits)
+  | extend Directory = tostring(parse_json(Entities)[0].Directory), SHA256 = tostring(parse_json(tostring(parse_json(Entities)[0].FileHashes))[2].Value), FileName = tostring(parse_json(Entities)[0].Name), Hostname = tostring(parse_json(Entities)[6].FQDN)| extend AccountName = tostring(parse_json(tostring(parse_json(Entities)[6].LoggedOnUsers))[0].AccountName)
+  | project TimeGenerated, AlertName, ThreatName_, ProviderName, AlertSeverity, Description, RemediationSteps, ExtendedProperties, Entities, FileName,SHA256, Directory, Hostname, AccountName
+  | extend timestamp = TimeGenerated, HostCustomEntity = Hostname , AccountCustomEntity = AccountName,  FileHashCustomEntity = SHA256, FileHashType = "SHA256"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: FileHashType
+      - identifier: Value
+        columnName: FileHashCustomEntity
+version: 1.0.1
+kind: Scheduled
