@@ -39,16 +39,14 @@ query: |
   let TrafficLogs = (union isfuzzy=true
   (AzureDiagnostics
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog" 
-  | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort ". " * "Action: " Action "." *
+  | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
   | where Action == "Deny"
   | where isnotempty(Fqdn) and isnotempty(SourceIp)),
   (AZFWNetworkRule
   | extend Fqdn = DestinationIp
-  | extend DestinationPort = tostring(DestinationPort)
   | where Action == "Deny"
   | where isnotempty(Fqdn) and isnotempty(SourceIp)),
   (AZFWApplicationRule
-  | extend DestinationPort = tostring(DestinationPort)
   | where Action == "Deny"
   | where isnotempty(Fqdn) and isnotempty(SourceIp)));
   let LearningSrcIpDenyRate = (TrafficLogs
@@ -61,18 +59,18 @@ query: |
   | summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp);
   AlertTimeSrcIpDenyRate
   | join kind=leftouter (LearningSrcIpDenyRate) on SourceIp
-  | extend LreaningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
-  | where AlertTimeSrcIpDenyRateCount > LreaningThreshold
+  | extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
+  | where AlertTimeSrcIpDenyRateCount > LearningThreshold
   | project-away SourceIp1, LearningTimeSrcIpDenyRateAvg, LearningTimeSrcIpDenyRateStd
   | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIp
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
+        columnName: Fqdn
 version: 1.1.0
 kind: Scheduled
