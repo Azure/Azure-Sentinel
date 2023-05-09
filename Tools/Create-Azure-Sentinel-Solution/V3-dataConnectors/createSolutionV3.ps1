@@ -168,7 +168,7 @@ $baseMainTemplate.resources += $armResourceContentPackage
 try {
     $jsonConversionDepth = 50
     $mainTemplateOutputPath = "$PSScriptRoot/mainTemplate.json"
-    ($baseMainTemplate | ConvertTo-Json -Depth $jsonConversionDepth).Replace('\n','\\n').Replace('\"','\\"')  | % { [System.Text.RegularExpressions.Regex]::Unescape($_) } | Format-Json | Out-File $mainTemplateOutputPath -Encoding utf8
+    ($baseMainTemplate | ConvertTo-Json -Depth $jsonConversionDepth).Replace('\n','\\n').Replace('\r','\\r').Replace('\"','\\"')  | % { [System.Text.RegularExpressions.Regex]::Unescape($_) } | Format-Json | Out-File $mainTemplateOutputPath -Encoding utf8
 }
 catch {
     Write-Host "Failed to write output file $mainTemplateOutputPath" -ForegroundColor Red
