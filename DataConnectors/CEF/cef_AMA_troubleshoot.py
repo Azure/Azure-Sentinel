@@ -6,7 +6,7 @@ import argparse
 import sys
 
 SCRIPT_VERSION = 2.0
-PY3 = sys.version_info[0] == 3
+PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
@@ -704,7 +704,10 @@ class SystemInfo:
     }
 
     @staticmethod
-    def format_command(command_object):
+    def format_collect_command(command_object):
+        """
+        Format a collect command details in a built-in format
+        """
         return str(
             DELIMITER + "command: " + str(command_object.command_name) + '\n' + "output: " + str(
                 command_object.command_result) + DELIMITER).replace(
@@ -715,7 +718,7 @@ class SystemInfo:
         :param command_object: consists of the name and the output
         :param file_path: a file to share the commands outputs
         """
-        output = self.format_command(command_object)
+        output = self.format_collect_command(command_object)
         cef_get_info_file = open(file_path, 'a')
         try:
             cef_get_info_file.write(output)
@@ -734,6 +737,9 @@ class SystemInfo:
 
 
 def verify_root_privileges():
+    """
+    Verify user has root privileges that required to execute this script
+    """
     o, e = subprocess.Popen(['id', '-u'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     if int(o) != 0:
         print_error(
@@ -759,6 +765,9 @@ def find_dcr_cloud_environment():
 
 
 def getargs(should_print=True):
+    """
+    Get execution args using argparse lib
+    """
     parser = argparse.ArgumentParser(description=SCRIPT_HELP_MESSAGE)
     parser.add_argument('collect', nargs='?', help='Collect syslog message samples to file')
     # parser.add_argument('--CEF', '--cef', action='store_true', default=False, help='Validate CEF DCR and events')
