@@ -1,0 +1,45 @@
+id: 2d50d937-d7f2-4c05-b151-9af7f9ec747e
+name: Rare User Agent Detected (ASIM Web Session)
+description: |
+  'Rule helps to detect a rare user-agents indicating web browsing activity by an unusual process other than the regular ones. This rule looks for UserAgent strings that did not appear in the last 14 days.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let lookBack = 14d;
+  let timeframe = 1d;
+  let user_agents_list = _Im_WebSession(starttime=ago(lookBack), endtime=ago(timeframe))
+  | summarize make_list(HttpUserAgent,1000000);
+  _Im_WebSession (starttime=ago(timeframe))
+  | where isnotempty( HttpUserAgent)
+  | where HttpUserAgent !in (user_agents_list)
+  | extend Message = "Rare User Agent"
+  | summarize Count=count() by Message, SrcIpAddr, DstIpAddr, Url, HttpUserAgent, bin(TimeGenerated,timeframe)
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Rare UserAgent not seen in last 14 days has been detected from IP: '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "This incident requires further investigation to know why this SrcIpAddr has been detected with such user agent"
+version: 1.0.0
+kind: Scheduled

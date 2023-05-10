@@ -1,0 +1,51 @@
+id: 2d50d937-d7f2-4c05-b151-9af7f9ec747e
+name: Known malicious user agent detected (ASIM Web Session)
+description: |
+  'This rule identifies a web request with a user agent header known to be malicious. This rule references known user agent list from this csv file'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let knownUserAgentsIndicators = materialize(externaldata(UserAgent:string, Category:string)
+        [ @"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv"] 
+            with(format="csv", ignoreFirstRecord=True)
+            | extend joiner = 1);
+    let knownUserAgents=toscalar(knownUserAgentsIndicators | where isnotempty(UserAgent) | summarize make_list(UserAgent,1000));
+    _Im_WebSession (httpuseragent_has_any=knownUserAgents)
+    | where TimeGenerated >ago(700d)
+    | extend joiner = 1
+    | join kind=inner knownUserAgentsIndicators on joiner
+    | where HttpUserAgent contains UserAgent
+    | summarize N_Events=count() by  SrcIpAddr, Url,HttpUserAgent, SrcUsername, DvcHostname, Category
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SrcUsername
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "The host {{SrcIpAddr}} is potentially running a malicious User Agent which has been categorized as '{{Category}}'"
+  alertDescriptionFormat: "The host at address {{SrcIpAddr}} sent an HTTP request to the URL {{Url}} with the HTTP user agent header {{HttpUserAgent}}. This user agent has been categorized as '{{Category}}'"
+version: 1.0.0
+kind: Scheduled
