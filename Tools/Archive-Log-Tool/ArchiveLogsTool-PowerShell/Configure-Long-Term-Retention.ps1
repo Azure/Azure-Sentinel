@@ -279,17 +279,19 @@ function Update-TablesRetention {
     param (        
         [parameter(Mandatory = $true)] $TablesForRetention,		
 		[parameter(Mandatory = $true)] $TotalRetentionInDays,
+        [parameter(Mandatory = $true)] $WorkspaceRetention,
         [parameter(Mandatory = $true)] $APIEndpoint
     )
 	$UpdatedTablesRetention = @()
     foreach($tbl in $TablesForRetention) {
 		$TablesApi = "https://$APIEndpoint/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-12-01-preview"		
         $ArchiveDays = [int]($TotalRetentionInDays)
+        $WorkspaceRetentionDays = [int]($WorkspaceRetention)
         
         $TablesApiBody = @"
 			{
 				"properties": {
-					"retentionInDays": 4,
+					"retentionInDays": $WorkspaceRetentionDays,
 					"totalRetentionInDays":$ArchiveDays
 				}
 			}
@@ -319,7 +321,8 @@ function Collect-AnalyticsPlanRetentionDays {
     [CmdletBinding()]
     param (        
         [parameter(Mandatory = $true)] $WorkspaceLevelRetention,
-        [parameter(Mandatory = $true)] $TableLevelRetentionLimit
+        [parameter(Mandatory = $true)] $TableLevelRetentionLimit,
+        [parameter(Mandatory = $true)] $DataRentionType
     )
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
@@ -349,7 +352,14 @@ function Collect-AnalyticsPlanRetentionDays {
     $label = New-Object System.Windows.Forms.Label
     $label.Location = New-Object System.Drawing.Point(10,20)
     $label.Size = New-Object System.Drawing.Size(350,60)
-    $label.Text = "Enter number of days to archive. The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days"
+    if($DataRentionType -eq "Archive")
+    {
+        $label.Text = "Enter number of days to archive. The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days"
+    }
+    else
+    {
+        $label.Text = "Enter number of Interactive/Workspace Retention days. The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days"
+    }
     $form.Controls.Add($label)
 
     $textBox = New-Object System.Windows.Forms.TextBox
@@ -386,6 +396,7 @@ function Collect-AnalyticsPlanRetentionDays {
         exit
     }
 }
+
 
 function Select-Plan {    
     Add-Type -AssemblyName System.Windows.Forms
@@ -553,9 +564,10 @@ foreach($CurrentSubscription in $GetSubscriptions)
                         $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim() -APIEndpoint $APIEndpoint
                         if($SelectedTables) {
                             $WorkspaceRetention = $SelectedTables[0].RetentionInWorkspace
-                            $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555
+                            $WorkspaceRetention = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555 -DataRentionType "Interactive" 
+                            $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555 -DataRentionType "Archive"
                             $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $APIEndpoint
-                            $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays -APIEndpoint $APIEndpoint                   
+                            $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays -WorkspaceRetention $WorkspaceRetention -APIEndpoint $APIEndpoint                   
                             $UpdatedTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru
                         }
                         else {
