@@ -312,6 +312,8 @@ function Update-TablesRetention {
                 RetentionInWorkspace=$TablesApiResult.properties.retentionInDays
             }
             Write-Log -Message "Table : $($TablesApiResult.name.Trim()) archive updated successfully to $ArchiveDays" -LogFileName $LogFileName -Severity Information
+            Write-Log -Message "Table : $($TablesApiResult.name.Trim()) Workspace Retention Days updated successfully to $WorkspaceRetentionDays" -LogFileName $LogFileName -Severity Information
+
         }		
 	}
     return $UpdatedTablesRetention
@@ -320,7 +322,7 @@ function Update-TablesRetention {
 function Collect-AnalyticsPlanRetentionDays {
     [CmdletBinding()]
     param (        
-        [parameter(Mandatory = $true)] $WorkspaceLevelRetention,
+        [parameter(Mandatory = $true)] $DefaultRetention,
         [parameter(Mandatory = $true)] $TableLevelRetentionLimit,
         [parameter(Mandatory = $true)] $DataRentionType
     )
@@ -390,6 +392,11 @@ function Collect-AnalyticsPlanRetentionDays {
     if ($result -eq [System.Windows.Forms.DialogResult]::OK)
     {
         $days = [int]$textBox.Text.Trim()        
+        return $days  
+    }
+    elseif ($result -eq [System.Windows.Forms.DialogResult]::Cancel)
+    {
+        $days = [int]$DefaultRetention        
         return $days  
     }
     else {
@@ -564,8 +571,9 @@ foreach($CurrentSubscription in $GetSubscriptions)
                         $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim() -APIEndpoint $APIEndpoint
                         if($SelectedTables) {
                             $WorkspaceRetention = $SelectedTables[0].RetentionInWorkspace
-                            $WorkspaceRetention = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555 -DataRentionType "Interactive" 
-                            $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555 -DataRentionType "Archive"
+                            $TotalRetention = $SelectedTables[0].TotalLogRetention
+                            $WorkspaceRetention = Collect-AnalyticsPlanRetentionDays -DefaultRetention $WorkspaceRetention -TableLevelRetentionLimit 2555 -DataRentionType "Interactive" 
+                            $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -DefaultRetention $TotalRetention -TableLevelRetentionLimit 2555 -DataRentionType "Archive"
                             $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $APIEndpoint
                             $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays -WorkspaceRetention $WorkspaceRetention -APIEndpoint $APIEndpoint                   
                             $UpdatedTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru
