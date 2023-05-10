@@ -9,6 +9,7 @@ SCRIPT_VERSION = 2.0
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
+DEFAULT_MACHINE_ENV = "Prod"
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 PATH_FOR_CSS_TICKET = {
@@ -751,7 +752,6 @@ def find_dcr_cloud_environment():
     """
     Use the agent config on the machine to determine the cloud environment we are running in
     """
-    default_machine_env = "Prod"
     command_to_run = "if grep -qs \"azure.cn\" {0}; then echo \"MK\"; elif grep -qs \"azure.us\" {0}; then echo \"Gov\"; else echo \"Prod\"; fi".format(
         AGENT_CONF_FILE)
     try:
@@ -759,9 +759,9 @@ def find_dcr_cloud_environment():
                                                               stdout=subprocess.PIPE,
                                                               stderr=subprocess.STDOUT).communicate()
         machine_env = command_result.decode('utf-8').strip("\n")
-        return machine_env if machine_env is not None else default_machine_env
+        return machine_env if machine_env is not None else DEFAULT_MACHINE_ENV
     except Exception:
-        return default_machine_env
+        return DEFAULT_MACHINE_ENV
 
 
 def getargs(should_print=True):
