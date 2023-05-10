@@ -20,13 +20,15 @@ AGENT_CONF_FILE = "/etc/opt/microsoft/azuremonitoragent/config-cache/mdsd.hr.jso
 FAILED_TESTS_COUNT = 0
 WARNING_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
-SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
+SCRIPT_HELP_MESSAGE = "Usage: python AMA_troubleshoot.py [STREAM_NAME] [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generates a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
+                      "     --cef/--CEF run the troubleshooting script for the CEF scenario." \
+                      "     --ASA/--CISCO run the troubleshooting script for the Cisco scenario." \
                       "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
                       "     -h,             --help display the help and exit\n\n" \
                       "Example:\n" \
-                      "     python cef_AMA_troubleshoot.py\n" \
-                      "     python cef_AMA_troubleshoot.py collect\n\n" \
+                      "     python cef_AMA_troubleshoot.py --cef\n" \
+                      "     python cef_AMA_troubleshoot.py --cisco collect\n\n" \
                       "This script verifies the installation of the CEF connector on the collector machine. It returns a status for each test and action items to fix detected issues."
 DELIMITER = "\n" + "-" * 20 + "\n"
 
@@ -318,17 +320,20 @@ class DCRConfigurationVerifications:
     This class is for data collection rules verifications
     """
     # CONSTANTS
+    global STREAM_SCENARIO
     DCR_DOC = "https://docs.microsoft.com/azure/azure-monitor/agents/data-collection-rule-overview"
     DCRA_DOC = "https://docs.microsoft.com/rest/api/monitor/data-collection-rule-associations"
     CEF_STREAM_NAME = "SECURITY_CEF_BLOB"
+    CISCO_STREAM_NAME = "SECURITY_CISCO_ASA_BLOB"
+    STREAM_NAME = {"cef": CEF_STREAM_NAME, "asa": CISCO_STREAM_NAME}
     DCR_MISSING_ERR = "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace." \
                       " For explanation on how to install a Data collection rule please browse- {} \n " \
                       "In order to read about how to associate a DCR to a machine please review- {}".format(DCR_DOC,
                                                                                                             DCRA_DOC)
-    DCR_MISSING_CEF_STREAM_ERR = "Could not detect any data collection rule for CEF data. No CEF events will " \
-                                 "be collected from this machine to any workspace. Please create a CEF DCR using the following documentation- " \
+    DCR_MISSING_CEF_STREAM_ERR = "Could not detect any data collection rule for the provided datatype. No such events will " \
+                                 "be collected from this machine to any workspace. Please create a DCR using the following documentation- " \
                                  "{} and run again".format(DCR_DOC)
-    CEF_MULTI_HOMING_MESSAGE = "Detected multiple collection rules sending the CEF stream. This scenario is called multi-homing and might have effect on the agent's performance"
+    CEF_MULTI_HOMING_MESSAGE = "Detected multiple collection rules sending the same stream. This scenario is called multi-homing and might have effect on the agent's performance"
 
     def verify_dcr_exists(self):
         """
@@ -344,14 +349,14 @@ class DCRConfigurationVerifications:
             return False
         return True
 
-    def verify_dcr_content_has_cef_stream(self):
+    def verify_dcr_content_has_stream(self):
         """
         Verifying there is a DCR on the machine for forwarding cef data
         """
         command_name = "verify_DCR_content_has_CEF_stream"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
-            self.CEF_STREAM_NAME)
-        result_keywords_array = [self.CEF_STREAM_NAME]
+            self.STREAM_NAME[STREAM_SCENARIO])
+        result_keywords_array = [self.STREAM_NAME[STREAM_SCENARIO]]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
@@ -365,7 +370,7 @@ class DCRConfigurationVerifications:
         """
         command_name = "verify_CEF_dcr_has_valid_content"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
-            self.CEF_STREAM_NAME)
+            self.STREAM_NAME[STREAM_SCENARIO])
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "opinsights.azure", "id"]
@@ -383,13 +388,13 @@ class DCRConfigurationVerifications:
                     return False
         command_object.run_full_verification()
 
-    def check_cef_multi_homing(self):
+    def check_multi_homing(self):
         """
         Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
         """
         command_name = "check_cef_multi_homing"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
-            self.CEF_STREAM_NAME)
+            self.STREAM_NAME[STREAM_SCENARIO])
         command_object = CommandVerification(command_name, command_to_run)
         command_object.run_command()
         try:
@@ -409,10 +414,10 @@ class DCRConfigurationVerifications:
         """
         if not self.verify_dcr_exists():
             return False
-        if not self.verify_dcr_content_has_cef_stream():
+        if not self.verify_dcr_content_has_stream():
             return False
         self.verify_dcr_has_valid_content()
-        self.check_cef_multi_homing()
+        self.check_multi_homing()
 
 
 class SyslogDaemonVerifications:
@@ -577,28 +582,29 @@ class IncomingEventsVerifications:
     This class is for sending and capturing CEF events in the incoming stream of events to the syslog daemon port
     """
     # CONSTANTS
+    global STREAM_SCENARIO
     FIXED_CEF_MESSAGE = "0|TestCommonEventFormat|MOCK|common=event-format-test|end|TRAFFIC|1|rt=$common=event-formatted-receive_time deviceExternalId=0002D01655 src=1.1.1.1 dst=2.2.2.2 sourceTranslatedAddress=1.1.1.1 destinationTranslatedAddress=3.3.3.3 cs1Label=Rule cs1=CEF_TEST_InternetDNS"
+    CISCO_FIXED_MESSAGE = "Deny inbound TCP src inet:1.1.1.1 dst inet:2.2.2.2"
+    STREAM_MESSAGE = {"cef": FIXED_CEF_MESSAGE, "asa": CISCO_FIXED_MESSAGE}
+    IDENT_NAME = {"cef": "CEF:", "asa": "%ASA-7-106010:"}
     TCPDUMP_NOT_INSTALLED_ERROR_MESSAGE = "Notice that \'tcpdump\' is not installed in your Linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'."
     LOGGER_NOT_INSTALLED_ERROR_MESSAGE = "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace."
-    CEF_EVENTS_FOUND_MESSAGE = "Found CEF events in stream. Please verify CEF events arrived at your workspace"
-    CEF_EVENTS_NOT_FOUND_ERROR_MESSAGE = "Could not locate \"CEF\" message in tcpdump. Please verify CEF events can be sent to the machine and there is not firewall blocking incoming traffic"
 
-    @staticmethod
-    def handle_tcpdump_line(line):
+    def handle_tcpdump_line(self, line):
         """
-        Validate there are incoming CEF events.
+        Validate there are incoming events for the relevant stream.
         :param line: a text line from the tcpdump stream
-        :return: True if CEF exists in the line. Otherwise, false.
+        :return: True if the stream exists in the line. Otherwise, false.
         """
-        if "CEF" in line:
+        if self.IDENT_NAME[STREAM_SCENARIO] in line:
             return True
         return False
 
     def incoming_logs_validations(self, mock_message=False):
         """
-        Validate that there is incoming traffic of CEF messages
+        Validate that there is incoming traffic of the stream type
         :param mock_message: Tells if to generate mock messages
-        :return: True if successfully captured CEF events.
+        :return: True if successfully captured events of the relevant stream.
         """
         tcpdump_time_restriction = 10
         start_seconds = int(round(time.time()))
@@ -606,9 +612,9 @@ class IncomingEventsVerifications:
         mock_message_counter = 0
         command_name = "listen_to_incoming_cef_events"
         command_to_run = "sudo tcpdump -A -ni any port 514 -vv"
-        result_keywords_array = ["CEF"]
+        result_keywords_array = [self.IDENT_NAME[STREAM_SCENARIO]]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
-        print("Attempting to capture CEF events using tcpdump. This could take up to " + str(
+        print("Attempting to capture events using tcpdump. This could take up to " + str(
             tcpdump_time_restriction) + " seconds.")
         tcp_dump = subprocess.Popen(command_object.command_to_run, shell=True, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT)
@@ -632,10 +638,11 @@ class IncomingEventsVerifications:
                 if self.handle_tcpdump_line(line):
                     command_object.command_result = line
                     command_object.run_full_verification()
-                    print_ok(self.CEF_EVENTS_FOUND_MESSAGE)
+                    print_ok("Found {0} events in stream. Please verify {0} events arrived at your workspace".format(STREAM_SCENARIO))
                     return True
             end_seconds = int(round(time.time()))
-        print_error(self.CEF_EVENTS_NOT_FOUND_ERROR_MESSAGE)
+        print_error("Could not locate {0} message in tcpdump. Please verify {0} events can be sent to the machine and"
+                    " there is not firewall blocking incoming traffic".format(STREAM_SCENARIO))
         command_object.command_result = str(line)
         command_object.run_full_verification()
         return False
@@ -648,13 +655,12 @@ class IncomingEventsVerifications:
         """
         try:
             for index in range(0, amount):
-                command_tokens = ["logger", "-p", "local4.warn", "-t", "CEF:", self.FIXED_CEF_MESSAGE, "-P", str(port),
-                                  "-n",
-                                  "127.0.0.1"]
+                command_tokens = ["logger", "-p", "local4.warn", "-t", self.IDENT_NAME[STREAM_SCENARIO],
+                 self.STREAM_MESSAGE[STREAM_SCENARIO], "-P", str(port), "-n", "127.0.0.1"]
                 logger = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
                 o, e = logger.communicate()
                 if e is not None:
-                    print("Error could not send cef mock message")
+                    print("Error could not send mock message")
         except OSError:
             print(self.LOGGER_NOT_INSTALLED_ERROR_MESSAGE)
 
@@ -770,8 +776,8 @@ def getargs(should_print=True):
     """
     parser = argparse.ArgumentParser(description=SCRIPT_HELP_MESSAGE)
     parser.add_argument('collect', nargs='?', help='Collect syslog message samples to file')
-    # parser.add_argument('--CEF', '--cef', action='store_true', default=False, help='Validate CEF DCR and events')
-    # parser.add_argument('--ASA', '--asa', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
+    parser.add_argument('--CEF', '--cef', action='store_true', default=False, help='Validate CEF DCR and events')
+    parser.add_argument('--ASA', '--asa', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
     args = parser.parse_args()
     if should_print:
         for arg in vars(args):
@@ -782,8 +788,16 @@ def getargs(should_print=True):
 
 
 def main():
+    global STREAM_SCENARIO
     args = getargs()
     verify_root_privileges()
+    if args.CEF:
+        STREAM_SCENARIO = "cef"
+    elif args.ASA:
+            STREAM_SCENARIO = "asa"
+    else:
+        print_error("Invalid stream name provided. The supported streams are either \'--CEF\' or \'--ASA\'. Please try again.")
+        sys.exit()
     if args.collect:
         print_notice("Starting to collect data. This may take a couple of seconds")
         machine_env = find_dcr_cloud_environment()
