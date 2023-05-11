@@ -1,0 +1,121 @@
+id: c2cc3901-d6bd-4189-bb5f-ab464dcfd079
+name: SAP - Brute Force (RFC)
+description: |-
+  'Identifies brute force attacks on the SAP system using RFC logons
+  Source Action: Attempt to login from the same IP to several systems/clients within the scheduled time interval using RFC
+
+  *Data Sources: SAPcon -  Audit Log*
+  '
+severity: Medium
+requiredDataConnectors:
+- connectorId: SAP
+  dataTypes:
+  - SAP_USR02
+  - SAPSystems
+  - SAPAuditLog
+  - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 3d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+relevantTechniques: ''
+query: |-
+  // SAP - Brute Force (RFC)
+  // Define constants
+  let TimeAgo= 60m;//time to look for brute forcing
+  let LearningTime= 3d;// history to learn
+  let Threshold= 0.5; // 0.1 is sensitive, 2 is indifferent
+  let PerIPPerMinute = 60; // number of calls permitted per minute from a single source
+  // determine which system roles are relevant for this alert
+  let SelectedSystemRoles =  dynamic(["All System Roles"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]);
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole, SystemUsage
+      | extend SystemRole= replace_string(SystemRole, 'Unknown (Production)', 'Unknown');
+  // here you can exclude system users which are OK to use RFC heavily
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'MultipleRFCOK'
+  // can also specify SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['MultipleRFCOK', 'SAP_ROLE', 'SAPPROFILE']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)
+      | summarize by User2Exclude=SAPUser;
+  // COCan also exclude users by user classes
+  let UserClassesToExclude= dynamic(["Class2Exclude"]);
+  let UsersByClass= (SAP_USR02
+  | where CLASS in (UserClassesToExclude)
+  | summarize arg_max(TimeGenerated, *) by GLTGB, SystemID, User=BNAME, ClientID= MANDT
+  | summarize arg_max(GLTGB, CLASS) by SystemID, User, ClientID);
+  // Query logic
+  let RFCLogons= SAPAuditLog
+  | where MessageID == "AU6" // RFC Logon Failed
+  | where SystemID in (SelectedSystems)
+  | where TimeGenerated > ago (LearningTime)
+  | extend IngestionTime= ingestion_time()
+  | join kind= leftantisemi UsersByClass on User, SystemID, ClientID
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude;
+  // get current excessive callers
+  let PotentialExcessiveCallers= RFCLogons
+  | where TimeGenerated > ago(TimeAgo + 1h)
+  | where IngestionTime > ago(TimeAgo)
+  | extend IP= coalesce(TerminalIPv6, Computer, TERM_IPV6)
+  | summarize CallCount= count(), StartTime = min(UpdatedOn_t), EndTime = max(UpdatedOn_t) by IP
+  | where CallCount > PerIPPerMinute* TimeAgo/ (1m);
+  // build series of logons from these addresses
+  let RFCLogonHistory= RFCLogons
+  | project TerminalIPv6, Computer, TERM_IPV6, UpdatedOn_t
+  | extend IP= coalesce(TerminalIPv6, Computer, TERM_IPV6)
+  | where IP in ((PotentialExcessiveCallers | summarize IPs= makeset(IP,1000)))
+  | make-series CallCount = count() on UpdatedOn_t from ago(LearningTime) to now() step TimeAgo by IP;
+  // learn the history and perform judgement
+  let ExcessiveCallers= RFCLogonHistory
+  | extend (CallCountAnome, score, baseline) = series_decompose_anomalies(CallCount, Threshold= Threshold, Test_points= 1)
+  // | where CallCountAnome[-1] > 0 // only excessive
+  | summarize IPs= makeset(IP,1000);
+  // get the actual call from these IPs
+  RFCLogons
+  | where TimeGenerated > ago(TimeAgo + 1h)
+  | where IngestionTime > ago(TimeAgo)
+  | where TerminalIPv6 in ((ExcessiveCallers)) or Computer in ((ExcessiveCallers)) or TERM_IPV6 in((ExcessiveCallers))
+  | extend IP= coalesce(TerminalIPv6, Computer, TERM_IPV6)
+  | lookup PotentialExcessiveCallers on IP
+  | summarize LoginAttemptsMadebyIP= any(CallCount), CallCountPerUserSystem= count(), StartTime= any(StartTime), EndTime=any(EndTime) by IP, Email, User, SystemID, ClientID, Host
+  | extend ActivityDetailed= bag_pack("Email", Email, "User", User, "SystemID", SystemID, "ClientID", ClientID, "Host", Host, "CallCountPerUserSystem", CallCountPerUserSystem)
+  | summarize LoginAttemptsMadebyIP= any(LoginAttemptsMadebyIP), Activities= make_set(ActivityDetailed, 30), StartTime =any(StartTime), EndTime = any(EndTime)
+  , (CallCountPerUserSystem, User, Email, SystemID, ClientID, Host)= argmax(CallCountPerUserSystem, User, Email, SystemID, ClientID, Host) by IP
+  | lookup SelectedSystems on SystemID
+  | extend AlertName= strcat("SAP - Potential brute force attack (RFC) on a ", tolower(SystemRole), " system, ", LoginAttemptsMadebyIP, " calls within ", datetime_diff("minute", EndTime, StartTime), " minutes")
+  | extend AlertDescription= strcat("Source has produced ", LoginAttemptsMadebyIP, " calls within ", datetime_diff("minute", EndTime, StartTime)," minutes, most of which were made to system ", SystemID, ". The permitted limit of calls per minute is ", PerIPPerMinute , ". ")
+  | extend AlertRuleUniqueName = 'bruteforce(rfc)'
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: '{{AlertDescription}}
+
+    '
+  alertTacticsColumnName: IP
+  alertSeverityColumnName: IP
+customDetails:
+  SAP_User: User
+  AlertRuleUniqueName: AlertRuleUniqueName
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Email
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IP
+- entityType: CloudApplication
+  fieldMappings:
+  - identifier: Name
+    columnName: SystemID
+  - identifier: AppId
+    columnName: ClientID
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: Host
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.58

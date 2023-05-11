@@ -1,0 +1,16 @@
+{
+    "properties": {
+        "category": "SAPWorkspaceManagement",
+        "displayName": "SAPWSIncidentsDetailed",
+        "query": "let AlertsWithEntities= SecurityAlert\r\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\r\n| project ExtendedProperties, TimeGenerated, SystemAlertId, Entities, DisplayName, StartTime\r\n| extend ExtendedProperties = parse_json(ExtendedProperties)\r\n| extend AnalyticRuleName= tostring(ExtendedProperties[\"Analytic Rule Name\"])\r\n| extend BagOfEntities= tostring(ExtendedProperties.Query), SystemAlertId\r\n| extend BagOfEntities= tostring(split(BagOfEntities, \"'\",1)[0])\r\n| extend BagOfEntities = todynamic(zlib_decompress_from_base64_string(BagOfEntities)) \r\n| evaluate bag_unpack(BagOfEntities, ignoredProperties= dynamic([\"TimeGenerated\"]), columnsConflict= \"keep_source\")\r\n| mv-expand CustomDetails= parse_json(ExtendedProperties.[\"Custom Details\"])\r\n| mv-expand Entities = parse_json(Entities)\r\n| project-away ExtendedProperties\r\n| extend CustomDetailsReplaced = replace_regex(tostring(CustomDetails), \"\\\\r\", \"\"), AlertDisplayName= tostring(DisplayName), Entities, SystemAlertId, AnalyticRuleName\r\n| project-rename AlertStartTime = StartTime\r\n| extend SAP_User = parse_json(tostring(parse_json(CustomDetailsReplaced).SAP_User))[0]\r\n| extend Name= parse_json(tostring(Entities.Name))\r\n| extend ADAccountT= tostring(iff(Entities.Type == \"account\", Name, \"\"))\r\n| extend Address= tostring(parse_json(tostring(Entities.Address)))\r\n| extend IPAddressT= tostring(iff(Entities.Type == \"ip\", Address, \"\"))\r\n| extend SAPSystemT= tostring(iff(Entities.Type == \"cloud-application\", Name, \"\"))\r\n| project-away CustomDetailsReplaced, Entities, Name\r\n| summarize take_any(*), ADAccount= take_anyif(ADAccountT, isnotempty(ADAccountT)), IPAddress=take_anyif(IPAddressT, isnotempty( IPAddressT)), SAPSystem= take_anyif(SAPSystemT, isnotempty( SAPSystemT))\r\nby SystemAlertId\r\n| project-away ADAccountT, IPAddressT, SAPSystemT, CustomDetails\r\n| project-reorder AnalyticRuleName;\r\nlet DetailedIncidents= SecurityIncident \r\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\r\n| project-away TenantId, IncidentName, RelatedAnalyticRuleIds\r\n| mv-expand AlertIds| extend AlertIds = tostring(AlertIds)\r\n| join kind= inner  \r\nAlertsWithEntities\r\non $left.AlertIds == $right.SystemAlertId\r\n| extend IsPrivateIP= ipv4_is_private(IPAddress)\r\n| extend Owner=tostring(Owner.userPrincipalName);\r\nDetailedIncidents\r\n| where Title startswith_cs \"SAP\" or isnotempty( SAPSystem)\r\n",
+        "functionAlias": "SAPWSIncidentsDetailed",
+        "version": 2,
+        "etag": "*"
+    },
+    "name": "SAPWSIncidentsDetailed",
+    "type": "savedSearches",
+    "dependsOn": [
+        "[variables('workspace-dependency')]"
+    ],
+    "apiVersion": "2022-10-01"
+}

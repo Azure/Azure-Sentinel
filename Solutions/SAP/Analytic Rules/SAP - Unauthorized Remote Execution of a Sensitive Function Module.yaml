@@ -1,0 +1,114 @@
+id: 8e8a95c5-7f78-435e-9e6a-7e29c0b831c1
+name: SAP - Unauthorized Remote Execution of a Sensitive Function Module
+description: |-
+  'Detects an unauthorized execution of a sensitive function module using RFC.
+  Source Action: Execute a function module using RFC.
+  **Recommended for Production only**
+  Function Modules should be maintained in watchlist "SAP - Sensitive Function Modules"
+  *Data Sources: SAPcon -  Audit Log*
+  '
+severity: High
+requiredDataConnectors:
+- connectorId: SAP
+  dataTypes:
+  - SAPUsersAuthorizations
+  - SAPAuditLog
+  - SAPSystems
+  - SAP_AGR_AGRS
+  - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+- Exfiltration
+- LateralMovement
+relevantTechniques: ''
+query: |-
+  // RFC Execution of a Sensitive Function Module
+  let TimeAgo= 60m;
+  // determine which system roles are relevant for this alert
+  let SelectedSystemRoles =  dynamic(["Production", "UAT"]); //can also do// let SelectedSystemRoles =  dynamic(["All System Roles"]);
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole, SystemUsage
+      | extend SystemRole= replace_string(SystemRole, 'Unknown (Production)', 'Unknown');
+  // here you can exclude system users which are OK to execute a Sensitive function module
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'ExecuteSensitiveFMOK'
+  // can also specify SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['ExecuteSensitiveFMOK','SAP_ALL']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  // this watchlist lists the sensitive function modules, along with users that are OK to run those.
+  // if you don't see a column named "UsersExcluded" in this WL, add one
+  let SensitiveFMs = _GetWatchlist('SAP - Sensitive Function Modules')
+  | extend UsersExcluded= replace_string(column_ifexists("UsersExcluded",""), " ","")
+  | extend UsersExcluded= parse_csv(UsersExcluded)
+  | summarize UsersExcluded= make_set(UsersExcluded, 1000), Description=take_anyif(Description, isnotempty(Description)) by SearchKey;
+  let SensitiveFMExecs= materialize(SAPAuditLog
+  | where TimeGenerated > ago(TimeAgo + 1h)
+  | where ingestion_time() > ago(TimeAgo)
+  | where MessageID == "AUK"
+  | where SystemID in ((SelectedSystems | project SystemID))
+  | where Variable3 in ((SensitiveFMs | summarize make_set(SearchKey)))
+  | join kind = inner SensitiveFMs on $left.Variable3 == $right.SearchKey
+  // exclude users which are OK to run the specific FM
+  | where UsersExcluded !has User
+  | project-rename FunctionModule = Variable3, FunctionGroup = Variable1
+  | order by TimeGenerated asc
+  | project TimeGenerated,Instance ,User, SystemID, ClientID, FunctionGroup, FunctionModule, Description, MessageID, Email, TerminalIPv6, Host);
+  let UsersExecuted= (SensitiveFMExecs | summarize make_set(User,1000));
+  // let's see if the auth was there yesterday
+  let UsersAuth= SAPUsersAuthorizations(SnapshotAge= 1d)
+  | where User in (UsersExecuted) and Field == "RFC_NAME" and SystemID in ((SelectedSystems | project SystemID))
+  | summarize EQs= make_set(EQs) by User, ClientID, SystemID;
+  let UserMDSystems= SAP_AGR_AGRS | where TimeGenerated > 1d | summarize by SystemID, ClientID= MANDT | extend IsUserMDThere= true;
+  // now we check if the user had permisions to perform the RFC call yesterday
+  let UnAuthFMExec= SensitiveFMExecs | lookup UsersAuth on SystemID, ClientID, User
+  | where not(EQs has FunctionModule or EQs has FunctionGroup or EQs has "*");
+  UnAuthFMExec
+  | lookup (SelectedSystems | project SystemID, SystemRole) on SystemID
+  | lookup UserMDSystems on SystemID, ClientID
+  | extend AlertName= strcat("SAP - Unauthorized RFC Execution of a Sensitive Function Module in a ", tolower(SystemRole), " system")
+  | extend AlertDescription = strcat("The Function module ", FunctionModule, " of the function group ", FunctionGroup, iff(isnotempty(Description), strcat(", described as '", Description, "',"), ""), " was executed by user ", User, iff(IsUserMDThere, ". No authorization for this execution was found in the user master data profile gathered from SAP system ", ". Sentinel could not verify the authorization for this action as no user master data found for SAP system "), SystemID, ", Client ", ClientID, ". If this execution is benign, consider checking if the relevant system is configured to send the user master data profile. If you wish to allow this activity, add the specific user USER as UsersExcluded in the ‘SAP - Sensitive Function Modules’ watchlist. If you wish to allow this user to perform all sensitive FM calls (not recommended), add the user to the SAP_User_Config watchlist with a tag of 'ExecuteSensitiveFMOK'.")
+  | extend Dummy= ""
+  // | summarize by User, SystemID, ClientID, FunctionGroup, FunctionModule
+  | extend AlertRuleUniqueName = 'rfcexecutionofasensitivefunctionmodule'
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: |
+    <img src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SAP/Workbooks/SAPVMIcon.svg" width="30"/>
+      </br>
+    {{AlertDescription}}
+    </br>
+    For more information on enabling user master data visit  [Select the SAP ingestion profile for your Microsoft Sentinel for SAP solution](https://learn.microsoft.com/en-us/azure/sentinel/sap/select-ingestion-profiles) guide.
+  alertTacticsColumnName: Dummy
+  alertSeverityColumnName: Dummy
+customDetails:
+  SAP_User: User
+  FunctionModule: FunctionModule
+  AlertRuleUniqueName: AlertRuleUniqueName
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Email
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: TerminalIPv6
+- entityType: Host
+  fieldMappings:
+  - identifier: FullName
+    columnName: Host
+- entityType: CloudApplication
+  fieldMappings:
+  - identifier: Name
+    columnName: SystemID
+  - identifier: AppId
+    columnName: ClientID
+  - identifier: InstanceName
+    columnName: Instance
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.58

@@ -1,0 +1,97 @@
+id: e0e53cb9-d3f4-47c3-b953-ad62a8414f4f
+name: SAP - Execution of a Sensitive ABAP Program
+description: |-
+  'Identifies direct execution of a sensitive ABAP program.
+
+  Source Action: Execute a program directly using SE38/SA38/SE80.
+
+  **Recommended for Production only**
+
+  ABAP Programs should be maintained in watchlist "SAP - Sensitive ABAP Programs"
+
+  *Data Sources: SAPcon -  Audit Log*
+  '
+severity: High
+requiredDataConnectors:
+- connectorId: SAP
+  dataTypes:
+  - SAPSystems
+  - SAPAuditLog
+  - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Exfiltration
+- LateralMovement
+- Execution
+relevantTechniques: ''
+query: |-
+  // SAP - Execution of a Sensitive ABAP Program
+  // this alert rule requires the "look back" period to be greater than 2 days to include a full user master data load
+  // the actual lookback period for the events is determined using the TimeAgo parameter
+  let TimeAgo= 60m;
+  // determine which system roles are relevant for this alert
+  let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["All System Roles"]);
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole, SystemUsage
+      | extend SystemRole= replace_string(SystemRole, 'Unknown (Production)', 'Unknown');
+  // here you can exclude system users which are OK to execute a Sensitive ABAP Program
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'SensitiveABAPProgramOK'
+  // can also specify SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['SensitiveABAPProgramOK','SAPRole','SAPProfile']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  // Get Relevant ABAP Programs, along with users which are OK to execute them. if the 'SAP - Sensitive ABAP Programs' watchlist is missing the UsersExcluded column,
+  // add the column manually, or force this watchlist to refresh using a fresh install of the solution, using the
+  let SensitiveABAPReports = _GetWatchlist('SAP - Sensitive ABAP Programs')
+  | extend UsersExcluded= replace_string(column_ifexists("UsersExcluded",""), " ","")
+  | extend UsersExcluded= parse_csv(UsersExcluded)
+  | summarize UsersExcluded= make_set(UsersExcluded, 1000), Description=take_anyif(Description, isnotempty(Description)) by ABAPProgramName= SearchKey;
+  let fixedABAPReports = datatable(ABAPProgramName:string, Description:string , UsersExcluded: dynamic)
+  // Maintain these if WatchList is not available
+      ["RSPFLDOC", "Profile Parameter Maintenance", "DummyUser"];
+  let UnionAbap =
+      union SensitiveABAPReports, fixedABAPReports
+      | summarize UsersExcluded= make_set(UsersExcluded, 1000), Description=any(Description)  by ABAPProgramName;
+  // Query logic
+  SAPAuditLog
+  | where TimeGenerated > ago(TimeAgo + 1h)
+  | where MessageID == 'AUW'
+  | where ingestion_time() > ago(TimeAgo)
+  | join kind= inner UnionAbap on ABAPProgramName
+  | where UsersExcluded !has User
+  | where SystemID in ((SelectedSystems | project SystemID))
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  | order by TimeGenerated asc
+  | project TimeGenerated, Instance , SystemID, ClientID, User, ABAPProgramName, MessageText, TransactionCode, MessageID, Email, TerminalIPv6, Host
+  | extend AlertRuleUniqueName = 'executionofasensitiveabapprogram'
+alertDetailsOverride: null
+customDetails:
+  SAP_User: User
+  AlertRuleUniqueName: AlertRuleUniqueName
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Email
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: TerminalIPv6
+- entityType: Host
+  fieldMappings:
+  - identifier: FullName
+    columnName: Host
+- entityType: CloudApplication
+  fieldMappings:
+  - identifier: Name
+    columnName: SystemID
+  - identifier: AppId
+    columnName: ClientID
+  - identifier: InstanceName
+    columnName: Instance
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.62

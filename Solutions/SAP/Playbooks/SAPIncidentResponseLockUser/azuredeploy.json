@@ -1,0 +1,1348 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "SAP Incident handler- Block User from Teams or Email",
+        "description": "This Playbook Provides the automation for the SAP incidents. It allows for automatically pop a Teams message or an email to the user to notify them of the incident. It also allows for the user to be blocked on AD or SAP, for the incident to be closed.",
+        "prerequisites": [
+            "1. Update you SAP alert rules to the latest version.",
+            "2. Asign the releavnt Teams or email addresses to be used as responders.",
+            "3. Optional- set you SAP system to allow user locking from Sentinel, See more details at https://aka.ms/sentinel4sapintro."
+        ],
+        "postDeployment": [
+            "1. Once deployment is complete, you will need to authorize each connection.",
+            "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter API key or credentials --> Save"
+        ],
+        "prerequisitesDeployTemplateFile": "../../TeamsSAPUserBlockPoC/azuredeploy.json",
+        "lastUpdateTime": "2022-08-18T00:00:00.000Z",
+        "entities": [
+            "ip",
+            "Account"
+        ],
+        "tags": [
+            "workflow",
+            "SAP",
+            "Active directory",
+            "SAP User",
+            "Block SAP User",
+            "Block AD User"
+        ],
+        "support": {
+            "tier": "microsoft",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SAPIncidentResponseLockUser",
+            "type": "string"
+        },
+        "DefaultEmailDestination": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for DefaultEmailDestination"
+            }
+        }
+    },
+    "variables": {
+        "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]",
+        "Office365ConnectionName": "[concat('Office365-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "DefaultEmailDestination": {
+                            "defaultValue": "[parameters('DefaultEmailDestination')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Incident_response_Scope": {
+                            "actions": {
+                                "Condition_block_or_flag": {
+                                    "actions": {
+                                        "Switch_lock_target_environment": {
+                                            "runAfter": {},
+                                            "cases": {
+                                                "Case_AAD": {
+                                                    "case": "aad",
+                                                    "actions": {
+                                                        "Reply_with_a_message_in_a_channel": {
+                                                            "runAfter": {
+                                                                "Update_user_with_disabled_flag": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "messageBody": "<p>Account @{variables('account')} disabled on Azure AD!</p>",
+                                                                    "parentMessageId": "@body('Parse_JSON')?['messageId']",
+                                                                    "recipient": {
+                                                                        "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
+                                                                        "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                                    }
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                            }
+                                                        },
+                                                        "Update_user_with_disabled_flag": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "accountEnabled": false
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuread']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "patch",
+                                                                "path": "/v1.0/users/@{encodeURIComponent(variables('account'))}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_BTP": {
+                                                    "case": "btp",
+                                                    "actions": {
+                                                        "Reply_with_a_message_in_a_channel_2": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "messageBody": "<p>Implement SAP REST interfaces with SAP IAS or OAuth2 flow to lock users on XSUAA with property \"active:false\"</p>",
+                                                                    "parentMessageId": "@body('Parse_JSON')?['messageId']",
+                                                                    "recipient": {
+                                                                        "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
+                                                                        "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                                    }
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_ERP": {
+                                                    "case": "erp",
+                                                    "actions": {
+                                                        "Block_User_via_SOAP_exposed_BAPI": {
+                                                            "runAfter": {
+                                                                "Get_secret": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Http",
+                                                            "inputs": {
+                                                                "authentication": {
+                                                                    "password": "@body('Get_secret')?['value']",
+                                                                    "type": "Basic",
+                                                                    "username": "@body('Get_secret')?['name']"
+                                                                },
+                                                                "body": {
+                                                                    "bAPI_USER_LOCK": {
+                                                                        "rETURN": [],
+                                                                        "uSERNAME": "@{variables('SAP-user')}"
+                                                                    }
+                                                                },
+                                                                "headers": {
+                                                                    "Content-Type": "application/json"
+                                                                },
+                                                                "method": "POST",
+                                                                "uri": "@{variables('basePath')}ZWS_BAPI_USER_LOCK:BAPI_USER_LOCKRequest?sap-client=@{variables('sap-client-id')}"
+                                                            }
+                                                        },
+                                                        "Condition_SOAP_success": {
+                                                            "actions": {
+                                                                "Close_Sentinel_incident": {
+                                                                    "runAfter": {
+                                                                        "Notify_impacted_colleague_working_with_SAP": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "classification": {
+                                                                                "ClassificationAndReason": "TruePositive - SuspiciousActivity",
+                                                                                "ClassificationReasonText": "@{body('Parse_JSON')?['data']?['blockComment']}"
+                                                                            },
+                                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                            "status": "Closed"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "put",
+                                                                        "path": "/Incidents"
+                                                                    }
+                                                                },
+                                                                "Notify_impacted_colleague_working_with_SAP": {
+                                                                    "runAfter": {
+                                                                        "Reply_with_SAP_lock_message_in_channel": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "messageBody": "<p>Your SAP user in System @{variables('SID')} has been locked due to a security signal! Please reach out to your SAP Basis colleagues for further info.</p>",
+                                                                            "recipient": "@variables('account')"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                                                                    }
+                                                                },
+                                                                "Reply_with_SAP_lock_message_in_channel": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "messageBody": "<p>SAP User @{variables('SAP-user')} (@{variables('account')}) locked!<br>\n<br>\nSAP response: @{body('Parse_SAP_response_as_JSON')?['bAPI_USER_LOCKResponse']?['RETURN'][0]?['mESSAGE']}</p>",
+                                                                            "parentMessageId": "@body('Parse_JSON')?['messageId']",
+                                                                            "recipient": {
+                                                                                "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
+                                                                                "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                                            }
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Parse_SAP_response_as_JSON": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Reply_to_Admins_with_lock_error_in_Channel": {
+                                                                        "runAfter": {},
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "body": {
+                                                                                "messageBody": "<p>User could not be locked. Error message (code @{outputs('Block_User_via_SOAP_exposed_BAPI')['statusCode']}): @{body('Block_User_via_SOAP_exposed_BAPI')}</p>",
+                                                                                "parentMessageId": "@body('Parse_JSON')?['messageId']",
+                                                                                "recipient": {
+                                                                                    "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
+                                                                                    "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                                                }
+                                                                            },
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@outputs('Block_User_via_SOAP_exposed_BAPI')['statusCode']",
+                                                                            200
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Get_secret": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "get",
+                                                                "path": "/secrets/@{encodeURIComponent('PM4ADMIN')}/value"
+                                                            }
+                                                        },
+                                                        "Parse_SAP_response_as_JSON": {
+                                                            "runAfter": {
+                                                                "Block_User_via_SOAP_exposed_BAPI": [
+                                                                    "Succeeded",
+                                                                    "Failed"
+                                                                ]
+                                                            },
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@body('Block_User_via_SOAP_exposed_BAPI')",
+                                                                "schema": {
+                                                                    "properties": {
+                                                                        "bAPI_USER_LOCKResponse": {
+                                                                            "properties": {
+                                                                                "RETURN": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "fIELD": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "iD": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "lOG_MSG_NO": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "lOG_NO": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "mESSAGE": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "mESSAGE_V1": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "mESSAGE_V2": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "mESSAGE_V3": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "mESSAGE_V4": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "nUMBER": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "pARAMETER": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "rOW": {
+                                                                                                "type": "integer"
+                                                                                            },
+                                                                                            "sYSTEM": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "tYPE": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "tYPE",
+                                                                                            "iD",
+                                                                                            "nUMBER",
+                                                                                            "mESSAGE",
+                                                                                            "lOG_NO",
+                                                                                            "lOG_MSG_NO",
+                                                                                            "mESSAGE_V1",
+                                                                                            "mESSAGE_V2",
+                                                                                            "mESSAGE_V3",
+                                                                                            "mESSAGE_V4",
+                                                                                            "pARAMETER",
+                                                                                            "rOW",
+                                                                                            "fIELD",
+                                                                                            "sYSTEM"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "expression": "@body('Parse_JSON')?['data']?['WhereToLockUser']",
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Flag_false_positive": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "classification": {
+                                                            "ClassificationAndReason": "FalsePositive - IncorrectAlertLogic",
+                                                            "ClassificationReasonText": "@body('Parse_JSON')?['data']?['flagComment']"
+                                                        },
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "status": "Closed"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "put",
+                                                    "path": "/Incidents"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_JSON')?['submitActionId']",
+                                                    "block"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {
+                                        "Post_incident_as_adaptive_card_and_wait_for_a_response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Post_incident_as_adaptive_card_and_wait_for_a_response')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "WhereToLockUser": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "messageId": {
+                                                    "type": "string"
+                                                },
+                                                "messageLink": {
+                                                    "type": "string"
+                                                },
+                                                "responder": {
+                                                    "properties": {
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "email": {
+                                                            "type": "string"
+                                                        },
+                                                        "objectId": {
+                                                            "type": "string"
+                                                        },
+                                                        "tenantId": {
+                                                            "type": "string"
+                                                        },
+                                                        "userPrincipalName": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "responseTime": {
+                                                    "type": "string"
+                                                },
+                                                "submitActionId": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Post_incident_as_adaptive_card_and_wait_for_a_response": {
+                                    "runAfter": {
+                                        "Send_SAP_incident_with_Microsoft_Teams_link_via_email": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "limit": {
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "ApiConnectionWebhook",
+                                    "inputs": {
+                                        "body": {
+                                            "body": {
+                                                "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Azure Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"View incident\",\n                            \"url\": \"@{triggerBody()?['object']?['properties']?['incidentUrl']}\",\n                            \"id\": \"openSentinel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time (UTC)\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['additionalData']?['tactics']}\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Block User on...\",\n            \"style\": \"destructive\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.ChoiceSet\",\n                        \"id\": \"WhereToLockUser\",\n                        \"label\": \"On which system?\",\n                        \"style\": \"expanded\",\n                        \"choices\": [\n                            {\n                                \"title\": \"SAP ERP\",\n                                \"value\": \"erp\"\n                            },\n                            {\n                                \"title\": \"SAP BTP Cloud Identity Service\",\n                                \"value\": \"btp\"\n                            },\n                            {\n                                \"title\": \"Azure AD (globally)\",\n                                \"value\": \"aad\"\n                            }\n                        ],\n                        \"value\": \"erp\",\n                        \"isRequired\": true,\n                        \"errorMessage\": \"Given choice unknown!\"\n                    },\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"blockComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"block\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        },\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Flag as false positive\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"flagComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"flag\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}",
+                                                "recipient": {
+                                                    "channelId": "@{body('Parse_Incident_Custom_Details')?['TeamsChannelID'][0]?['channelID']}",
+                                                    "groupId": "@{body('Parse_Incident_Custom_Details')?['TeamsChannelID'][0]?['teamID']}"
+                                                },
+                                                "updateMessage": "Thanks for keeping SAP on Azure secure!"
+                                            },
+                                            "notificationUrl": "@{listCallbackUrl()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                            }
+                                        },
+                                        "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                    }
+                                },
+                                "Post_timeout_message_in_Channel": {
+                                    "runAfter": {
+                                        "Post_incident_as_adaptive_card_and_wait_for_a_response": [
+                                            "TimedOut",
+                                            "Skipped",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "messageBody": "<p>Incident notification timed out after 1h!&nbsp;</p>",
+                                            "recipient": {
+                                                "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
+                                                "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                    }
+                                },
+                                "Send_SAP_incident_with_Microsoft_Teams_link_via_email": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "Body": "<p>@{variables('email-body')}</p>",
+                                            "Cc": "@variables('account')",
+                                            "Importance": "High",
+                                            "Subject": "@{triggerBody()?['object']?['properties']?['title']}, block SAP user @{variables('SAP-user')}?",
+                                            "To": "@variables('EmailDestination')"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/v2/Mail"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Payload_parsing_Scope": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Initialize_Custom_Details_JSON_string": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "custom-details-json-string",
+                                        "type": "string",
+                                        "value": "@{replace(replace(replace(replace(triggerBody()?['object']?['properties']?['alerts'][0]?['properties']?['additionalData']?['Custom Details'],'}\"','}'),'\"{','{'),'\\',''),'\"}]}','}]}')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entities__Kind_for_dynamic_json": {
+                            "runAfter": {
+                                "Initialize_base_path_from_query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entitiesKindArray",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entities__Name_for_dynamic_json": {
+                            "runAfter": {
+                                "Initialize_Entities__Kind_for_dynamic_json": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entitiesNameArray",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SAPClientId_variable": {
+                            "runAfter": {
+                                "Initialize_SID_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sap-client-id",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SAP_user_to_be_locked": {
+                            "runAfter": {
+                                "Initialize_account_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SAP-user",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SID_variable": {
+                            "runAfter": {
+                                "Initialize_Custom_Details_JSON_string": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SID",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_account_variable": {
+                            "runAfter": {
+                                "Initialize_SAPClientId_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "account",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_actionable_message_for_outlook": {
+                            "runAfter": {
+                                "Initialize_Entities__Name_for_dynamic_json": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "adaptiveCard",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_base_path_from_query": {
+                            "runAfter": {
+                                "Initialize_SAP_user_to_be_locked": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "basePath",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_email_body": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "email-body",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Initialize_actionable_message_for_outlook": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EmailDestination",
+                                        "type": "string",
+                                        "value": "@parameters('DefaultEmailDestination')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Payload_parsing_Scope": {
+                            "actions": {
+                                "Compose_dynamic_json_for_entities_table": {
+                                    "runAfter": {
+                                        "Iterate_related_incident_entities": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": [
+                                        {
+                                            "items": "@variables('entitiesKindArray')",
+                                            "type": "Column",
+                                            "width": 40
+                                        },
+                                        {
+                                            "items": "@variables('entitiesNameArray')",
+                                            "type": "Column",
+                                            "width": 60
+                                        }
+                                    ]
+                                },
+                                "Iterate_related_incident_entities": {
+                                    "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                    "actions": {
+                                        "Append_to_kind_array": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "entitiesKindArray",
+                                                "value": {
+                                                    "text": "@{items('Iterate_related_Incident_entities')?['kind']}",
+                                                    "type": "TextBlock",
+                                                    "weight": "Default"
+                                                }
+                                            }
+                                        },
+                                        "Append_to_name_array": {
+                                            "runAfter": {
+                                                "Append_to_kind_array": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "entitiesNameArray",
+                                                "value": {
+                                                    "text": "@{items('Iterate_related_incident_entities')?['properties']?['friendlyName']}",
+                                                    "type": "TextBlock",
+                                                    "weight": "Default"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Select_base_path_from_query": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "Parse_Incident_Custom_Details": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@variables('custom-details-json-string')",
+                                        "schema": {
+                                            "properties": {
+                                                "AuditClassID": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "BagOfDetails": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "DestinationEmail": {
+                                                                "type": "string"
+                                                            },
+                                                            "MessageID": {
+                                                                "type": "string"
+                                                            },
+                                                            "Severity": {
+                                                                "type": "string"
+                                                            },
+                                                            "SystemID": {
+                                                                "type": "string"
+                                                            },
+                                                            "Tactics": {
+                                                                "type": "string"
+                                                            },
+                                                            "TeamsChannelID": {
+                                                                "properties": {
+                                                                    "channelID": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "teamID": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "MessageID",
+                                                            "Tactics",
+                                                            "SystemID",
+                                                            "Severity",
+                                                            "DestinationEmail",
+                                                            "TeamsChannelID"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "DestinationEmail": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "IsProductionEnv": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SAPAuditLogMessageID": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SAPProcessType": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SAPUser": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SystemRole": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SystemUsage": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "TeamsChannelID": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "channelID": {
+                                                                "type": "string"
+                                                            },
+                                                            "teamID": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "teamID",
+                                                            "channelID"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Run_query_to_select_sap_basepath": {
+                                    "runAfter": {
+                                        "Select_related_entities": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "SAPSystems(SelectedSystems='@{variables('SID')}')| project tostring(todynamic(InterfaceAttributes).BasePath)",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                            "timerange": "Last 24 hours"
+                                        }
+                                    }
+                                },
+                                "Select_base_path_from_query": {
+                                    "runAfter": {
+                                        "Run_query_to_select_sap_basepath": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "basePath",
+                                        "value": "@{body('Run_query_to_select_sap_basepath')?['value'][0]?['InterfaceAttributes_BasePath']}"
+                                    }
+                                },
+                                "Select_entities": {
+                                    "runAfter": {
+                                        "Parse_Incident_Custom_Details": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Select",
+                                    "inputs": {
+                                        "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                        "select": {
+                                            "entity": "@item()?['properties']?['friendlyName']",
+                                            "entity-type": "@item()?['kind']"
+                                        }
+                                    }
+                                },
+                                "Select_related_entities": {
+                                    "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                    "actions": {
+                                        "Switch": {
+                                            "runAfter": {},
+                                            "cases": {
+                                                "Case": {
+                                                    "case": "CloudApplication",
+                                                    "actions": {
+                                                        "Select_SID_from_Incident": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "SID",
+                                                                "value": "@{items('Select_related_entities')?['properties']?['friendlyName']}"
+                                                            }
+                                                        },
+                                                        "Set_SAP_client_id": {
+                                                            "runAfter": {
+                                                                "Select_SID_from_Incident": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "sap-client-id",
+                                                                "value": "@{string(formatNumber(items('Select_related_entities')?['properties']?['appId'],'000'))}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_2": {
+                                                    "case": "Account",
+                                                    "actions": {
+                                                        "Set_account_from_incident": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "account",
+                                                                "value": "@{items('Select_related_entities')?['properties']?['friendlyName']}"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "expression": "@items('Select_related_entities')?['kind']",
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_Email_if_DestinationEmail_is_there,_else_DefaultEmail": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 2
+                                        }
+                                    }
+                                },
+                                "Set_Email_if_DestinationEmail_is_there,_else_DefaultEmail": {
+                                    "runAfter": {
+                                        "Set_SAP_user_to_be_locked": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "EmailDestination",
+                                        "value": "@{coalesce(body('Parse_Incident_Custom_Details')?['DestinationEmail'][0],parameters('DefaultEmailDestination'))}"
+                                    }
+                                },
+                                "Set_SAP_user_to_be_locked": {
+                                    "runAfter": {
+                                        "Select_entities": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "SAP-user",
+                                        "value": "@{body('Parse_Incident_Custom_Details')?['SAPUser'][0]}"
+                                    }
+                                },
+                                "Set_actionable_message_for_outlook": {
+                                    "runAfter": {
+                                        "Compose_dynamic_json_for_entities_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "adaptiveCard",
+                                        "value": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Azure Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"Navigate to Microsoft Teams to act\",\n                            \"url\": \"https://teams.microsoft.com/l/channel/19%3afebede5de91d4198bd0f75be9047d029%40thread.tacv2/Notifications?groupId=f812e2e3-8e37-475a-9d82-3d7297e9ead1&tenantId=72f988bf-86f1-41af-91ab-2d7cd011db47\",\n                            \"id\": \"openTeamsChannel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['additionalData']?['tactics']}\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}"
+                                    }
+                                },
+                                "Set_email_body": {
+                                    "runAfter": {
+                                        "Set_actionable_message_for_outlook": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "email-body",
+                                        "value": "<script type=\"application/adaptivecard+json\"> \n@{variables('adaptiveCard')}\n</script>"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_email_body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Post_parsing_error_message_to_Logic_App_admin": {
+                            "runAfter": {
+                                "Payload_parsing_Scope": [
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "isAlert": true,
+                                    "messageBody": "<p>Sentinel SAP Incident parsing failed or timed out (after 1h)! Please verify your logic and process the incident from Sentinel manually till resolved.</p>",
+                                    "recipient": "admin@contoso.com"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                            }
+                        },
+                        "Post_processing_error_message_to_Logic_App_admin": {
+                            "runAfter": {
+                                "Incident_response_Scope": [
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "isAlert": true,
+                                    "messageBody": "<p>Sentinel SAP Incident workflow action failed or timed out (after 1h)! Please verify your logic and process the incident from Sentinel manually till resolved.</p>",
+                                    "recipient": "admin@contoso.com"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                            }
+                        },
+                        "Terminate": {
+                            "runAfter": {
+                                "Incident_response_Scope": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runStatus": "Succeeded"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuread": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
+                                "connectionName": "[variables('AzureadConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName": "[variables('Office365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                            },
+                            "teams_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "SAPIncidentResponseLockUser",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureadConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureadConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Office365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Office365ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

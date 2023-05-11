@@ -1,0 +1,141 @@
+id: bde3ff9b-2b5d-4aec-8402-ac2f9dbbca7e
+name: SAP - (Preview) Sensitive Static Parameter Has Changed
+description: |-
+  'Produces alerts on static parameter changes which are considered as risky
+  '
+severity: Medium
+requiredDataConnectors:
+- connectorId: SAP
+  dataTypes:
+  - SAPGetSystemParameter
+  - SAPSystems
+  - SAPAuditLog
+  - SAP_PAHI
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Impact
+relevantTechniques: ''
+query: |-
+  // Risky static parameter changes
+  // IMPORTANT!!!!! Please set the alert lookback period for at least 7 days, to make sure that the activities of server restart and parameter historical changes are detected.
+  // this is the actual lookback period for parameter changes
+  let LookBack4Changes= 2h;
+  let SelectedSystemRoles =  dynamic(["All System Roles"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]);
+  // we need to look back in PAHI 1d as PAHI updates are full dialy + hourly deltas
+  let PAHILookBack= 36h;
+  // get the alert relevant parameters
+  let GetSystemParams= materialize(SAPGetSystemParameter()
+  | where EnableAlerts
+  | project-away SearchKey, EnableAlerts, DummyJoinField, LastUpdatedTimeUTC);
+  let ParameterSets= GetSystemParams |summarize RelevantParams= make_set(ParameterName, 1000);
+  let StateDescriptions= dynamic({"A":"Active", "C": "Changed", "O": "Original", "D": "<<parameter inactive>>" });
+  // CONFIGURATION OPTION- determine which system roles are relevant for this alert
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole, SystemUsage
+      | extend SystemRole= replace_string(SystemRole, 'Unknown (Production)', 'Unknown');
+  let RiskyParameterChanges= materialize(SAP_PAHI
+  | where SystemID in (SelectedSystems)
+  | where PARNAME in (ParameterSets)
+  | where TimeGenerated > ago(PAHILookBack) // PAHI is loaded in full mode daily with entire history
+  | summarize LastObserved= max(TimeGenerated), FirstObserved= min(TimeGenerated) by PARNAME, PARTYPE, HOSTNAME, SYSTEMID, PARDATE, PARSTATE, PARVALUE, SystemID
+  | extend ChangeDay= todatetime(PARDATE)
+  | extend FirstObserved= iff(startofday(FirstObserved)== ChangeDay,FirstObserved, ChangeDay));
+  // recently changed
+  let RecentlyChangedParameters= RiskyParameterChanges
+  | where PARSTATE != "C" // latest state can't be "Changed"
+  | where strcmp( PARDATE, format_datetime(ago(LookBack4Changes), "yyyyMMdd")) >= 0
+  | where FirstObserved > ago(LookBack4Changes + 60m)
+  | project-rename LastChangedOn= ChangeDay, LatestParValue= PARVALUE, LatestParState= PARSTATE;
+  // look for application server starts, as the static parameters take effect after restart
+  let ApplicationServerRestarts= (SAPAuditLog
+  | where SystemID in (SelectedSystems)
+  | where MessageID == "AUH"
+  | summarize by ServerStartTimeDT= UpdatedOn_t, SystemID) ;
+  // look for executions of transaction which are used for parameter changes
+  let ParameterChangeActions= (SAPAuditLog
+  | where SystemID in (SelectedSystems)
+  | where MessageID == "AU3"
+  | where (Variable1 == "RZ10" or Variable1 == "RZ10") or (TransactionCode == "RZ10" or TransactionCode == "RZ10"))
+  | project ParameterChangeActionDT= UpdatedOn_t, User, SystemID, MessageText, TransactionCode= Variable1, Email;
+  RecentlyChangedParameters
+  // get all matching parameters so we can look for previous values
+  | join kind= leftouter (RiskyParameterChanges | project PARNAME, PARVALUE, HOSTNAME, SystemID, PreviousChangeDate= ChangeDay, PARSTATE, SYSTEMID) on PARNAME, SystemID, SYSTEMID, HOSTNAME
+  | project-away PARNAME1, HOSTNAME1, SystemID1
+  | where LastChangedOn > PreviousChangeDate
+  | where PARVALUE != LatestParValue or PARSTATE !=  LatestParState
+  // keep the latest record from the PreviousChangeDate history
+  | summarize FirstObserved= min(FirstObserved), PreviousChangeDate= arg_max(PreviousChangeDate, *) by ParameterName= PARNAME, SystemID, PARTYPE, LatestParState, SYSTEMID, LastObserved , LastChangedOn, HOSTNAME
+  | summarize FirstObserved= min(FirstObserved) by ParameterName, LatestParValue, LatestParState, SystemID, PreviousChangeDate, PreviousParValue= PARVALUE, PreviousParState= PARSTATE, SystemNumber= SYSTEMID, Host= HOSTNAME
+  | lookup GetSystemParams on SystemID, ParameterName
+  | join kind= leftouter ApplicationServerRestarts on SystemID
+  | where (FirstObserved > ServerStartTimeDT or isnull(ServerStartTimeDT))
+  | join kind= leftouter ParameterChangeActions on SystemID
+  | where (FirstObserved > ParameterChangeActionDT or isnull(ParameterChangeActionDT))
+  | summarize ServerStartTimeDT= arg_max(ServerStartTimeDT, *) by ParameterName, SystemID, ParameterChangeActionDT, SystemNumber, Host
+  | summarize ParameterChangeActionDT= arg_max(ParameterChangeActionDT, *) by ParameterName, SystemID, SystemNumber, Host
+  | project-rename ParameterDescription= Comment
+  | project-away SystemID1, SystemID2
+  | extend LatestParState= tostring(StateDescriptions[LatestParState]), PreviousParState= tostring(StateDescriptions[PreviousParState])
+  | extend ChangeScope= case((LatestParState == "Active" and PreviousParState == "<<parameter inactive>>"),strcat("activated")
+  ,(LatestParValue == PreviousParValue and LatestParState == "Active" and PreviousParState == "Changed"),"No changes detected"
+  ,(LatestParValue != PreviousParValue and LatestParState == "Active"),"changed"
+  , (LatestParState == "<<parameter inactive>>" and PreviousParState != "<<parameter inactive>>"),"deactivated", "Not sure")
+  | where ChangeScope != "No changes detected"
+  | extend LatestNumeric= extract("([0-9.]+)", 1, replace(",",".", LatestParValue), typeof(real))
+  | extend LatestAlpha= extract("([A-Z]+[a-z])", 1, LatestParValue, typeof(string))
+  | extend ValueComparison= case(ExpectedValue == LatestParValue and (Option in(dynamic(["LE", "GE", "EQ"])) or isempty( Option)), "OK"
+  , (Option == "AlertOnAnyChange" and LatestParValue != PreviousParValue), "Not OK"
+  , LatestAlpha != ExpectedAlpha, "Cannot compare values of different units"
+  , LatestNumeric >= ExpectedNumeric and Option in(dynamic(["GT", "GE"])), "OK"
+  , LatestNumeric <= ExpectedNumeric and Option in(dynamic(["LT", "LE"])), "OK"
+  , "Not OK")
+  | extend ExpectedValue= iff(Option == "AlertOnAnyChange", "alert on any value changes ",strcat("Expected value is ", Option, " '", ExpectedValue, "'"))
+  | extend AlertName= strcat("SAP Parameter '", ParameterName, "' was  ", ChangeScope, iff(isnotempty( SystemRole),strcat(" in a ", tolower(SystemRole), " system"), ""),".")
+  | extend Details= strcat(AlertName, iff(ChangeScope == "activated", strcat(", value set to '", LatestParValue, "'"), iff(ChangeScope == "deactivated", strcat(" Previous values was '", PreviousParValue,"'")
+  , iff(ChangeScope == "changed", strcat(" Value changed from '", PreviousParValue, "'", " to '", LatestParValue, "'"),"'"))),".")
+  | extend ExtendedDetails= strcat("The parameter ", ParameterName, " is described as '", ParameterDescription,"'. This parameter change is a static change. Parameter change was first observed on "
+  , format_datetime(FirstObserved,"yy-MM-dd [HH:mm:ss]"), " , and has likely taken effect after an application server start."
+  , iff(isnotnull(ServerStartTimeDT), strcat(" A server restart was reported on ", format_datetime(ServerStartTimeDT,"yy-MM-dd [HH:mm:ss]"),"."),"")
+  , iff(isnotnull(ParameterChangeActionDT), strcat(" The last parameter change detected on the sytem was performed on ", format_datetime(ParameterChangeActionDT,"yy-MM-dd [HH:mm:ss]"), " by user ", User,"."),""),". ", ExpectedValue)
+  | project-reorder ValueComparison, ExpectedValue, ChangeScope, Details, LatestParValue, PreviousParValue, LatestParState, PreviousParState
+  | where ValueComparison != "OK"
+  | extend Dummy= ""
+  | extend AlertRuleUniqueName = 'sensitivestaticparameterhaschanged'
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: |
+    <img src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SAP/Workbooks/SAPVMIcon.svg" width="30"/>
+      </br>
+    {{Details}}.
+    {{ExtendedDetails}}.
+    </br>
+    For more troubleshooting guidance, visit the [documentation](https://aka.ms/Sentinel4SAPDocsParameterChanges).
+  alertTacticsColumnName: Dummy
+  alertSeverityColumnName: Severity
+customDetails:
+  SAPUser: User
+  SystemRole: SystemRole
+  ParameterName: ParameterName
+  SystemNumber: SystemNumber
+  LatestParValue: LatestParValue
+  AlertRuleUniqueName: AlertRuleUniqueName
+entityMappings:
+- entityType: CloudApplication
+  fieldMappings:
+  - identifier: Name
+    columnName: SystemID
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: Host
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Email
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.56

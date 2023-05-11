@@ -1,0 +1,17 @@
+{
+    "properties": {
+        "category": "SAPFunctions",
+        "displayName": "SAPUsersAuthorizations",
+        "query": "// get the relevant user MD load frequency\nlet UserMDTimeAgo = totimespan(toscalar(SAPGetParameters('UserMDLookBack')| project-keep ValueLow));\n// let SnapshotAge= 0d;// allow to go back in time and see user MD snapshots\n// gather the authorizations per role\nlet Auths= SAP_AGR_1251 \n| where TimeGenerated between (ago(UserMDTimeAgo+ SnapshotAge).. ago(SnapshotAge))\n| summarize arg_max(TimeGenerated, OBJECT, FIELD, LOW, HIGH, AUTH) by AGR_NAME, MANDT, COUNTER, SystemID;\nlet AuthsEQs= Auths\n| summarize Lows= make_set_if(LOW, isnotempty(LOW), 1500), Highs=make_set_if(HIGH, isnotempty(HIGH), 1500)\n// , FromAuths= make_set(AUTH,1000) \nby AGR_NAME, MANDT, SystemID, OBJECT, FIELD\n| extend Option= 'EQ'\n| extend EQs= set_union(Lows, Highs)\n| project-away Lows, Highs;\nlet AuthsBTs= Auths | where not(isempty(HIGH))\n| summarize \n// FromAuths= make_set(AUTH,1000) \nby AGR_NAME, MANDT, SystemID, OBJECT, FIELD, LOW, HIGH\n| extend Option= 'BT';\n// get the user role assignments, including child roles\nlet UserRoles= (SAP_AGR_USERS \n| where TimeGenerated > ago (7d)\n| summarize\narg_max(TimeGenerated, UNAME, AGR_NAME, MANDT, SystemID)\nby UNAME, AGR_NAME, MANDT, SystemID\n// get the child roles as well\n| join kind= leftouter   (SAP_AGR_AGRS\n| where TimeGenerated > ago(UserMDTimeAgo)\n| summarize arg_max(TimeGenerated, *) by AGR_NAME, CHILD_AGR, MANDT,SystemID)\non MANDT, SystemID, AGR_NAME\n// Role is the lowest level\n| extend Role = iff(isempty(CHILD_AGR), AGR_NAME, CHILD_AGR)\n| summarize by UNAME, MANDT, SystemID, Role);\n// query\nUserRoles | join kind= inner (AuthsEQs | union AuthsBTs | project-rename Role= AGR_NAME) on SystemID, MANDT, Role\n|summarize Roles=make_set(Role,100), EQs=make_set(EQs, 100) by ClientID = MANDT, SystemID, User=UNAME, Object=OBJECT, Field= FIELD, Option, Low= LOW, High= HIGH",
+        "functionAlias": "SAPUsersAuthorizations",
+        "functionParameters": "SnapshotAge:timespan = 0d",
+        "version": 2,
+        "etag": "*"
+    },
+    "name": "SAPUsersAuthorizations",
+    "type": "savedSearches",
+    "dependsOn": [
+        "[variables('workspace-dependency')]"
+    ],
+    "apiVersion": "2022-10-01"
+}
