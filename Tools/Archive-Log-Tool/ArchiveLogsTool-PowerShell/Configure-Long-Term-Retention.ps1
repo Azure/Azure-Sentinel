@@ -289,7 +289,7 @@ function Update-TablesRetention {
         $TablesApiBody = @"
 			{
 				"properties": {
-					"retentionInDays": 4,
+					"retentionInDays": $null,
 					"totalRetentionInDays":$ArchiveDays
 				}
 			}
