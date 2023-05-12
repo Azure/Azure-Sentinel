@@ -1,0 +1,83 @@
+id: 5965d3e7-8ed0-477c-9b42-e75d9237fab0
+name: Data Exfiltration -  Detect data transfer using timeseries anomaly (ASIM Web Session)
+description: |
+  'Identifies anomalous data transfer to public networks. The query leverages built-in KQL anomaly detection algorithms that detects large deviations from a baseline pattern.
+  A sudden increase in data transferred to unknown public networks is an indication of data exfiltration attempts and should be investigated.
+  The higher the score, the further it is from the baseline value.
+  The output is aggregated to provide summary view of unique source IP to destination IP address and port bytes sent traffic observed in the flagged anomaly hour.
+  The source IP addresses which were sending less than bytessentperhourthreshold have been exluded whose value can be adjusted as needed .
+  You may have to run queries for individual source IP addresses from SourceIPlist to determine if anything looks suspicious'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+  let startTime = 14d;
+  let endTime = 1d;
+  let timeframe = 1h;
+  let scorethreshold = 5;
+  let bytessentperhourthreshold = 10;
+  let TimeSeriesData = 
+  _Im_WebSession(starttime=startofday(ago(startTime)),endtime =startofday(ago(endTime)))
+  | where isnotempty(DstIpAddr) and isnotempty(SrcIpAddr) and isnotempty(SrcBytes)
+  | where not(ipv4_is_private(DstIpAddr))
+  | project TimeGenerated, SrcBytes, EventProduct
+  | make-series TotalBytesSent = sum(SrcBytes) on TimeGenerated from startofday(ago(startTime)) to startofday(ago(endTime)) step timeframe by EventProduct; // TimeSeriesData block ends here
+  //Filter anomolies against TimeSeriesData
+  let TimeSeriesAlerts = materialize(TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')
+  | mv-expand TotalBytesSent to typeof(long), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0 and baseline > 0
+  | extend AnomalyHour = TimeGenerated
+  | extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), BaselineBytesSentinMBperHour = round(((baseline/2024)/1024),2), score = round(score,2)
+  | project EventProduct, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, anomalies, score); // TimeSeriesAlerts block end here
+  let AnomalyHours = materialize (TimeSeriesAlerts | where TimeGenerated >ago(2d) | project TimeGenerated);
+  //BaseLogs aggregated per hour
+  let BaseLogs = 
+  _Im_WebSession(starttime=startofday(ago(2d)))
+  | where isnotempty(DstIpAddr) and isnotempty(SrcIpAddr) and isnotempty(SrcBytes)
+  | project TimeGenerated, DstIpAddr, SrcIpAddr, SrcBytes, DstBytes, DstPortNumber, EventProduct
+  | extend DateHour = bin(TimeGenerated, timeframe) // create a new column and round to hour
+  | where DateHour in (AnomalyHours) // Filter dataset to include only anomaly AnomalyHours
+  | where not(ipv4_is_private(DstIpAddr))
+  | extend SentBytesinMB = ((SrcBytes / 1024)/1024), ReceivedBytesinMB = ((DstBytes / 1024)/1024)
+  | summarize HourlyCount = count(), TimeGeneratedMax = arg_max(TimeGenerated,*), DestinationIPList = make_set(DstIpAddr,100), DestinationPortList = make_set(DstPortNumber, 100), SentBytesinMB = sum(SentBytesinMB), ReceivedBytesinMB = sum(ReceivedBytesinMB) by SrcIpAddr, EventProduct, TimeGeneratedHour = bin(TimeGenerated,timeframe)
+  | where SentBytesinMB > bytessentperhourthreshold
+  | sort by TimeGeneratedHour asc, SentBytesinMB desc
+  | extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition
+  | where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour
+  | project EventProduct, TimeGeneratedHour, TimeGeneratedMax, SrcIpAddr, DestinationIPList, DestinationPortList, SentBytesinMB, ReceivedBytesinMB, Rank;
+  TimeSeriesAlerts
+  | where TimeGenerated > ago(2d)
+  | join kind = inner (BaseLogs | extend AnomalyHour = TimeGeneratedHour)
+  on EventProduct, AnomalyHour | sort by score desc
+  | project EventProduct, AnomalyHour, TimeGeneratedMax, SrcIpAddr, DestinationIPList, DestinationPortList, SentBytesinMB, ReceivedBytesinMB, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, score, anomalies
+  | summarize EventCount = count(), startTimeUtc = min(TimeGeneratedMax), EndTimeUtc = max(TimeGeneratedMax), SourceIPMax = arg_max(SrcIpAddr,*), SentBytesinMB = sum(SentBytesinMB), ReceivedBytesinMB = sum(ReceivedBytesinMB), SourceIPList = make_set(SrcIpAddr, 100), DestinationIPList = make_set(DestinationIPList,100) by AnomalyHour, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, score, anomalies
+  | project EventProduct, AnomalyHour, startTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, SentBytesinMB, ReceivedBytesinMB, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, anomalies, score, EventCount
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPMax
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Data Exfiltration -  Detect data transfer using timeseries anomaly (ASIM Web Session)"
+  alertDescriptionFormat: "Identifies anomalous data transfer to public networks. The query leverages built-in KQL anomaly detection algorithms that detects large deviations from a baseline pattern.
+  A sudden increase in data transferred to unknown public networks is an indication of data exfiltration attempts and should be investigated.
+  The higher the score, the further it is from the baseline value.
+  The output is aggregated to provide summary view of unique source IP to destination IP address and port bytes sent traffic observed in the flagged anomaly hour.
+  The source IP addresses which were sending less than bytessentperhourthreshold have been exluded whose value can be adjusted as needed .
+  You may have to run queries for individual source IP addresses from SourceIPlist to determine if anything looks suspicious"
+version: 1.0.0
+kind: Scheduled
