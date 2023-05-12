@@ -1,0 +1,92 @@
+{
+    "id": "SAPBTPAuditLog",
+    "title": "SAP BTP",
+    "publisher": "Microsoft",
+    "descriptionMarkdown": "SAP Business Technology Platform (SAP BTP) brings together data management, analytics, artificial intelligence, application development, automation, and integration in one, unified environment.",
+    "graphQueries": [
+        {
+            "metricName": "Total data received",
+            "legend": "SAPBTPAuditLog_CL",
+            "baseQuery": "SAPBTPAuditLog_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "BTP account token issuance events",
+            "query": "SAPBTPAuditLog_CL\n            | where MessageData.message startswith \"TokenIssuedEvent\"\n            | project TimeGeneratedBTP, UserName, IPAddress, MessageData.message"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "SAPBTPAuditLog_CL",
+            "lastDataReceivedQuery": "SAPBTPAuditLog_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "SAPBTPAuditLog_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": true
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Microsoft.Web/Sites, Microsoft.Web/ServerFarms, Microsoft.Insights/Components, Microsoft.Storage/StorageAccounts",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            },
+            {
+                "name": "Microsoft.Insights/DataCollectionEndpoints, Microsoft.Insights/DataCollectionRules",
+                "description": "Read and write permissions to Data Collection Rules/Endpoints is required. Permissions to assign the Monitoring Metrics Publisher role to the Azure Function is required. [See the documentation to learn more about Data Collection Rules](https://docs.microsoft.com/azure/azure-monitor/platform/data-collection-rules)."
+            },
+            {
+                "name": "Azure Key Vault",
+                "description": "A Key Vault to hold SAP BTP client secret [See the documentation to learn more about Key Vault](https://docs.microsoft.com/azure/key-vault/general/overview)."
+            },
+            {
+                "name": "SAP BTP auditlog-management service, and key",
+                "description": "Connectivity and permissions to retrieve SAP BTP Audit logs in the Cloud Foundry environment."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses Azure Functions to connect to SAP BTP Global Account to pull its logs into Azure Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+        },
+        {
+            "title": "",
+            "description": "**Step 1 - Create a an Azure Key Vault**\n\n Refer to the [Azure Key Vault quickstart guide](https://learn.microsoft.com/azure/key-vault/general/quick-create-portal) for details. This key vault will hold a client secret required to access the Audit Retrieval API."
+        },
+        {
+            "title": "",
+            "description": "**Step 2 - Configuration steps for the SAP BTP Audit Retrieval API**\n\nFollow the steps provided by SAP [see Audit Log Retrieval API for Global Accounts in the Cloud Foundry Environment](https://help.sap.com/docs/btp/sap-business-technology-platform/audit-log-retrieval-api-for-global-accounts-in-cloud-foundry-environment/). \n\n1. Take a note of the **url** (Audit Retrieval API URL), **uaa.url** (User Account and Authentication Server url) and the associated **uaa.clientid**.\n2. Add the **uaa.clientsecret** as a secret in the Key Vault created in Step 1 and take note of the **name** of the secret.\n\n>**NOTE:** You can onboard one or more BTP subaccounts by following the steps provided by SAP [see Audit Log Retrieval API Usage for Subaccounts in the Cloud Foundry Environment](https://help.sap.com/docs/btp/sap-business-technology-platform/audit-log-retrieval-api-usage-for-subaccounts-in-cloud-foundry-environment/). Repeat the steps above and redeploy the ARM template (step 3) for each subaccount."
+        },
+        {
+            "title": "",
+            "description": "**Step 3 - Azure Resource Manager (ARM) Template**\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-sapbtp-azuredeploy)\n2. Enter the values collected in steps 1 and 2 as parameters in the ARM template. Populate Key Vault name, name of the Key Vault secret, Audit Retrieval API URL, UAA Server URL, clientid.\n3. Click **Purchase** to deploy."
+        },
+        {
+            "title": "",
+            "description": "**Step 4 - Set Key Vault Access Policy**\n\nTo allow the Azure Function to access the Key Vault, you need to set the Key Vault Access Policy. \n\n1. Go to the Azure Portal and select the Key Vault created in Step 1.\n2. Select Access Policies from the left menu.\n3. Click on the **+ Add Access Policy** button.\n4. Select the **Secret Permissions** tab.\n5. Select the **Get** permissions.\n6. Select the **Azure Functions** service principal from the **Select principal** dropdown.\n7. Click on the **Add** button.\n8. Click on the **Save** button."
+        }
+    ]
+}
