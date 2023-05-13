@@ -15,6 +15,11 @@ It is encapsulated in other Logic app to enrich Sentinel incident (like Enrich-A
 
 * AzureResourceGraph data access requires Reader access for targeted scope
 * Service principal client id and secret stored in Azure keyvault as 'azureresourcegraph-clientid' and 'azureresourcegraph-clientsecret' (Possible change to Managed Identity as supported by HTTP block)
+* Default playbooks have a limit of 3 join. It is possible to extend this by opening an Azure support case with following inputs
+  * LogicApp resource id and identity object id
+  * Example failed run because of it with correlation id and timestamp
+  * Expect about a week delay for change to be effective after support validation
+  * "There is a default limit of 3 join and 3 mv-expand operators in a single Resource Graph SDK query. You can request an increase in these limits for your tenant through Help + support." - https://learn.microsoft.com/en-us/azure/governance/resource-graph/concepts/query-language#supported-tabulartop-level-operators
 
 ## Screenshots
 ![Enrich-AzureResourceGraph](./images/Enrich-AzureResourceGraph.png)
@@ -29,7 +34,7 @@ It is encapsulated in other Logic app to enrich Sentinel incident (like Enrich-A
 5. Return response through HTTP
 
 Included queries (KQL, Azure ResourceGraph...
-Current query is
+Current default query is
 ```
 resources
 | where name == \"@{triggerBody()?['resourceName']}\"
