@@ -122,6 +122,9 @@
                             "inputs": {
                                 "schema": {
                                     "properties": {
+                                        "query": {
+                                            "type": "string"
+                                        },
                                         "resourceName": {
                                             "type": "string"
                                         }
@@ -132,8 +135,52 @@
                         }
                     },
                     "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Set_variable_arg_query_-_default": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "arg_query",
+                                        "value": "resources | where name == \"@{triggerBody()?['resourceName']}\" | join kind=inner (resourcecontainers | where type == 'microsoft.resources/subscriptions' | project subscriptionId, subscriptionName = name, subproperties = properties) on subscriptionId | project subscriptionName, resourceGroup, name, type, tags, subproperties"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_arg_query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_variable_arg_query_-_custom_query": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "arg_query",
+                                            "value": "@triggerBody()?['query']"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['query']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
                         "Get_secret_azureresourcegraph-clientid": {
-                            "runAfter": {},
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "ApiConnection",
                             "inputs": {
                                 "host": {
@@ -197,13 +244,26 @@
                                     "managementGroups": [
                                         "29208c38-8fc5-4a03-89e2-9b6e8e4b388b"
                                     ],
-                                    "query": "resources | where name == \"@{triggerBody()?['resourceName']}\" | join kind=inner (resourcecontainers | where type == 'microsoft.resources/subscriptions' | project subscriptionId, subscriptionName = name, subproperties = properties) on subscriptionId | project subscriptionName, resourceGroup, name, type, tags, subproperties"
+                                    "query": "@{variables('arg_query')}"
                                 },
                                 "headers": {
                                     "Authorization": "Bearer @{body('Parse_JSON')?['access_token']}"
                                 },
                                 "method": "POST",
                                 "uri": "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+                            }
+                        },
+                        "Initialize_variable_arg_query": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "arg_query",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
                             }
                         },
                         "Parse_JSON": {
