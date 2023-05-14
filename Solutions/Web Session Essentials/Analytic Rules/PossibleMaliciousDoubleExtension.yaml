@@ -1,0 +1,51 @@
+id: 6a71687f-00cf-44d3-93fc-8cbacc7b5615
+name: Possible Malicious File Double Extension (ASIM Web Session)
+description: |
+  'The double extension is one of the vulnerabilities of file upload, it can cause a lot of trouble if an attacker would upload a file with a virus. Adversaries may abuse a double extension in the filename as a means of masquerading the true file type. A file name may include a secondary file type extension that may cause only the first extension to be displayed (ex: File.txt.exe may render in some views as just File.txt). However, the second extension is the true file type that determines how the file is opened and executed'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Exfiltration
+relevantTechniques:
+  - T1190
+  - T1133
+  - T1048
+query: |
+  let common_file_ext_list = dynamic([".txt", ".xlsx", ".doc", ".docx", ".csv", ".pdf", ".png", ".jpg", ".jpeg"]);
+  _Im_WebSession (eventresult='Success')
+  | where TimeGenerated > ago(1d)
+  | where HttpRequestMethod in~ ("POST", "PUT") 
+  | project Url, SrcIpAddr
+  | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]),'/')[-1])
+  | extend FileWithdualextension = extract(@'([\w-]+\.\w+\.\w+)$',1, requestedFileName,typeof(string))
+  | extend FirstExt = tostring(split(FileWithdualextension,'.')[-2])
+  | where strcat('.',FirstExt) in~ (common_file_ext_list) // First extension is mostly from the common files
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileWithdualextension
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Possible Malicious File Double Extension (ASIM Web Session)"
+  alertDescriptionFormat: "The double extension is one of the vulnerabilities of file upload, it can cause a lot of trouble if an attacker would upload a file with a virus. Adversaries may abuse a double extension in the filename as a means of masquerading the true file type. A file name may include a secondary file type extension that may cause only the first extension to be displayed (ex: File.txt.exe may render in some views as just File.txt). However, the second extension is the true file type that determines how the file is opened and executed"
+version: 1.0.0
+kind: Scheduled
