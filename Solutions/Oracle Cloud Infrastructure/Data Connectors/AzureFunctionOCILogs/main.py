@@ -99,7 +99,7 @@ def get_cursor_by_group(sc, sid, group_name, instance_name):
 def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, sentinel: AzureSentinelConnector, start_ts):
     cursor = initial_cursor
     while True:
-        get_response = client.get_messages(stream_id, cursor, limit=1000)
+        get_response = client.get_messages(stream_id, cursor, limit=250)
         if not get_response.data:
             return
 
