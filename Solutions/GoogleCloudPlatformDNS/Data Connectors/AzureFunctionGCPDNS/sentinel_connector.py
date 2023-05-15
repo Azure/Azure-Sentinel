@@ -64,6 +64,7 @@ class AzureSentinelConnector:
 
     def _post_data(self, workspace_id, shared_key, body, log_type):
         events_number = len(body)
+        logging.info('Number Of Events {}'.format(events_number))
         body = json.dumps(body)
         method = 'POST'
         content_type = 'application/json'
@@ -95,6 +96,7 @@ class AzureSentinelConnector:
 
     def _check_size(self, queue):
         data_bytes_len = len(json.dumps(queue).encode())
+        logging.info('Length of the data {}'.format(data_bytes_len))
         return data_bytes_len < self.queue_size_bytes
 
     def _split_big_request(self, queue):
