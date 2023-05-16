@@ -16,7 +16,7 @@ relevantTechniques:
   - T1078
   - T1030
 query: |
-    let priv_users = ('_GetWatchlist("VIPUsers")') ;
+    let priv_users = ('_GetWatchlist("VIPUsers") | distinct ["User Principal Name"]');
     SAPAuditLog 
     | where User in (priv_users)
     | where (MessageID in ('AU1') and Variable1 in ('A','H')) //AU1 = Logon Successful
@@ -30,23 +30,25 @@ query: |
     | summarize DownloadsByUser = count(), Paths= make_set(Variable3, 10), ByteCount=sum(ByteCount) by SystemID, ClientID, User, TerminalIPv6, Email, Host, TransactionCode, Instance
     | where ByteCount > 5000
     ) on Email, User
-    | project  User, Host, ClientID, Email, MessageID, LogonTypes, SystemID, ByteCount, DownloadsByUser, TerminalIPv6, TransactionCode
-    | extend  AccountCustomEntity = User, HostCustomEntity = Host
-    | extend UPNSuffix = User
+    | project  User, Computer = Host, ClientID, Email, MessageID, LogonTypes, SystemID, ByteCount, DownloadsByUser, TerminalIPv6, TransactionCode
+    | extend UserName = tostring(split(User, '@', 0)[0]), UPNSuffix = tostring(split(User, '@', 1)[0])
+    | extend Account_0_Name = UserName
+    | extend Account_0_UPNSuffix = UPNSuffix
+    | extend IP_0_Address = TerminalIPv6
+    | extend Host_0_HostName = Computer
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: AccountCustomEntity
+        columnName: UserName
       - identifier: UPNSuffix
         columnName: UPNSuffix
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: Computer
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: TerminalIPv6
 version: 1.0.0
-kind: Scheduled
