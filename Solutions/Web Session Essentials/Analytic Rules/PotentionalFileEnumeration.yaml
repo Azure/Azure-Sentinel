@@ -1,0 +1,47 @@
+id: b3731ce1-1f04-47c4-95c2-9827408c4375
+name: Potential File Enumeration Activity (ASIM Web Session)
+description: |
+  'Detects potential file enumeration activity. This query looks for multiple 404 error code within a short timeframe by client ips '
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let ErrorCode=dynamic(["404"]);
+  let threshold = 10;
+  let FileNotFoundRequests = 
+    _Im_WebSession (eventresultdetails_in=(ErrorCode)) | where TimeGenerated >ago(500d)
+    // Filter the logs to include only HTTP GET requests with an HTTP status code of 404 and '/' in the URL
+    | where HttpRequestMethod =~ "GET" and Url contains "/";
+  FileNotFoundRequests
+  | summarize RequestCount = count(), FileCount=dcount(Url), RequestedURLs = make_set(Url, 100) by SrcIpAddr, bin(TimeGenerated, 1h)
+  | where RequestCount > threshold  // Adjust the threshold as per your requirements
+  | project SrcIpAddr, TimeGenerated, RequestCount, FileCount
+  | order by RequestCount desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  RequestCount: RequestCount
+  RequestedURLs: RequestedURLs
+  FileCount: FileCount
+alertDetailsOverride:
+  alertDisplayNameFormat: "Potential File Enumeration Activity (ASIM Web Session)"
+  alertDescriptionFormat: "Detects potential file enumeration activity. This query looks for multiple 404 error code within a short timeframe by client ips"
+version: 1.0.0
+kind: Scheduled
