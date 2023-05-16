@@ -1,0 +1,63 @@
+id: c99cf650-c53b-4c4c-9671-7d7500191a10
+name: Request for a rare resource on Web (ASIM Web Session)
+description: |
+  'This will look for connections to a domain where only a single file is requested, this is unusual as most modern web applications require additional recources. This type of activity is often assocaited with malware beaconing or tracking URL's delivered in emails.'
+severity: Low
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1102
+  - T1071
+query: |
+  let lookback = 1d;
+  let scriptExtensions = dynamic([".php",".aspx", ".asp", ".cfml"]);
+  //The number of URI's seen to be suspicious, higher = less likely to be suspicious
+  let uriThreshold = 1;
+  // Only look at connections that were allowed through the web proxy
+  _Im_WebSession (starttime=ago(lookback), eventresult='Success')
+  | project EventVendor, EventResult, SrcBytes, DstBytes, DstFQDN, Url, TimeGenerated, DstIpAddr , SrcIpAddr, HttpRequestMethod , HttpReferrer
+  // Only look at connections that were allowed through the web proxy
+  // Only look at connections where some data was exchanged.
+  | where SrcBytes > 0 and DstBytes > 0
+  // Extract Domain
+  | extend Domain = iif(countof( DstFQDN,'.') >=2, strcat(split(DstFQDN,'.')[-2],'.',split(DstFQDN,'.')[-1]), DstFQDN)
+  | extend GetData = iff(Url contains "?",1,0)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), make_set(Url,100), make_set(DstIpAddr,100), make_set(SrcIpAddr,100), numofConnections = count(), make_set(HttpRequestMethod,10), max(GetData), max(HttpReferrer) by Domain
+  // Determine the number of URIs that have been visited for the domain
+  | extend destinationURI = array_length(set_Url)
+  | where destinationURI <= uriThreshold
+  | where tostring(set_Url) has_any(scriptExtensions)
+  //Remove matches with referer
+  | where max_HttpReferrer == ""
+  //Keep requests where data was trasferred either in a GET with parameters or a POST
+  | where set_HttpRequestMethod in~ ("POST") or max_GetData == 1
+  //Defeat email click tracking, may increase FN's while decreasing FP's
+  | where set_Url !has "click" and set_HttpRequestMethod !has "GET"
+  | mvexpand set_Url, set_DstIpAddr
+  | extend RequestURL = tostring(set_Url), DestinationIP = tostring(set_DstIpAddr), ClientIP = tostring(set_SrcIpAddr)
+  | project-away set_Url, set_DstIpAddr, set_SrcIpAddr, destinationURI, Domain, StartTimeUtc, EndTimeUtc, max_GetData, max_HttpReferrer
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Request for a rare resource on Web (ASIM Web Session)"
+  alertDescriptionFormat: "This will look for connections to a domain where only a single file is requested, this is unusual as most modern web applications require additional recources. This type of activity is often assocaited with malware beaconing or tracking URL's delivered in emails."
+version: 1.0.0
+kind: Scheduled
