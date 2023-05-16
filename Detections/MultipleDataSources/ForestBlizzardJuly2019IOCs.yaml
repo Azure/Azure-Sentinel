@@ -1,0 +1,129 @@
+id: 074ce265-f684-41cd-af07-613c5f3e6d0d
+name: Known Forest Blizzard group domains - July 2019
+description: |
+  'Matches domain name IOCs related to Forest Blizzard group activity published July 2019 with CommonSecurityLog, DnsEvents and VMConnection dataTypes.
+  References: https://blogs.microsoft.com/on-the-issues/2019/07/17/new-cyberthreats-require-new-ways-to-protect-democracy/.'
+severity: High
+tags:
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWDnsQuery
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let DomainNames = dynamic(["irf.services","microsoft-onthehub.com","msofficelab.com","com-mailbox.com","my-sharefile.com","my-sharepoints.com",
+  "accounts-web-mail.com","customer-certificate.com","session-users-activities.com","user-profile-credentials.com","verify-linke.com","support-servics.net",
+  "onedrive-sharedfile.com","onedrv-live.com","transparencyinternational-my-sharepoint.com","transparencyinternational-my-sharepoints.com","soros-my-sharepoint.com"]);
+  (union isfuzzy=true
+    (CommonSecurityLog 
+    | parse Message with * '(' DNSName ')' * 
+    | extend Account = SourceUserID, Host = DeviceName, IPAddress = SourceIP
+    ),
+    (_Im_Dns(domain_has_any=DomainNames)
+    | extend IPAddress = SrcIpAddr, DNSName = DnsQuery, Host = Dvc),
+    (VMConnection 
+    | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+    | extend IPAddress = RemoteIp, Host = Computer
+    ),
+    (AzureDiagnostics 
+    | where ResourceType == "AZUREFIREWALLS"
+    | where Category == "AzureFirewallApplicationRule"
+    | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+    | extend DNSName = DestinationHost 
+    | extend IPAddress = SourceHost
+    ),
+    (AzureDiagnostics
+    | where ResourceType == "AZUREFIREWALLS"
+    | where Category == "AzureFirewallDnsProxy"
+    | project TimeGenerated,Resource, msg_s, Type
+    | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+    | where  Request_Name  has_any (DomainNames)
+    | extend DNSName = Request_Name
+    | extend IPAddress = ClientIP
+    ),
+    (AZFWApplicationRule
+    | where isnotempty(Fqdn)
+    | where Fqdn has_any (DomainNames)  
+    | extend DNSName = Fqdn 
+    | extend IPAddress = SourceIp
+    ),
+    (AZFWDnsQuery
+    | where isnotempty(QueryName)
+    | where QueryName has_any (DomainNames)
+    | extend DNSName = QueryName
+    | extend IPAddress = SourceIp
+    ),
+    (
+      _Im_WebSession(url_has_any=DomainNames)
+      | extend IPCustomEntity=IpAddr, HostCustomEntity=Hostname, AccoutCustomEntity=User
+    )
+  )
+  | where isnotempty(DNSName)
+  | where DNSName  has_any (DomainNames)
+  | extend timestamp = TimeGenerated, IPCustomEntity = IPAddress, AccountCustomEntity = Account, HostCustomEntity = Host
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.5.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: petebryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - 0-day Vulnerability" ]
