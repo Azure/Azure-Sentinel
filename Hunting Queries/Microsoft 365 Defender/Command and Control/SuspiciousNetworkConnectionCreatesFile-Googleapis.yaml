@@ -8,6 +8,10 @@ requiredDataConnectors:
   - DeviceNetworkEvents
 tactics:
 - Command and control
+technique:
+- T1105
+- T1102
+- T1102.002
 query: |
   let excludedProcessFileNames = datatable (browser:string)["teams.exe","GoogleUpdate.exe","outlook.exe","msedge.exe","chrome.exe","iexplorer.exe","brave.exe","firefox.exe"]; //add additional browsers, mail clients, and legitimate google desktop applications where needed for exclusion in your environment
   let processComWithGoogleAPI = DeviceNetworkEvents 
@@ -16,3 +20,25 @@ query: |
   | distinct InitiatingProcessFileName;
   DeviceFileEvents
   | where ActionType == "FileCreated" and InitiatingProcessFileName in~ (processComWithGoogleAPI)
+  | extend Name = InitiatingProcessAccountName
+  | extend HostName = DeviceName
+  | extend FileName = InitiatingProcessFileName
+  | extend FileHash = InitiatingProcessSHA256
+  | extend HashAlgorithm = "SHA256"
+  | sort by TimeGenerated asc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingProcessAccountName
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: InitiatingProcessSHA256
+      - identifier: Algorithm
+        columnName: HashAlgorithm
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+version: 0.0.1
