@@ -7,13 +7,38 @@ requiredDataConnectors:
   dataTypes:
   - DeviceNetworkEvents
 tactics:
-- Command and control
+  - Command and control
+technique:
+  - T1102
+  - T1102.002  
 query: |
   let excludedProcessFileNames = datatable (browser:string)["teams.exe","GoogleUpdate.exe","outlook.exe","msedge.exe","chrome.exe","iexplorer.exe","brave.exe","firefox.exe"]; //add additional browsers, mail clients, and legitimate google desktop applications where needed for exclusion in your environment
-   DeviceNetworkEvents
-   | where RemoteUrl has_any ("oauth2.googleapis.com","sheets.googleapis.com","drive.googleapis.com") and isnotempty(InitiatingProcessFileName)
-   | where not(InitiatingProcessFileName has_any (excludedProcessFileNames))
-   | extend joinkey = strcat(InitiatingProcessFileName, DeviceName, InitiatingProcessAccountName)
-   | join kind=leftouter (DeviceProcessEvents | extend joinkey = strcat(InitiatingProcessParentFileName, DeviceName, InitiatingProcessAccountName) | summarize ProcessesRanByParent = make_set(InitiatingProcessCommandLine) by joinkey) on joinkey
-   | join kind=leftouter (DeviceFileEvents | where ActionType == "FileCreated" | extend joinkey = strcat(InitiatingProcessParentFileName, DeviceName, InitiatingProcessAccountName) | summarize FilesCreated = make_set(FileName) by joinkey) on joinkey
-   | project TimeGenerated, DeviceName, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, FilesCreated, ProcessesRanByParent, LocalIP, RemoteIP, RemoteUrl
+  DeviceNetworkEvents
+  | where RemoteUrl has_any ("oauth2.googleapis.com","sheets.googleapis.com","drive.googleapis.com") and isnotempty(InitiatingProcessFileName)
+  | where not(InitiatingProcessFileName has_any (excludedProcessFileNames))
+  | extend joinkey = strcat(InitiatingProcessFileName, DeviceName, InitiatingProcessAccountName)
+  | join kind=leftouter (DeviceProcessEvents 
+  | extend joinkey = strcat(InitiatingProcessParentFileName, DeviceName, InitiatingProcessAccountName, InitiatingProcessAccountUpn, InitiatingProcessSHA256) 
+  | summarize ProcessesRanByParent = make_set(InitiatingProcessCommandLine) by joinkey) on joinkey
+  | join kind=leftouter (DeviceFileEvents 
+  | where ActionType == "FileCreated" 
+  | extend joinkey = strcat(InitiatingProcessParentFileName, DeviceName, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessSHA256, InitiatingProcessAccountUpn, InitiatingProcessSHA256) 
+  | summarize FilesCreated = make_set(FileName) by joinkey) on joinkey
+  | project TimeGenerated, DeviceName, InitiatingProcessAccountName, InitiatingProcessAccountUpn, InitiatingProcessFileName, InitiatingProcessSHA256, InitiatingProcessCommandLine, InitiatingProcessFolderPath, FilesCreated, ProcessesRanByParent, LocalIP, RemoteIP, RemoteUrl
+  | extend Name = InitiatingProcessAccountUpn
+  | extend HostName = DeviceName
+  | extend Address = RemoteIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingProcessAccountName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 0.0.1
