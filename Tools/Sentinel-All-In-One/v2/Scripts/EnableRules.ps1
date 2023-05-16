@@ -17,7 +17,7 @@ $SubscriptionId = $context.Subscription.Id
 Write-Host "Connected to Azure with subscription: " + $context.Subscription
 
 $baseUri = "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${Workspace}"
-$templatesUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRuleTemplates?api-version=2019-01-01-preview"
+$templatesUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRuleTemplates?api-version=2023-04-01-preview"
 $alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
 
 
@@ -41,7 +41,7 @@ if ($Connectors) {
                         if ($connector.connectorId -in $Connectors) {
                             #$return += $item.properties
                             $guid = New-Guid
-                            $alertUriGuid = $alertUri + $guid + '?api-version=2022-12-01-preview'
+                            $alertUriGuid = $alertUri + $guid + '?api-version=2023-02-01'
 
                             $properties = @{
                                 displayName           = $item.properties.displayName
@@ -68,7 +68,7 @@ if ($Connectors) {
                             $alertBody | Add-Member -NotePropertyName properties -NotePropertyValue $properties
 
                             try {
-                                Invoke-AzRestMethod -Path $alertUriGuid -Method PUT -Payload ($alertBody | ConvertTo-Json -Depth 3)
+                                Invoke-AzRestMethod -Path $alertUriGuid -Method PUT -Payload ($alertBody | ConvertTo-Json -Depth 5)
                             }
                             catch {
                                 Write-Host "Can't enable rule template with connectors: " $item.properties.requiredDataConnectors
