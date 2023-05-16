@@ -101,6 +101,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         # Access the value of the property
         if ($objectProperties.Value -is [System.Array]) {
+            
             foreach ($file in $objectProperties.Value) {
                 $finalPath = $basePath + $file
                 $rawData = $null
@@ -109,7 +110,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     $rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
                 }
                 catch {
-                    Write-Host "Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
+                    Write-Host "(1) Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
                     break;
                 }
 
@@ -151,6 +152,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $fileName = $fileName + "_workbook";
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+                        
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind      = "Workbook";
@@ -212,7 +214,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookUiParameter = [PSCustomObject] @{
                             name     = "workbook$workbookCounter";
                             type     = "Microsoft.Common.Section";
-                            label    = $solutionName;
+                            label    = Split-Path $file -leafbase;
                             elements = @(
                                 [PSCustomObject] @{
                                     name    = "workbook$workbookCounter-text";
@@ -323,6 +325,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         foreach ($param in $playbookData.parameters.PsObject.Properties) {
                             $paramName = $param.Name
+                
                             $defaultParamValue = $(if ($playbookData.parameters.$paramName.defaultValue) { $playbookData.parameters.$paramName.defaultValue } else { "" })
                             if ($param.Name.ToLower().contains("playbookname")) {
                                 $playbookNameObject = [PSCustomObject] @{
@@ -349,9 +352,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $playbookUsernameObject = [PSCustomObject] @{
                                     name         = "playbook$playbookCounter-$paramName";
                                     type         = "Microsoft.Common.TextBox";
-                                    label        = "$solutionName Username";
+                                    label        = $playbookData.parameters.$paramName.metadata.label;
                                     defaultValue = $defaultParamValue;
-                                    toolTip      = "Username to connect to $solutionName API";
+                                    toolTip      = $playbookData.parameters.$paramName.metadata.description;
                                     constraints  = [PSCustomObject] @{
                                         required          = $true;
                                         regex             = "[a-z0-9A-Z]{1,256}$";
@@ -370,8 +373,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $playbookPasswordObject = [PSCustomObject] @{
                                     name        = "playbook$playbookCounter-$paramName";
                                     type        = "Microsoft.Common.PasswordBox";
-                                    label       = [PSCustomObject] @{ password = $defaultParamValue; };
-                                    toolTip     = "Password to connect to $solutionName API";
+                                    label       = $playbookData.parameters.$paramName.metadata.label;
+                                    toolTip     = $playbookData.parameters.$paramName.metadata.description;
                                     constraints = [PSCustomObject] @{ required = $true; };
                                     options     = [PSCustomObject] @{ hideConfirmation = $false; };
                                 }
@@ -399,6 +402,22 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         metadata  = [PSCustomObject] @{ description = "ApiKey to connect to $solutionName API"; }
                                     })
                             }
+                            elseif ($param.Name.ToLower().contains("clientsecret")) {
+                                $playbookPasswordObject = [PSCustomObject] @{
+                                    name        = "playbook$playbookCounter-$paramName";
+                                    type        = "Microsoft.Common.PasswordBox";
+                                    label       = $playbookData.parameters.$paramName.metadata.label;
+                                    toolTip     = $playbookData.parameters.$paramName.metadata.description;
+                                    constraints = [PSCustomObject] @{ required = $true; };
+                                    options     = [PSCustomObject] @{ hideConfirmation = $false; };
+                                }
+                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
+                                        type      = "securestring";
+                                        minLength = 1;
+                                        metadata  = [PSCustomObject] @{ description = "client secret to connect to $solutionName API"; }
+                                    })
+                            }
                             else {
                                 function PascalSplit ($pascalStr) {
                                     foreach ($piece in $pascalStr) {
@@ -416,10 +435,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         [PSCustomObject] @{
                                             name         = "playbook$playbookCounter-$paramName";
                                             type         = "Microsoft.Common.DropDown";
-                                            label        = "$(PascalSplit $paramName)";
+                                            label        = $playbookData.parameters.$paramName.metadata.label;
                                             placeholder  = "$($playbookData.parameters.$paramName.allowedValues[0])";
-                                            defaultValue = "$($playbookData.parameters.$paramName.allowedValues[0])";
-                                            toolTip      = "Please enter $(if($paramName.IndexOf("-") -ne -1){$paramName}else{PascalSplit $paramName})";
+                                            defaultValue = $playbookData.parameters.$paramName.defaultValue;
+                                            toolTip      = $playbookData.parameters.$paramName.metadata.description;
                                             constraints  = [PSCustomObject] @{
                                                 allowedValues = $playbookData.parameters.$paramName.allowedValues | ForEach-Object {
                                                     [PSCustomObject] @{
@@ -432,13 +451,21 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             visible      = $true;
                                         }
                                     }
+                                    elseif ($playbookData.parameters.$paramName.type -eq "bool") {
+                                        [PSCustomObject] @{
+                                            name         = "playbook$playbookCounter-$paramName";
+                                            type         = "Microsoft.Common.CheckBox";
+                                            label        = $playbookData.parameters.$paramName.metadata.label;
+                                            toolTip      = $playbookData.parameters.$paramName.metadata.description;
+                                        }
+                                    }
                                     else {
                                         [PSCustomObject] @{
                                             name         = "playbook$playbookCounter-$paramName";
                                             type         = "Microsoft.Common.TextBox";
-                                            label        = "$(PascalSplit $paramName)";
+                                            label        = $playbookData.parameters.$paramName.metadata.label;
                                             defaultValue = $defaultParamValue;
-                                            toolTip      = "Please enter $(if($paramName.IndexOf("-") -ne -1){$paramName}else{PascalSplit $paramName})";
+                                            toolTip      = $playbookData.parameters.$paramName.metadata.description;
                                             constraints  = [PSCustomObject] @{
                                                 required          = $true;
                                                 regex             = "[a-z0-9A-Z]{1,256}$";
@@ -455,7 +482,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         minLength    = 1;
                                     })
                             }
+                
                             $baseCreateUiDefinition.parameters.outputs | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue "[steps('playbooks').playbook$playbookCounter.playbook$playbookCounter-$paramName]"
+                               
                         }
 
                         foreach ($playbookVariable in $playbookData.variables.PsObject.Properties) {
@@ -1195,7 +1224,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 $rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
             }
             catch {
-                Write-Host "Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
+                Write-Host "(2) Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
                 break;
             }
 
@@ -1228,7 +1257,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                 $newMetadata = [PSCustomObject]@{
                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                    apiVersion = "2021-03-01-preview";
+                    apiVersion = "2021-06-01";
                     properties = [PSCustomObject] @{
                         version = $contentToImport.Version;
                         kind    = "Solution";
