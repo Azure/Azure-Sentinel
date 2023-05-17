@@ -27,6 +27,14 @@
       "metadata": {
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Threat Intelligence",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
     }
   },
   "variables": {
@@ -62,7 +70,12 @@
     "playbookContentId4": "MDTI-Intel-Reputation",
     "_playbookContentId4": "[variables('playbookContentId4')]",
     "playbookId4": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId4'))]",
-    "playbookTemplateSpecName4": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId4')))]"
+    "playbookTemplateSpecName4": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId4')))]",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "MicrosoftThreatIntelligenceWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]"
   },
   "resources": [
     {
@@ -92,7 +105,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "MDTI-Automated-Triage Playbook with template version 2.0.2",
+        "description": "MDTI-Automated-Triage Playbook with template version 2.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -261,18 +274,13 @@
                             },
                             "method": "GET",
                             "uri": "https://@{body('MDTI-Base')?['MDTI-BaseUrl']}/@{body('MDTI-Base')?['Api-Version']}/security/threatIntelligence/hosts('@{items('For_each_Host')?['HostName']}.@{items('For_each_Host')?['DnsDomain']}')/reputation"
-                          }
-                        },
-                        "Reset_host_variable": {
-                          "runAfter": {
-                            "Add_comment_to_incident_(V3)": [
-                              "Succeeded"
-                            ]
                           },
-                          "type": "SetVariable",
-                          "inputs": {
-                            "name": "result_output_host",
-							"value": []
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "inputs"
+                              ]
+                            }
                           }
                         },
                         "Set_host_variable": {
@@ -358,18 +366,13 @@
                             },
                             "method": "GET",
                             "uri": "https://@{body('MDTI-Base')?['MDTI-BaseUrl']}/@{body('MDTI-Base')?['Api-Version']}/security/threatIntelligence/hosts('@{items('For_each_IP_Address')?['Address']}')/reputation"
-                          }
-                        },
-                        "Reset_IP_Variable": {
-                          "runAfter": {
-                            "Add_comment_to_incident_(V3)_2": [
-                              "Succeeded"
-                            ]
                           },
-                          "type": "SetVariable",
-                          "inputs": {
-                            "name": "result_output_ip",
-							"value": []
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "inputs"
+                              ]
+                            }
                           }
                         },
                         "Set_IP_variable": {
@@ -403,8 +406,7 @@
                         "variables": [
                           {
                             "name": "classification_bit",
-                            "type": "array",
-							"value": []
+                            "type": "array"
                           }
                         ]
                       }
@@ -420,8 +422,7 @@
                         "variables": [
                           {
                             "name": "result_output_host",
-                            "type": "array",
-							"value": []
+                            "type": "array"
                           }
                         ]
                       }
@@ -437,8 +438,7 @@
                         "variables": [
                           {
                             "name": "result_output_ip",
-                            "type": "array",
-							"value": []
+                            "type": "array"
                           }
                         ]
                       }
@@ -451,6 +451,13 @@
                           "workflow": {
                             "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/MDTI-Base')]"
                           }
+                        }
+                      },
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "outputs"
+                          ]
                         }
                       }
                     },
@@ -613,10 +620,10 @@
             ],
             "releaseNotes": [
               {
-                "version": "1.0.0",
+                "version": "1.0.1",
                 "title": "MDTI Automated Triage",
                 "notes": [
-                  "Initial version"
+                  "Updated version with Secure Inputs for HTTP REST and Secure Output for MDTI-Base actions"
                 ]
               }
             ]
@@ -651,7 +658,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "MDTI-Base Playbook with template version 2.0.2",
+        "description": "MDTI-Base Playbook with template version 2.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -661,12 +668,11 @@
               "type": "String"
             },
             "Client-Id": {
-              "defaultValue": "Client-ID",
+              "defaultValue": "Client-Id",
               "type": "String"
             },
             "Client-Secret": {
-              "defaultValue": "Client-Secret",
-              "type": "SecureString"
+              "type": "securestring"
             },
             "MDTI-Resource": {
               "defaultValue": "https://graph.microsoft.com",
@@ -679,19 +685,132 @@
             "Api-Version": {
               "defaultValue": "beta",
               "type": "String"
+            },
+            "Key-Vault-Name": {
+              "defaultValue": "[[concat('kv-mdti-', uniqueString(parameters('Client-Id'), utcNow()))]",
+              "type": "string"
+            },
+            "Key-Vault-Sku": {
+              "defaultValue": "standard",
+              "type": "string",
+              "metadata": {
+                "description": "Key Vault SKU name"
+              },
+              "allowedValues": [
+                "premium",
+                "standard"
+              ]
+            },
+            "Key-Vault-Secret-Name": {
+              "defaultValue": "mdti-api",
+              "type": "string",
+              "metadata": {
+                "description": "The name for the Service Principal Client Secret in the Key Vault"
+              }
+            },
+            "User-Object-Id": {
+              "defaultValue": "00000000-0000-0000-0000-000000000000",
+              "type": "string",
+              "metadata": {
+                "description": "Object ID, aka Principal ID, of the User to assign Key Vault Administrator role. If left unchanged, then a role must be assigned manually the Key Vault Access Control (IAM) in order to view Key Vault contents"
+              }
             }
           },
           "variables": {
+            "connections_keyvault_name": "[[format('keyvault-{0}', parameters('PlaybookName'))]",
+            "connection-5": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'), 'keyvault')]",
+            "_connection-5": "[[variables('connection-5')]",
             "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
             "workspace-name": "[parameters('workspace')]",
             "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
           },
           "resources": [
             {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2022-07-01",
+              "name": "[[parameters('Key-Vault-Name')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "properties": {
+                "sku": {
+                  "family": "A",
+                  "name": "[[parameters('Key-Vault-Sku')]"
+                },
+                "tenantId": "[[subscription().tenantId]",
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": false,
+                "enableRbacAuthorization": true,
+                "networkAcls": {
+                  "defaultAction": "Allow",
+                  "bypass": "AzureServices"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2021-10-01",
+              "name": "[[format('{0}/{1}', parameters('Key-Vault-Name'), parameters('Key-Vault-Secret-Name'))]",
+              "properties": {
+                "value": "[[parameters('Client-Secret')]"
+              },
+              "dependsOn": [
+                "[[resourceId('Microsoft.KeyVault/vaults', parameters('Key-Vault-Name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-10-01-preview",
+              "scope": "[[format('Microsoft.KeyVault/vaults/{0}', parameters('Key-Vault-Name'))]",
+              "name": "[[guid('4633458b-17de-408a-b874-0445c86b69e6', resourceId('Microsoft.KeyVault/vaults', parameters('Key-Vault-Name')))]",
+              "properties": {
+                "principalId": "[[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[[resourceId('Microsoft.KeyVault/vaults', parameters('Key-Vault-Name'))]",
+                "[[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-10-01-preview",
+              "scope": "[[format('Microsoft.KeyVault/vaults/{0}', parameters('Key-Vault-Name'))]",
+              "name": "[[guid('00482a5a-887f-4fb3-b363-3b7fe8e74483', resourceId('Microsoft.KeyVault/vaults', parameters('Key-Vault-Name')))]",
+              "properties": {
+                "principalId": "[[parameters('User-Object-Id')]",
+                "roleDefinitionId": "[[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '00482a5a-887f-4fb3-b363-3b7fe8e74483')]",
+                "principalType": "User"
+              },
+              "dependsOn": [
+                "[[resourceId('Microsoft.KeyVault/vaults', parameters('Key-Vault-Name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('connections_keyvault_name')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
+              "properties": {
+                "displayName": "keyvault",
+                "api": {
+                  "id": "[[variables('_connection-5')]"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                  "vaultName": "[[parameters('Key-Vault-Name')]"
+                }
+              }
+            },
+            {
               "type": "Microsoft.Logic/workflows",
               "apiVersion": "2017-07-01",
               "name": "[[parameters('PlaybookName')]",
               "location": "[[variables('workspace-location-inline')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
               "tags": {
                 "Source": "MDTI",
                 "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
@@ -702,24 +821,23 @@
                   "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                   "contentVersion": "1.0.0.0",
                   "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    },
                     "Client-Id": {
-                      "defaultValue": "Client-Id",
+                      "defaultValue": "[[parameters('Client-Id')]",
                       "type": "String"
                     },
-                    "Client-Secret": {
-                      "defaultValue": "Client-Secret",
-                      "type": "SecureString"
-                    },
                     "MDTI-Resource": {
-                      "defaultValue": "https://graph.microsoft.com",
+                      "defaultValue": "[[parameters('MDTI-Resource')]",
                       "type": "String"
                     },
                     "MDTI-BaseUrl": {
-                      "defaultValue": "graph.microsoft.com",
+                      "defaultValue": "[[parameters('MDTI-BaseUrl')]",
                       "type": "String"
                     },
                     "Api-Version": {
-                      "defaultValue": "beta",
+                      "defaultValue": "[[parameters('Api-Version')]",
                       "type": "String"
                     },
                     "ResourceGroupName": {
@@ -743,6 +861,11 @@
                   },
                   "actions": {
                     "Response": {
+                      "runAfter": {
+                        "Get_Client_Secret": [
+                          "Succeeded"
+                        ]
+                      },
                       "runtimeConfiguration": {
                         "secureData": {
                           "properties": [
@@ -755,7 +878,7 @@
                       "inputs": {
                         "body": {
                           "clientId": "@parameters('Client-Id')",
-                          "clientSecret": "@parameters('Client-Secret')",
+                          "clientSecret": "@body('Get_Client_Secret')?['value']",
                           "resource": "@{parameters('MDTI-Resource')}",
                           "tenantId": "@parameters('Tenant-Id')",
                           "MDTI-BaseUrl": "@{parameters('MDTI-BaseUrl')}",
@@ -789,27 +912,41 @@
                         },
                         "statusCode": 200
                       }
+                    },
+                    "Get_Client_Secret": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['keyvault']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "[[format('/secrets/@{{encodeURIComponent(''{0}'')}}/value', parameters('Key-Vault-Secret-Name'))]"
+                      }
                     }
                   }
                 },
                 "parameters": {
-                  "Client-Id": {
-                    "value": "[[parameters('Client-Id')]"
-                  },
-                  "Client-Secret": {
-                    "value": "[[parameters('Client-Secret')]"
-                  },
-                  "MDTI-Resource": {
-                    "value": "[[parameters('MDTI-Resource')]"
-                  },
-                  "MDTI-BaseUrl": {
-                    "value": "[[parameters('MDTI-BaseUrl')]"
-                  },
-                  "Api-Version": {
-                    "value": "[[parameters('Api-Version')]"
+                  "$connections": {
+                    "value": {
+                      "keyvault": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('connections_keyvault_name'))]",
+                        "connectionName": "keyvault-MDTI-Base",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        },
+                        "id": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'), 'keyvault')]"
+                      }
+                    }
                   }
                 }
-              }
+              },
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('connections_keyvault_name'))]"
+              ]
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -854,10 +991,10 @@
             ],
             "releaseNotes": [
               {
-                "version": "1.0.0",
+                "version": "1.0.1",
                 "title": "MDTI Base",
                 "notes": [
-                  "Initial version"
+                  "Updated version with Key Vault to hold secret"
                 ]
               }
             ]
@@ -892,7 +1029,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName3'))]"
       ],
       "properties": {
-        "description": "MDTI-Data-WebComponents Playbook with template version 2.0.2",
+        "description": "MDTI-Data-WebComponents Playbook with template version 2.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -1076,6 +1213,13 @@
                               "$top": "25"
                             },
                             "uri": "https://@{body('MDTI-Base')?['MDTI-BaseUrl']}/@{body('MDTI-Base')?['Api-Version']}/security/threatIntelligence/hosts('@{items('For_each_Host')?['HostName']}.@{items('For_each_Host')?['DnsDomain']}')/components"
+                          },
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "inputs"
+                              ]
+                            }
                           }
                         },
                         "Parse_host_components": {
@@ -1140,8 +1284,7 @@
                           },
                           "type": "SetVariable",
                           "inputs": {
-                            "name": "result_output_host",
-							"value": []
+                            "name": "result_output_host"
                           }
                         }
                       },
@@ -1235,6 +1378,13 @@
                               "$top": "25"
                             },
                             "uri": "https://@{body('MDTI-Base')?['MDTI-BaseUrl']}/@{body('MDTI-Base')?['Api-Version']}/security/threatIntelligence/hosts('@{items('For_each_IP_Address')?['Address']}')/components"
+                          },
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "inputs"
+                              ]
+                            }
                           }
                         },
                         "Parse_components": {
@@ -1299,8 +1449,7 @@
                           },
                           "type": "SetVariable",
                           "inputs": {
-                            "name": "result_output_ip",
-							"value": []
+                            "name": "result_output_ip"
                           }
                         }
                       },
@@ -1327,8 +1476,7 @@
                         "variables": [
                           {
                             "name": "result_output_host",
-                            "type": "array",
-							"value": []
+                            "type": "array"
                           }
                         ]
                       }
@@ -1344,8 +1492,7 @@
                         "variables": [
                           {
                             "name": "result_output_ip",
-                            "type": "array",
-							"value": []
+                            "type": "array"
                           }
                         ]
                       }
@@ -1358,6 +1505,13 @@
                           "workflow": {
                             "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/MDTI-Base')]"
                           }
+                        }
+                      },
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "outputs"
+                          ]
                         }
                       }
                     }
@@ -1420,10 +1574,10 @@
             ],
             "releaseNotes": [
               {
-                "version": "1.0.0",
+                "version": "1.0.1",
                 "title": "MDTI Data WebComponents",
                 "notes": [
-                  "Initial version"
+                  "Updated version with Secure Inputs for HTTP REST and Secure Output for MDTI-Base actions"
                 ]
               }
             ]
@@ -1458,7 +1612,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName4'))]"
       ],
       "properties": {
-        "description": "MDTI-Intel-Reputation Playbook with template version 2.0.2",
+        "description": "MDTI-Intel-Reputation Playbook with template version 2.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion4')]",
@@ -1616,6 +1770,13 @@
                             "method": "GET",
                             "path": "/reputation",
                             "uri": "https://@{body('MDTI-Base')?['MDTI-BaseUrl']}/@{body('MDTI-Base')?['Api-Version']}/security/threatIntelligence/hosts('@{items('For_each_Host')?['HostName']}.@{items('For_each_Host')?['DnsDomain']}')/reputation"
+                          },
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "outputs"
+                              ]
+                            }
                           }
                         },
                         "Set_host_variable": {
@@ -1628,18 +1789,6 @@
                           "inputs": {
                             "name": "result_output_host",
                             "value": "@body('Get_reputation_for_host')?['rules']"
-                          }
-                        },
-                        "Reset_host_variable": {
-                          "runAfter": {
-                            "Add_comment_to_incident_(V3)": [
-                              "Succeeded"
-                            ]
-                          },
-                          "type": "SetVariable",
-                          "inputs": {
-                            "name": "result_output_host",
-							"value": []
                           }
                         }
                       },
@@ -1702,6 +1851,13 @@
                             "method": "GET",
                             "path": "/reputation",
                             "uri": "https://@{body('MDTI-Base')?['MDTI-BaseUrl']}/@{body('MDTI-Base')?['Api-Version']}/security/threatIntelligence/hosts('@{items('For_each_IP_Address')?['Address']}')/reputation"
+                          },
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "inputs"
+                              ]
+                            }
                           }
                         },
                         "Set_ip_variable": {
@@ -1714,18 +1870,6 @@
                           "inputs": {
                             "name": "result_output_ip",
                             "value": "@body('Get_reputation')?['rules']"
-                          }
-                        },
-                        "Reset_IP_variable": {
-                          "runAfter": {
-                            "Add_comment_to_incident_(V3)_2": [
-                              "Succeeded"
-                            ]
-                          },
-                          "type": "SetVariable",
-                          "inputs": {
-                            "name": "result_output_ip",
-							"value": []
                           }
                         }
                       },
@@ -1747,8 +1891,7 @@
                         "variables": [
                           {
                             "name": "result_output_host",
-                            "type": "array",
-							"value": []
+                            "type": "array"
                           }
                         ]
                       }
@@ -1764,8 +1907,7 @@
                         "variables": [
                           {
                             "name": "result_output_ip",
-                            "type": "array",
-							"value": []
+                            "type": "array"
                           }
                         ]
                       }
@@ -1778,6 +1920,13 @@
                           "workflow": {
                             "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/MDTI-Base')]"
                           }
+                        }
+                      },
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "outputs"
+                          ]
                         }
                       }
                     }
@@ -1840,10 +1989,10 @@
             ],
             "releaseNotes": [
               {
-                "version": "1.0.0",
+                "version": "1.0.1",
                 "title": "MDTI Intel Reputation",
                 "notes": [
-                  "Initial version"
+                  "Updated version with Secure Inputs for HTTP REST and Secure Output for MDTI-Base actions"
                 ]
               }
             ]
@@ -1852,11 +2001,114 @@
       }
     },
     {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Microsoft Defender Threat Intelligence Workbook with template",
+        "displayName": "Microsoft Defender Threat Intelligence workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "MicrosoftThreatIntelligenceWorkbook with template version 2.0.4",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain insights into threat indicators ingestion and search for indicators at scale across Microsoft 1st Party, 3rd Party, On-Premises, Hybrid, and Multi-Cloud Workloads. Indicators Search facilitates a simple interface for finding IP, File, Hash, Sender and more across your data. Seamless pivots to correlate indicators with Microsoft Sentinel: Incidents to make your threat intelligence actionable."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"a4b4e975-fa7c-46a3-b669-850aacc88134\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Help\",\"label\":\"🔎 Guide\",\"type\":10,\"isRequired\":true,\"typeSettings\":{\"showDefault\":false},\"jsonData\":\"[\\r\\n    {\\\"value\\\": \\\"Yes\\\", \\\"label\\\": \\\"Yes\\\", \\\"selected\\\":true},\\r\\n    {\\\"value\\\": \\\"No\\\", \\\"label\\\": \\\"No\\\"}\\r\\n]\"},{\"version\":\"KqlParameterItem/1.0\",\"name\":\"DefaultSubscription_Internal\",\"type\":1,\"isRequired\":true,\"query\":\"where type =~ 'microsoft.operationalinsights/workspaces'\\r\\n| take 1\\r\\n| project subscriptionId\",\"crossComponentResources\":[\"value::selected\"],\"isHiddenWhenLocked\":true,\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\",\"id\":\"314d02bf-4691-43fa-af59-d67073c8b8fa\"},{\"id\":\"e6ded9a1-a83c-4762-938d-5bf8ff3d3d38\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Subscription\",\"type\":6,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"summarize by subscriptionId\\r\\n| project value = strcat(\\\"/subscriptions/\\\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{DefaultSubscription_Internal}', true, false)\",\"crossComponentResources\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"showDefault\":false},\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\",\"value\":[\"value::all\"]},{\"id\":\"e3225ed0-6210-40a1-b2d0-66e42ffa71d6\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Workspace\",\"type\":5,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"resources\\r\\n| where type =~ 'microsoft.operationalinsights/workspaces'\\r\\n| order by name asc\\r\\n| summarize Selected = makelist(id, 10), All = makelist(id, 1000)\\r\\n| mvexpand All limit 100\\r\\n| project value = tostring(All), label = tostring(All), selected = iff(Selected contains All, true, false)\",\"crossComponentResources\":[\"{Subscription}\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"showDefault\":false},\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\",\"value\":[\"value::all\"]},{\"id\":\"15b2c181-7397-43c1-900a-28e175ae8a6f\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":86400000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":604800000}],\"allowCustom\":true},\"timeContextFromParameter\":\"TimeRange\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"Parameter Selectors\"},{\"type\":1,\"content\":{\"json\":\"# [Threat Intelligence](https://docs.microsoft.com/azure/sentinel/understand-threat-intelligence)\\n---\\n\\nWithin a Security Information and Event Management (SIEM) solution like Microsoft Sentinel, the most commonly used form of CTI is threat indicators, also known as Indicators of Compromise or IoCs. Threat indicators are data that associate observed artifacts such as URLs, file hashes, or IP addresses with known threat activity such as phishing, botnets, or malware. This form of threat intelligence is often called tactical threat intelligence because it can be applied to security products and automation in large scale to detect potential threats to an organization and protect against them. In Microsoft Sentinel, you can use threat indicators to help detect malicious activity observed in your environment and provide context to security investigators to help inform response decisions. <br>\\n\"},\"conditionalVisibility\":{\"parameterName\":\"Help\",\"comparison\":\"isEqualTo\",\"value\":\"Yes\"},\"customWidth\":\"79\",\"name\":\"Workbook Overview\"},{\"type\":1,\"content\":{\"json\":\"![Image Name](https://azure.microsoft.com/svghandler/azure-sentinel?width=600&height=315) \"},\"conditionalVisibility\":{\"parameterName\":\"Help\",\"comparison\":\"isEqualTo\",\"value\":\"Yes\"},\"customWidth\":\"20\",\"name\":\"Microsoft Sentinel Logo\"},{\"type\":11,\"content\":{\"version\":\"LinkItem/1.0\",\"style\":\"tabs\",\"links\":[{\"id\":\"18c690d7-7cbd-46c1-b677-1f72692d40cd\",\"cellValue\":\"TAB\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Indicators Ingestion\",\"subTarget\":\"Indicators\",\"preText\":\"Alert rules\",\"style\":\"link\"},{\"id\":\"f88dcf47-af98-4684-9de3-1ee5f48f68fc\",\"cellValue\":\"TAB\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Indicators Search\",\"subTarget\":\"Observed\",\"style\":\"link\"}]},\"name\":\"Tabs link\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ThreatIntelligenceIndicator\\r\\n// Select all indicators from the table\\r\\n// Create a new column to identify the type of indicator, IP, Domain, URL, File, or Other\\r\\n| extend IndicatorType = iif(isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkIP) or isnotempty(NetworkSourceIP) or isnotempty(NetworkCidrBlock), \\\"IP\\\",\\r\\n                        iff(isnotempty(Url), \\\"URL\\\",\\r\\n                        iff(isnotempty(EmailRecipient) or isnotempty(EmailSenderAddress), \\\"Email\\\",\\r\\n                        iff(isnotempty(FileHashValue), \\\"File\\\",\\r\\n                         iff(isnotempty(DomainName) or isnotempty(EmailSourceDomain), \\\"Domain\\\",\\r\\n                        \\\"Other\\\")))))\\r\\n// Summarize and order the data, then render the chart\\r\\n| summarize CountOfIndicators = count() by IndicatorType, bin(TimeGenerated, 1h)\\r\\n| order by CountOfIndicators desc \\r\\n| render barchart kind=stacked \",\"size\":0,\"showAnalytics\":true,\"title\":\"Indicators Imported into Sentinel by Indicator Type and Date\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"]},\"customWidth\":\"50\",\"name\":\"query - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ThreatIntelligenceIndicator\\r\\n// Select all indicators from the table\\r\\n// Summarize and order the data, then render the chart\\r\\n| summarize CountOfIndicators = count() by SourceSystem, bin(TimeGenerated, 1h)\\r\\n| render barchart kind=stacked\",\"size\":0,\"showAnalytics\":true,\"title\":\"Indicators Imported into Sentinel by Indicator Provider and Date\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"]},\"customWidth\":\"50\",\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ThreatIntelligenceIndicator\\r\\n// Select all indicators from the table\\r\\n| where TimeGenerated < now()\\r\\n// Select only indicators that have not expired\\r\\n    and ExpirationDateTime > now()\\r\\n// Select only indicators that are marked active\\r\\n    and Active == true\\r\\n// Select only the most recently ingested copy of an indicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n// Create a new column to identify the type of indicator, IP, Domain, URL, File, or Other\\r\\n| extend IndicatorType = iif(isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkIP) or isnotempty(NetworkSourceIP) or isnotempty(NetworkCidrBlock), \\\"IP\\\",\\r\\n                        iff(isnotempty(Url), \\\"URL\\\",\\r\\n                        iff(isnotempty(EmailRecipient) or isnotempty(EmailSenderAddress), \\\"Email\\\",\\r\\n                        iff(isnotempty(FileHashValue), \\\"File\\\",\\r\\n                         iff(isnotempty(DomainName) or isnotempty(EmailSourceDomain), \\\"Domain\\\",\\r\\n                        \\\"Other\\\")))))\\r\\n// Summarize and order the data, then render the chart\\r\\n| summarize CountOfIndicators = count() by IndicatorType\\r\\n| order by CountOfIndicators desc \\r\\n| render barchart kind=unstacked\",\"size\":0,\"showAnalytics\":true,\"title\":\"Active Indicators by Indicator Type\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"]},\"customWidth\":\"50\",\"name\":\"query - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ThreatIntelligenceIndicator\\r\\n// Select all indicators from the table\\r\\n| where TimeGenerated < now()\\r\\n// Select only indicators that have not expired\\r\\n    and ExpirationDateTime > now()\\r\\n// Select only indicators that are marked active\\r\\n    and Active == true\\r\\n// Select only the most recently ingested copy of an indicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n// Summarize and order the data, then render the chart\\r\\n| summarize CountOfIndicators = count() by SourceSystem\\r\\n| order by CountOfIndicators desc \\r\\n| render barchart kind=unstacked\",\"size\":0,\"showAnalytics\":true,\"title\":\"Active Indicators by Indicator Source\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"]},\"customWidth\":\"50\",\"name\":\"query - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ThreatIntelligenceIndicator\\r\\n// Select all indicators from the table\\r\\n| where TimeGenerated < now()\\r\\n// Select only indicators that have not expired\\r\\n    and ExpirationDateTime > now()\\r\\n// Select only indicators that are marked active\\r\\n    and Active == true\\r\\n// Select only the most recently ingested copy of an indicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n// Summarize and order the data, then render the chart\\r\\n| summarize CountOfIndicators = count() by tostring(ConfidenceScore)\\r\\n| order by CountOfIndicators desc \\r\\n| render piechart\",\"size\":0,\"showAnalytics\":true,\"title\":\"Active Indicators by Confidence Score\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"]},\"customWidth\":\"50\",\"name\":\"query - 10\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let DomainQuery=view() { \\r\\nThreatIntelligenceIndicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where isnotempty(DomainName)\\r\\n| summarize SourceSystemArray=make_set(SourceSystem) by DomainName\\r\\n| summarize count() by tostring(SourceSystemArray)\\r\\n| project SourceSystemArray, count_, EntryType=\\\"DomainEntry\\\"\\r\\n};\\r\\nlet UrlQuery=view(){\\r\\nThreatIntelligenceIndicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where isnotempty(Url)\\r\\n| summarize SourceSystemArray=make_set(SourceSystem) by Url\\r\\n| summarize count() by tostring(SourceSystemArray)\\r\\n| project SourceSystemArray, count_, EntryType=\\\"UrlEntry\\\"\\r\\n};\\r\\nlet FileHashQuery=view(){\\r\\nThreatIntelligenceIndicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where isnotempty(FileHashValue)\\r\\n| summarize SourceSystemArray=make_set(SourceSystem) by FileHashValue\\r\\n| summarize count() by tostring(SourceSystemArray)\\r\\n| project SourceSystemArray, count_, EntryType=\\\"FileHashEntry\\\"\\r\\n};\\r\\nlet IPQuery=view(){\\r\\nThreatIntelligenceIndicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where isnotempty(NetworkIP) or isnotempty(NetworkSourceIP)\\r\\n| summarize SourceSystemArray=make_set(SourceSystem) by NetworkIP, NetworkSourceIP\\r\\n| summarize count() by tostring(SourceSystemArray)\\r\\n| project SourceSystemArray, count_, EntryType=\\\"IPEntry\\\"\\r\\n};\\r\\nlet EmailAddressQuery=view(){\\r\\nThreatIntelligenceIndicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where isnotempty(EmailSenderAddress)\\r\\n| summarize SourceSystemArray=make_set(SourceSystem) by EmailSenderAddress\\r\\n| summarize count() by tostring(SourceSystemArray)\\r\\n| project SourceSystemArray, count_, EntryType=\\\"EmailAddressEntry\\\"\\r\\n};\\r\\nlet EmailMessageQuery=view(){\\r\\nThreatIntelligenceIndicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where isnotempty(EmailSubject)\\r\\n| summarize SourceSystemArray=make_set(SourceSystem) by EmailSubject\\r\\n| summarize count() by tostring(SourceSystemArray)\\r\\n| project SourceSystemArray, count_, EntryType=\\\"EmailMessageEntry\\\"\\r\\n};\\r\\nlet SingleSourceIndicators=view(){\\r\\n    DomainQuery\\r\\n    | union UrlQuery\\r\\n    | union FileHashQuery\\r\\n    | union IPQuery\\r\\n    | union EmailAddressQuery\\r\\n    | union EmailMessageQuery\\r\\n    | where array_length(todynamic(SourceSystemArray))==1\\r\\n    | summarize sum(count_) by SourceSystemArray\\r\\n    | extend counter=1 \\r\\n};\\r\\nlet MultipleSourceIndicators=view(){\\r\\n    DomainQuery\\r\\n    | union UrlQuery\\r\\n    | union FileHashQuery\\r\\n    | union IPQuery\\r\\n    | union EmailAddressQuery\\r\\n    | union EmailMessageQuery\\r\\n    | where array_length(todynamic(SourceSystemArray))!=1\\r\\n    | summarize sum(count_) by SourceSystemArray\\r\\n    | extend counter=1\\r\\n};\\r\\nlet CountOfActiveIndicatorsBySource=view(){\\r\\n    ThreatIntelligenceIndicator\\r\\n\\t| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n    | where ExpirationDateTime > now() and Active == true\\r\\n    | summarize count() by SourceSystem\\r\\n    | project SourceSystem, count_\\r\\n};\\r\\nSingleSourceIndicators\\r\\n| join kind=fullouter MultipleSourceIndicators on counter \\r\\n| where SourceSystemArray contains todynamic(SourceSystemArray)[0] \\r\\n| order by SourceSystemArray\\r\\n| extend solitary_count=sum_count_\\r\\n| summarize shared_count = sum(sum_count_1) by SourceSystemArray, solitary_count\\r\\n| extend total_count = shared_count + solitary_count\\r\\n| extend unique_percentage = round(toreal(solitary_count)/toreal(total_count)*100, 1)\\r\\n| extend IndicatorSource = tostring(todynamic(SourceSystemArray)[0])\\r\\n| join kind=inner CountOfActiveIndicatorsBySource on $left.IndicatorSource == $right.SourceSystem\\r\\n| order by unique_percentage desc\\r\\n| project Source=IndicatorSource, UniquenessPercentage=unique_percentage, ActiveIndicators = count_\\r\\n\\r\\n\",\"size\":0,\"showAnalytics\":true,\"title\":\"Uniqueness of Threat Intelligence Sources\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Source\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"Default\",\"representation\":\"View\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"ActiveIndicators\",\"formatter\":4,\"formatOptions\":{\"palette\":\"blue\"}}],\"filter\":true}},\"customWidth\":\"50\",\"name\":\"query - 12\"}]},\"conditionalVisibility\":{\"parameterName\":\"TAB\",\"comparison\":\"isEqualTo\",\"value\":\"Indicators\"},\"name\":\"Indicators Ingestion\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"9aec751b-07bd-43ba-80b9-f711887dce45\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Indicator\",\"label\":\"Search Indicator in Events\",\"type\":1,\"value\":\"\",\"timeContext\":{\"durationMs\":7776000000},\"timeContextFromParameter\":\"TimeRange\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"Threat Research Parameters\"},{\"type\":1,\"content\":{\"json\":\"\"},\"customWidth\":\"50\",\"name\":\"text - 9\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"//Add additional lines for desired data columns\\r\\nunion withsource= Table_Name *\\r\\n| where column_ifexists('CallerIpAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DestinationIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FileOriginUrl', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FQDN', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('InitiatingProcessSHA256', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('IpAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('IPAddresses', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('IPAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Name', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('RemoteIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('RemoteUrl', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('RecipientEmailAddress', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('SenderMailFromAddress', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('SourceIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Url', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SrcIpAddr', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DstIpAddr', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('NetworkSourceIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FileHashValue', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('NetworkIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('NetworkDestinationIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('EmailSourceIpAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('EmailSenderAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DomainName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('AADEmail', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Account', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('AccountName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('AccountUpn', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('AccountUPN', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Caller', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('CompromisedEntity', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DestinationUserID', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DestinationUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DisplayName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Email_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FullyQualifiedSubjectUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('InitiatingProcessAccountUpn', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('MailboxOwnerUPN', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Owner', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('RequesterUpn', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SourceIdentity', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SourceUserID', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SourceUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SubjectUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('TargetUser', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('TargetUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Upn', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('User_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserId', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('UserId_', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserId_s_s', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('userName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserName', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('UserName_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('userPrincipalName_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserPrincipalName_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserPrincipalName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Computer', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FileHash', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FilePath', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Process', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('CommandLine', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('NewProcessName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('ParentProcessName', '') has \\\"{Indicator}\\\"\\r\\n| summarize count() by Table_Name \\r\\n| project-rename ['Data Table']=Table_Name, ['Logs Count']=count_\\r\\n| sort by ['Logs Count'] desc\",\"size\":0,\"showAnalytics\":true,\"title\":\"Indicators Observed\",\"noDataMessage\":\"No indicators observed within these thresholds\",\"timeContextFromParameter\":\"TimeRange\",\"exportFieldName\":\"Type\",\"exportParameterName\":\"Type\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Data Table\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"Default\",\"representation\":\"Log\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"Logs Count\",\"formatter\":4,\"formatOptions\":{\"palette\":\"blue\"}}],\"filter\":true}},\"customWidth\":\"50\",\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"//Add additional lines for desired data columns\\r\\nunion withsource= Table_Name *\\r\\n| where column_ifexists('CallerIpAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DestinationIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FileOriginUrl', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FQDN', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('InitiatingProcessSHA256', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('IpAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('IPAddresses', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('IPAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Name', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('RemoteIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('RemoteUrl', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('RecipientEmailAddress', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('SenderMailFromAddress', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('SourceIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Url', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SrcIpAddr', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DstIpAddr', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('NetworkSourceIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FileHashValue', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('NetworkIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('NetworkDestinationIP', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('EmailSourceIpAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('EmailSenderAddress', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DomainName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('AADEmail', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Account', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('AccountName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('AccountUpn', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('AccountUPN', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Caller', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('CompromisedEntity', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DestinationUserID', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DestinationUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('DisplayName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Email_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FullyQualifiedSubjectUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('InitiatingProcessAccountUpn', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('MailboxOwnerUPN', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Owner', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('RequesterUpn', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SourceIdentity', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SourceUserID', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SourceUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('SubjectUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('TargetUser', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('TargetUserName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Upn', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('User_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserId', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('UserId_', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserId_s_s', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('userName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserName', '') has \\\"{Indicator}\\\" \\r\\nor column_ifexists('UserName_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('userPrincipalName_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserPrincipalName_s', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('UserPrincipalName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Computer', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FileHash', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('FilePath', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('Process', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('CommandLine', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('NewProcessName', '') has \\\"{Indicator}\\\"\\r\\nor column_ifexists('ParentProcessName', '') has \\\"{Indicator}\\\"\\r\\n| make-series count() default=0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step 1d by Type\\r\\n| render areachart\",\"size\":0,\"showAnalytics\":true,\"title\":\"Indicators Observed over Time\",\"noDataMessage\":\"No indicators observed within these thresholds\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Data Table\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"Default\",\"representation\":\"Log\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"Logs Count\",\"formatter\":4,\"formatOptions\":{\"palette\":\"redBright\"}}],\"filter\":true}},\"customWidth\":\"50\",\"name\":\"query - 4 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let tiObservables = ThreatIntelligenceIndicator\\r\\n    | where TimeGenerated < now()\\r\\n    | project IndicatorId, ThreatType, Description, Active, IndicatorTime = TimeGenerated, Indicator = strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, EmailSourceIpAddress, EmailSenderAddress, DomainName), SourceSystem;\\r\\nlet alertEntity = SecurityAlert \\r\\n    | project parse_json(Entities), SystemAlertId , AlertTime = TimeGenerated\\r\\n    | mvexpand(Entities)\\r\\n    | extend entity = iif(isnotempty(Entities.Address), Entities.Address,\\r\\n                      iif(isnotempty(Entities.HostName),strcat(Entities.HostName, \\\".\\\", Entities.DnsDomain),\\r\\n                      iif(isnotempty(Entities.Url), Entities.Url,\\r\\n                      iif(isnotempty(Entities.Value), Entities.Value,\\r\\n                      iif(Entities.Type == \\\"account\\\", strcat(Entities.Name,\\\"@\\\",Entities.UPNSuffix),\\\"\\\")))))\\r\\n    | where isnotempty(entity) \\r\\n    | project entity, SystemAlertId, AlertTime;\\r\\nlet IncidentAlerts = SecurityIncident\\r\\n    | project IncidentTime = TimeGenerated, IncidentNumber, Title, parse_json(AlertIds)\\r\\n    | mv-expand AlertIds\\r\\n    | project IncidentTime, IncidentNumber, Title, tostring(AlertIds);\\r\\nlet AlertsWithTiObservables = alertEntity\\r\\n    | join kind=inner tiObservables on $left.entity == $right.Indicator;\\r\\nlet IncidentsWithAlertsWithTiObservables = AlertsWithTiObservables\\r\\n    | join kind=inner IncidentAlerts on $left.SystemAlertId == $right.AlertIds;\\r\\nIncidentsWithAlertsWithTiObservables\\r\\n| where Indicator contains '{Indicator}' or Indicator == \\\"*\\\"\\r\\n| summarize Incidents=dcount(IncidentNumber), Alerts=dcount(SystemAlertId) by Indicator, ThreatType, Source = SourceSystem, Description\\r\\n| sort by Incidents, Alerts desc\",\"size\":0,\"showAnalytics\":true,\"title\":\"Threat Intelligence Alerts\",\"noDataMessage\":\"No indicators observed within these thresholds\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"ThreatType\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"Botnet\",\"representation\":\"Command and Control\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"MaliciousUrl\",\"representation\":\"Initial_Access\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"Malware\",\"representation\":\"Execution\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"Phishing\",\"representation\":\"Exfiltration\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"Pre attack\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"Source\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"Default\",\"representation\":\"success\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"Incidents\",\"formatter\":4,\"formatOptions\":{\"palette\":\"redBright\"}},{\"columnMatch\":\"Alerts\",\"formatter\":4,\"formatOptions\":{\"palette\":\"orange\"}}],\"filter\":true}},\"name\":\"query - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"SecurityIncident\\r\\n| extend SystemAlertId = tostring(AlertIds[0])\\r\\n| join (SecurityAlert \\r\\n| where Entities <> \\\"\\\"\\r\\n| mv-expand parse_json(Entities)\\r\\n| where Entities contains '{Indicator}'\\r\\n| project SystemAlertId, Entities\\r\\n) on SystemAlertId\\r\\n| where Title <> \\\"\\\"\\r\\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\\r\\n| parse IncidentUrl with * '/#asset/Microsoft_Azure_Security_Insights/Incident' IncidentBlade\\r\\n| extend SeverityRank=iff(Severity == \\\"High\\\", 3, iff(Severity == \\\"Medium\\\", 2, iff(Severity == \\\"Low\\\", 1, iff(Severity == \\\"Informational\\\", 0, 0))))\\r\\n| sort by SeverityRank, IncidentNumber desc\\r\\n| project ['Incident Name']=Title, IncidentNumber, Severity, IncidentUrl, FirstActivityTime, IncidentBlade, Entities\\r\\n| limit 2500\",\"size\":0,\"showAnalytics\":true,\"title\":\"Security Incidents\",\"noDataMessage\":\"No incidents observed within these thresholds\",\"timeContextFromParameter\":\"TimeRange\",\"showExportToExcel\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Incident Name\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"Default\",\"representation\":\"Alert\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"Severity\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"High\",\"representation\":\"Sev0\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"Medium\",\"representation\":\"Sev1\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"Low\",\"representation\":\"Sev2\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"Sev3\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"IncidentUrl\",\"formatter\":7,\"formatOptions\":{\"linkTarget\":\"OpenBlade\",\"linkLabel\":\"Incident >>\",\"bladeOpenContext\":{\"bladeName\":\"CaseBlade\",\"extensionName\":\"Microsoft_Azure_Security_Insights\",\"bladeParameters\":[{\"name\":\"id\",\"source\":\"column\",\"value\":\"IncidentBlade\"}]}}},{\"columnMatch\":\"IncidentBlade\",\"formatter\":5}],\"rowLimit\":2500,\"filter\":true,\"sortBy\":[{\"itemKey\":\"IncidentNumber\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"IncidentNumber\",\"sortOrder\":2}]},\"name\":\"query - 3\"}]},\"conditionalVisibility\":{\"parameterName\":\"TAB\",\"comparison\":\"isEqualTo\",\"value\":\"Observed\"},\"name\":\"Indicators Observed\"}],\"fromTemplateId\":\"sentinel-ThreatIntelligence\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=MicrosoftThreatIntelligenceWorkbook; logoFileName=; description=Gain insights into threat indicators ingestion and search for indicators at scale across Microsoft 1st Party, 3rd Party, On-Premises, Hybrid, and Multi-Cloud Workloads. Indicators Search facilitates a simple interface for finding IP, File, Hash, Sender and more across your data. Seamless pivots to correlate indicators with Microsoft Sentinel: Incidents to make your threat intelligence actionable.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Threat Intelligence; templateRelativePath=MicrosoftThreatIntelligence.json; subtitle=; provider=Microsoft}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Microsoft Defender Threat Intelligence",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "ThreatIntelligenceIndicator",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "SecurityIncident",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ThreatIntelligence",
+                      "kind": "DataConnector"
+                    },
+                    {
+                      "contentId": "ThreatIntelligenceTaxii",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2022-01-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.2",
+        "version": "2.0.4",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
@@ -1898,6 +2150,11 @@
               "kind": "Playbook",
               "contentId": "[variables('_MDTI-Intel-Reputation')]",
               "version": "[variables('playbookVersion4')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
             }
           ]
         },

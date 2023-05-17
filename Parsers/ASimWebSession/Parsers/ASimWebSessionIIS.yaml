@@ -1,12 +1,12 @@
 Parser:
   Title: Web Session ASIM parser for Windows IIS logs
-  Version: '0.1'
-  LastUpdated: Jan 17, 2023
+  Version: '0.2'
+  LastUpdated: Apr 19, 2023
 Product:
   Name: Internet Information Services (IIS)
 Normalization:
   Schema: WebSession
-  Version: '0.2.5'
+  Version: '0.2.6'
 References:
 - Title: ASIM Web Session Schema
   Link: https://aka.ms/ASimWebSessionDoc
@@ -26,16 +26,16 @@ ParserQuery: |
   let parser = (disabled: bool = false)
         {
         W3CIISLog
+        | where not(disabled)
         | extend
                 EventResult = iff ( toint(scStatus) < 400, "Success", "Failure"),
                 EventResultDetails = tostring(scStatus), 
                 csUriQuery = iff(csUriQuery == "-", "", csUriQuery),
                 csUserName = iff(csUserName == "-", "", csUserName),
-                HttpVersion = iff((csVersion has "HTTP"), split(csVersion, "/")[1], "") // there is a limited chance that something connects over non-HTTP
+                HttpVersion = iff((csVersion has "HTTP"), split(csVersion, "/")[1], ""), // there is a limited chance that something connects over non-HTTP
+                HttpHost = iff (sSiteName in ("Default Web Site", "-"), "", sSiteName)
         | project-rename 
-                HttpHost = sSiteName,
                 HttpRequestMethod = csMethod,
-                HttpReferrer = csReferer,
                 User = csUserName, //probably won't have this one often
                 Dvc = Computer,
                 Dst = sIP,
@@ -47,24 +47,24 @@ ParserQuery: |
                 SrcGeoLongitude = RemoteIPLongitude,
                 ThreatOriginalConfidence = Confidence,
                 ThreatIpAddr = MaliciousIP,
-                EventReportUrl = ReportReferenceLink
+                EventReportUrl = ReportReferenceLink,
+                EventUid = _ItemId,
+                DvcId = _ResourceId
         | extend
                 EventOriginalSeverity = tostring(Severity),
                 ThreatIsActive = tobool(IsActive),
                 ThreatFirstReportedTime = todatetime(FirstReportedDateTime),
                 ThreatLastReportedTime = todatetime(LastReportedDateTime),
-                SrcUsername = iff ( User == "-", "", User)
+                SrcUsername = iff ( User == "-", "", User),
+                HttpReferrer = iff ( csReferer == "-", "", csReferer),
+                DvcIdType = "AzureResourceId"
+        | project-away IsActive, FirstReportedDateTime, LastReportedDateTime, Severity, sSiteName
         | extend 
-                SrcUsernameType = case( 
-                                        SrcUsername contains "@" , "UPN"
-                                      , SrcUsername contains "\\", "Windows"
-                                      , (SrcUsername has "CN=" or SrcUsername has "OU=" or SrcUsername has "DC="), "DN"
-                                      , "Simple"
-                                      ),
+                SrcUsernameType = _ASIM_GetUsernameType (SrcUsername),
                 DstNatIpAddr = iff(csHost <> "", Dst, ""),
                 EventType = 'WebServerSession',            
                 EventVendor = 'Microsoft',
-                EventSchemaVersion = '0.2.5',
+                EventSchemaVersion = '0.2.6',
                 EventSchema = 'WebSession', 
                 EventProduct = 'IIS',
                 DvcOs = 'Windows',
@@ -76,7 +76,7 @@ ParserQuery: |
                 EventStartTime = ( (TimeGenerated) - (TimeTaken * 1ms)), // TimeTaken field is in Milliseconds 
                 EventEndTime =  TimeGenerated,
                 EventSeverity = iff(EventResult == "Success", "Low", "Informational"),
-                tempURLconstruct = iff(csUriQuery == "", csUriStem, strcat(csUriStem,"?",csUriQuery)),
+                Url = iff(csUriQuery == "", csUriStem, strcat(csUriStem,"?",csUriQuery)),
                 sPort = tostring(sPort),
                 HttpHost = iff ( HttpHost == "-", "", HttpHost),
                 csHost = iff ( csHost == "-", "", csHost),  //remove empty values
@@ -90,23 +90,14 @@ ParserQuery: |
                 DstPortNumber = toint(coalesce(ipv4_parts[1], ipv6_parts[1], host_parts[1])),
                 HttpHost = tostring(coalesce(host_parts[0], HttpHost))
         | project-away ipv4_parts, ipv6_parts, host_parts              
-        | extend 
-                port = strcat (":", sPort),
-                host = case ( 
-                HttpHost == "Default Web Site", Dst,
-                HttpHost <> "" and HttpHost <> "Default Web Site", HttpHost,
-                Dst
-               )
-         | extend 
-                 Url = strcat (host, port, tempURLconstruct)
-        | project-away host, port, tempURLconstruct
+        | extend
+            DstHostname = HttpHost,
+            Hostname = HttpHost
         | extend 
                  ThreatField = case(
                                     ThreatIpAddr <> "" and ThreatIpAddr == SrcIpAddr, "SrcIpAddr"
                                    ,ThreatIpAddr <> "" and ThreatIpAddr == DstIpAddr, "DstIpAddr"
                                    ,"")
-        | project-rename
-                        DstHostname = sComputerName
         | project-away 
                 AdditionalInformation,
                 AzureDeploymentID,
@@ -118,6 +109,7 @@ ParserQuery: |
                 MG, 
                 ManagementGroupName,
                 Role*,
+                sComputerName,
                 SourceSystem,
                 TLPLevel,
                 TenantId,
@@ -128,4 +120,4 @@ ParserQuery: |
                 sc*,
                 StorageAccount
       };
-      parser  (disabled)
+      parser  (disabled=disabled)
