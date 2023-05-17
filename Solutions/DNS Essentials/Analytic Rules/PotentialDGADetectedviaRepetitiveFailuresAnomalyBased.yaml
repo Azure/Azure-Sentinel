@@ -1,49 +1,13 @@
 id: 01191239-274e-43c9-b154-3a042692af06
 name: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Anomaly based (ASIM DNS Solution)
 description: |
-  'This rule makes use of the series decompose anomaly method to detect clients with a high NXDomain response count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert is generated when new IP address DNS activity is identified as an outlier when compared to the baseline, indicating a recurring pattern. \n\nIt utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+  'This rule makes use of the series decompose anomaly method to detect clients with a high NXDomain response count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert is generated when new IP address DNS activity is identified as an outlier when compared to the baseline, indicating a recurring pattern. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
 severity: Medium
 status: Available 
 tags:
   - Schema: ASimDns
     SchemaVersion: 0.1.6
-requiredDataConnectors:
-  - connectorId: ASimDnsActivityLogs
-    dataTypes:
-      - ASimDnsActivityLogs
-  - connectorId: GCPDNSDataConnector
-    dataTypes:
-      - GCP_DNS_CL
-  - connectorId: AzureFirewall
-    dataTypes:
-      - AzureDiagnostics
-  - connectorId: CiscoUmbrellaDataConnector
-    dataTypes:
-      - Cisco_Umbrella_proxy_CL
-  - connectorId: Corelight
-    dataTypes:
-      - Corelight_CL
-  - connectorId: InfobloxNIOS
-    dataTypes:
-      - Syslog
-  - connectorId: NXLogDnsLogs
-    dataTypes:
-      - NXLog_DNS_Server_CL
-  - connectorId: DNS
-    dataTypes:
-      - DnsEvents
-  - connectorId: AIVectraStream
-    dataTypes:
-      - VectraStream_CL
-  - connectorId: WindowsForwardedEvents
-    dataTypes:
-      - WindowsEvents
-  - connectorId: Zscaler
-    dataTypes:
-      - CommonSecurityLog
-  - connectorId: ISCBind
-    dataTypes:
-      - Syslog
+requiredDataConnectors: []
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -54,10 +18,7 @@ relevantTechniques:
   - T1568
   - T1008
 query: |
-  let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
-    | where wl_RuleName == 'Anomaly - Potential DGA(Domain Generation Algorithm) detected'
-        and wl_Type == 'Detection'
-    | project todouble(wl_AnomalyThreshold));
+  let threshold = 2.5;
   let min_t = ago(14d);
   let max_t = now();
   let timeframe = 1d;
@@ -148,7 +109,7 @@ query: |
   allData
   | make-series QueryCount=dcount(DnsQuery) on EventTime from min_t to max_t step timeframe by SrcIpAddr
   // include calculated Anomalies, Score and Baseline
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, toscalar(threshold), -1, 'linefit')
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, threshold, -1, 'linefit')
   | mv-expand anomalies, score, baseline, EventTime, QueryCount
   | extend
     anomalies = toint(anomalies),
@@ -157,8 +118,8 @@ query: |
     EventTime = todatetime(EventTime),
     Total = tolong(QueryCount)
   | where EventTime >= ago(timeframe)
-  | where score >= (toscalar(threshold) * 2)
-  // Join the allData to include DnsQuery details
+  | where score >= threshold * 2
+  // Join allData to include DnsQuery details
   | join kind=inner(allData
     | where TimeGenerated >= ago(timeframe)
     | summarize DNSQueries = make_set(DnsQuery, 1000) by SrcIpAddr)
@@ -179,5 +140,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: "[Anomaly] Potential DGA (Domain Generation Algorithm) originating from client IP: '{{SrcIpAddr}}' has been detected."
   alertDescriptionFormat: "Client has been identified with high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). This client is found to be communicating with multiple Domains which do not exist.\n\nBaseline Domain or DNS query count from this client: '{{baseline}}'\n\nCurrent Domain or DNS query count from this client: '{{Total}}'\n\nDNS queries requested by this client inlcude: '{{DNSQueries}}'"
-version: 1.0.0
+version: 1.0.2
 kind: Scheduled

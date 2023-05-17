@@ -27,27 +27,31 @@ query: |
   (union isfuzzy=true
   (
   SecurityEvent
-  | where EventID == 1102 and EventSourceName == "Microsoft-Windows-Eventlog"
+  | where EventID == 1102 and EventSourceName =~ "Microsoft-Windows-Eventlog"
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
   ),
   (
   WindowsEvent
-  | where EventID == 1102 and Provider == "Microsoft-Windows-Eventlog"
+  | where EventID == 1102 and Provider =~ "Microsoft-Windows-Eventlog"
   | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | extend Activity= "1102 - The audit log was cleared."
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
   )
   )
+  | extend Name=tostring(split(Account, "@")[0]), UPNSuffix=tostring(split(Account, "@")[1])
+  | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.1.2
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.1.4
 kind: Scheduled

@@ -1,49 +1,13 @@
 id: cf687598-5a2c-46f8-81c8-06b15ed489b1
 name: Detect DNS queries reporting multiple errors from different clients - Anomaly Based (ASIM DNS Solution)
 description: |
-  'This rule makes use of the series decompose anomaly method to generate an alert when multiple clients report errors for the same DNS query. This rule monitors DNS traffic over a period of 14 days to detect possible similar C2 communication originating from different clients. \n\nIt utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+  'This rule makes use of the series decompose anomaly method to generate an alert when multiple clients report errors for the same DNS query. This rule monitors DNS traffic over a period of 14 days to detect possible similar C2 communication originating from different clients. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
 severity: Medium
 status: Available 
 tags:
   - Schema: ASimDns
     SchemaVersion: 0.1.6
-requiredDataConnectors:
-  - connectorId: ASimDnsActivityLogs
-    dataTypes:
-      - ASimDnsActivityLogs
-  - connectorId: GCPDNSDataConnector
-    dataTypes:
-      - GCP_DNS_CL
-  - connectorId: AzureFirewall
-    dataTypes:
-      - AzureDiagnostics
-  - connectorId: CiscoUmbrellaDataConnector
-    dataTypes:
-      - Cisco_Umbrella_proxy_CL
-  - connectorId: Corelight
-    dataTypes:
-      - Corelight_CL
-  - connectorId: InfobloxNIOS
-    dataTypes:
-      - Syslog
-  - connectorId: NXLogDnsLogs
-    dataTypes:
-      - NXLog_DNS_Server_CL
-  - connectorId: DNS
-    dataTypes:
-      - DnsEvents
-  - connectorId: AIVectraStream
-    dataTypes:
-      - VectraStream_CL
-  - connectorId: WindowsForwardedEvents
-    dataTypes:
-      - WindowsEvents
-  - connectorId: Zscaler
-    dataTypes:
-      - CommonSecurityLog
-  - connectorId: ISCBind
-    dataTypes:
-      - Syslog
+requiredDataConnectors: []
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -55,10 +19,7 @@ relevantTechniques:
   - T1573
   - T1008
 query: |
-  let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
-    | where wl_RuleName == 'Anomaly - Multiple errors reported for same DNSQuery'
-        and wl_Type == 'Detection'
-    | project todouble(wl_AnomalyThreshold));
+  let threshold = 2.5;
   let min_t = ago(14d);
   let max_t = now();
   let dt = 1d;
@@ -129,7 +90,7 @@ query: |
   );
   allData
   | make-series TotalIPCount=dcount(SrcIpAddr) on EventTime from min_t to max_t step dt by DnsQuery
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, toscalar(threshold), -1, 'linefit')
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, threshold, -1, 'linefit')
   | mv-expand anomalies, score, baseline, EventTime, TotalIPCount
   | extend
     anomalies = toint(anomalies),
@@ -138,10 +99,9 @@ query: |
     EventTime = todatetime(EventTime),
     TotalIPs = tolong(TotalIPCount)
   | where EventTime >= ago(dt)
-  | where score >= (toscalar(threshold) * 2)
+  | where score >= threshold * 2
   | join kind=inner(allData | where TimeGenerated>ago(dt) | summarize SrcIps = make_set(SrcIpAddr,1000) by DnsQuery) on DnsQuery
   | project-away DnsQuery1
-
 entityMappings:
   - entityType: DNS
     fieldMappings:
@@ -157,5 +117,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: "[Anomaly] Multiple errors for the same DNS query has been detected - '{{DnsQuery}}'"
   alertDescriptionFormat: "Multiple errors were detected on different clients for the same DNS query. These unsuccessful responses can be an indication of C2 communication. \n\nBaseline for total clients reporting errors for this DNS query: '{{baseline}}'\n\nCurrent count of clients reporting errors for this DNS query: '{{TotalIPs}}'\n\nClients requesting this DNS query include:\n'{{SrcIps}}'"
-version: 1.0.0
+version: 1.0.2
 kind: Scheduled

@@ -1,11 +1,16 @@
+from enum import Enum
 from typing import Dict, List, Optional
+
 from pydantic import BaseModel
 
 
-class OATQueueMessage(BaseModel):
-    clp_id: str
-    detections: List[Dict]
-    post_data: Dict
+class RiskLevel(str, Enum):
+    UNDEFINED = 'undefined'
+    INFO = 'info'
+    LOW = 'low'
+    MEDIUM = 'medium'
+    HIGH = 'high'
+    CRITICAL = 'critical'
 
 
 class OATDetectionResult(BaseModel):
@@ -13,3 +18,19 @@ class OATDetectionResult(BaseModel):
     detections: List[Dict]
     search_api_post_data: List[Dict]
     next_batch_token: Optional[str]
+
+
+class OATTaskMessage(BaseModel):
+    clp_id: str
+    token: Optional[str]
+    start_time: str
+    end_time: str
+    task_id: Optional[str]
+
+
+class OATFileMessage(BaseModel):
+    clp_id: str
+    token: Optional[str]
+    package_id: str
+    task_id: Optional[str]
+    pipeline_id: str

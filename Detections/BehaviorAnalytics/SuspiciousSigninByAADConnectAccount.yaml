@@ -1,0 +1,55 @@
+id: 2cd8b3d5-c9e0-4be3-80f7-0469d511c3f6
+name: Suspicious Sign In by AAD Connect Sync Account
+description: |
+  'This query looks for sign ins by the Azure AD Connect Sync account to Azure where properties about the logon are anomalous.
+  This query uses Microsoft Sentinel's UEBA features to detect these suspicious properties.
+  A threat actor may attempt to steal the Sync account credentials and use them to access Azure resources. This alert should be 
+  reviewed to ensure that the log in came was from a legitimate source.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  BehaviorAnalytics
+  // User modification is expected from this account so focus on logons
+  | where ActivityType =~ "LogOn"
+  | where UserName startswith "Sync_" and UsersInsights.AccountDisplayName =~ "On-Premises Directory Synchronization Service Account"
+  // Filter out this expected activity
+  | where ActivityInsights.App !~ "Microsoft Azure Active Directory Connect"
+  | where InvestigationPriority > 0
+  | extend Name = split(UserPrincipalName, "@")[0], UPNSuffix = split(UserPrincipalName, "@")[1]
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DestinationDevice
+alertDetailsOverride:
+  alertDisplayNameFormat: Suspicious Sign In by AAD Connect Sync Account {{UserPrincipalName}} from {{SourceIPAddress}}
+  alertDescriptionFormat: |
+    This query looks for sign ins by the Azure AD Connect Sync account to Azure where properties about the logon are anomalous.
+    This query uses Microsoft Sentinel's UEBA features to detect these suspicious properties.
+    A threat actor may attempt to steal the Sync account credentials and use them to access Azure resources. This alert should be 
+    reviewed to ensure that the log in came was from a legitimate source.
+    In this case {{UserPrincipalName}} logged in from {{SourceIPAddress}}.
+version: 1.0.0
+kind: Scheduled

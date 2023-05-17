@@ -31,12 +31,12 @@ query: |
   (union isfuzzy=true
   (SecurityEvent
     | where EventID == 4688
-    | extend shortFileName = tostring(split(NewProcessName, '\\')[-1])
+    | extend shortFileName = tolower(tostring(split(NewProcessName, '\\')[-1]))
     ),
     (WindowsEvent
     | where EventID == 4688
     | extend  NewProcessName = tostring(EventData.NewProcessName)
-    | extend shortFileName = tostring(split(NewProcessName, '\\')[-1])
+    | extend shortFileName = tolower(tostring(split(NewProcessName, '\\')[-1]))
     | extend TargetUserName = tostring(EventData.TargetUserName)
     ));
   // Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints
@@ -46,33 +46,26 @@ query: |
   | where RequestURL endswith ".exe"
   | project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP
   | extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))
-  | join (endpointData) on $left.suspectExeName == $right.shortFileName 
-  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP, AccountCustomEntity = TargetUserName, HostCustomEntity = Computer, URLCustomEntity = RequestURL
+  | join kind=innerunique (endpointData) on $left.suspectExeName == $right.shortFileName 
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: TargetUserName
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: DestinationIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.1.3
+        columnName: RequestURL
+version: 1.1.5
 kind: Scheduled
-metadata:
-    source:
-        kind: Community
-    author:
-        name: timbMSFT
-    support:
-        tier: Community
-    categories:
-        domains: [ "Security - Threat Protection", "Networking" ]
