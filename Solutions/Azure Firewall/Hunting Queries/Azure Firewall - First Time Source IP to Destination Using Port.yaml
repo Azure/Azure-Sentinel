@@ -24,20 +24,20 @@ query: |
   let TrafficLogs = (union isfuzzy=true
   (AzureDiagnostics
     | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
-    | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort "." *
+    | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort:int "." *
     | where isnotempty(Fqdn) and isnotempty(SourceIp)),
   (AZFWApplicationRule),
   (AZFWNetworkRule
   | extend Fqdn = DestinationIp));
   let LearningSrcIpToDstIpPort = (TrafficLogs
   | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
-  | summarize LearningSrcToDsts = make_set(Fqdn,10000) by SourceIp);
+  | summarize LearningSrcToDsts = make_set(Fqdn,10000) by SourceIp, DestinationPort);
   let AlertTimeSrcIpToDstIpPort = (TrafficLogs
   | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
   | extend AlertTimeDst = Fqdn
-  | distinct AlertTimeDst ,SourceIp);
+  | distinct AlertTimeDst ,SourceIp, DestinationPort);
   AlertTimeSrcIpToDstIpPort
-  | join kind=leftouter (LearningSrcIpToDstIpPort) on SourceIp
+  | join kind=leftouter (LearningSrcIpToDstIpPort) on SourceIp, DestinationPort
   | mv-expand LearningSrcToDsts
   | where AlertTimeDst != LearningSrcToDsts
-  | summarize LearningSrcToDsts = make_set(LearningSrcToDsts,10000) by SourceIp, AlertTimeDst
+  | summarize LearningSrcToDsts = make_set(LearningSrcToDsts,10000) by SourceIp, AlertTimeDst, DestinationPort
