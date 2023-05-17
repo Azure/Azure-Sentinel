@@ -31,16 +31,19 @@ query: |
   let BinTime = 30s;
   union isfuzzy=true(
   AZFWApplicationRule
+  | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
   | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold),
   (AZFWNetworkRule
+  | extend Fqdn = DestinationIp
+  | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
   | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold),
   (AzureDiagnostics
   | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
   | parse msg_s with * "from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort
-  | where isnotempty(Fqdn) and isnotempty(SourceIp))
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)
   | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
-  | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold
+  | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold)
 entityMappings:
   - entityType: IP
     fieldMappings:
