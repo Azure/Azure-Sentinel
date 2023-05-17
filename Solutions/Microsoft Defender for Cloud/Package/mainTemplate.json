@@ -34,11 +34,11 @@
     "_solutionId": "[variables('solutionId')]",
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
-    "analyticRuleVersion1": "1.0.0",
+    "analyticRuleVersion1": "1.0.1",
     "analyticRulecontentId1": "011c84d8-85f0-4370-b864-24c13455aa94",
     "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
     "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
-    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-AnalyticsRule-',variables('_analyticRulecontentId1'))]",
+    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "uiConfigId1": "AzureSecurityCenter",
     "_uiConfigId1": "[variables('uiConfigId1')]",
@@ -46,13 +46,13 @@
     "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
     "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
     "_dataConnectorId1": "[variables('dataConnectorId1')]",
-    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
     "dataConnectorVersion1": "1.0.0"
   },
   "resources": [
     {
       "type": "Microsoft.Resources/templateSpecs",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-02-01",
       "name": "[variables('analyticRuleTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -66,7 +66,7 @@
     },
     {
       "type": "Microsoft.Resources/templateSpecs/versions",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-02-01",
       "name": "[concat(variables('analyticRuleTemplateSpecName1'),'/',variables('analyticRuleVersion1'))]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -77,7 +77,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "CoreBackupDeletionwithSecurityAlert_AnalyticalRules Analytics Rule with template version 2.0.0",
+        "description": "CoreBackupDeletionwithSecurityAlert_AnalyticalRules Analytics Rule with template version 2.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion1')]",
@@ -91,10 +91,10 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "This query will help detect attackers attempt to delete backup containers in correlation with other alerts that could have triggered to help possibly reveal more details of attacker activity. \nThough such an activity could be legitimate as part of business operation, some ransomware actors may perform such operation to cause interruption to regular business services.",
-                "displayName": "CoreBackUp Deletion in correlation with other related security alerts",
+                "description": "The query identifies any efforts by an attacker to delete backup containers, while also searching for any security alerts that may be linked to the same activity, in order to uncover additional information about the attacker's actions.' \nThough such an activity could be legitimate as part of business operation, some ransomware actors may perform such operation to cause interruption to regular business services.",
+                "displayName": "Detect CoreBackUp Deletion Activity from related Security Alerts",
                 "enabled": false,
-                "query": "SecurityAlert\n| extend Extprop = parse_json(ExtendedProperties)\n| extend Computer = iff(isnotempty(toupper(tostring(Extprop[\"Compromised Host\"]))), toupper(tostring(Extprop[\"Compromised Host\"])), tostring(parse_json(Entities)[0].HostName))\n| extend Account = iff(isnotempty(tolower(tostring(Extprop[\"User Name\"]))), tolower(tostring(Extprop[\"User Name\"])), tolower(tostring(Extprop[\"user name\"])))\n| extend IpAddress = tostring(parse_json(ExtendedProperties).[\"IpAddress\"]) \n| project TimeGenerated, AlertName, Computer, Account, IpAddress, ExtendedProperties\n| extend timestamp = TimeGenerated, Account, MachineName = Computer, IpAddress\n| join kind=inner\n(\nCoreAzureBackup\n| where State =~ \"Deleted\"\n| where OperationName =~ \"BackupItem\"\n| extend data = split(BackupItemUniqueId, \";\")\n| extend AzureLocation = data[0], VaultId=data[1], MachineName=data[2], DrivesBackedUp=data[3]\n| project timestamp = TimeGenerated, AzureLocation, VaultId, tostring(MachineName), DrivesBackedUp, State, BackupItemUniqueId, _ResourceId, OperationName, BackupItemFriendlyName\n)\non MachineName\n| project timestamp, AlertName, HostCustomEntity = MachineName, AccountCustomEntity = Account, ResourceCustomEntity = _ResourceId, IPCustomEntity = IpAddress, VaultId, AzureLocation, DrivesBackedUp, State, BackupItemUniqueId, OperationName, BackupItemFriendlyName\n",
+                "query": "SecurityAlert\n| extend Extprop = parse_json(ExtendedProperties)\n| mv-expand todynamic(Entities)\n| extend HostName = iff(isnotempty(tostring(Extprop[\"Compromised Host\"])), tolower(tostring(Extprop[\"Compromised Host\"])), tolower(tostring(parse_json(Entities).HostName)))\n| where isnotempty(HostName)\n| mv-expand todynamic(split(HostName, ','))\n| extend DnsDomain = iff(isnotempty(tostring(Extprop[\"Machine Domain\"])), tostring(Extprop[\"Machine Domain\"]), tostring(parse_json(Entities).DnsDomain))\n| extend UserName = iff(isnotempty(tostring(Extprop[\"User Name\"])), tostring(Extprop[\"User Name\"]), iff(tostring(parse_json(Entities).Type) == 'account', tostring(parse_json(Entities).Name), ''))\n| extend NTDomain = iff(isnotempty(tostring(Extprop[\"User Domain\"])), tostring(Extprop[\"User Domain\"]), tostring(parse_json(Entities).NTDomain))\n| extend IpAddress = iff(tostring(parse_json(Entities).Type) == 'ip', tostring(parse_json(Entities).Address), tostring(parse_json(Extprop).[\"IpAddress\"]))\n| summarize timestamp = arg_max(TimeGenerated, *) by AlertName, tostring(HostName)\n| project timestamp, AlertName, UserName, NTDomain, tostring(HostName), DnsDomain, IpAddress\n| join kind=inner\n(\nCoreAzureBackup\n| where State =~ \"Deleted\"\n| where OperationName =~ \"BackupItem\"\n| extend data = split(BackupItemUniqueId, \";\")\n| extend AzureLocation = data[0], VaultId=data[1], HostName=tolower(tostring(data[2])), DrivesBackedUp=data[3]\n| project timestamp = TimeGenerated, AzureLocation, VaultId, HostName, DrivesBackedUp, State, BackupItemUniqueId, _ResourceId, OperationName, BackupItemFriendlyName\n)\non HostName\n| project timestamp, AlertName, HostName, DnsDomain, UserName, NTDomain, _ResourceId, IpAddress, VaultId, AzureLocation, DrivesBackedUp, State, BackupItemUniqueId, OperationName, BackupItemFriendlyName\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P1D",
                 "severity": "Medium",
@@ -114,42 +114,53 @@
                 "tactics": [
                   "Impact"
                 ],
+                "techniques": [
+                  "T1496"
+                ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AccountCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "Name",
+                        "columnName": "UserName"
+                      },
+                      {
+                        "identifier": "NTDomain",
+                        "columnName": "NTDomain"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "AzureResource",
                     "fieldMappings": [
                       {
-                        "columnName": "ResourceCustomEntity",
-                        "identifier": "ResourceId"
+                        "identifier": "ResourceId",
+                        "columnName": "_ResourceId"
                       }
-                    ],
-                    "entityType": "AzureResource"
+                    ]
                   },
                   {
+                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
+                      },
+                      {
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
-                    ],
-                    "entityType": "Host"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPCustomEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IpAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -187,7 +198,7 @@
     },
     {
       "type": "Microsoft.Resources/templateSpecs",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-02-01",
       "name": "[variables('dataConnectorTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -201,7 +212,7 @@
     },
     {
       "type": "Microsoft.Resources/templateSpecs/versions",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-02-01",
       "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -212,7 +223,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Microsoft Defender for Cloud data connector with template version 2.0.0",
+        "description": "Microsoft Defender for Cloud data connector with template version 2.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -292,6 +303,7 @@
       "dependsOn": [
         "[variables('_dataConnectorId1')]"
       ],
+      "location": "[parameters('workspace-location')]",
       "properties": {
         "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
         "contentId": "[variables('_dataConnectorContentId1')]",
@@ -353,8 +365,9 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.0",
+        "version": "2.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
