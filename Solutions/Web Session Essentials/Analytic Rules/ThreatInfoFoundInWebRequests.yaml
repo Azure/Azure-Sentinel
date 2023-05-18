@@ -1,0 +1,51 @@
+id: 7d2ed1c7-da26-45fd-b4ea-b6f2bbeccea7
+name: Threat information has been detected in web request. (ASIM Web Session)
+description: |
+  'This rule looks for threat fields like EventSeverity, ThreatName, ThreatCategory and ThreatConfidence and creates an alert if threat info is found.'
+severity: High
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  _Im_WebSession
+  | project EventSeverity, ThreatName, ThreatCategory, ThreatConfidence, TimeGenerated, SrcIpAddr, SrcUsername, SrcHostname
+  | where EventSeverity =~ 'High' or isnotempty(ThreatName) or isnotempty(ThreatCategory) // Check for high severity events or that has either ThreatName or ThreatCategory field populated
+  | where isempty(ThreatConfidence) or ThreatConfidence > 90 // Check if ThreatConfidence is presnet then it must be great than 90
+  | summarize EventCount = count(), EventStartTime=min(TimeGenerated), EvenEndTime=max(TimeGenerated) by SrcIpAddr, SrcUsername, SrcHostname, ThreatCategory, ThreatConfidence, ThreatName
+  | order by EventCount desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SrcUsername
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  ThreatCategory: ThreatCategory
+  ThreatConfidence: ThreatConfidence
+  ThreatName: ThreatName
+  EventCount: EventCount
+alertDetailsOverride:
+  alertDisplayNameFormat: "Threat event has been detected in web request (ASIM Web Session)"
+  alertDescriptionFormat: "This rule looks for threat fields like EventSeverity, ThreatName, ThreatCategory and ThreatConfidence and creates an alert if threat info is found in those fields."
+version: 1.0.0
+kind: Scheduled
