@@ -2,10 +2,10 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "SAP Incident handler- Block User from Teams or Email",
+        "title": "SAP Incident Response- lock User from Teams- Advanced",
         "description": "This Playbook Provides the automation for the SAP incidents. It allows for automatically pop a Teams message or an email to the user to notify them of the incident. It also allows for the user to be blocked on AD or SAP, for the incident to be closed.",
         "prerequisites": [
-            "1. Update you SAP alert rules to the latest version.",
+            "1. Update your SAP alert rules to the latest version.",
             "2. Asign the releavnt Teams or email addresses to be used as responders.",
             "3. Optional- set you SAP system to allow user locking from Sentinel, See more details at https://aka.ms/sentinel4sapintro."
         ],
@@ -14,7 +14,7 @@
             "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter API key or credentials --> Save"
         ],
         "prerequisitesDeployTemplateFile": "../../TeamsSAPUserBlockPoC/azuredeploy.json",
-        "lastUpdateTime": "2022-08-18T00:00:00.000Z",
+        "lastUpdateTime": "2023-05-17T00:00:00.000Z",
         "entities": [
             "ip",
             "Account"
@@ -37,13 +37,25 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "SAPIncidentResponseLockUser",
+            "defaultValue": "SAPLockUser-Advanced-SEED",
             "type": "string"
         },
-        "DefaultEmailDestination": {
+        "DefaultAdminEmail": {
             "type": "string",
             "metadata": {
-                "description": "Enter value for DefaultEmailDestination"
+                "description": "Enter value for DefaultAdminEmail"
+            }
+        },
+        "SAP-SOAP-KeyVault-Credential-Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for SAP-SOAP-KeyVault-Credential-Name"
+            }
+        },
+        "TeamsChannel": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for TeamsChannel"
             }
         }
     },
@@ -68,9 +80,17 @@
                             "defaultValue": {},
                             "type": "Object"
                         },
-                        "DefaultEmailDestination": {
-                            "defaultValue": "[parameters('DefaultEmailDestination')]",
-                            "type": "string"
+                        "DefaultAdminEmail": {
+                            "type": "string",
+                            "defaultValue": "[parameters('DefaultAdminEmail')]"
+                        },
+                        "SAP-SOAP-KeyVault-Credential-Name": {
+                            "type": "string",
+                            "defaultValue": "[parameters('SAP-SOAP-KeyVault-Credential-Name')]"
+                        },
+                        "TeamsChannel": {
+                            "type": "string",
+                            "defaultValue": "[parameters('TeamsChannel')]"
                         }
                     },
                     "triggers": {
@@ -112,8 +132,8 @@
                                                                     "messageBody": "<p>Account @{variables('account')} disabled on Azure AD!</p>",
                                                                     "parentMessageId": "@body('Parse_JSON')?['messageId']",
                                                                     "recipient": {
-                                                                        "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
-                                                                        "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                                        "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                                        "groupId": "@{variables('TeamsChannel')?['teamID']}"
                                                                     }
                                                                 },
                                                                 "host": {
@@ -154,8 +174,8 @@
                                                                     "messageBody": "<p>Implement SAP REST interfaces with SAP IAS or OAuth2 flow to lock users on XSUAA with property \"active:false\"</p>",
                                                                     "parentMessageId": "@body('Parse_JSON')?['messageId']",
                                                                     "recipient": {
-                                                                        "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
-                                                                        "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                                        "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                                        "groupId": "@{variables('TeamsChannel')?['teamID']}"
                                                                     }
                                                                 },
                                                                 "host": {
@@ -187,50 +207,111 @@
                                                                 },
                                                                 "body": {
                                                                     "bAPI_USER_LOCK": {
-                                                                        "rETURN": [],
-                                                                        "uSERNAME": "@{variables('SAP-user')}"
+                                                                        "uSERNAME": "@{variables('SAP_User')}"
                                                                     }
                                                                 },
                                                                 "headers": {
                                                                     "Content-Type": "application/json"
                                                                 },
                                                                 "method": "POST",
-                                                                "uri": "@{variables('basePath')}ZWS_BAPI_USER_LOCK:BAPI_USER_LOCKRequest?sap-client=@{variables('sap-client-id')}"
+                                                                "uri": "@{variables('basePath')}lockme/sap-com:document:sap:rfc:functions:ZWS_BAPI_USER_LOCK:BAPI_USER_LOCKRequest?sap-client=@{variables('sap-client-id')}"
                                                             }
                                                         },
                                                         "Condition_SOAP_success": {
                                                             "actions": {
-                                                                "Close_Sentinel_incident": {
-                                                                    "runAfter": {
-                                                                        "Notify_impacted_colleague_working_with_SAP": [
-                                                                            "Succeeded"
-                                                                        ]
-                                                                    },
-                                                                    "type": "ApiConnection",
-                                                                    "inputs": {
-                                                                        "body": {
-                                                                            "classification": {
-                                                                                "ClassificationAndReason": "TruePositive - SuspiciousActivity",
-                                                                                "ClassificationReasonText": "@{body('Parse_JSON')?['data']?['blockComment']}"
+                                                                "Condition": {
+                                                                    "actions": {
+                                                                        "Close_Sentinel_incident": {
+                                                                            "runAfter": {
+                                                                                "Reply_with_SAP_lock_message_in_channel": [
+                                                                                    "Succeeded"
+                                                                                ]
                                                                             },
-                                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                                            "status": "Closed"
-                                                                        },
-                                                                        "host": {
-                                                                            "connection": {
-                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "body": {
+                                                                                    "classification": {
+                                                                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity",
+                                                                                        "ClassificationReasonText": "@{body('Parse_JSON')?['data']?['blockComment']}"
+                                                                                    },
+                                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                    "status": "Closed"
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "put",
+                                                                                "path": "/Incidents"
                                                                             }
                                                                         },
-                                                                        "method": "put",
-                                                                        "path": "/Incidents"
-                                                                    }
-                                                                },
-                                                                "Notify_impacted_colleague_working_with_SAP": {
+                                                                        "Reply_with_SAP_lock_message_in_channel": {
+                                                                            "runAfter": {},
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "body": {
+                                                                                    "messageBody": "<p>SAP User @{variables('SAP_User')} (@{variables('account')}) locked!<br>\n<br>\nSAP response: @{body('Parse_SAP_response_as_JSON')?['bAPI_USER_LOCKResponse']?['RETURN'][0]?['mESSAGE']}</p>",
+                                                                                    "parentMessageId": "@body('Parse_JSON')?['messageId']",
+                                                                                    "recipient": {
+                                                                                        "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                                                        "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                                                                    }
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "post",
+                                                                                "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                            }
+                                                                        }
+                                                                    },
                                                                     "runAfter": {
-                                                                        "Reply_with_SAP_lock_message_in_channel": [
+                                                                        "Terminate_active_user_session_of_locked_SAP_user": [
                                                                             "Succeeded"
                                                                         ]
                                                                     },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Reply_with_SAP_lock_error_message_in_channel": {
+                                                                                "runAfter": {},
+                                                                                "type": "ApiConnection",
+                                                                                "inputs": {
+                                                                                    "body": {
+                                                                                        "messageBody": "<p>SAP User @{variables('SAP_User')} (@{variables('account')}) locked!<br>\n<br>\nSAP response: @{body('Parse_SAP_response_as_JSON')?['bAPI_USER_LOCKResponse']?['RETURN'][0]?['mESSAGE']}</p>",
+                                                                                        "parentMessageId": "@body('Parse_JSON')?['messageId']",
+                                                                                        "recipient": {
+                                                                                            "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                                                            "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                                                                        }
+                                                                                    },
+                                                                                    "host": {
+                                                                                        "connection": {
+                                                                                            "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                                                                        }
+                                                                                    },
+                                                                                    "method": "post",
+                                                                                    "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "less": [
+                                                                                    "@outputs('Terminate_active_user_session_of_locked_SAP_user')['statusCode']",
+                                                                                    400
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Notify_impacted_colleague_working_with_SAP": {
+                                                                    "runAfter": {},
                                                                     "type": "ApiConnection",
                                                                     "inputs": {
                                                                         "body": {
@@ -246,25 +327,30 @@
                                                                         "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
                                                                     }
                                                                 },
-                                                                "Reply_with_SAP_lock_message_in_channel": {
-                                                                    "runAfter": {},
-                                                                    "type": "ApiConnection",
+                                                                "Terminate_active_user_session_of_locked_SAP_user": {
+                                                                    "runAfter": {
+                                                                        "Notify_impacted_colleague_working_with_SAP": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "Http",
                                                                     "inputs": {
+                                                                        "authentication": {
+                                                                            "password": "@body('Get_secret')?['value']",
+                                                                            "type": "Basic",
+                                                                            "username": "@body('Get_secret')?['name']"
+                                                                        },
                                                                         "body": {
-                                                                            "messageBody": "<p>SAP User @{variables('SAP-user')} (@{variables('account')}) locked!<br>\n<br>\nSAP response: @{body('Parse_SAP_response_as_JSON')?['bAPI_USER_LOCKResponse']?['RETURN'][0]?['mESSAGE']}</p>",
-                                                                            "parentMessageId": "@body('Parse_JSON')?['messageId']",
-                                                                            "recipient": {
-                                                                                "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
-                                                                                "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                                            "tH_DELETE_USER": {
+                                                                                "cLIENT": "@{variables('sap-client-id')}",
+                                                                                "uSER": "@{variables('SAP_User')}"
                                                                             }
                                                                         },
-                                                                        "host": {
-                                                                            "connection": {
-                                                                                "name": "@parameters('$connections')['teams_1']['connectionId']"
-                                                                            }
+                                                                        "headers": {
+                                                                            "Content-Type": "application/json"
                                                                         },
-                                                                        "method": "post",
-                                                                        "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                        "method": "POST",
+                                                                        "uri": "@{variables('basePath')}/go/sap-com:document:sap:rfc:functions:ZWS_DELETE_USER_SESSION:TH_DELETE_USERRequest?sap-client=@{variables('sap-client-id')}"
                                                                     }
                                                                 }
                                                             },
@@ -283,8 +369,8 @@
                                                                                 "messageBody": "<p>User could not be locked. Error message (code @{outputs('Block_User_via_SOAP_exposed_BAPI')['statusCode']}): @{body('Block_User_via_SOAP_exposed_BAPI')}</p>",
                                                                                 "parentMessageId": "@body('Parse_JSON')?['messageId']",
                                                                                 "recipient": {
-                                                                                    "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
-                                                                                    "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                                                    "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                                                    "groupId": "@{variables('TeamsChannel')?['teamID']}"
                                                                                 }
                                                                             },
                                                                             "host": {
@@ -316,11 +402,11 @@
                                                             "inputs": {
                                                                 "host": {
                                                                     "connection": {
-                                                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                                                        "name": "@parameters('$connections')['keyvault_2']['connectionId']"
                                                                     }
                                                                 },
                                                                 "method": "get",
-                                                                "path": "/secrets/@{encodeURIComponent('PM4ADMIN')}/value"
+                                                                "path": "/secrets/@{encodeURIComponent(parameters('SAP-SOAP-KeyVault-Credential-Name'))}/value"
                                                             }
                                                         },
                                                         "Parse_SAP_response_as_JSON": {
@@ -413,9 +499,6 @@
                                                         }
                                                     }
                                                 }
-                                            },
-                                            "default": {
-                                                "actions": {}
                                             },
                                             "expression": "@body('Parse_JSON')?['data']?['WhereToLockUser']",
                                             "type": "Switch"
@@ -532,10 +615,10 @@
                                     "inputs": {
                                         "body": {
                                             "body": {
-                                                "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Azure Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"View incident\",\n                            \"url\": \"@{triggerBody()?['object']?['properties']?['incidentUrl']}\",\n                            \"id\": \"openSentinel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time (UTC)\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['additionalData']?['tactics']}\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Block User on...\",\n            \"style\": \"destructive\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.ChoiceSet\",\n                        \"id\": \"WhereToLockUser\",\n                        \"label\": \"On which system?\",\n                        \"style\": \"expanded\",\n                        \"choices\": [\n                            {\n                                \"title\": \"SAP ERP\",\n                                \"value\": \"erp\"\n                            },\n                            {\n                                \"title\": \"SAP BTP Cloud Identity Service\",\n                                \"value\": \"btp\"\n                            },\n                            {\n                                \"title\": \"Azure AD (globally)\",\n                                \"value\": \"aad\"\n                            }\n                        ],\n                        \"value\": \"erp\",\n                        \"isRequired\": true,\n                        \"errorMessage\": \"Given choice unknown!\"\n                    },\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"blockComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"block\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        },\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Flag as false positive\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"flagComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"flag\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}",
+                                                "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Azure Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"View incident\",\n                            \"url\": \"@{triggerBody()?['object']?['properties']?['incidentUrl']}\",\n                            \"id\": \"openSentinel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time (UTC)\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\":\"@{variables('Sentinel-Tactics')}\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Block User on...\",\n            \"style\": \"destructive\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.ChoiceSet\",\n                        \"id\": \"WhereToLockUser\",\n                        \"label\": \"On which system?\",\n                        \"style\": \"expanded\",\n                        \"choices\": [\n                            {\n                                \"title\": \"SAP ERP\",\n                                \"value\": \"erp\"\n                            },\n                            {\n                                \"title\": \"SAP BTP Cloud Identity Service\",\n                                \"value\": \"btp\"\n                            },\n                            {\n                                \"title\": \"Azure AD (globally)\",\n                                \"value\": \"aad\"\n                            }\n                        ],\n                        \"value\": \"erp\",\n                        \"isRequired\": true,\n                        \"errorMessage\": \"Given choice unknown!\"\n                    },\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"blockComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"block\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        },\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Flag as false positive\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"flagComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"flag\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}",
                                                 "recipient": {
-                                                    "channelId": "@{body('Parse_Incident_Custom_Details')?['TeamsChannelID'][0]?['channelID']}",
-                                                    "groupId": "@{body('Parse_Incident_Custom_Details')?['TeamsChannelID'][0]?['teamID']}"
+                                                    "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                    "groupId": "@{variables('TeamsChannel')?['teamID']}"
                                                 },
                                                 "updateMessage": "Thanks for keeping SAP on Azure secure!"
                                             },
@@ -562,8 +645,8 @@
                                         "body": {
                                             "messageBody": "<p>Incident notification timed out after 1h!&nbsp;</p>",
                                             "recipient": {
-                                                "channelId": "19:febede5de91d4198bd0f75be9047d029@thread.tacv2",
-                                                "groupId": "f812e2e3-8e37-475a-9d82-3d7297e9ead1"
+                                                "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                "groupId": "@{variables('TeamsChannel')?['teamID']}"
                                             }
                                         },
                                         "host": {
@@ -583,8 +666,8 @@
                                             "Body": "<p>@{variables('email-body')}</p>",
                                             "Cc": "@variables('account')",
                                             "Importance": "High",
-                                            "Subject": "@{triggerBody()?['object']?['properties']?['title']}, block SAP user @{variables('SAP-user')}?",
-                                            "To": "@variables('EmailDestination')"
+                                            "Subject": "@{triggerBody()?['object']?['properties']?['title']}, block SAP user @{variables('SAP_User')}?",
+                                            "To": "@variables('DefaultAdminEmail')"
                                         },
                                         "host": {
                                             "connection": {
@@ -674,7 +757,7 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "SAP-user",
+                                        "name": "SAP_User",
                                         "type": "string"
                                     }
                                 ]
@@ -682,7 +765,7 @@
                         },
                         "Initialize_SID_variable": {
                             "runAfter": {
-                                "Initialize_Custom_Details_JSON_string": [
+                                "Initialize_default_admin_email": [
                                     "Succeeded"
                                 ]
                             },
@@ -744,9 +827,26 @@
                                 ]
                             }
                         },
+                        "Initialize_default_admin_email": {
+                            "runAfter": {
+                                "Initialize_target_TeamsChannel": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DefaultAdminEmail",
+                                        "type": "string",
+                                        "value": "@parameters('DefaultAdminEmail')"
+                                    }
+                                ]
+                            }
+                        },
                         "Initialize_email_body": {
                             "runAfter": {
-                                "Initialize_variable": [
+                                "Initialize_actionable_message_for_outlook": [
                                     "Succeeded"
                                 ]
                             },
@@ -760,9 +860,9 @@
                                 ]
                             }
                         },
-                        "Initialize_variable": {
+                        "Initialize_sentinel_incident_tactics_for_adaptive_card": {
                             "runAfter": {
-                                "Initialize_actionable_message_for_outlook": [
+                                "Initialize_email_body": [
                                     "Succeeded"
                                 ]
                             },
@@ -770,9 +870,26 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "EmailDestination",
+                                        "name": "Sentinel-Tactics",
                                         "type": "string",
-                                        "value": "@parameters('DefaultEmailDestination')"
+                                        "value": "@{replace(replace(replace(string(triggerBody()?['object']?['properties']?['additionalData']?['tactics']),'[',''),']',''),'\"','')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_target_TeamsChannel": {
+                            "runAfter": {
+                                "Initialize_Custom_Details_JSON_string": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TeamsChannel",
+                                        "type": "object",
+                                        "value": "@parameters('TeamsChannel')"
                                     }
                                 ]
                             }
@@ -844,7 +961,11 @@
                                     }
                                 },
                                 "Parse_Incident_Custom_Details": {
-                                    "runAfter": {},
+                                    "runAfter": {
+                                        "Select_related_entities": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "ParseJson",
                                     "inputs": {
                                         "content": "@variables('custom-details-json-string')",
@@ -965,7 +1086,7 @@
                                 },
                                 "Run_query_to_select_sap_basepath": {
                                     "runAfter": {
-                                        "Select_related_entities": [
+                                        "Set_SAP_user_to_be_locked": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1060,35 +1181,16 @@
                                                     }
                                                 }
                                             },
-                                            "default": {
-                                                "actions": {}
-                                            },
                                             "expression": "@items('Select_related_entities')?['kind']",
                                             "type": "Switch"
                                         }
                                     },
-                                    "runAfter": {
-                                        "Set_Email_if_DestinationEmail_is_there,_else_DefaultEmail": [
-                                            "Succeeded"
-                                        ]
-                                    },
+                                    "runAfter": {},
                                     "type": "Foreach",
                                     "runtimeConfiguration": {
                                         "concurrency": {
                                             "repetitions": 2
                                         }
-                                    }
-                                },
-                                "Set_Email_if_DestinationEmail_is_there,_else_DefaultEmail": {
-                                    "runAfter": {
-                                        "Set_SAP_user_to_be_locked": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "EmailDestination",
-                                        "value": "@{coalesce(body('Parse_Incident_Custom_Details')?['DestinationEmail'][0],parameters('DefaultEmailDestination'))}"
                                     }
                                 },
                                 "Set_SAP_user_to_be_locked": {
@@ -1099,8 +1201,8 @@
                                     },
                                     "type": "SetVariable",
                                     "inputs": {
-                                        "name": "SAP-user",
-                                        "value": "@{body('Parse_Incident_Custom_Details')?['SAPUser'][0]}"
+                                        "name": "SAP_User",
+                                        "value": "@{body('Parse_Incident_Custom_Details')?['SAP_User'][0]}"
                                     }
                                 },
                                 "Set_actionable_message_for_outlook": {
@@ -1112,7 +1214,7 @@
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "adaptiveCard",
-                                        "value": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Azure Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"Navigate to Microsoft Teams to act\",\n                            \"url\": \"https://teams.microsoft.com/l/channel/19%3afebede5de91d4198bd0f75be9047d029%40thread.tacv2/Notifications?groupId=f812e2e3-8e37-475a-9d82-3d7297e9ead1&tenantId=72f988bf-86f1-41af-91ab-2d7cd011db47\",\n                            \"id\": \"openTeamsChannel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['additionalData']?['tactics']}\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}"
+                                        "value": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"large\",\n                                    \"weight\": \"bolder\",\n                                    \"text\": \"New incident from Azure Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"Navigate to Microsoft Teams to act\",\n                            \"url\": \"https://teams.microsoft.com/l/channel/19%3afebede5de91d4198bd0f75be9047d029%40thread.tacv2/Notifications?groupId=f812e2e3-8e37-475a-9d82-3d7297e9ead1&tenantId=72f988bf-86f1-41af-91ab-2d7cd011db47\",\n                            \"id\": \"openTeamsChannel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": @{variables('Sentinel-Tactics')}\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}"
                                     }
                                 },
                                 "Set_email_body": {
@@ -1124,12 +1226,12 @@
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "email-body",
-                                        "value": "<script type=\"application/adaptivecard+json\"> \n@{variables('adaptiveCard')}\n</script>"
+                                        "value": "<html>\n<head>\n  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n<script type=\"application/adaptivecard+json\">\n@{variables('adaptiveCard')}\n</script>\n</head>\n<body>\nVisit the <a href=\"https://learn.microsoft.com/outlook/actionable-messages\">Outlook Dev Portal</a> to learn more about Actionable Messages.\n</body>\n</html>"
                                     }
                                 }
                             },
                             "runAfter": {
-                                "Initialize_email_body": [
+                                "Initialize_sentinel_incident_tactics_for_adaptive_card": [
                                     "Succeeded"
                                 ]
                             },
@@ -1171,8 +1273,8 @@
                             "inputs": {
                                 "body": {
                                     "isAlert": true,
-                                    "messageBody": "<p>Sentinel SAP Incident workflow action failed or timed out (after 1h)! Please verify your logic and process the incident from Sentinel manually till resolved.</p>",
-                                    "recipient": "admin@contoso.com"
+                                    "messageBody": "<p>Sentinel SAP Incident workflow action failed! Please verify your logic and process the incident from Sentinel manually till resolved.<br>\n<br>\n<a href=\"https://portal.azure.com/\">Link</a>&nbsp;</p>",
+                                    "recipient": "@variables('DefaultAdminEmail')"
                                 },
                                 "host": {
                                     "connection": {
@@ -1194,8 +1296,7 @@
                                 "runStatus": "Succeeded"
                             }
                         }
-                    },
-                    "outputs": {}
+                    }
                 },
                 "parameters": {
                     "$connections": {
@@ -1220,7 +1321,7 @@
                                     }
                                 }
                             },
-                            "keyvault": {
+                            "keyvault_2": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
                                 "connectionName": "[variables('KeyvaultConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
@@ -1243,8 +1344,9 @@
             "type": "Microsoft.Logic/workflows",
             "location": "[resourceGroup().location]",
             "tags": {
-                "hidden-SentinelTemplateName": "SAPIncidentResponseLockUser",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelWorkspaceId": "/subscriptions/78ffdd91-611e-402f-8a7e-7ab0b209b7c6/resourceGroups/tamir-sentinel-sap-dev-rg/providers/microsoft.OperationalInsights/Workspaces/tamir-sentinel4sap-dev",
+                "hidden-SentinelTemplateName": "SAPLockUser-Advanced",
+                "hidden-SentinelTemplateVersion": "2.0.63"
             },
             "identity": {
                 "type": "SystemAssigned"

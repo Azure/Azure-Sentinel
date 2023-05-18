@@ -1,0 +1,900 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "SAP Incident Response- Reenable audit logging once deactivated",
+        "description": "This Playbook Provides the automation for the SAP incidents. It allows for automatically pop a Teams message or an email to the user to notify them of the incident. It also allows for the user to be blocked on AD or SAP, for the incident to be closed.",
+        "prerequisites": [],
+        "postDeployment": [
+            "1. Once deployment is complete, you will need to authorize each connection.",
+            "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter API key or credentials --> Save"
+        ],
+        "prerequisitesDeployTemplateFile": "../../TeamsSAPUserBlockPoC/azuredeploy.json",
+        "lastUpdateTime": "2023-05-17T00:00:00.000Z",
+        "entities": [
+            "ip",
+            "Account"
+        ],
+        "tags": [
+            "workflow",
+            "SAP",
+            "Active directory",
+            "SAP User",
+            "Block SAP User",
+            "Block AD User"
+        ],
+        "support": {
+            "tier": "microsoft",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SAPReEnableAuditLog-SEED",
+            "type": "string"
+        },
+        "DefaultAdminEmail": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for DefaultAdminEmail"
+            }
+        },
+        "SAP-SOAP-KeyVault-Credential-Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for SAP-SOAP-KeyVault-Credential-Name"
+            }
+        },
+        "TeamsChannel": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for TeamsChannel"
+            }
+        }
+    },
+    "variables": {
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "DefaultAdminEmail": {
+                            "type": "string",
+                            "defaultValue": "[parameters('DefaultAdminEmail')]"
+                        },
+                        "SAP-SOAP-KeyVault-Credential-Name": {
+                            "type": "string",
+                            "defaultValue": "[parameters('SAP-SOAP-KeyVault-Credential-Name')]"
+                        },
+                        "TeamsChannel": {
+                            "type": "string",
+                            "defaultValue": "[parameters('TeamsChannel')]"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_latest_SAP_Audit_Log_parameter": {
+                            "runAfter": {
+                                "Get_secret_for_SAP_SOAP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret_for_SAP_SOAP')?['value']",
+                                    "type": "Basic",
+                                    "username": "@body('Get_secret_for_SAP_SOAP')?['name']"
+                                },
+                                "body": {
+                                    "rSAU_API_GET_PARAM": {
+                                        "iD_GET_FROM_KP": "X"
+                                    }
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "@{variables('basePath')}auditlog/param/sap-com:document:sap:rfc:functions:ZWS_RSAU_API_GET_PARAM:RSAU_API_GET_PARAMRequest"
+                            }
+                        },
+                        "Get_secret_for_SAP_SOAP": {
+                            "runAfter": {
+                                "Payload_parsing_Scope": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent(parameters('SAP-SOAP-KeyVault-Credential-Name'))}/value"
+                            }
+                        },
+                        "Initialize_Custom_Details_JSON_string": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "custom-details-json-string",
+                                        "type": "string",
+                                        "value": "@{replace(replace(replace(replace(triggerBody()?['object']?['properties']?['alerts'][0]?['properties']?['additionalData']?['Custom Details'],'}\"','}'),'\"{','{'),'\\',''),'\"}]}','}]}')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entities__Kind_for_dynamic_json": {
+                            "runAfter": {
+                                "Initialize_base_path_from_query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entitiesKindArray",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entities__Name_for_dynamic_json": {
+                            "runAfter": {
+                                "Initialize_Entities__Kind_for_dynamic_json": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entitiesNameArray",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SAPClientId_variable": {
+                            "runAfter": {
+                                "Initialize_SID_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sap-client-id",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SAP_user_to_be_locked": {
+                            "runAfter": {
+                                "Initialize_account_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SAP-user",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SID_variable": {
+                            "runAfter": {
+                                "Initialize_default_admin_email": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SID",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_account_variable": {
+                            "runAfter": {
+                                "Initialize_SAPClientId_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "account",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_actionable_message_for_outlook": {
+                            "runAfter": {
+                                "Initialize_Entities__Name_for_dynamic_json": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "adaptiveCard",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_base_path_from_query": {
+                            "runAfter": {
+                                "Initialize_SAP_user_to_be_locked": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "basePath",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_default_admin_email": {
+                            "runAfter": {
+                                "Initialize_target_TeamsChannel": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DefaultAdminEmail",
+                                        "type": "string",
+                                        "value": "@parameters('DefaultAdminEmail')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_email_body": {
+                            "runAfter": {
+                                "Initialize_actionable_message_for_outlook": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "email-body",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_target_TeamsChannel": {
+                            "runAfter": {
+                                "Initialize_Custom_Details_JSON_string": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TeamsChannel",
+                                        "type": "object",
+                                        "value": "@parameters('TeamsChannel')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Get_latest_SAP_Audit_Log_parameter": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_latest_SAP_Audit_Log_parameter')?['rSAU_API_GET_PARAMResponse']",
+                                "schema": {
+                                    "properties": {
+                                        "eD_ACTIV": {
+                                            "type": "string"
+                                        },
+                                        "eD_DBMODE": {
+                                            "type": "string"
+                                        },
+                                        "eD_GEN_USER": {
+                                            "type": "string"
+                                        },
+                                        "eD_INTEGRITY": {
+                                            "type": "string"
+                                        },
+                                        "eD_MBYTE_DAY": {
+                                            "type": "integer"
+                                        },
+                                        "eD_MBYTE_FILE": {
+                                            "type": "integer"
+                                        },
+                                        "eD_MBYTE_SGL": {
+                                            "type": "integer"
+                                        },
+                                        "eD_PEER_ADR": {
+                                            "type": "string"
+                                        },
+                                        "eD_SLOTS": {
+                                            "type": "integer"
+                                        },
+                                        "eD_TARGET": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Payload_parsing_Scope": {
+                            "actions": {
+                                "Compose_dynamic_json_for_entities_table": {
+                                    "runAfter": {
+                                        "Iterate_related_incident_entities": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": [
+                                        {
+                                            "items": "@variables('entitiesKindArray')",
+                                            "type": "Column",
+                                            "width": 40
+                                        },
+                                        {
+                                            "items": "@variables('entitiesNameArray')",
+                                            "type": "Column",
+                                            "width": 60
+                                        }
+                                    ]
+                                },
+                                "Iterate_related_incident_entities": {
+                                    "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                    "actions": {
+                                        "Append_to_kind_array": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "entitiesKindArray",
+                                                "value": {
+                                                    "text": "@{items('Iterate_related_Incident_entities')?['kind']}",
+                                                    "type": "TextBlock",
+                                                    "weight": "Default"
+                                                }
+                                            }
+                                        },
+                                        "Append_to_name_array": {
+                                            "runAfter": {
+                                                "Append_to_kind_array": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "entitiesNameArray",
+                                                "value": {
+                                                    "text": "@{items('Iterate_related_incident_entities')?['properties']?['friendlyName']}",
+                                                    "type": "TextBlock",
+                                                    "weight": "Default"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Select_base_path_from_query": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "Parse_Incident_Custom_Details": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@variables('custom-details-json-string')",
+                                        "schema": {
+                                            "properties": {
+                                                "AuditClassID": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "BagOfDetails": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "DestinationEmail": {
+                                                                "type": "string"
+                                                            },
+                                                            "MessageID": {
+                                                                "type": "string"
+                                                            },
+                                                            "Severity": {
+                                                                "type": "string"
+                                                            },
+                                                            "SystemID": {
+                                                                "type": "string"
+                                                            },
+                                                            "Tactics": {
+                                                                "type": "string"
+                                                            },
+                                                            "TeamsChannelID": {
+                                                                "properties": {
+                                                                    "channelID": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "teamID": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "MessageID",
+                                                            "Tactics",
+                                                            "SystemID",
+                                                            "Severity",
+                                                            "DestinationEmail",
+                                                            "TeamsChannelID"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "DestinationEmail": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "IsProductionEnv": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SAPAuditLogMessageID": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SAPProcessType": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SAPUser": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SystemRole": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "SystemUsage": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "TeamsChannelID": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "channelID": {
+                                                                "type": "string"
+                                                            },
+                                                            "teamID": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "teamID",
+                                                            "channelID"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Run_query_to_select_sap_basepath": {
+                                    "runAfter": {
+                                        "Select_related_entities": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "SAPSystems(SelectedSystems='@{variables('SID')}')| project tostring(todynamic(InterfaceAttributes).BasePath)",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs_2']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "tamir-sentinel-sap-dev-rg",
+                                            "resourcename": "tamir-sentinel4sap-dev",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "78ffdd91-611e-402f-8a7e-7ab0b209b7c6",
+                                            "timerange": "Last 24 hours"
+                                        }
+                                    }
+                                },
+                                "Select_base_path_from_query": {
+                                    "runAfter": {
+                                        "Run_query_to_select_sap_basepath": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "basePath",
+                                        "value": "@{body('Run_query_to_select_sap_basepath')?['value'][0]?['InterfaceAttributes_BasePath']}"
+                                    }
+                                },
+                                "Select_entities": {
+                                    "runAfter": {
+                                        "Parse_Incident_Custom_Details": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Select",
+                                    "inputs": {
+                                        "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                        "select": {
+                                            "entity": "@item()?['properties']?['friendlyName']",
+                                            "entity-type": "@item()?['kind']"
+                                        }
+                                    }
+                                },
+                                "Select_related_entities": {
+                                    "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                    "actions": {
+                                        "Switch": {
+                                            "runAfter": {},
+                                            "cases": {
+                                                "Case": {
+                                                    "case": "CloudApplication",
+                                                    "actions": {
+                                                        "Select_SID_from_Incident": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "SID",
+                                                                "value": "@{items('Select_related_entities')?['properties']?['friendlyName']}"
+                                                            }
+                                                        },
+                                                        "Set_SAP_client_id": {
+                                                            "runAfter": {
+                                                                "Select_SID_from_Incident": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "sap-client-id",
+                                                                "value": "@{string(formatNumber(items('Select_related_entities')?['properties']?['appId'],'000'))}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_2": {
+                                                    "case": "Account",
+                                                    "actions": {
+                                                        "Set_account_from_incident": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "account",
+                                                                "value": "@{items('Select_related_entities')?['properties']?['friendlyName']}"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "expression": "@items('Select_related_entities')?['kind']",
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_involved_SAP_user": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 2
+                                        }
+                                    }
+                                },
+                                "Set_involved_SAP_user": {
+                                    "runAfter": {
+                                        "Select_entities": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "SAP-user",
+                                        "value": "@{body('Parse_Incident_Custom_Details')?['SAP_User'][0]}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_email_body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Post_Audit_Log_activate_message_in_Channel": {
+                            "runAfter": {
+                                "Re-activate_SAP_Audit_Log": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Azure Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"View incident\",\n                            \"url\": \"@{triggerBody()?['object']?['properties']?['incidentUrl']}\",\n                            \"id\": \"openSentinel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time (UTC)\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['additionalData']?['tactics'][0]}\"\n                        },\n                        {\n                            \"title\": \"\u26a0\ufe0fCorrective Action\",\n                            \"value\": \"SAP Audit Log on  @{variables('SID')} has been automatically re-activated. This is a critical event! You need to investigate the root cause.\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}",
+                                    "recipient": {
+                                        "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                        "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                            }
+                        },
+                        "Re-activate_SAP_Audit_Log": {
+                            "runAfter": {
+                                "Set_Audit_Log_active_in_payload": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret_for_SAP_SOAP')?['value']",
+                                    "type": "Basic",
+                                    "username": "@body('Get_secret_for_SAP_SOAP')?['name']"
+                                },
+                                "body": {
+                                    "rSAU_API_SET_PARAM": "@json(variables('updated-params'))"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "@{variables('basePath')}auditlog/sap-com:document:sap:rfc:functions:ZWS_RSAU_API_SET_PARAM:RSAU_API_SET_PARAMRequest"
+                            }
+                        },
+                        "Set_Audit_Log_active_in_payload": {
+                            "runAfter": {
+                                "Translate_SAP_Audit_log_parameters_for_Update_request": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "updated-params",
+                                        "type": "string",
+                                        "value": "@{replace(variables('sap-log-params'),'\"iD_ACTIV\":\"\"','\"iD_ACTIV\":\"X\"')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Translate_SAP_Audit_log_parameters_for_Update_request": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sap-log-params",
+                                        "type": "string",
+                                        "value": "@{trim(replace(string(body('Parse_JSON')),'eD','iD'))}"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs_2": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "SAPReEnableAuditLog",
+                "hidden-SentinelTemplateVersion": "2.0.63"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}
