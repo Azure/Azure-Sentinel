@@ -12,8 +12,7 @@ export function IsValidSupportObject(filePath: string): ExitCode {
 
         // check if the file has a "resources" field
         if (!jsonFile.hasOwnProperty("resources")) {
-            console.warn(`No "resources" field found in the file. Skipping file path: ${filePath}`);
-            return ExitCode.SUCCESS;
+            throw new MainTemplateSupportObjectValidationError(`No "resources" field found in the file. File path: ${filePath}`);
         }
 
         // get the resources from the file
@@ -61,7 +60,9 @@ export function IsValidSupportObject(filePath: string): ExitCode {
                 }
             });
         }
-
+        else {
+            throw new MainTemplateSupportObjectValidationError(`There are no metadata resoruces found in the file. File path: ${filePath}`);
+        }
         // If the file is not identified as a main template, log a warning message
     } else {
         console.warn(`Could not identify json file as a Main Template. Skipping File path: ${filePath}`);
