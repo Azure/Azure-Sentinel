@@ -54,13 +54,6 @@ export function IsValidSupportObject(filePath: string): ExitCode {
                                     throw new MainTemplateSupportObjectValidationError(`Invalid url format for support link: ${support.link}`);
                                 }
                             }
-
-                            // check if either the email or the link field is present and not empty
-                            if ((support.hasOwnProperty("email") && support.email.trim() !== "") || (support.hasOwnProperty("link") && support.link.trim() !== "")) {
-                                // do nothing
-                            } else {
-                                throw new MainTemplateSupportObjectValidationError(`Either the "email" or "link" field is required.`);
-                            }
                         }
                     } else {
                         throw new MainTemplateSupportObjectValidationError(`The "properties" field must have "support" field.`);
