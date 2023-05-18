@@ -1,0 +1,41 @@
+id: 43c2832e-6c01-4dc1-bd9e-bc3f330c2b31
+name: Excessive number of requests to forbidden file detected (ASIM Web Session)
+description: |
+  'This rule detects abnormal number of 403 errors from clients. HTTP 403 is returned when the client is not permitted access to the resource despite providing authentication in case such as when authenticated account not having sufficient permissions'
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+tactics:
+  - Persistence
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+  - T1556
+query: |
+  // Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+  let threshold=200; // Adjust the threshold as per your requirements
+  let ErrorCode=dynamic(["403"]);
+  _Im_WebSession(starttime=ago(1d),eventresultdetails_in=(ErrorCode))
+  | summarize ErrorCount = count(), Urls=make_set(Url,1000) by SrcIpAddr, SrcUsername, SrcHostname
+  | extend Address_0_SrcIpAddr = SrcIpAddr,
+  | extend Account_0_Name = SrcUsername,
+  | extend Host_0_HostName = SrcHostname
+  | order by ErrorCount desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SrcUsername
+customDetails:
+  ErrorCount: ErrorCount
+  Urls: Urls
+version: 1.0.0
