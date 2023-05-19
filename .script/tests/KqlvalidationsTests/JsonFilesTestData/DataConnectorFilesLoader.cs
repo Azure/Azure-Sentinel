@@ -28,59 +28,46 @@ namespace Kqlvalidations.Tests
             try
             {
                 var directoryPaths = GetDirectoryPaths();
+
                 return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
                 {
-                    try
-                    {
-                        var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories)?.ToList();
-                        if (files != null)
-                        {
-                            files.ForEach(filePath =>
-                            {
-                                try
-                                {
-                                    JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
+                    var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories)?.ToList();
 
-                                    var jsonString = File.ReadAllText(filePath);
-                                    try
-                                    {
-                                        JObject dataConnectorJsonObject = JObject.Parse(jsonString);
-                                        if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
-                                        {
-                                            validFiles.Add(filePath);
-                                        }
-                                        else
-                                        {
-                                            throw new Exception("Invalid JSON schema for file: " + filePath);
-                                        }
-                                    }
-                                    catch (JsonReaderException ex)
-                                    {
-                                        Console.WriteLine("Invalid JSON file: " + filePath);
-                                        Console.WriteLine("Error message: " + ex.Message);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Console.WriteLine("An error occurred while processing file: " + filePath);
-                                        Console.WriteLine("Error message: " + ex.Message);
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine("An error occurred while reading file: " + filePath);
-                                    Console.WriteLine("Error message: " + ex.Message);
-                                }
-                            });
-                        }
-                        else
-                        {
-                            Console.WriteLine("No JSON files found in directory: " + directoryPath);
-                        }
-                    }
-                    catch (Exception ex)
+                    if (files != null)
                     {
-                        Console.WriteLine("An error occurred while retrieving files in directory: " + directoryPath);
-                        Console.WriteLine("Error message: " + ex.Message);
+                        files.ForEach(filePath =>
+                        {
+                            try
+                            {
+                                JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
+
+                                var jsonString = File.ReadAllText(filePath);
+                                JObject dataConnectorJsonObject = JObject.Parse(jsonString);
+
+                                if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
+                                {
+                                    validFiles.Add(filePath);
+                                }
+                                else
+                                {
+                                    throw new Exception("Invalid JSON schema for file: " + filePath);
+                                }
+                            }
+                            catch (JsonReaderException ex)
+                            {
+                                Console.WriteLine("Invalid JSON file: " + filePath);
+                                Console.WriteLine("Error message: " + ex.Message);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("An error occurred while processing file: " + filePath);
+                                Console.WriteLine("Error message: " + ex.Message);
+                            }
+                        });
+                    }
+                    else
+                    {
+                        Console.WriteLine("No JSON files found in directory: " + directoryPath);
                     }
 
                     return accumulator.Concat(validFiles).ToList();
@@ -94,6 +81,5 @@ namespace Kqlvalidations.Tests
 
             return validFiles;
         }
-
     }
 }
