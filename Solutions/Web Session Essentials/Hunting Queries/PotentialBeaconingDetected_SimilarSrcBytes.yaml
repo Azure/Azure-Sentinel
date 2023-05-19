@@ -1,0 +1,37 @@
+id: 75929222-fee5-4f97-a2cc-cb6f29444385
+name: Potential beaconing detected - Similar sent bytes (ASIM Web Session)
+description: |
+  'Calculate the count of SrcBytes(Sent bytes) per SrcIpAddress-DstIpAddress pair over 24 hours. Higher values may indicate beaconing.'
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+  - T1571
+query: |
+  let lookback = 1d;
+  let TotalEventsThreshold = 25; // Minimum events expected in 1 day. Assuming atleast 25 events.
+  _Im_WebSession(starttime=ago(lookback))
+  | where isnotempty(SrcIpAddr) and isnotempty(DstIpAddr) and isnotempty(SrcBytes)
+  | summarize TotalEventCount = count(), make_set(TimeGenerated,10000), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, SrcBytes // Same SrcBytes between SrcIPAddress and DstIpAddress is a potential sign of beaconing activity.
+  | where TotalEventCount > TotalEventsThreshold
+  | sort by TotalEventCount desc // Higher the count, more is the possibility of beaconing activity.
+  // Analyze set_TimeGenerated to know if request being sent at specific intervals.
+  | extend Address_0_SrcIpAddr = SrcIpAddr
+  | extend Address_1_SrcIpAddr = DstIpAddr
+  | extend Account_0_Name = SrcUsername
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+      - identifier: Address
+        columnName: DstIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SrcUsername
+version: 1.0.0
