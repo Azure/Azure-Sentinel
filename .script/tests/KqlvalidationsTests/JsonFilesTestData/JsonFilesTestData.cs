@@ -9,14 +9,19 @@ namespace Kqlvalidations.Tests
         public JsonFilesTestData(JsonFilesLoader jsonFilesLoader, List<string> fileNamesToIgnore = null)
         {
             var files = jsonFilesLoader.GetFilesNames();
-            files.ForEach(filePath =>
+
+            if (files != null)
             {
-                if (!fileNamesToIgnore?.Any(fileNameToIgnore => filePath.EndsWith(fileNameToIgnore)) ?? true)
+                files.ForEach(filePath =>
                 {
-                    var fileName = Path.GetFileName(filePath);
-                    Add(fileName, Utils.EncodeToBase64(filePath));
-                }
-            });
+                    if (fileNamesToIgnore == null || !fileNamesToIgnore.Any(fileNameToIgnore => filePath.EndsWith(fileNameToIgnore)))
+                    {
+                        var fileName = Path.GetFileName(filePath);
+                        Add(fileName, Utils.EncodeToBase64(filePath));
+                    }
+                });
+            }
         }
+
     }
 }

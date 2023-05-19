@@ -16,6 +16,7 @@ namespace Kqlvalidations.Tests
     {
         private readonly IKqlQueryAnalyzer _queryValidator;
         private const int TestFolderDepth = 3;
+        private const string UserMessageTemplate = "Template Id:{0} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.";
 
         public KqlValidationTests()
         {
@@ -119,7 +120,7 @@ namespace Kqlvalidations.Tests
             {
                 var queryStr = (string)res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+                Assert.False(validationRes.IsValid, string.Format(UserMessageTemplate, id));
             }
 
         }
@@ -137,7 +138,7 @@ namespace Kqlvalidations.Tests
             {
                 var queryStr = (string)res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+                Assert.False(validationRes.IsValid, string.Format(UserMessageTemplate, id));
             }
 
         }
@@ -182,7 +183,7 @@ namespace Kqlvalidations.Tests
             {
                 var queryStr = (string)res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+                Assert.False(validationRes.IsValid, string.Format(UserMessageTemplate, id));
             }
 
         }

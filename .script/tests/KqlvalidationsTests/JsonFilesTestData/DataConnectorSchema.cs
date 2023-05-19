@@ -5,10 +5,8 @@ using System.Text;
 
 namespace Kqlvalidations.Tests
 {
-    public partial class DataConnectorSchema
+    public class DataConnectorSchema
     {
-
-
         [JsonProperty("connectivityCriterias")]
         public ConnectivityCriteria[] ConnectivityCriterias { get; set; }
 
