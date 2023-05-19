@@ -68,7 +68,7 @@ class MicrosoftSentinel:
                             response_json,
                         )
                     )
-                    return
+                    return response_json
                 elif response.status_code == 429:
                     applogger.error(
                         "{}(method={}) : {} : trying again error 429.".format(
