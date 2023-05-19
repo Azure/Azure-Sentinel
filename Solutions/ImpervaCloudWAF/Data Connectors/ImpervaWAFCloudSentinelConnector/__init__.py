@@ -134,7 +134,10 @@ class ImpervaFilesHandler:
         file_encryption_flag = file_header.find("key:")
         events_arr = []
         if file_encryption_flag == -1:
-            events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
+            try:
+                events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
+            except:
+                events_data = file_data
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
