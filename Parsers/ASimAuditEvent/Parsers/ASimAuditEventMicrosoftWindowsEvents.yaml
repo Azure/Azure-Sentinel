@@ -37,23 +37,23 @@ ParserQuery: |
     // EventID Lookup
     let EventIDLookup = datatable(EventID:int, Operation:string, EventType:string, Object:string, ObjectType:string)
     [   
-        1102, "Delete Logs", "Delete", "Security Logs", "EventLog",
+        1102, "Delete Logs", "Delete", "Security Logs", "Event Log",
         4698, "Create Scheduled Task", "Create", "", "Scheduled Task",
         4699, "Delete Scheduled Task", "Delete", "", "Scheduled Task",
         4700, "Enable Scheduled Task", "Enable", "", "Scheduled Task",
         4701, "Disable Scheduled Task ", "Disable", "", "Scheduled Task",
         4702, "Update Scheduled Task", "Set", "", "Scheduled Task",
-        4929, "Remove Active Directory Replica Source Naming Context", "Delete", "", "Active Directory Replica Source Naming Context",
+        4929, "Remove Active Directory Replica Source Naming Context", "Delete", "", "Other",
         5025, "Stop Firewall Service", "Disable", "Firewall Service", "Service",
         5027, "Retrieve the Security Policy From The Local Storage", "", "Firewall Service", "Service",
-        5028, "Parse the new Security Policy", "", "Firewall Service", "Service",
-        5029, "Initialize the Firewall Driver", "", "Firewall Service", "Service",
+        5028, "Parse the new Security Policy", "Set", "Firewall Service", "Service",
+        5029, "Initialize the Firewall Driver", "Initialize", "Firewall Service", "Service",
         5030, "Start the Firewall Service", "Start", "Firewall Service", "Service",
         5034, "Stop Firewall Driver", "Stop", "Firewall Driver", "Driver",
         5035, "Start Firewall Driver", "Start", "Firewall Driver", "Driver",
-        5037, "Terminating Firewall Driver", "", "Firewall Driver", "Driver"
+        5037, "Terminating Firewall Driver", "Terminate", "Firewall Driver", "Driver"
     ];
-    let ParsedEvents = materialize (
+    let ParsedEvents =
     union (
         union (
         // SecurityEvents
@@ -107,7 +107,7 @@ ParserQuery: |
         | project-away EventData
     )
     | lookup EventIDLookup on EventID
-    );
+    ;
     // Parse EventLog
     let EventLog = ParsedEvents
     | where EventID in(EventlogEventIds)
@@ -117,9 +117,9 @@ ParserQuery: |
     | where EventID in(ScheduledTaskEventIds)
     | extend 
         Object = TaskName,
-        NewValue = iff (
-            TaskContent == "", TaskContentNew, 
-            TaskContent
+        NewValue = coalesce(
+            TaskContent,
+            TaskContentNew
         )
     | extend 
         Value = NewValue
@@ -144,11 +144,11 @@ ParserQuery: |
     ;
     // Union Events
     union EventLog, ScheduledTask, ActiveDirectoryReplica, WindowsFirewall
+        | invoke _ASIM_ResolveDvcFQDN("Computer")
         | project-rename 
             ActorUserId = SubjectUserSid,
             ActorSessionId = SubjectLogonId,
             DvcId = _ResourceId,
-            DvcFQDN = Computer,
             ActingAppId = ClientProcessId,
             EventUid = _ItemId
         | extend
@@ -164,10 +164,11 @@ ParserQuery: |
             DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
             ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
             ActorUsernameType = iff (SubjectDomainName == "", 'Simple', 'Windows'),
-            ActorUserIdType = 'SID'
+            ActorUserIdType = iff (ActorUserId == "","", "SID"),
+            ActingAppType = "Process"
         | extend
             User = ActorUsername,
             Dvc = DvcFQDN
-        | project-away Subject*, EventID
+        | project-away Subject*, EventID, Computer
   };
   parser (disabled=disabled)
