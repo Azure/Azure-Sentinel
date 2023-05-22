@@ -1,0 +1,421 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Add-Machine-Logon-Users-to-Incident", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel incident. It will match the hosts from a Microsoft Sentinel incident with Microsoft Defender machines and add the logon users for each machine as a comment on the Microsoft Sentinel incident.",
+        "prerequisites": "1. An integration account with User.Read.All permissions for defender for endpoint. 2. An Azure Key Vault secret holding the client secret of the app registration. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Add-Machine-Logon-Users-to-Incident",
+        "lastUpdateTime": "2023-05-09T16:29:33Z",
+        "entities": ["Host"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Microsoft Defender"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Add-Machine-Logon-Users-to-Incident",
+            "type": "string"
+        },
+        "ClientID": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the Application (client) ID of your App Registration"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the name of the key vault that stores your App Registration client secret"
+            }
+        },
+        "KeyVaultSecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of the key vault secret that contains your App Registration client secret"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Client_Secret": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeyVaultSecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Condition_-_Check_for_hosts": {
+                            "actions": {
+                                "For_each_-_Host": {
+                                    "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                                    "actions": {
+                                        "Condition_-_Check_for_device_ID": {
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)": {
+                                                    "runAfter": {
+                                                        "For_each_-_Logon_user": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p><strong>Logon users for host </strong><strong>@{items('For_each_-_Host')?['HostName']}</strong>@{variables('Logon Users')}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "For_each_-_Logon_user": {
+                                                    "foreach": "@body('Parse_JSON_-_Logon_users')?['value']",
+                                                    "actions": {
+                                                        "Append_to_string_variable_-_Logon_Users": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "Logon Users",
+                                                                "value": "\nAccount Name: @{items('For_each_-_Logon_user')?['accountName']}\nLast Seen: @{items('For_each_-_Logon_user')?['lastSeen']}\nAccount Domain: @{items('For_each_-_Logon_user')?['accountDomain']}\nFirst Seen: @{items('For_each_-_Logon_user')?['firstSeen']}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_JSON_-_Logon_users": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "HTTP_-_Get_machine_logon_users": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "headers": {
+                                                            "Authorization": "Bearer @{body('Parse_JSON_-_Access_token')?['access_token']}"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://api.securitycenter.microsoft.com/api/machines/@{items('For_each_-_Host')?['additionalData']?['MdatpDeviceId']}/logonusers\n"
+                                                    }
+                                                },
+                                                "Parse_JSON_-_Logon_users": {
+                                                    "runAfter": {
+                                                        "HTTP_-_Get_machine_logon_users": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_-_Get_machine_logon_users')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {
+                                                                    "type": "string"
+                                                                },
+                                                                "value": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "accountDomain": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "accountName": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "accountSid": {},
+                                                                            "firstSeen": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "isDomainAdmin": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "isOnlyNetworkUser": {},
+                                                                            "lastSeen": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "leastPrevalentMachineId": {},
+                                                                            "logOnMachinesCount": {},
+                                                                            "logonTypes": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "mostPrevalentMachineId": {}
+                                                                        },
+                                                                        "required": [
+                                                                            "id",
+                                                                            "accountName",
+                                                                            "accountDomain",
+                                                                            "accountSid",
+                                                                            "firstSeen",
+                                                                            "lastSeen",
+                                                                            "mostPrevalentMachineId",
+                                                                            "leastPrevalentMachineId",
+                                                                            "logonTypes",
+                                                                            "logOnMachinesCount",
+                                                                            "isDomainAdmin",
+                                                                            "isOnlyNetworkUser"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_variable_-_Clear_Logon_Users": {
+                                                    "runAfter": {
+                                                        "Add_comment_to_incident_(V3)": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Logon Users",
+                                                        "value": "''"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@{items('For_each_-_Host')?['additionalData']?['MdatpDeviceId']}",
+                                                                ""
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_-_Access_token": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "HTTP_-_Authenticate": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": "[concat('grant_type=client_credentials&client_id=', parameters('ClientID'),'&client_secret=@{body(''Get_Client_Secret'')?[''value'']}&scope=https://securitycenter.onmicrosoft.com/windowsatpservice/.default')]",
+                                        "headers": {
+                                            "Content-Type": "application/x-www-form-urlencoded",
+                                            "Host": "login.microsoftonline.com"
+                                        },
+                                        "method": "POST",
+                                        "uri": "[concat('https://login.microsoftonline.com/', subscription().tenantId, '/oauth2/v2.0/token')]"
+                                    }
+                                },
+                                "Parse_JSON_-_Access_token": {
+                                    "runAfter": {
+                                        "HTTP_-_Authenticate": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_-_Authenticate')",
+                                        "schema": {
+                                            "properties": {
+                                                "access_token": {
+                                                    "type": "string"
+                                                },
+                                                "expires_in": {
+                                                    "type": "integer"
+                                                },
+                                                "ext_expires_in": {
+                                                    "type": "integer"
+                                                },
+                                                "token_type": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_Logon_Users": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_Hosts')?['Hosts'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {
+                                "Get_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Initialize_variable_-_Logon_Users": {
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Logon Users",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
