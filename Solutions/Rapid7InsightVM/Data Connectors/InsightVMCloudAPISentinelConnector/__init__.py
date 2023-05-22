@@ -60,6 +60,8 @@ async def main(mytimer: func.TimerRequest):
             async for assets in api.get_assets(start_time=start_time, end_time=end_time):
                 last_processed_date = await process_assets(assets=assets, api=api, sentinel=sentinel,
                                                            state_manager=state_manager)
+                if(last_processed_date is None):
+                    last_processed_date = end_time
                 state_manager.remember_last_date(last_processed_date)
             await state_manager.save_last_date_to_storage()
     logging.info(f'Script finished. Total sent events: {sentinel.successfull_sent_events_number}')
