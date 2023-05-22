@@ -14,11 +14,15 @@ query: |
   let lookback = 1d;
   _Im_WebSession (starttime=ago(lookback))
   | project HttpUserAgent, SrcIpAddr, SrcUsername, SrcHostname, Url, TimeGenerated
-  | where HttpUserAgent matches regex "(?i).*Linux.*Kali.*|.*Kali.*Linux.*"
+  //| where HttpUserAgent matches regex "(?i).*Linux.*Kali.*|.*Kali.*Linux.*"
+  | where HttpUserAgent has_all ("Linux", "Kali")
   | summarize EventCount=count(), EventStartTime=min(TimeGenerated), EventEndTime = max(TimeGenerated), URLs = make_set(Url,100) by HttpUserAgent, SrcIpAddr, SrcUsername, SrcHostname
-  | extend Address_0_SrcIpAddr = SrcIpAddr,
-  | extend Account_0_Name = SrcUsername,
+  | extend Name = tostring(split(SrcUsername,'@',0)[0]), UPNSuffix = tostring(split(SrcUsername,'@',1)[0])
+  | extend IP_0_Address = SrcIpAddr
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
   | extend Host_0_HostName = SrcHostname
+  | extend URL_0_Url = Url
 entityMappings:
   - entityType: URL
     fieldMappings:
@@ -31,5 +35,11 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: SrcUsername
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
 version: 1.0.0

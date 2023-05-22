@@ -14,10 +14,17 @@ relevantTechniques:
   - T1190
   - T1133
 query: |
-  _Im_WebSession
+  let lookback= 1d;
+  _Im_WebSession(starttime=ago(1d))
   | project EventSeverity, ThreatName, ThreatCategory, ThreatConfidence, TimeGenerated, SrcIpAddr, SrcUsername, SrcHostname
   | where EventSeverity =~ 'High' or isnotempty(ThreatName) or isnotempty(ThreatCategory) // Check for high severity events or that has either ThreatName or ThreatCategory field populated
   | summarize EventCount = count(), EventStartTime=min(TimeGenerated), EvenEndTime=max(TimeGenerated) by SrcIpAddr, SrcUsername, SrcHostname, ThreatCategory, ThreatConfidence, ThreatName
+  | extend Name = tostring(split(SrcUsername,'@',0)[0]), UPNSuffix = tostring(split(SrcUsername,'@',1)[0])
+  | extend IP_0_Address = SrcIpAddr
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend Host_0_HostName = SrcHostname
+  | order by EventCount desc
   | order by EventCount desc
 entityMappings:
   - entityType: Host
@@ -31,12 +38,9 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: SrcUsername
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
 eventGroupingSettings:
   aggregationKind: AlertPerResult
-customDetails:
-  ThreatCategory: ThreatCategory
-  ThreatConfidence: ThreatConfidence
-  ThreatName: ThreatName
-  EventCount: EventCount
 version: 1.0.0

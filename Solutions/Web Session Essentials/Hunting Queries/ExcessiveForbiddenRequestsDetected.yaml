@@ -14,13 +14,16 @@ relevantTechniques:
   - T1556
 query: |
   // Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
-  let threshold=200; // Adjust the threshold as per your requirements
+  let lookBack = 1d;
   let ErrorCode=dynamic(["403"]);
-  _Im_WebSession(starttime=ago(1d),eventresultdetails_in=(ErrorCode))
-  | summarize ErrorCount = count(), Urls=make_set(Url,1000) by SrcIpAddr, SrcUsername, SrcHostname
-  | extend Address_0_SrcIpAddr = SrcIpAddr,
-  | extend Account_0_Name = SrcUsername,
+  _Im_WebSession(starttime=ago(lookBack),eventresultdetails_in=(ErrorCode))
+  | summarize ErrorCount = count(), Urls=make_set(Url,1000) by SrcIpAddr, SrcUsername, SrcHostname, DstIpAddr
+  | extend Name = tostring(split(SrcUsername,'@',0)[0]), UPNSuffix = tostring(split(SrcUsername,'@',1)[0])
+  | extend IP_0_Address = SrcIpAddr
+  | extend IP_1_Address = DstIpAddr
   | extend Host_0_HostName = SrcHostname
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
   | order by ErrorCount desc
 entityMappings:
   - entityType: Host
@@ -31,11 +34,12 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SrcIpAddr
+      - identifier: Address
+        columnName: DstIpAddr
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: SrcUsername
-customDetails:
-  ErrorCount: ErrorCount
-  Urls: Urls
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
 version: 1.0.0
