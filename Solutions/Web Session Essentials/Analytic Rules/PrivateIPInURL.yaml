@@ -31,7 +31,7 @@ query: |
   | where isnotempty(Url)
   | extend ip_candidate = extract(@"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", 0, Url)
   | where ipv4_is_private(ip_candidate)
-  | summarize EventEndTime = max(TimeGenerated), EventStartTime = min(TimeGenerated), Urls=tostring(make_set(Url,100)) by ip_candidate;
+  | summarize EventCount=count(), EventEndTime = max(TimeGenerated), EventStartTime = min(TimeGenerated), Urls=tostring(make_set(Url,100)) by ip_candidate;
   let ipV4_Private_FromEncodedString = _Im_WebSession(starttime=ago(lookback))
   | where isnotempty(Url)
   // Identify requests with encoded IPv4 addresses
@@ -57,7 +57,7 @@ query: |
   // Convert the array back into a string
   | extend decoded_ip_candidate = unicode_codepoints_to_string(hex_extracted)
   | where ipv4_is_private(decoded_ip_candidate)
-  | summarize by ip_candidate=decoded_ip_candidate, Urls=tostring(set_Url), EventStartTime, EventEndTime;
+  | summarize EventCount=count() by ip_candidate=decoded_ip_candidate, Urls=tostring(set_Url), EventStartTime, EventEndTime;
   union ipV4_Private_FromPlainString, ipV4_Private_FromEncodedString
 entityMappings:
   - entityType: IP
@@ -66,8 +66,14 @@ entityMappings:
         columnName: ip_candidate
 eventGroupingSettings:
   aggregationKind: AlertPerResult
+customDetails:
+  EventCount: EventCount
+  Urls: Urls
 alertDetailsOverride:
-  alertDisplayNameFormat: "Rare UserAgent not seen in last 14 days has been detected from IP: '{{SrcIpAddr}}'"
-  alertDescriptionFormat: "This incident requires further investigation to know why this SrcIpAddr has been detected with such user agent"
+  alertDisplayNameFormat: "Private IP in URL (ASIM Web Session)"
+  alertDescriptionFormat: "Detects requests to unusual URL. Malware can use IP address to communicate with C2.This detection will identify network requests in HTTP proxy data that contains Base64 encoded IP addresses. After identifying candidates the query
+  joins with DeviceNetworkEvents to idnetify any machine within the network using that IP address. Alerts indicate that the IP address of a machine
+  within your network was seen with it's IP address base64 encoded in an outbound web request. This method of egressing the IP was seen used in POLONIUM's
+  RunningRAT tool, however the detection is generic."
 version: 1.0.0
 kind: Scheduled

@@ -22,9 +22,10 @@ query: |
   let cmd_list = dynamic(['/etc/shadow', '/etc/passwd', '/etc/hosts', '/etc/ssh/', '..\\', '../', 'proc/self/environ', 'id_rsa', 'etc/issue', 'ping -i', '/usr/bin/id', 'phpinfo()', '/bin/bash', 'sleep(', '<script>', 'whoami', 'dpkg', 'useradd', 'sudo']);
   _Im_WebSession
   | where isnotempty(Url)
-  | project Url, SrcIpAddr
+  | project Url, SrcIpAddr, TimeGenerated
   | extend Decoded_url = url_decode(Url)
   | where Decoded_url  has_any (cmd_list)
+  | summarize Count=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr, Url, Decoded_url
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -33,9 +34,12 @@ entityMappings:
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: RequestURL
+        columnName: Url
 eventGroupingSettings:
   aggregationKind: AlertPerResult
+customDetails:
+  EventCount: Count
+  Decoded_url: Decoded_url
 alertDetailsOverride:
   alertDisplayNameFormat: "Known Malicious Keywords or Commands used in URL (ASIM Web Session)"
   alertDescriptionFormat: "Use of system commands, functions could be an indication of attacker attempting to get access to the environment by exploiting a weak service. Local File Inclusion is attack which gets executed on system and all attack payloads will be delivered from URL."

@@ -44,7 +44,7 @@ query: |
   let AnomalyHours = materialize (TimeSeriesAlerts | where TimeGenerated >ago(2d) | project TimeGenerated);
   //BaseLogs aggregated per hour
   let BaseLogs = 
-  _Im_WebSession(starttime=startofday(ago(2d)))
+  _Im_WebSession(starttime=startofday(ago(endTime)), endtime=startofday(now()))
   | where isnotempty(DstIpAddr) and isnotempty(SrcIpAddr) and isnotempty(SrcBytes)
   | project TimeGenerated, DstIpAddr, SrcIpAddr, SrcBytes, DstBytes, DstPortNumber, EventProduct
   | extend DateHour = bin(TimeGenerated, timeframe) // create a new column and round to hour
@@ -58,19 +58,28 @@ query: |
   | where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour
   | project EventProduct, TimeGeneratedHour, TimeGeneratedMax, SrcIpAddr, DestinationIPList, DestinationPortList, SentBytesinMB, ReceivedBytesinMB, Rank;
   TimeSeriesAlerts
-  | where TimeGenerated > ago(2d)
+  | where TimeGenerated >= startofday(ago(endTime))
   | join kind = inner (BaseLogs | extend AnomalyHour = TimeGeneratedHour)
   on EventProduct, AnomalyHour | sort by score desc
   | project EventProduct, AnomalyHour, TimeGeneratedMax, SrcIpAddr, DestinationIPList, DestinationPortList, SentBytesinMB, ReceivedBytesinMB, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, score, anomalies
-  | summarize EventCount = count(), startTimeUtc = min(TimeGeneratedMax), EndTimeUtc = max(TimeGeneratedMax), SourceIPMax = arg_max(SrcIpAddr,*), SentBytesinMB = sum(SentBytesinMB), ReceivedBytesinMB = sum(ReceivedBytesinMB), SourceIPList = make_set(SrcIpAddr, 100), DestinationIPList = make_set(DestinationIPList,100) by AnomalyHour, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, score, anomalies
-  | project EventProduct, AnomalyHour, startTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, SentBytesinMB, ReceivedBytesinMB, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, anomalies, score, EventCount
+  | summarize EventCount = count(), startTimeUtc = min(TimeGeneratedMax), EndTimeUtc = max(TimeGeneratedMax), SourceIP = arg_max(SrcIpAddr,*), SentBytesinMB = sum(SentBytesinMB), ReceivedBytesinMB = sum(ReceivedBytesinMB), SourceIPList = make_set(SrcIpAddr, 100), DestinationIPList = make_set(DestinationIPList,100) by AnomalyHour, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, score, anomalies
+  | project EventProduct, AnomalyHour, startTimeUtc, EndTimeUtc, SourceIP, SourceIPList, DestinationIPList, DestinationPortList, SentBytesinMB, ReceivedBytesinMB, TotalBytesSentinMBperHour, BaselineBytesSentinMBperHour, anomalies, score, EventCount
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceIPMax
+        columnName: SourceIP
 eventGroupingSettings:
   aggregationKind: AlertPerResult
+customDetails:
+  EventCount: EventCount
+  SourceIPList: SourceIPList
+  DestinationIPList: DestinationIPList
+  DestinationPortList: DestinationPortList
+  SentBytesinMB: SentBytesinMB
+  ReceivedBytesinMB: ReceivedBytesinMB
+  anomalies: anomalies
+  score: score
 alertDetailsOverride:
   alertDisplayNameFormat: "Data Exfiltration -  Detect data transfer using timeseries anomaly (ASIM Web Session)"
   alertDescriptionFormat: "Identifies anomalous data transfer to public networks. The query leverages built-in KQL anomaly detection algorithms that detects large deviations from a baseline pattern.
