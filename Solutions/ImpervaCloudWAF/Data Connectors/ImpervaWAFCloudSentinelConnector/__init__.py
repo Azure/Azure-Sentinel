@@ -128,6 +128,7 @@ class ImpervaFilesHandler:
 
     def decrypt_and_unpack_file(self, file_name, file_content):
         logging.info("Unpacking and decrypting file {}".format(file_name))
+        logging.info("Checking file content {}".format(file_content))
         file_splitted = file_content.split(b"|==|\n")
         file_header = file_splitted[0].decode("utf-8")
         file_data = file_splitted[1]
@@ -137,7 +138,8 @@ class ImpervaFilesHandler:
             try:
                 events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
             except:
-                events_data = file_data
+                events_data = file_data.decode("utf-8")
+        logging.info("decoded events_data".format(events_data))
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
