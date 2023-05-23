@@ -4,7 +4,7 @@ To deploy widgets to a workspace:
 
 ## Create a Key Vault to store widgets credentials
 
-Download the [Deployment/WidgetsKvCreation](https://aka.ms/SentinelWidgetsDeployScript) powershell script. and then execute it using the following steps: #TODO: need to update the aka.ms
+Download the [WidgetsKvCreation](https://aka.ms/SentinelWidgetsDeployScript) powershell script. and then execute it using the following steps: #TODO: need to update the aka.ms
 
 1. Onboard to Azure cloud Shell: [Azure Cloud Shell](https://learn.microsoft.com/en-us/azure/cloud-shell/quickstart?tabs=azurecli)
 Perform the following setps from the doc:
