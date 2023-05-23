@@ -54,8 +54,8 @@ async def main(mytimer: func.TimerRequest):
                                               file_path='rapid7_last_scan_date')
             start_time = await state_manager.get_last_date_from_storage(end_time=end_time, current_time=current_time,
                                                                         shift_start_time=shift_start_time)
-            if(datetime.timedelta(days=7) < (end_time - start_time)):
-                end_time = start_time + datetime.timedelta(days=7)
+            if(datetime.timedelta(days=4) < (end_time - start_time)):
+                end_time = start_time + datetime.timedelta(days=4)
             logging.info(f'Data processing. Period(UTC): {start_time} - {end_time}')
             last_processed_date = None
             async for assets in api.get_assets(start_time=start_time, end_time=end_time):
