@@ -4,26 +4,23 @@ To deploy widgets to a workspace:
 
 ## Create a Key Vault to store widgets credentials
 
-Make sure you have [Python](https://www.python.org/downloads/) installed, and the required libraries. Use the following  commands to install the required libraries: 
+Download the [CreateKV](https://aka.ms/SentinelWidgetsDeployScript) powershell script. and then execute it using the following steps: #TODO: need to update the aka.ms
 
-```
-pip install azure.identity
-pip install azure.mgmt.resource
-```
+1. Onboard to Azure cloud Shell: [Azure Cloud Shell](https://learn.microsoft.com/en-us/azure/cloud-shell/quickstart?tabs=azurecli)
+Perform the following setps from the doc:
+- Start Cloud Shell
+- Select your shell environment - **PowerShell**
 
-Download the [CreateKV](https://aka.ms/SentinelWidgetsDeployScript) python script. and then execute it using the following command:
-
+2. Run the following command within the Azure Cloud shell
 ``` Command Line
-python CreateKV.py --subscription-id <subscription id> --resource-group-name <resource group name> --workspace-id <workspace id>
+./WidgetsKvCreation.Ps1 -SubscriptionId <subscription id> -WorkspaceId <workspace id>
+
 ```
 
-You can get the required parameters for your workspace by choosing `Settings`->`Workspace Settings` in your Sentinel workspace.
+* You can get the SubscriptionId and WorkspaceId by choosing `Settings`->`Workspace Settings` in your Sentinel workspace.
 
-Make sure you record the Key Vault name that the script prints as you will need it to configure the widgets. If you did not recorc the name, us the following command to get it without recreating the Key Vault:
-
-``` Command Line
-python CreateKV.py --subscription-id <subscription id> --resource-group-name <resource group name> --workspace-id <workspace id> --print_kv_name True
-```
+* Make sure you record the Key Vault name that the script prints, as you will need it to configure the widgets. If you did not record the name, you can either re-run the script, or search for the Keyvault (which has a "widgets" prefix) in [Key Vaults](https://ms.portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults).
+* Notice: You can Verify that the "widgets-*" KeyValut is matched to the workspace, by entering the KeyVault => Tags page, and check that the WorkspaceId tag matches the workspace Id of your Setninel workspace.
 
 ## Configure widgets
 
