@@ -97,16 +97,49 @@ class poller:
 
             self.AS_obj.post_data(json.dumps(azure_obj), constant.LOG_NAME)
 
+    def get_last_polled_triage_items(self, triage_ids, state_serializer_obj):
+        """ 
+            gets the last triage items list, if the file is not there then create a file
+            and upload new triage items if file is already there then return the triage item list    
+        """
+        existing_triage_id = set()
+        existing_triage_id_str = state_serializer_obj.get_triage_items()
+
+        try:
+            if existing_triage_id_str:
+                existing_triage_id = set(existing_triage_id_str.splitlines())
+
+            logger.info('existing triage items length : {}'.format(len(existing_triage_id)))
+
+            new_triage_id = set(triage_ids)
+            unique_triage_id = existing_triage_id.union(new_triage_id)
+            unique_triage_id_list = list(unique_triage_id)
+            num_items = len(unique_triage_id_list)
+            logger.info('unique triage list length: {}'.format(num_items))
+
+
+            # Determine how many items to return
+            id = unique_triage_id_list[:150]
+            state_serializer_obj.post_triage_items('\n'.join(unique_triage_id_list[150:]))
+            return id
+        
+        except Exception as e:
+            logger.info("An error occurred while getting the last polled triage items: {}".format(e))
+            return None
+
+
+
     def get_data(self, classification_filter_operation, classification_list):
         """
             getting the incident and alert data from digital shadows
         """
-        triage_id = []
+        triage_ids = []
         max_event_num = -1
         item_data = []
         event_data = []
 
         if isinstance(self.event, int):
+            max_event_num = self.event
             event_data = self.DS_obj.get_triage_events_by_num(self.event, classification_filter_operation, classification_list)
             #calculating the max event number from current batch to  use in next call
             if event_data:
@@ -121,15 +154,15 @@ class poller:
                 logger.info("Total number of events are " + str(len(event_data)))
         
         for event in event_data:
-            if event is not None and event['triage-item-id'] not in triage_id:
-                triage_id.append(event['triage-item-id'])
+            if event is not None and event['triage-item-id'] not in triage_ids:
+                triage_ids.append(event['triage-item-id'])
 
-        logger.info(triage_id)
+        #fetch the triage id's from azure fileshare if file exist
+        logger.info('triage length from api call: {}'.format(len(triage_ids)))
+        triage_ids = self.get_last_polled_triage_items(triage_ids, self.date)
+
         
-        if triage_id:
-            item_data = self.DS_obj.get_triage_items(triage_id)
-        
-        return item_data, max_event_num
+        return triage_ids, max_event_num
 
     def poll(self, classification_filter_operation, classification_list):
         """
@@ -141,32 +174,40 @@ class poller:
             #sending data to sentinel
             inc_ids = []
             alert_ids = []
-            item_data, max_event_num = self.get_data(classification_filter_operation, classification_list)
-            if item_data:
-                logger.info("total number of items are " + str(len(item_data)))
-                #creating list of ids by alert and incidents
-                alert_triage_items = list(filter(lambda item: item['source']['alert-id'] is not None, item_data))
-                inc_triage_items = list(filter(lambda item: item['source']['incident-id'] is not None, item_data))
-                
-                #getting data from DS and posting to Sentinel
-                if inc_triage_items:
-                    inc_ids = [item['source']['incident-id'] for item in inc_triage_items]
-                    response_inc = self.DS_obj.get_incidents(inc_ids)
-                        
-                if alert_triage_items:
-                    alert_ids = [item['source']['alert-id'] for item in alert_triage_items]
-                    response_alert = self.DS_obj.get_alerts(alert_ids)
+            triage_ids_to_process, max_event_num = self.get_data(classification_filter_operation, classification_list)
+
+            if triage_ids_to_process:
+                while len(triage_ids_to_process) > 0:
+                    sub_triage_ids = triage_ids_to_process[:50]
+                    triage_ids_to_process = triage_ids_to_process[50:]
+                    item_data = self.DS_obj.get_triage_items(sub_triage_ids)
                     
-                if inc_triage_items:
-                    self.post_azure(response_inc, inc_triage_items, classification_filter_operation)
-                if alert_triage_items:
-                    self.post_azure(response_alert, alert_triage_items, classification_filter_operation)
+                    if item_data:
+                        logger.info("total number of items are " + str(len(item_data)))
+                        #creating list of ids by alert and incidents
+                        alert_triage_items = list(filter(lambda item: item['source']['alert-id'] is not None, item_data))
+                        inc_triage_items = list(filter(lambda item: item['source']['incident-id'] is not None, item_data))
+                        
+                        #getting data from DS and posting to Sentinel
+                        if inc_triage_items:
+                            inc_ids = [item['source']['incident-id'] for item in inc_triage_items]
+                            response_inc = self.DS_obj.get_incidents(inc_ids)
+                                
+                        if alert_triage_items:
+                            alert_ids = [item['source']['alert-id'] for item in alert_triage_items]
+                            response_alert = self.DS_obj.get_alerts(alert_ids)
+                            
+                        if inc_triage_items:
+                            self.post_azure(response_inc, inc_triage_items, classification_filter_operation)
+                        if alert_triage_items:
+                            self.post_azure(response_alert, alert_triage_items, classification_filter_operation)
             else:
                 logger.info("No new events found.")
                 max_event_num = self.event
 
             #saving event num for next invocation
-            self.date.post_event(max_event_num)
+            if max_event_num != -1:
+                self.date.post_event(max_event_num)
         except Exception:
             logger.exception("Error polling: ")
             
