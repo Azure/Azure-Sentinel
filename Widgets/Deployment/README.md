@@ -10,18 +10,18 @@ To deploy widgets to a workspace:
 - Select your shell environment - **PowerShell**
 
 2. Run the following commands within the **Azure Cloud Shell**:
-* Copy the Keyvault provisioning script:
+* Copy the KeyVault provisioning script:
 ``` Command Line
 Invoke-WebRequest -Uri https://aka.ms/SentinelWidgetsDeployScript -OutFile WidgetsKvCreation.Ps1
 ```
 
-* Run the Keyvault provisioning script (You can get the SubscriptionId and WorkspaceId by choosing `Settings`->`Workspace Settings` in your Sentinel workspace):
+* Run the KeyVault provisioning script (You can get the SubscriptionId and WorkspaceId by choosing `Settings`->`Workspace Settings` in your Sentinel workspace):
 ``` Command Line
 ./WidgetsKvCreation.Ps1 -SubscriptionId <subscription id> -WorkspaceId <workspace id>
 ```
 
-* Make sure you record the Key Vault name that the script prints, as you will need it to configure the widgets. If you did not record the name, you can either re-run the script, or search for the Keyvault (which has a "widgets" prefix) in [Key Vaults](https://ms.portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults).
-* Notice: You can Verify that the "widgets-*" KeyValut is matched to the workspace, by entering the KeyVault => Tags page, and check that the WorkspaceId tag matches the workspace Id of your Setninel workspace.
+* Make sure you record the KeyVault name that the script prints, as you will need it to configure the widgets. If you did not record the name, you can either re-run the script, or search for the Keyvault name ("widgets-...") in Azure Portal: [Key Vaults](https://ms.portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults).
+* Notice: You can Verify that the "widgets-..." KeyValut is matched to the workspace, by entering the 'Tags' page of the KeyVault within AzurePortal, and check that the **WorkspaceId** tag matches the workspace Id of your Setninel workspace.
 
 ## Configure widgets
 
