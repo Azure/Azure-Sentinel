@@ -25,6 +25,7 @@ STARTPARAMS="$@"
 dockerimage="mcr.microsoft.com/azure-sentinel/solutions/sapcon"
 sdkfileloc="/sapcon-app/inst/"
 CONTAINERNAMES=()
+EXCLUDECONTAINERNAMES=()
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -47,6 +48,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--containername)
 		CONTAINERNAMES+=("$2")
+		shift 2
+		;;
+	--exclude-containername)
+		EXCLUDECONTAINERNAMES+=("$2")
 		shift 2
 		;;
 	--devmode)
@@ -130,6 +135,11 @@ while IFS= read -r contname; do
 
 	if [[ ! -z ${CONTAINERNAMES[*]} ]] && [[ ! ${CONTAINERNAMES[*]} =~ $contname ]]; then
 		log "Skipping agent $contname as it is not specified in --containername list"
+		continue
+	fi
+
+	if [[ ${EXCLUDECONTAINERNAMES[*]} =~ $contname ]]; then
+		log "Skipping agent $contname as it is specified in --exclude-containername list"
 		continue
 	fi
 
