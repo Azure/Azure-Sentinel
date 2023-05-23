@@ -1,7 +1,7 @@
 Parser:
   Title: Process Terminate Event ASIM parser for WEF Security Events
-  Version: '0.2.0'
-  LastUpdated: Apr 30, 2022
+  Version: '0.3'
+  LastUpdated: May 1st 2023
 Product:
   Name: Security Events
 Normalization:
@@ -60,13 +60,6 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |    
-    let ASIM_GetWindowsUserType = (username:string, sid:string) { 
-        case ( 
-            username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", 
-            isempty(username) or sid in ("S-1-0-0"), "", 
-            "Regular"
-        )
-    };
     let ASIM_GetFilenamePart = (path:string) { tostring(split(path,@'\')[-1]) };
     let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { 
         T 
@@ -131,14 +124,16 @@ ParserQuery: |
         DvcOs = 'Windows'
     | extend 
         ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), 
-        ActorUserId = tostring(EventData.SubjectUserSid),
-        ActorUserIdType = "SID",
+        ActorUserId = tostring(EventData.SubjectUserSid)
+    | extend
+        ActorUserIdType = iff (ActorUserId <> "S-1-0-0", "SID", ""),
+        ActorUserId = iff (ActorUserId <> "S-1-0-0", ActorUserId, ""),  
         ActorUsernameType = "Windows"
     | where // -- post filtering
         (actorusername_has=='*' or ActorUsername has actorusername_has)  
     | extend 
         ActorUserSid = ActorUserId,
-        ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
+        ActorUserType = _ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
     | extend
         ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
         // Processes 
