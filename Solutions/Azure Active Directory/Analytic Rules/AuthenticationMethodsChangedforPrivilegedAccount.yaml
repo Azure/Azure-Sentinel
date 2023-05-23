@@ -35,24 +35,36 @@ query: |
   | where ActivityDisplayName in (security_info_actions)
   | extend Initiator = tostring(InitiatedBy.user.userPrincipalName)
   | extend IP = tostring(InitiatedBy.user.ipAddress)
-  | extend Target = tolower(tostring(TargetResources[0].userPrincipalName))
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend Target = tostring(TargetResource.userPrincipalName)
+    )
   | where Target in (VIPUsers)
   // Uncomment the line below if you are experiencing high volumes of Target entities. If this is uncommented, the Target column will not be mapped to an entity.
   //| summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions = make_set(ResultReason, MaxSize=8), Targets=make_set(Target, MaxSize=256) by Initiator, IP, Result
   // Comment out this line below, if line above is used.
   | summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions = make_set(ResultReason, MaxSize=8) by Initiator, IP, Result, Targets = Target
+  | extend InitiatorName = tostring(split(Initiator,'@',0)[0]), 
+           InitiatorUPNSuffix = tostring(split(Initiator,'@',1)[0]),
+           TargetName = iff(tostring(Targets) has "[", "", tostring(split(Targets,'@',0)[0])), 
+           TargetUPNSuffix = iff(tostring(Targets) has "[", "", tostring(split(Targets,'@',1)[0]))
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Targets
+      - identifier: Name
+        columnName: InitiatorName
+      - identifier: UPNSuffix
+        columnName: InitiatorUPNSuffix
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Initiator
+      - identifier: Name
+        columnName: TargetName
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IP
-version: 1.0.6
+version: 1.0.7
 kind: Scheduled

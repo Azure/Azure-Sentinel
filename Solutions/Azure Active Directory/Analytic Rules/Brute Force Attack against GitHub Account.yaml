@@ -10,8 +10,8 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AADNonInteractiveUserSignInLogs
-queryFrequency: 1d
-queryPeriod: 1d
+queryFrequency: 1h
+queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 status: Available
@@ -20,30 +20,31 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-  let LearningPeriod = 7d; 
-  let BinTime = 1h; 
-  let RunTime = 1h; 
-  let StartTime = 1h; 
-  let NumberOfStds = 3; 
-  let MinThreshold = 10.0; 
-  let EndRunTime = StartTime - RunTime; 
+  let LearningPeriod = 7d;
+  let BinTime = 1h;
+  let RunTime = 1h;
+  let StartTime = 1h;  
+  let sensitivity = 2.5;
+  let EndRunTime = StartTime - RunTime;
   let EndLearningTime = StartTime + LearningPeriod;
   let aadFunc = (tableName:string){
-  let GitHubFailedSSOLogins = (table(tableName)  
-  | where AppDisplayName == "GitHub.com" 
-  | where ResultType != 0); 
-  GitHubFailedSSOLogins 
-  | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime)) 
-  | summarize FailedLoginsCountInBinTime = count() by  UserPrincipalName, bin(TimeGenerated, BinTime), Type
-  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by UserPrincipalName, Type
-  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold)  
-  | join kind=innerunique ( 
-    GitHubFailedSSOLogins 
-    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime)) 
-    | summarize FailedLoginsCountInRunTime = count() by User = Identity, UserPrincipalName, bin(TimeGenerated, BinTime), Type
-  ) on UserPrincipalName 
-  | where FailedLoginsCountInRunTime > LearningThreshold
-  | extend AccountCustomEntity = UserPrincipalName , timestamp = TimeGenerated
+  table(tableName)  
+  | where TimeGenerated between (ago(EndLearningTime) .. ago(EndRunTime))
+  | where AppDisplayName =~ "GitHub.com"
+  | where ResultType != 0
+  | make-series FailedLogins = count() on TimeGenerated from ago(LearningPeriod) to ago(EndRunTime) step BinTime by UserPrincipalName, Type
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(FailedLogins, sensitivity, -1, 'linefit')
+  | mv-expand FailedLogins to typeof(double), TimeGenerated to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)  
+  | where TimeGenerated >= ago(RunTime)
+  | where Anomalies > 0 and Baseline > 0
+  | join kind=inner (
+            table(tableName)  
+            | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+            | where AppDisplayName =~ "GitHub.com"
+            | where ResultType != 0
+            | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddresses = make_set(IPAddress,100), Locations = make_set(LocationDetails,20), Devices = make_set(DeviceDetail,20) by UserPrincipalName          
+        ) on UserPrincipalName
+  | extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
@@ -51,7 +52,9 @@ query: |
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 2.0.0
 kind: Scheduled

@@ -1,8 +1,8 @@
 id: 86490334-5371-40a2-971a-3749c2654954
-name: Signins From VPS Providers
+name: Sign-ins From VPS Providers
 description: |
-  'Looks for successful logons from known VPS provider network ranges with suspicious token based logon patterns.
-  This is not an exhaustive list of VPS provider ranges but covers some of the most prevelent providers observed.'
+  'This query searches for successful logons from known VPS provider network ranges with suspicious token based logon patterns.
+  This is not an exhaustive list of VPS provider ranges but covers some of the most prevalent providers observed.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -16,35 +16,29 @@ tags:
   - NOBELIUM
   - DEV-0537
 query: |
-
   let IP_Data = (externaldata(network:string)
   [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/VPS_Networks.csv"] with (format="csv"));
   SigninLogs
   | where ResultType == 0
   | extend additionalDetails = tostring(Status.additionalDetails)
   | evaluate ipv4_lookup(IP_Data, IPAddress, network, return_unmatched = false)
-  | summarize make_set(additionalDetails), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by IPAddress, UserPrincipalName
+  | summarize make_set(additionalDetails, 100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by IPAddress, UserPrincipalName
   // Uncomment the remaining lines to only see logons from VPS providers with token only logons.
   //| where array_length(set_additionalDetails) == 2
-  //| where (set_additionalDetails[1] == "MFA requirement satisfied by claim in the token" and set_additionalDetails[0] == "MFA requirement satisfied by claim provided by external provider") or (set_additionalDetails[0] == "MFA requirement satisfied by claim in the token" and set_additionalDetails[1] == "MFA requirement satisfied by claim provided by external provider")
-  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
-
+  //| where (set_additionalDetails[1] =~ "MFA requirement satisfied by claim in the token" and set_additionalDetails[0] =~ "MFA requirement satisfied by claim provided by external provider") or (set_additionalDetails[0] =~ "MFA requirement satisfied by claim in the token" and set_additionalDetails[1] =~ "MFA requirement satisfied by claim provided by external provider")
+  | extend timestamp = StartTime, UserName = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  | extend Account_0_Name = UserName
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = IPAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
-metadata:
-    source:
-        kind: Community
-    author:
-        name: Pete Bryan
-    support:
-        tier: Community
-    categories:
-        domains: [ "Security - Other", "Identity" ]
+        columnName: IPAddress
+version: 1.0.2
