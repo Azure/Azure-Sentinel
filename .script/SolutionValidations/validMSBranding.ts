@@ -9,9 +9,9 @@ export function IsValidBrandingContent(filePath: string): ExitCode {
         // read the content of the file
         let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-        // check if the file content contains the word "Sentinel" with a space before it
+        // check if the file content contains the word "Sentinel" without "Microsoft" preceding it
         const fileContent = JSON.stringify(jsonFile);
-        const sentinelRegex = /(\W)Sentinel\b/g;
+        const sentinelRegex = /(?<!Microsoft )Sentinel\b/g;
         const sentinelMatches = fileContent.match(sentinelRegex);
 
         if (sentinelMatches && sentinelMatches.length > 0) {
