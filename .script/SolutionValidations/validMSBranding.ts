@@ -15,7 +15,11 @@ export function IsValidBrandingContent(filePath: string): ExitCode {
         const sentinelMatches = fileContent.match(sentinelRegex);
 
         if (sentinelMatches && sentinelMatches.length > 0) {
-            throw new InvalidFileContentError(`The file content should use "Microsoft Sentinel" instead of "Sentinel". File path: ${filePath}`);
+            for (const match of sentinelMatches) {
+                if (match !== 'Microsoft Sentinel') {
+                    throw new InvalidFileContentError(`The string "${match}" is invalid. It should be "Microsoft Sentinel". File path: ${filePath}`);
+                }
+            }
         }
 
         // If the file is not identified correctly, log a warning message
