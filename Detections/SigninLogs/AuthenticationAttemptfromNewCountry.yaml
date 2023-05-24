@@ -1,10 +1,10 @@
 id: ef895ada-e8e8-4cf0-9313-b1ab67fab69f
 name: Authentication Attempt from New Country
 description: |
-  'Detects when there is a log in attempt from a country that has not seen a successful login in the previous 14 days.
-    Threat actors may attempt to authenticate with credentials from compromised accounts - monitoring attempts from anomalous locations may help identify these attempts.
-    Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.
-    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'
+  Detects when there is a login attempt from a country that has not seen a successful login in the previous 14 days.
+  Threat actors may attempt to authenticate with credentials from compromised accounts - monitoring attempts from anomalous locations may help identify these attempts.
+  Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.
+  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -22,16 +22,32 @@ relevantTechniques:
 tags:
   - AADSecOpsGuide
 query: |
-  let known_locations =
-    union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs
-    | where TimeGenerated between(ago(14d)..ago(1d))
-    | where ResultType == 0
-    | summarize by Location;
-    union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs
-    | where TimeGenerated > ago(1d)
-    | where ResultType != 50126
-    | where Location !in (known_locations)
-    | extend LocationDetails_dynamic = column_ifexists("LocationDetails_dynamic", "")
+  // Combine two sign-in logs tables, AADNonInteractiveUserSignInLogs and SigninLogs
+  let CombinedSignInLogs = union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs;
+  // Fetch Azure IP address ranges data from a JSON file hosted on GitHub
+  let AzureRanges = externaldata(changeNumber: string, cloud: string, values: dynamic)
+  ["https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MSFTIPRanges/ServiceTags_Public.json"] with(format='multijson')
+  | mv-expand values
+  | extend Name = values.name, AddressPrefixes = tostring(values.properties.addressPrefixes);
+  // Identify known locations to be excluded from analysis
+  let ExcludedKnownLocations = CombinedSignInLogs
+  | where TimeGenerated between (ago(14d)..ago(1d))
+  | where ResultType == 0
+  | summarize by Location;
+  // Find sign-in locations matching specific criteria
+  let MatchedLocations = materialize(CombinedSignInLogs
+  | where TimeGenerated > ago(1d)
+  | where ResultType !in (50126, 50053, 50074, 70044)
+  | where Location !in (ExcludedKnownLocations));
+  // Match IP addresses of matched locations with Azure IP address ranges
+  let MatchedIPs = MatchedLocations
+  | evaluate ipv4_lookup(AzureRanges, IPAddress, AddressPrefixes)
+  | project IPAddress;
+  // Exclude IP addresses that are already matched with Azure IP address ranges
+  let ExcludedIPs = MatchedLocations
+  | where not (IPAddress in (MatchedIPs))
+  | where isnotempty(Location)
+  | extend LocationDetails_dynamic = column_ifexists("LocationDetails_dynamic", "")
     | extend DeviceDetail_dynamic = column_ifexists("DeviceDetail_dynamic", "")
     | extend LocationDetails = iif(isnotempty(LocationDetails_dynamic), LocationDetails_dynamic, parse_json(LocationDetails_string))
     | extend DeviceDetail = iif(isnotempty(DeviceDetail_dynamic), DeviceDetail_dynamic, parse_json(DeviceDetail_string))
@@ -40,20 +56,21 @@ query: |
     | extend Place = strcat(City, " - ", State)
     | extend DeviceId = tostring(DeviceDetail.deviceId)
     | extend Result = strcat(tostring(ResultType), " - ", ResultDescription)
-    | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated), make_set(Result), make_set(IPAddress), make_set(UserAgent), make_set(Place), make_set(DeviceId) by UserPrincipalName, Location, Category
+    | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated), make_set(Result), make_set(IPAddress), make_set(UserAgent), make_set(Place), make_set(DeviceId) by UserPrincipalName, Location, Category;
+  ExcludedIPs
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: UserPrincipalName
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
 metadata:
-    source:
-        kind: Community
-    author:
-        name: Pete Bryan
-    support:
-        tier: Community
-    categories:
-        domains: [ "Security - Others" ]
+  source:
+    kind: Community
+  author:
+    name: Pete Bryan
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Others" ]
