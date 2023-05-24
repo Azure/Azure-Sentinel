@@ -41,7 +41,7 @@ let CheckOptions = {
             logger.logError("Validation for Support object failed in Main Template.");
         }
         else if (e instanceof InvalidFileContentError) {
-            logger.logError("Validation for Microsoft Sentinel Branding Failed, Please Check the content.");
+            logger.logError("Validation for Microsoft Sentinel Branding Failed.");
         }
     },
     // Callback function to handle final failure
