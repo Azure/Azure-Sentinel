@@ -139,6 +139,9 @@ class ImpervaFilesHandler:
                 events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
             except:
                 events_data = file_data.decode("utf-8")
+        else :
+            logging.info("File is encrypted with file header : {}".format(file_header))
+            events_data = file_data.decode("utf-8")
         logging.info("decoded events_data".format(events_data))
         if events_data is not None:
             for line in events_data.splitlines():
