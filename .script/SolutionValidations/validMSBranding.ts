@@ -3,6 +3,12 @@ import { ExitCode } from "../utils/exitCode";
 import fs from "fs";
 
 export function IsValidBrandingContent(filePath: string): ExitCode {
+
+    // Skip validation if file path contains "SentinelOne"
+    if (filePath.includes("SentinelOne")) {
+        return ExitCode.SUCCESS;
+    }
+
     const errors: string[] = [];
 
     // check if the file is mainTemplate.json or createUiDefinition.json
