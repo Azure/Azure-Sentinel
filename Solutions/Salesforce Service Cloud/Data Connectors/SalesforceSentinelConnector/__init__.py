@@ -205,6 +205,7 @@ def post_data(customer_id, shared_key, body, log_type, chunk_count):
 def main(mytimer: func.TimerRequest) -> None:
     logging.info(f'Script started')
     global instance_url,token,headers,customer_id,shared_key,log_type,users,temp_dir,file_in_tmp_path
+    csv.field_size_limit(sys.maxsize)
     users = dict()
     token = _get_token()[0]
     instance_url = _get_token()[1]
