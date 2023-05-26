@@ -7,11 +7,9 @@ export function IsValidBrandingContent(filePath: string): ExitCode {
 
     // check if the file is mainTemplate.json or createUiDefinition.json
     if (filePath.endsWith("mainTemplate.json") || filePath.endsWith("createUiDefinition.json")) {
-        // read the content of the file
-        let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
-
+        
         // check if the file content contains " Sentinel" without being preceded by "Microsoft" and not part of a hyphenated word
-        const fileContent = JSON.stringify(jsonFile);
+        const fileContent = fs.readFileSync(filePath, "utf8");
         const sentinelRegex = /(?<!Microsoft\s)(?<!-)\bSentinel\b/g;
         let match;
         while ((match = sentinelRegex.exec(fileContent))) {
