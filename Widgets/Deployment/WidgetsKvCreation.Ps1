@@ -58,7 +58,10 @@ function Write-Log {
     }
 }
 "@
-    Invoke-WebRequest -Uri https://dc.services.visualstudio.com/v2/track -Method POST -Body $appinsightsTraceBody
+    try {
+        Invoke-WebRequest -Uri https://dc.services.visualstudio.com/v2/track -Method POST -Body $appinsightsTraceBody | out-null -SilentlyContinue
+    } catch {}
+
 	if ($isError)
     {
         Write-Host $message -ForegroundColor Red
@@ -69,23 +72,56 @@ function Write-Log {
     }
 }
 
+function TryRegisterProviders {
+        param ([string]$userName)
+    try
+    {
+        $providers = Get-AzResourceProvider -ProviderNamespace Microsoft.CloudShell,Microsoft.KeyVault
+        $cloudSehllRegistered = ($providers | Where {$_.ProviderName -eq "Microsoft.CloudShell" && $_.RegistrationState -eq "Registered"}).Count -gt 0
+        $keyVaultRegistered = ($providers | Where {$_.ProviderName -eq "Microsoft.KeyVault" && $_.RegistrationState -eq "Registered"}).Count -gt 0
+        Write-Log "Resource Providers registrations validaion result: CloudShell Registered - $cloudSehllRegistered; KeyVault Registered - $keyVaultRegistered"
+
+        if ($cloudSehllRegistered -ne $true || $keyVaultRegistered -ne $true) { # One of the registrations is missing. Try to Register.
+            if((Get-AzRoleAssignment  -RoleDefinitionName "Contributor" -SignInName $userName -ExpandPrincipalGroups| Where-Object {$_.Scope -eq "/subscriptions/$SubscriptionId"}).Count -gt 0) {
+                $cloudShellProvider = Register-AzResourceProvider -ProviderNamespace Microsoft.CloudShell | out-null
+                $keyValutProvider = Register-AzResourceProvider -ProviderNamespace Microsoft.KeyVault | out-null
+                Write-Log "Initiated CloudShell and KeyVault registreation. This might take some time. If the KeyVault deployment fails, try running the script again in a few minutes "
+            } else {  # user doesn't have permissions to perform the registrations
+                Write-Log "Resource Provider Registrations are missing and the active user lacks Contributor Role over the subscription toperform the registrations" -isError
+            }
+        } 
+    } catch {
+        Write-Log "TryRegisterProviders Filed with exception: $_" -isError
+    }
+}
+
 ##############################################################################################
 ####  Main
 ##############################################################################################
 $sub = Select-AzSubscription $SubscriptionId
-Register-AzResourceProvider -ProviderNamespace Microsoft.CloudShell | out-null
-
 Write-Log "Selected a subscription. Name - '$($($sub.Subscription).Name)'; Id - '$($($sub.Subscription).Id)'"
+$userName = az account show --query user.name --output tsv
+
+TryRegisterProviders $userName
+
 $workspace = Get-AzOperationalInsightsWorkspace | where CustomerId -eq $WorkspaceId
 if ($workspace -eq $null) {
     Write-Log "Failed to find a workspace with id '$WorkspaceId'. Fix the WorkspaceId or contant SentinelWidgets@microsoft.com for support. Aborting." -isError
     return
-} 
+}
 
+# Create the KV
 $keyVaultName = Get-WigdetsKeyVaultName -workspaceId $WorkspaceId
 if ((Get-AzKeyVault -Name $keyVaultName) -eq $null) { # KeyVault doesn't exist
     Write-Log "KeyValut Deployment in progress, please wait.."
-    $keyVault = New-AzKeyVault -Name $keyVaultName -ResourceGroupName $workspace.ResourceGroupName -Location $workspace.Location -Tag @{WorkspaceId=$WorkspaceId} -WarningAction SilentlyContinue
+
+    $wsResourceGroup = $workspace.ResourceGroupName;
+     if((Get-AzRoleAssignment  -RoleDefinitionName "Contributor" -SignInName $userName -ExpandPrincipalGroups| Where-Object {$_.Scope -eq "/subscriptions/$SubscriptionId/resourceGroups/$wsResourceGroup"}).Count -gt 0) {
+        Write-Log "User does not have a Contributor Role on the Resource Group '$wsResourceGroup' and can't create a KeyVault. Aborting" -isError
+        return
+     }
+
+    $keyVault = New-AzKeyVault -Name $keyVaultName -ResourceGroupName $wsResourceGroup -Location $workspace.Location -Tag @{WorkspaceId=$WorkspaceId} -WarningAction SilentlyContinue
     if ($keyVault -ne $null) {
 	    Write-Log "Successfully Created a KeyValut named '$keyVaultName' for Sentinel Widgets"
     } else {
@@ -106,11 +142,20 @@ if ($sentinelAppObjectId -eq $null) {
 	return
 }
 
+# Add Access to Sentinel on the KeyVault
 Set-AzKeyVaultAccessPolicy -VaultName $keyVaultName -ObjectId $sentinelAppObjectId  -PermissionsToSecrets get,list
 
 if ((Get-AzKeyVault -Name $keyVaultName | where {$_.AccessPolicies.ObjectId  -eq $sentinelAppObjectId}).Count -eq 1) {	
 	Write-Log "Successfully Added AccessPolicy on your widgets KeyVault to Sentinel"
-}
-else {
+} else {
     Write-Log "Failed to Add AccessPolicy on your widgets KeyVault to Sentinel. Contant SentinelWidgets@microsoft.com for support. Aborting.." -isError
+}
+
+# Add Access to the user on the KeyVault
+Set-AzKeyVaultAccessPolicy -VaultName $keyVaultName -UserPrincipalName $userName -PermissionsToSecrets set,get,delete,list, delete
+
+if ((Get-AzKeyVault -Name $keyVaultName | where {$_.AccessPolicies.DisplayName  -match $userName}).Count -eq 1) {	
+	Write-Log "Successfully Added AccessPolicy on your widgets KeyVault to the user"
+} else {
+    Write-Log "Failed to Add AccessPolicy on your widgets KeyVault to the user. Aborting.." -isError
 }

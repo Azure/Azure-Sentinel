@@ -1,6 +1,8 @@
 # Deploy widgets
 
 To deploy widgets to a workspace:
+## Prerequisites
+1. You should have a Contributor Role over the ResourceGroup in which your Sentinel workspace is located
 
 ## Create a Key Vault to store widgets credentials
 
