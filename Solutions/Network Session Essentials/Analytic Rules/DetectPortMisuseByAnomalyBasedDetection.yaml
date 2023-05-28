@@ -90,7 +90,6 @@ query: |
   | extend Ports = tostring(Ports), App = tostring(App), Protocol = tostring(Protocol), Direction = tostring(Direction), Action = tostring(Action), Threshold = toint(Threshold)
   ;
   let AnomalyThreshold = 2.5;
-  let eps = materialize (_Im_NetworkSession | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
   let maxSummarizedTime = toscalar (
       union isfuzzy=true 
           (
@@ -121,26 +120,8 @@ query: |
                 );
   let allData = union isfuzzy=true 
       (
-          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) > 1000 | join (nosummary) on nosum) | join (
+          (datatable(exists:int, nosum:bool)[1,false] | join (nosummary) on nosum) | join (
           _Im_NetworkSession(starttime=todatetime(ago(2d)), endtime=now())
-          | where TimeGenerated > maxSummarizedTime
-          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
-          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
-          ) on exists
-          | project-away exists, maxv, nosum*
-      ),
-      (
-          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (nosummary) on nosum) | join (
-          _Im_NetworkSession(starttime=todatetime(ago(3d)), endtime=now())
-          | where TimeGenerated > maxSummarizedTime
-          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
-          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
-          ) on exists
-          | project-away exists, maxv, nosum*
-      ),
-      (
-          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) <= 500 | join (nosummary) on nosum) | join (
-          _Im_NetworkSession(starttime=todatetime(ago(4d)), endtime=now())
           | where TimeGenerated > maxSummarizedTime
           | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
           | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
@@ -156,8 +137,8 @@ query: |
   ;
   allData
   | where isnotempty(DstPortNumber)
-  | make-series Total=count() on EventTime from ago(lookback) to now() step 1d by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, AnomalyThreshold, -1, 'linefit')
+  | make-series Total=count() on EventTime from ago(lookback) to now() step 1d by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction  
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, AnomalyThreshold, -1, 'linefit')  
   | mv-expand anomalies, score, baseline, EventTime, Total
   | extend anomalies = toint(anomalies), score = toint(score), baseline = toint(baseline), EventTime = todatetime(EventTime), Total = tolong(Total)
   | where EventTime >= ago(1d)
@@ -183,5 +164,5 @@ alertDetailsOverride:
   alertDescriptionFormat: '{{Description}}'
   alertTacticsColumnName: Tactic
   alertSeverityColumnName: Severity
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled
