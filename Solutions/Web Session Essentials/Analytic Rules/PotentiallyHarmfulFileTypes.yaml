@@ -17,14 +17,19 @@ tactics:
 relevantTechniques:
   - 
 query: |
-  let mal_file_exts_list = dynamic([".exe", ".dll", ".bat", ".cmd", ".vbs", ".jse", ".wsf", ".wsh", ".ps1", ".psm1", ".hta"]);
-  _Im_WebSession (url_has_any=mal_file_exts_list,eventresult='Success')
-  | project Url, SrcIpAddr, TimeGenerated
+  let mal_file_exts_list = dynamic([".exe", ".dll", ".bat", ".cmd", ".vbs", ".ps1", ".psm1", ".scr", ".jar",".app"]); // Update this list as per your requirement
+  let whitelisted_domains = dynamic ([ "windowsupdate.com","windows.net" ]); // exclude all trusted domain names
+  _Im_WebSession ( starttime=ago(1h),url_has_any=mal_file_exts_list,eventresult='Success')
+  | project Url, SrcIpAddr, TimeGenerated, SrcUsername, DstIpAddr
   | where Url has_any (mal_file_exts_list)
   | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]),'/')[-1])
   | extend requestedFileExt=extract(@'(\.\w+)$',1,requestedFileName, typeof(string))
   | where requestedFileExt in~ (mal_file_exts_list)
-  | summarize EventCount=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr, Url, requestedFileName
+  | summarize EventCount=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcUsername, SrcIpAddr, DstIpAddr, Url, requestedFileName
+  | extend FQDN = split(parse_url(Url)["Host"],'.')
+  | extend Domain = iif(array_length(FQDN)>1,strcat(FQDN[-2],'.',FQDN[-1]),FQDN)
+  | where Domain !in~ (whitelisted_domains)
+  | project-away FQDN
 entityMappings:
   - entityType: IP
     fieldMappings:

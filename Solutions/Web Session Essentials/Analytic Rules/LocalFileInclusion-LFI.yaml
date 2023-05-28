@@ -1,5 +1,5 @@
 id: 7bb55d05-ef39-4a40-8079-0bc3c05e7881
-name: Detect URLs containing known malicious keywords or commands (ASIM Web Session)
+name: Detect Local File Inclusion in web requests (ASIM Web Session)
 description: |
   'The utilization of system commands or functions in the request URL may suggest that an attacker is trying to gain unauthorized access to the environment by exploiting a vulnerable service.
   In a similar vein, Local File Inclusion is an attack that is executed on the system, where all attack payloads are delivered via the URL'
@@ -20,13 +20,14 @@ relevantTechniques:
   - T1133
 query: |
   // You can add more keywords to the query as necessary, depending on the specific indicators you want to detect.
-  let cmd_list = dynamic(['id_rsa', 'etc/issue', 'ping -i', '/usr/bin/id', 'phpinfo()', '/bin/bash', 'sleep(', '<script>', 'whoami', 'dpkg', 'useradd', 'sudo']);
+  let cmd_list = dynamic(['/etc/shadow', '/etc/passwd', '/etc/hosts', '/etc/ssh/', '..\\', '../', 'proc/self/environ']);
   _Im_WebSession (starttime=ago(1h), eventresult='Success')
   | where isnotempty(Url)
   | project Url, SrcIpAddr, SrcUsername, DstIpAddr, TimeGenerated
   | extend Decoded_url = url_decode(Url)
   | where Decoded_url  has_any (cmd_list)
   | summarize EventCount=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr, SrcUsername, Url, Decoded_url, DstIpAddr
+  | order by EventCount desc
 entityMappings:
   - entityType: IP
     fieldMappings:

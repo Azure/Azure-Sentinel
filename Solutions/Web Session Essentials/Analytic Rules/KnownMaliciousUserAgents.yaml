@@ -18,16 +18,30 @@ relevantTechniques:
   - T1190
   - T1133
 query: |
-  let knownUserAgentsIndicators = materialize(externaldata(UserAgent:string, Category:string)
-        [ @"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv"] 
-            with(format="csv", ignoreFirstRecord=True)
-            | extend joiner = 1);
-    let knownUserAgents=toscalar(knownUserAgentsIndicators | where isnotempty(UserAgent) | summarize make_list(UserAgent,1000));
-    _Im_WebSession (httpuseragent_has_any=knownUserAgents)
-    | extend joiner = 1
-    | join kind=inner knownUserAgentsIndicators on joiner
-    | where HttpUserAgent contains UserAgent
-    | summarize EventCount=count() by SrcIpAddr, Url,HttpUserAgent, SrcUsername, DstIpAddr, Category
+  let knownUserAgentsIndicators = materialize(externaldata(UserAgent: string, UserAgentCategory: string)
+    [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv"] 
+    with(format="csv", ignoreFirstRecord=True)
+    | extend joiner = 1);
+  let CustomUserAgentIndicators = (_ASIM_GetWatchlistRaw("UnusualUserAgents")
+    | extend
+        UserAgent = tostring(WatchlistItem["UserAgent"]),
+        UserAgentCategory = tostring(WatchlistItem["UserAgentCategory"])
+    | project UserAgent, UserAgentCategory, joiner = 1
+    | where isnotempty(UserAgent) and isnotempty(UserAgentCategory));
+  let CombinedUAList = union isfuzzy=true knownUserAgentsIndicators, CustomUserAgentIndicators;
+  let knownUserAgents=toscalar(CombinedUAList
+    | where isnotempty(UserAgent)
+    | summarize make_list(UserAgent, 1000));
+  _Im_WebSession (starttime=ago(15min), httpuseragent_has_any=knownUserAgents)
+  | project SrcIpAddr, SrcUsername, HttpUserAgent, Url, DstIpAddr, TimeGenerated
+  | extend joiner = 1
+  | join kind=inner CombinedUAList on joiner
+  | where HttpUserAgent contains UserAgent
+  | summarize
+    EventCount=count(),
+    EventStartTime = min(TimeGenerated),
+    EventEndTime=min(TimeGenerated)
+    by SrcIpAddr, SrcUsername, Url, HttpUserAgent, DstIpAddr, UserAgentCategory
 entityMappings:
   - entityType: URL
     fieldMappings:

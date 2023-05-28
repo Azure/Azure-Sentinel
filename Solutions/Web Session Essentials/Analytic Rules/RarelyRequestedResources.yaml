@@ -26,9 +26,11 @@ query: |
   let scriptExtensions = dynamic([".php",".aspx", ".asp", ".cfml"]);
   //The number of URI's seen to be suspicious, higher = less likely to be suspicious
   let uriThreshold = 1;
+  let ReqestCountThreshold = 10; // set minimum requests count to confirm repetitive connections
   // Only look at connections that were allowed through the web proxy
   _Im_WebSession (starttime=ago(lookback), eventresult='Success')
-  | project EventVendor, EventResult, SrcBytes, DstBytes, DstFQDN, Url, TimeGenerated, DstIpAddr , SrcIpAddr, HttpRequestMethod , HttpReferrer
+  | project EventVendor, EventResult, SrcBytes, DstBytes, Url, TimeGenerated, DstIpAddr , SrcIpAddr, HttpRequestMethod , HttpReferrer
+  | extend DstFQDN = tostring(parse_url(Url)["Host"])
   // Only look at connections that were allowed through the web proxy
   // Only look at connections where some data was exchanged.
   | where SrcBytes > 0 and DstBytes > 0
@@ -38,7 +40,7 @@ query: |
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), make_set(Url,100), make_set(DstIpAddr,100), make_set(SrcIpAddr,100), numofConnections = count(), make_set(HttpRequestMethod,10), max(GetData), max(HttpReferrer) by Domain
   // Determine the number of URIs that have been visited for the domain
   | extend destinationURI = array_length(set_Url)
-  | where destinationURI <= uriThreshold
+  | where destinationURI <= uriThreshold and numofConnections > ReqestCountThreshold // check for repetitive requests for single resource only.
   | where tostring(set_Url) has_any(scriptExtensions)
   //Remove matches with referer
   | where max_HttpReferrer == ""
@@ -48,7 +50,7 @@ query: |
   | where set_Url !has "click" and set_HttpRequestMethod !has "GET"
   | mvexpand set_Url, set_DstIpAddr
   | extend RequestURL = tostring(set_Url), DestinationIP = tostring(set_DstIpAddr), ClientIP = tostring(set_SrcIpAddr)
-  | project-away set_Url, set_DstIpAddr, set_SrcIpAddr, destinationURI, Domain, StartTimeUtc, EndTimeUtc, max_GetData, max_HttpReferrer
+  | project ClientIP, DestinationIP, numofConnections, RequestURL, set_HttpRequestMethod
 entityMappings:
   - entityType: IP
     fieldMappings:
