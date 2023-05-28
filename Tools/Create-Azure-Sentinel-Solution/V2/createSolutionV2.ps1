@@ -1809,8 +1809,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         displayName = "$($solutionName) Hunting Query template";
                                     }
                                 }
-                                if($baseAnalyticRuleTemplateSpec.properties.displayName.length -ge 64){
-                                    $baseAnalyticRuleTemplateSpec.properties.displayName = "$($solutionName) HQ template";
+                                if($baseHuntingQueryTemplateSpec.properties.displayName.length -ge 64){
+                                    $baseHuntingQueryTemplateSpec.properties.displayName = "$($solutionName) HQ template";
                                 }
 
                                 $baseMainTemplate.resources += $baseHuntingQueryTemplateSpec
@@ -2648,5 +2648,5 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
     }
-    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"
+    Invoke-Expression ". '$armTtkFolder/run-arm-ttk-in-automation.ps1' '$solutionName'"
 }
