@@ -1,0 +1,39 @@
+id: 123e4567-e89b-12d3-a456-426614174000
+name: BYOVD-LOLdrivers
+description: |
+  Living Off The Land Drivers is used by adversaries to bypass security controls and carry out attacks
+  Reference - https://www.loldrivers.io/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceFileEvents
+  - DeviceEvents
+tactics:
+- Privilege escalation
+query: |
+  let DriverData = externaldata (
+    Id:string,Author:string,Created:string,Command:string,Description1:string,Usecase:string,Category:string,
+    Privileges:string,MitreID:string,OperatingSystem:string,Resources:string,Driver:string,Person:string,Handle:string,
+    Detection:string,MD5:string,SHA1:string,SHA256:string,KnownVulnerableSamples_Publisher:string,
+    KnownVulnerableSamples_Date:string,DriverCompany:string,DriverDescription:string,Verified:string,Tags:string
+  ) [@"https://www.loldrivers.io/api/drivers.csv"] 
+  with (format="csv", ignoreFirstRecord=true);
+  union (
+      DriverData // Remove any of the parts below to only search for matches against that file-hash type
+      | join (
+          union DeviceFileEvents, DeviceEvents
+          | where isnotempty(MD5) and FileName endswith ".sys"
+      ) on MD5
+  ), (
+      DriverData
+      | join (
+          union DeviceFileEvents, DeviceEvents
+          | where isnotempty(SHA1) and FileName endswith ".sys"
+      ) on SHA1
+  ), (
+      DriverData
+      | join (
+          union DeviceFileEvents, DeviceEvents
+          | where isnotempty(SHA256) and FileName endswith ".sys"
+      ) on SHA256
+  )
