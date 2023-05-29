@@ -18,70 +18,69 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-
-	  //Finding security alerts and extracting the Entities 
-	SecurityAlert
-	//extracting Alert Entities 
-	| extend Entities = parse_json(Entities)
-	| mv-apply Entity = Entities on
-		(
-		where Entity.Type == 'account'
-		| extend EntityUPN = iff(isempty(Entity.UserPrincipalName), tostring(strcat(Entity.Name, "@", tostring (Entity.UPNSuffix))), tostring(Entity.UserPrincipalName))
-		)
-	| mv-apply Entity = Entities on
-		(
-		where Entity.Type == 'ip'
-		| extend EntityIp = tostring(Entity.Address)
-		)
-	| mv-apply Entity = Entities on
-		(
-		where Entity.Type == 'host'
-		| extend EntityHost = tostring(Entity.HostName)
-		)
-	| mv-apply Entity = Entities on
-		(
-		where Entity.Type == 'url'
-		| extend EntityUrl = tostring(Entity.Url)
-		)
-	| where not(ipv4_is_private(EntityIp))
-	| summarize
-		AccountUpn=take_any(EntityUPN),
-		IPAddress=take_any(EntityIp),
-		HostName=take_any(EntityHost),
-		Url=take_any(EntityUrl),
-		AlertTime= min(TimeGenerated)
-		by SystemAlertId, ProductName
-	// filtering 3pnetwork devices 
-	| join kind= inner (CommonSecurityLog
-		| where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
-		| project
-			3plogTime=TimeGenerated,
-			DeviceVendor,
-			DeviceProduct,
-			Activity,
-			DestinationHostName,
-			DestinationIP,
-			RequestURL,
-			MaliciousIP,
-			SourceUserName,
-			IndicatorThreatType,
-			ThreatSeverity,
-			ThreatConfidence)
-		on $left.Url == $right.RequestURL
-	// Applied the condition where alert trigger 1st and then the 3p Network activity execution 
-	| where AlertTime > 3plogTime
-	
+    	  //Finding security alerts and extracting the Entities 
+    	SecurityAlert
+    	//extracting Alert Entities 
+    	| extend Entities = parse_json(Entities)
+    	| mv-apply Entity = Entities on
+    		(
+    		where Entity.Type == 'account'
+    		| extend EntityUPN = iff(isempty(Entity.UserPrincipalName), tostring(strcat(Entity.Name, "@", tostring (Entity.UPNSuffix))), tostring(Entity.UserPrincipalName))
+    		)
+    	| mv-apply Entity = Entities on
+    		(
+    		where Entity.Type == 'ip'
+    		| extend EntityIp = tostring(Entity.Address)
+    		)
+    	| mv-apply Entity = Entities on
+    		(
+    		where Entity.Type == 'host'
+    		| extend EntityHost = tostring(Entity.HostName)
+    		)
+    	| mv-apply Entity = Entities on
+    		(
+    		where Entity.Type == 'url'
+    		| extend EntityUrl = tostring(Entity.Url)
+    		)
+    	| where not(ipv4_is_private(EntityIp))
+    	| summarize
+    		AccountUpn=take_any(EntityUPN),
+    		IPAddress=take_any(EntityIp),
+    		HostName=take_any(EntityHost),
+    		Url=take_any(EntityUrl),
+    		AlertTime= min(TimeGenerated)
+    		by SystemAlertId, ProductName
+    	// filtering 3pnetwork devices 
+    	| join kind= inner (CommonSecurityLog
+    		| where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
+    		| project
+    			3plogTime=TimeGenerated,
+    			DeviceVendor,
+    			DeviceProduct,
+    			Activity,
+    			DestinationHostName,
+    			DestinationIP,
+    			RequestURL,
+    			MaliciousIP,
+    			SourceUserName,
+    			IndicatorThreatType,
+    			ThreatSeverity,
+    			ThreatConfidence)
+    		on $left.Url == $right.RequestURL
+    	// Applied the condition where alert trigger 1st and then the 3p Network activity execution 
+    	| where AlertTime > 3plogTime
+    	
 entityMappings:
-  - entityType: Account
-    fieldMappings:
+    - entityType: Account
+      fieldMappings:
       - identifier: FullName
         columnName: SourceUserName
-  - entityType: IP
-    fieldMappings:
+    - entityType: IP
+      fieldMappings:
       - identifier: Address
         columnName: DestinationIP
-  - entityType: DNS
-    fieldMappings:
+    - entityType: DNS
+      fieldMappings:
       - identifier: DomainName
         columnName: DestinationHostName	
 version: 1.0.0
