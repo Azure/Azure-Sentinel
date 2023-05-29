@@ -78,7 +78,7 @@ class AzureSentinelConnectorAsync:
 
     def _check_size(self, queue):
         data_bytes_len = len(json.dumps(queue).encode())
-        return data_bytes_len < self.queue_size_bytes
+        return data_bytes_len < 32000
 
     def _split_big_request(self, queue):
         if self._check_size(queue):
@@ -103,6 +103,7 @@ class AzureSentinelMultiConnectorAsync:
         if log_type not in self.connectors:
             self.connectors[log_type] = AzureSentinelConnectorAsync(self.session, self.log_analytics_uri, self.workspace_id, self.shared_key, log_type, self.queue_size, self.queue_size_bytes)
         conn = self.connectors[log_type]
+
         await conn.send(event)
 
     async def flush(self):
