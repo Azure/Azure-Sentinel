@@ -36,7 +36,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (automation_execution_id and type):
         try:
-            req_body = req.get_json()
+            req_body = json.loads(req.get_json())
         except ValueError:
             pass
         else:

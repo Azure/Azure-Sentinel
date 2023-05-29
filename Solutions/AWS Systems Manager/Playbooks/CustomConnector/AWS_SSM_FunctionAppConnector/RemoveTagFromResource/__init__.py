@@ -37,7 +37,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (resource_type and resource_id and tag_keys):
         try:
-            req_body = req.get_json()
+            req_body = json.loads(req.get_json())
         except ValueError:
             pass
         else:

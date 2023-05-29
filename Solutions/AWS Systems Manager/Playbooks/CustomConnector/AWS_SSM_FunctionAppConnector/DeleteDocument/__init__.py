@@ -38,7 +38,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (name and version_name and document_version and force):
         try:
-            req_body = req.get_json()
+            req_body = json.loads(req.get_json())
         except ValueError:
             pass
         else:
