@@ -9,7 +9,7 @@
 
 [hashtable]$templateContentTypeByCounter = @{
     1 = "DataConnector"; 
-    2 = "LogicAppsCustomConnector";
+    2 = "ResourcesDataConnector";
 }
 
 function Get-ContentTemplateResource($templateName, $TemplateCounter){
@@ -136,10 +136,10 @@ foreach ($file in $(Get-ChildItem $inputFilesPath)) {
         $armResource = Get-ArmResource $fileContent.name $fileContent.type $fileContent.kind $fileContent.properties
         $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
     }
-    elseif($fileContent.type -eq "Microsoft.OperationalInsights/workspaces")
+    elseif($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables")
     {
         $baseMainTemplate.variables | Add-Member -NotePropertyName "_logAnalyticsTableId$tableCounter" -NotePropertyValue $resourceName
-        $resourceName = "[variables('_logAnalyticsTableId$tableCounter')]";
+        $resourceName = "[concat(parameters('workspace'),'/', variables('_logAnalyticsTableId$tableCounter'))]"
         $fileContent.properties.schema.name = "[variables('_logAnalyticsTableId$tableCounter')]"
         $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
         $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
