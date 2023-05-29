@@ -18,63 +18,63 @@ relevantTechniques:
   - T1071
 query: |
 
-SigninLogs
-//Find risky Signin
-| where RiskState == "atRisk" and ResultType == 0
-| extend Signin_Time = TimeGenerated
-| summarize
-    AppDisplayName=make_set(AppDisplayName),
-    ClientAppUsed=make_set(ClientAppUsed),
-    UserAgent=make_set(UserAgent),
-    CorrelationId=make_set(CorrelationId),
-    Signin_Time= min(Signin_Time),
-    RiskEventTypes=make_set(RiskEventTypes)
-    by
-    ConditionalAccessStatus,
-    IPAddress,
-    IsRisky,
-    ResourceDisplayName,
-    RiskDetail,
-    ResultType,
-    RiskLevelAggregated,
-    RiskLevelDuringSignIn,
-    RiskState,
-    UserPrincipalName,
-    SourceSystem
-| join kind=inner (
-    CommonSecurityLog
-    | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
-    | where isnotempty(DestinationHostName) 
-    | where isnotempty(RequestURL)
+    SigninLogs
+    //Find risky Signin
+    | where RiskState == "atRisk" and ResultType == 0
+    | extend Signin_Time = TimeGenerated
     | summarize
-        min(TimeGenerated),
-        max(TimeGenerated),
-        Activity=make_set(Activity),
-        DeviceProduct=make_set(DeviceProduct),
-        DeviceVendor=make_set(DeviceVendor)
-        by DestinationHostName, DestinationIP, RequestURL, SourceUserName
-    | extend 3p_observed_Time= min_TimeGenerated)
-    on $left.IPAddress == $right.DestinationIP and $left.UserPrincipalName == $right.SourceUserName
-| extend Timediff = datetime_diff('day', 3p_observed_Time, Signin_Time)
-| where Timediff <= 2 and Timediff >= 0
+        AppDisplayName=make_set(AppDisplayName),
+        ClientAppUsed=make_set(ClientAppUsed),
+        UserAgent=make_set(UserAgent),
+        CorrelationId=make_set(CorrelationId),
+        Signin_Time= min(Signin_Time),
+        RiskEventTypes=make_set(RiskEventTypes)
+        by
+        ConditionalAccessStatus,
+        IPAddress,
+        IsRisky,
+        ResourceDisplayName,
+        RiskDetail,
+        ResultType,
+        RiskLevelAggregated,
+        RiskLevelDuringSignIn,
+        RiskState,
+        UserPrincipalName,
+        SourceSystem
+    | join kind=inner (
+        CommonSecurityLog
+        | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
+        | where isnotempty(DestinationHostName) 
+        | where isnotempty(RequestURL)
+        | summarize
+            min(TimeGenerated),
+            max(TimeGenerated),
+            Activity=make_set(Activity),
+            DeviceProduct=make_set(DeviceProduct),
+            DeviceVendor=make_set(DeviceVendor)
+            by DestinationHostName, DestinationIP, RequestURL, SourceUserName
+        | extend 3p_observed_Time= min_TimeGenerated)
+        on $left.IPAddress == $right.DestinationIP and $left.UserPrincipalName == $right.SourceUserName
+    | extend Timediff = datetime_diff('day', 3p_observed_Time, Signin_Time)
+    | where Timediff <= 2 and Timediff >= 0
 
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: FullName
-        columnName: SourceUserName
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: IPAddress
-  - entityType: DNS
-    fieldMappings:
-      - identifier: DomainName
-        columnName: DestinationHostName	
+    - entityType: Account
+      fieldMappings:
+    - identifier: FullName
+      columnName: SourceUserName
+    - entityType: IP
+      fieldMappings:
+    - identifier: Address
+      columnName: IPAddress
+    - entityType: DNS
+      fieldMappings:
+    - identifier: DomainName
+      columnName: DestinationHostName	
     - entityType: Host
-        fieldMappings:
-        - identifier: FullName
-            columnName: SourceSystem
+      fieldMappings:
+    - identifier: FullName
+      columnName: SourceSystem
 version: 1.0.0
 kind: Scheduled
 metadata:
