@@ -34,7 +34,7 @@ let CheckOptions = {
     },
     // Callback function to handle errors during execution
     onExecError: async (e: any, filePath: string) => {
-        console.log(`Solution Validation Failed. File path: ${filePath} \n. Error message: ${e.message}`);
+        console.log(`Solution Validation Failed. File path: ${filePath} \nError message: ${e.message}`);
         if (e instanceof MainTemplateDomainVerticalValidationError) {
             logger.logError("Please refer link https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/sentinel/sentinel-solutions.md?msclkid=9a240b52b11411ec99ae6736bd089c4a#categories-for-microsoft-sentinel-out-of-the-box-content-and-solutions for valid Domains and Verticals.");
         } else if (e instanceof MainTemplateSupportObjectValidationError) {
