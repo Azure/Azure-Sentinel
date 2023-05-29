@@ -87,15 +87,15 @@ namespace Kqlvalidations.Tests
         public void Validate_DetectionQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
-            var id = (string) res["id"];
+            var id = (string)res["id"];
 
             //we ignore known issues
             if (ShouldSkipTemplateValidation(id))
             {
                 return;
             }
-            
-            var queryStr =  (string) res["query"];
+
+            var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
         }
 
@@ -124,18 +124,18 @@ namespace Kqlvalidations.Tests
         public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
-            var id = (string) res["id"];
-        
+            var id = (string)res["id"];
+
             //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
             if (ShouldSkipTemplateValidation(id) && res.ContainsKey("query"))
             {
-                var queryStr =  (string) res["query"];
+                var queryStr = (string)res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
                 Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
             }
-        
+
         }
-        
+
         // // We pass File name to test because in the result file we want to show an informative name for the test
         // [Theory]
         // [ClassData(typeof(InsightsYamlFilesTestData))]
@@ -152,15 +152,15 @@ namespace Kqlvalidations.Tests
         public void Validate_ExplorationQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
-            var id = (string) res["Id"];
+            var id = (string)res["Id"];
 
             //we ignore known issues
             if (ShouldSkipTemplateValidation(id))
             {
                 return;
             }
-            
-            var queryStr =  (string) res["query"];
+
+            var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
         }
 
@@ -169,16 +169,16 @@ namespace Kqlvalidations.Tests
         public void Validate_ExplorationQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
-            var id = (string) res["Id"];
-        
+            var id = (string)res["Id"];
+
             //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
             if (ShouldSkipTemplateValidation(id) && res.ContainsKey("query"))
             {
-                var queryStr =  (string) res["query"];
+                var queryStr = (string)res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
                 Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
             }
-        
+
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -195,7 +195,7 @@ namespace Kqlvalidations.Tests
             {
                 return;
             }
-            
+
             var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
             var parserName = (string)yaml["ParserName"];
             ValidateKql(parserName, queryStr, false);
@@ -216,17 +216,18 @@ namespace Kqlvalidations.Tests
                 return;
             }
 
-            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];            
+            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
             var parserName = (string)yaml["EquivalentBuiltInFunction"];
             ValidateKql(parserName, queryStr, false);
         }
 
         private void ValidateKql(string id, string queryStr, bool ignoreNoTabularExpressionError = true)
         {
-            
+
             // The KQL validation ignores no tabular expression error. For instance, "let x = table;" is considered a valid query.
             // Add "| count" at the end of the query, to fail queries without tabular expressions.
-            if (!ignoreNoTabularExpressionError) {
+            if (!ignoreNoTabularExpressionError)
+            {
                 queryStr += " | count";
             }
 
@@ -240,8 +241,8 @@ namespace Kqlvalidations.Tests
             var listOfDiagnostics = validationResult.Diagnostics;
 
             bool isQueryValid = !(from p in listOfDiagnostics
-                               where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
-                               select p).Any();
+                                  where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                                  select p).Any();
 
 
             Assert.True(
@@ -255,28 +256,37 @@ namespace Kqlvalidations.Tests
         private void ValidateKqlForLatestTIData(string id, string queryStr)
         {
 
-            //Condition to check below logic only when queryStr it contains "ThreatIntelligenceIndicator"
-            if (queryStr.Contains("ThreatIntelligenceIndicator"))
+            //Condition to check below logic only when queryStr it contains "ThreatIntelligenceIndicator" followed by "|"
+            string tiTablepattern = @"ThreatIntelligenceIndicator\s*\|\s*";
+            bool match = Regex.IsMatch(queryStr, tiTablepattern);
+            if (match)
             {
-                string pattern = @"\bThreatIntelligenceIndicator\b\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\((\w+)\)\s*and\s*ExpirationDateTime\s*>\s*now\(\)\s*\|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*Active\s*==\s*true";
-                bool match = Regex.IsMatch(queryStr, pattern);
+                string queryPattern = @"ThreatIntelligenceIndicator\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\(\w+\)\s*\|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*(?:ExpirationDateTime\s*>\s*now\(\)\s*and\s*Active\s*==\s*true|Active\s*==\s*true\s*and\s*ExpirationDateTime\s*>\s*now\(\))";
+                bool queryMatch = Regex.IsMatch(queryStr, queryPattern);
                 Assert.True(
-                    match,
-                    match
-                        ? string.Empty
-                        : @$"Template Id: {id} is not valid 
-                    Errors: Content needs to use latest Threat Intelligence data, sample query to get the latest Threat Intelligence data
-                    ThreatIntelligenceIndicator
-                    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-                    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-                    | where Active == true");
+                    queryMatch,
+                    queryMatch
+                       ? string.Empty
+        : @$"Template Id: {id} is not valid 
+        Errors: Content needs to use the latest Threat Intelligence data. Sample queries to get the latest Threat Intelligence data:
+        ThreatIntelligenceIndicator
+        | where TimeGenerated >= ago(ioc_lookBack)
+        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+        | where Active == true and ExpirationDateTime > now()
+
+        or
+
+        ThreatIntelligenceIndicator
+        | where TimeGenerated >= ago(ioc_lookBack)
+        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+        | where ExpirationDateTime > now() and Active == true");
             }
-            
+
         }
 
         private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
         {
-        
+
             var yaml = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
             var deserializer = new DeserializerBuilder().Build();
             return deserializer.Deserialize<dynamic>(yaml);
