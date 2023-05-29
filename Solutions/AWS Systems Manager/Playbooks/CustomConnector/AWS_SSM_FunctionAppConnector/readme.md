@@ -1,28 +1,36 @@
-# AWS Athena API Function App Connector
+# AWS Systems Manager API Functions App Connector
 
-This Function App Connector is to connect AWS Athena API.
+This Functions App Connector is to connect AWS Systems Manager API.
 
 ### Authentication methods supported by this connector
 
 * Custom Authentication
 
-### Prerequisites For AWS Athena API Function App Connector
+### Prerequisites For AWS Systems Manager API Functions App Connector
 
 * AWS Access Key ID, Secret Access Key and Region are required. 
 * Check the [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) to obtain above credentials.
 * Check these [steps](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#using-regions-availability-zones-describe) to get the Region.
 
 
-## Actions supported by AWS Athena API Function App Connector
+## Actions supported by AWS Systems Manager API Functions App Connector
 
 | **Component** | **Description** |
 | --------- | -------------- |
-| **StartQueryExecution** | Start the query execution with specified QueryString, OutputLocation, Database and Catalog. Returns QueryExecutionId. |
-| **GetQueryResults** | Get query results for specified QueryExecutionId. |
-| **GetQueryExecution** | Get query execution state for specified QueryExecutionId. |
-| **ListQueryExecution** | List QueryExecutionIds for all the query runs. |
-| **ListDataCatalogs** | List all the Data Catalogs. |
-| **ListDatabases** | List all databases for specified CatalogName. |
+| **AddTagsToResource** | Adds or overwrites one or more tags for the specified resource. |
+| **CreateDocument** | Creates a AWS Systems Manager (SSM document). An SSM document defines the actions that Systems Manager performs on your managed nodes. |
+| **DeleteDocuemnt** | Deletes the AWS Systems Manager document (SSM document) and all managed node associations to the document. |
+| **DescribeDocument** | Describes the specified AWS Systems Manager document (SSM document). |
+| **DescribeInstanceInformation** | Describes one or more of your managed nodes, including information about the operating system platform, the version of SSM Agent installed on the managed node, node status, and so on. |
+| **DescribeInstancePatches** | Retrieves information about the patches on the specified managed node and their state relative to the patch baseline being used for the node. |
+| **GetAutomationExecution** | Get detailed information about a particular Automation execution. |
+| **GetDocument** | Gets the contents of the specified AWS Systems Manager document (SSM document). |
+| **GetInventory** | Query inventory information. This includes managed node status, such as Stopped or Terminated. |
+| **ListDocuments** | Returns all Systems Manager (SSM) documents in the current AWS account and AWS Region. You can limit the results of this request by using a filter. |
+| **ListTagsForResource** | Returns a list of the tags assigned to the specified resource. |
+| **RemoveTagFromResource** | Removes tag keys from the specified resource. |
+| **StartAutomationExecution** | Initiates execution of an Automation runbook. |
+| **StopAutomationExecution** | Stop an Automation that is currently running. |
 
 ### Deployment Instructions
 
@@ -32,7 +40,7 @@ This Function App Connector is to connect AWS Athena API.
     - AWS Secret Access Key
     - AWS Region
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWSAthena%2FPlaybooks%2FCustomConnector%2FAWSAthena_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWSAthena%2FPlaybooks%2FCustomConnector%2FAWSAthena_FunctionAppConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Fblob%2Forigin%2Fusers%2Frahul%2FAWS-SystemsManager%2FSolutions%2FAWS%20Systems%20Manager%2FPlaybooks%2FCustomConnector%2FAWS_SSM_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Fblob%2Forigin%2Fusers%2Frahul%2FAWS-SystemsManager%2FSolutions%2FAWS%2520Systems%2520Manager%2FPlaybooks%2FCustomConnector%2FAWS_SSM_FunctionAppConnector%2Fazuredeploy.json)
 
 ### Function App Settings (Access Key ID, Secret Access Key and Region) Update Instruction
 1. Select the Function App.
@@ -41,3 +49,7 @@ This Function App Connector is to connect AWS Athena API.
 4. Click on the Edit for a setting.
 5. Update the Values.
 6. Click Ok to save.
+
+### References
+- [AWS Systems Manager API Documentation](https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DeleteDocument.html)
+- [AWS Systems Manager User Guide](https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html)
