@@ -19,7 +19,7 @@ export function IsValidBrandingContent(filePath: string): ExitCode {
         const sentinelRegex = /(?<!Microsoft\s)(?<!-)\bSentinel\b/g;
         let match;
         while ((match = sentinelRegex.exec(fileContent))) {
-            errors.push(`The string 'Sentinel' is invalid. It should be preceded by 'Microsoft' at index ${match.index+1}`);
+            errors.push(`Inaccurate product branding used at index ${match.index + 1}. Use "Microsoft Sentinel" instead of "Sentinel"`);
         }
 
         // If the file is not identified correctly, log a warning message
