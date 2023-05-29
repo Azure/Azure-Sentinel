@@ -73,7 +73,7 @@ Recorded Futures risk lists are generated at different cadences as described in 
 
 There are two options for installing playbooks and starting automated threat response:
 
-- Installing the solution from from [Content Hub](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/dontDiscardJourney~/true/id/recordedfuture1605638642586.recorded_future_sentinel_solution). (Recommended)
+- Installing the solution from [Content Hub](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/dontDiscardJourney~/true/id/recordedfuture1605638642586.recorded_future_sentinel_solution). (Recommended)
 
 - Installing the playbooks one by one by from this Readme.
 
