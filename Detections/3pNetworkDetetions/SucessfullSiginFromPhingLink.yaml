@@ -5,12 +5,12 @@ description: |
   ,"Messages containing malicious entity not removed after delivery","Email messages containing malicious URL removed after delivery","Email reported by user as malware or phish","Phish delivered due to an ETR override","Phish not zapped because ZAP is disabled","which was observed successful connection with Phishing URL from 3P Network telemetry and also followed successful signing attempts'
 severity:	Medium
 requiredDataConnectors:
-	- connectorId:	OfficeATP
-    	dataTypes:
-		- OfficeATP
-		- Office365	
-		- CommonSecurityLog
-		- SigninLogs 
+- connectorId: OfficeATP
+dataTypes:
+    - OfficeATP
+    - Office365	
+    - CommonSecurityLog
+    - SigninLogs 
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -20,110 +20,110 @@ tactics:
 relevantTechniques:
   - T1212
 query: |
-	
-	let Alert_List= dynamic([
-	"Phishing link click observed in Network Traffic", 
-	"Phish delivered due to an IP allow policy",
-	"A potentially malicious URL click was detected",
-	"High Risk Sign-in Observed in Network Traffic",
-	"A user clicked through to a potentially malicious URL",
-	"Suspicious network connection to AitM phishing site", 
-	"Messages containing malicious entity not removed after delivery", 
-	"Email messages containing malicious URL removed after delivery",
-	"Email reported by user as malware or phish",
-	"Phish delivered due to an ETR override",
-	"Phish not zapped because ZAP is disabled"]);
-	SecurityAlert | where AlertName in~ (Alert_List)
-	//Findling Alerts which has the URL
-	| where Entities has "url"
-	//extracting Entities 
-	| extend Entities = parse_json(Entities)
-	| mv-apply Entity = Entities on
-	(
-	where Entity.Type == 'account'
-	| extend EntityUPN = iff(isempty(Entity.UserPrincipalName), tostring(strcat(Entity.Name, "@", tostring (Entity.UPNSuffix[0]))), tostring(Entity.UserPrincipalName))
-	)
-	| mv-apply Entity = Entities on
-	(
-	where Entity.Type == 'ip'
-	| extend EntityIp = tostring(Entity.Address)
-	)
-	| mv-apply Entity = Entities on
-	(
-	where Entity.Type == 'host'
-	| extend EntityHost = tostring(Entity.HostName)
-	)
-	| mv-apply Entity = Entities on
-	(
-	where Entity.Type == 'url'
-	| extend EntityUrl = tostring(Entity.Url)
-	)
-	| where not(ipv4_is_private(EntityIp))
-	| summarize
-	AccountUpn=take_any(EntityUPN),
-	IPAddress=take_any(EntityIp),
-	HostName=take_any(EntityHost),
-	Url=take_any(EntityUrl),
-	AlertTime= min(TimeGenerated),
-	make_set(SystemAlertId)
-	by ProductName, AlertName
-	// matching with 3rd party network logs and 3p Alerts 
-	| join kind= inner (CommonSecurityLog
-	| where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
-	| project
-	    3plogTime=TimeGenerated,
-	    DeviceVendor,
-	    DeviceProduct,
-	    Activity,
-	    DestinationHostName,
-	    DestinationIP,
-	    RequestURL,
-	    MaliciousIP,
-	    SourceUserName,
-	    IndicatorThreatType,
-	    ThreatSeverity,
-	    ThreatConfidence,
-	    SourceUserID,
-	    SourceHostName)
-	on $left.Url == $right.RequestURL
-	// matching successful Login from suspicious IP 
-	| join kind=inner (SigninLogs
-	//filtering the Successful Login
-	| where ResultType == 0
-	| project
-	    IPAddress,
-	    SourceSystem,
-	    SigniningTime= TimeGenerated,
-	    OperationName,
-	    ResultType,
-	    ResultDescription,
-	    AlternateSignInName,
-	    AppDisplayName,
-	    AuthenticationRequirement,
-	    ClientAppUsed,
-	    RiskState,
-	    RiskLevelDuringSignIn,
-	    UserPrincipalName)
-	on $left.DestinationIP == $right.IPAddress and $left.SourceUserName == $right.UserPrincipalName  
-	| where SigniningTime between ((AlertTime - 6h) .. (AlertTime + 6h)) and 3plogTime between ((AlertTime - 6h) .. (AlertTime + 6h))
-	
+
+    let Alert_List= dynamic([
+    "Phishing link click observed in Network Traffic", 
+    "Phish delivered due to an IP allow policy",
+    "A potentially malicious URL click was detected",
+    "High Risk Sign-in Observed in Network Traffic",
+    "A user clicked through to a potentially malicious URL",
+    "Suspicious network connection to AitM phishing site", 
+    "Messages containing malicious entity not removed after delivery", 
+    "Email messages containing malicious URL removed after delivery",
+    "Email reported by user as malware or phish",
+    "Phish delivered due to an ETR override",
+    "Phish not zapped because ZAP is disabled"]);
+    SecurityAlert | where AlertName in~ (Alert_List)
+    //Findling Alerts which has the URL
+    | where Entities has "url"
+    //extracting Entities 
+    | extend Entities = parse_json(Entities)
+    | mv-apply Entity = Entities on
+        (
+        where Entity.Type == 'account'
+        | extend EntityUPN = iff(isempty(Entity.UserPrincipalName), tostring(strcat(Entity.Name, "@", tostring (Entity.UPNSuffix[0]))), tostring(Entity.UserPrincipalName))
+        )
+    | mv-apply Entity = Entities on
+        (
+        where Entity.Type == 'ip'
+        | extend EntityIp = tostring(Entity.Address)
+        )
+    | mv-apply Entity = Entities on
+        (
+        where Entity.Type == 'host'
+        | extend EntityHost = tostring(Entity.HostName)
+        )
+    | mv-apply Entity = Entities on
+        (
+        where Entity.Type == 'url'
+        | extend EntityUrl = tostring(Entity.Url)
+        )
+    | where not(ipv4_is_private(EntityIp))
+    | summarize
+        AccountUpn=take_any(EntityUPN),
+        IPAddress=take_any(EntityIp),
+        HostName=take_any(EntityHost),
+        Url=take_any(EntityUrl),
+        AlertTime= min(TimeGenerated),
+        make_set(SystemAlertId)
+        by ProductName, AlertName
+    // matching with 3rd party network logs and 3p Alerts 
+    | join kind= inner (CommonSecurityLog
+        | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
+        | project
+            3plogTime=TimeGenerated,
+            DeviceVendor,
+            DeviceProduct,
+            Activity,
+            DestinationHostName,
+            DestinationIP,
+            RequestURL,
+            MaliciousIP,
+            SourceUserName,
+            IndicatorThreatType,
+            ThreatSeverity,
+            ThreatConfidence,
+            SourceUserID,
+            SourceHostName)
+        on $left.Url == $right.RequestURL
+    // matching successful Login from suspicious IP 
+    | join kind=inner (SigninLogs
+        //filtering the Successful Login
+        | where ResultType == 0
+        | project
+            IPAddress,
+            SourceSystem,
+            SigniningTime= TimeGenerated,
+            OperationName,
+            ResultType,
+            ResultDescription,
+            AlternateSignInName,
+            AppDisplayName,
+            AuthenticationRequirement,
+            ClientAppUsed,
+            RiskState,
+            RiskLevelDuringSignIn,
+            UserPrincipalName)
+        on $left.DestinationIP == $right.IPAddress and $left.SourceUserName == $right.UserPrincipalName  
+    | where SigniningTime between ((AlertTime - 6h) .. (AlertTime + 6h)) and 3plogTime between ((AlertTime - 6h) .. (AlertTime + 6h))
+    
 entityMappings:
-	- entityType: Account
-    		fieldMappings:
-      		- identifier: FullName
-        	columnName: SourceUserName
-	- entityType: IP
-    		fieldMappings:
-      		- identifier: Address
-        	columnName: IPAddress
-  	- entityType: DNS
-    		fieldMappings:
-      		- identifier: DomainName
-        	columnName: DestinationHostName	
-	- entityType: Host
-		fieldMappings:
-		- identifier: FullName
-		columnName: SourceSystem
+    - entityType: Account
+      fieldMappings:
+      - identifier: FullName
+      columnName: SourceUserName
+    - entityType: IP
+      fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+    - entityType: DNS
+      fieldMappings:
+      - identifier: DomainName
+      columnName: DestinationHostName	
+    - entityType: Host
+      fieldMappings:
+      - identifier: FullName
+        columnName: SourceSystem
 version: 1.0.0
 kind: Scheduled
 metadata:
