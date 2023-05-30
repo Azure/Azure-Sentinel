@@ -39,8 +39,6 @@ For each widget, configure the secrets and other parameters it requires using th
 - Enter the username and API key defined in your Anomali account.
 - Press on the “Review + create” button and deploy the template – this should add a secret named “AnomaliApiKey” to your key vault.
 
-![Anomali ARM deployment screenshot](Images/anomali-arm-deployment.png)
-
 <img src="Images/anomali-arm-deployment.png" alt="Anomali ARM deployment screenshot" width="75%"/>
 
 #### Configure Recorded future
@@ -51,7 +49,8 @@ For each widget, configure the secrets and other parameters it requires using th
 - Enter the API key defined in your Recoded future account.
 - Press on the “Review + create” button and deploy the template – this should add a secret named “RecordedFuture” to your key vault.
 
-![Recorded Future ARM deployment screenshot](Images/recorded-future-arm-deployment.png)
+<img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future ARM deployment screenshot" width="75%"/>
+
 
 ## Using enrichment widgets
 
@@ -65,11 +64,11 @@ To view your widgets:
 - Press on the entity behavior menu option
 - Your widgets should be available in the insights pane on the right side:
 
-![Widget with results screenshot](Images/widget-results.png)
+<img src="Images/widget-results.png" alt="Widget with results screenshot" width="75%"/>
 
 - If the source return no results, you will see a different display, for example:
 
-![Widget with no answers screenshot](Images/widget-with-no-results.png)
+<img src="Images/widget-with-no-results.png" alt="Widget with no answers screenshot" width="75%"/>
 
 ### Viewing your widgets in the incident page
 
