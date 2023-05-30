@@ -92,15 +92,15 @@ If you received in a widget the message "The widget has not been configured as s
 
 To get your Sentinel's Workspace ID, Resource Group and Subscription ID:
 
-- go to the settings section in Sentinel:
+Go to the settings section in Sentinel:
 
-![Go to settings section screenshot](Images/goto-settings-section.png)
+<img src="Images/goto-settings-section.png" alt="Go to settings section screenshot" width="40%"/>
 
-- Press on the workspace settings menu item:
+Press on the workspace settings menu item:
 
-![Select settings tab screenshot](Images/select-settings-tab.png)
+<img src="Images/select-settings-tab.png" alt="Select settings tab screenshot" width="40%"/>
 
-- Hover on the right side of each parameter to view its copy tool and copy it:
+Hover on the right side of each parameter to view its copy tool and copy it:
 
 ![Copy workspace parameters screenshot](Images/copy-workspace-parameters.png)
 
