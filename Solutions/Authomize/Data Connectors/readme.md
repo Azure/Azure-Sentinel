@@ -12,18 +12,16 @@
 5. Update the ```config.cfg``` file within the ```<YourLocalWorkingDirectory>\Authomize\Data Connectors\``` with the data you collected from points 1 and 2 above and save the file.
 6. Create your your Ubuntu VM with Dokcer Engine
     
-## Deply an Ubuntu VM with Docker Engine
+## Deploy an Ubuntu VM with Docker Engine
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2Fapplication-workloads%2Fdocker%2Fdocker-simple-on-ubuntu%2Fazuredeploy.json" data-linktype="external"><img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true" alt="Deploy To Azure" data-linktype="external"></a>
 
 This template allows you to deploy an Ubuntu VM with Docker (using the Docker Extension) installed. You can run docker commands by connecting to the virtual machine with SSH. [More details can be found here.](https://learn.microsoft.com/en-us/samples/azure/azure-quickstart-templates/docker-simple-on-ubuntu/)
 
-More details about how to do this can be located on the Authomize ITDR repo found [here](https://github.com/authomize/Open-ITDR/tree/main/Open-Connectors/MSSentinelBasicIncidents).
-
 Following are the basic setup instructions to start the container:
 
-7. Copy the ```<Data Connectorsr>``` directory to your Ubuntu VM with Docker Engine
+7. Copy the ```<Data Connectors>``` directory to your Ubuntu VM with Docker Engine
 8. Go to the ```<workingdirectory>\Data Connectors\``` directory you just copied to your Ubuntu VM with Docker Engine.
-9. By default the scheduler will run every 2 hours looking for incidents. If you want to change that value then open the file authomizescheduler.py find the variable at the top of the file called ```NumberOfMinutes``` and change from ```120```. This default can be left as is unless you have a very busy environment. Do not go below ```5``` minutes.
+9. By default the scheduler will run every 2 hours looking for incidents. If you want to change that value then open the file authomizescheduler.py find the variable at the top of the file called ```NumberOfMinutes``` and change from ```120```. This default can be left as is unless you have a very busy environment. Do not go below ```30``` minutes.
     - ***NOTE:*** When the image starts it will initiate contact with your tenant and collect all currently open events. Once complete it will check for new events every 120 minutes.
 10. Using the Docker file included build your docker image: [```docker build -t authomize:sentinel .```] .
 11. Create a container and start it detached. This also mounts the volume authomize_apps which is needed to ensure we keep file states: [```docker run -d -v authomize_apps:/apps --name sentinel001 authomize:sentinel```] .
