@@ -52,7 +52,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             max_concurrency and max_errors and \
             target_locations and tags and alarm_configuration):
         try:
-            req_body = json.loads(req.get_json())
+            req_body = req.get_json()
         except ValueError:
             pass
         else:

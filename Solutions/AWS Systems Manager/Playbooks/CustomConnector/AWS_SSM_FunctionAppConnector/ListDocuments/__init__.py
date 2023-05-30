@@ -37,7 +37,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (filters and max_results and next_token):
         try:
-            req_body = json.loads(req.get_json())
+            req_body = req.get_json()
         except ValueError:
             pass
         else:

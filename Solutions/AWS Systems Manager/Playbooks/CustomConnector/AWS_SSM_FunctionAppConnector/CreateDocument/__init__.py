@@ -44,7 +44,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (content or requires or attachments or name or display_name or version_name or document_type or document_format or target_type or tags):
         try:
-            req_body = json.loads(req.get_json())
+            req_body = req.get_json()
         except ValueError:
             pass
         else:
