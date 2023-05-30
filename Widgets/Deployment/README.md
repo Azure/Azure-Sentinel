@@ -130,17 +130,18 @@ python CreateKVName.py –workspace-id <workspace-id>
 
 3) Search for "Key Vault" in Azure global search and choose “Key vaults”:
 
-![Search key vault screenshot](Images/create-kv-search.png)
+
+<img src="Images/create-kv-search.png" alt="Search key vault screenshot" width="40%"/>
  
 4) Press on the “Create” button in the upper left corner.
 
-![Create key vault screenshot](Images/create-kv-create.png)
+<img src="Images/create-kv-create.png" alt="Create key vault screenshot" width="40%"/>
  
 5) Enter the Subscription Name and Resource group name of your Sentinel workspace in the relevant input fields.
 
 6) Enter the Key Vault name you copied above in the "Key vault name" input field:
 
-![Enter key vault name screenshot](Images/create-kv-name.png)
+<img src="Images/create-kv-name.png" alt="Enter key vault name screenshot" width="75%"/>
 
 7) Make sure that the region field is set to the Workspace region.
  
@@ -148,20 +149,20 @@ python CreateKVName.py –workspace-id <workspace-id>
 
 9) Press on the “Create” button to add Sentinel to the access policy.
 
-![Add principal to key vault screenshot](Images/create-kv-create-policy.png)
+<img src="Images/create-kv-create-policy.png" alt="Add principal to key vault screenshot" width="40%"/>
  
 10) In the right pane opened, select "Get" and "List" in the "Secret permissions" only:
 
-![Select permissions for principal screenshot](Images/create-kv-policy.png)
+<img src="Images/create-kv-policy.png" alt="Select permissions for principal screenshot" width="75%"/>
 
 11)	Press next to move to the "Principal" tab, and search for "Azure Security Insights", and select it. "Azure Security Insights" the internal name for Microsoft Sentinel. Sentinel needs these permissions to access the credentials stored in the key vault to perform the interaction with the 3rd party service provider:
 
-![Add principal screenshot](Images/create-kv-principal.png)
+<img src="Images/create-kv-principal.png" alt="Add principal screenshot" width="40%"/>
 
 12) Press "Next" twice and then "Create" to create the access policy. 
 
 13) Press "Next" twice to get to the “Tags” tab add the workspace name and ID that this Key Vault is related to:
 
-![Add tag to key vault screenshot](Images/create-kv-tags.png)
+<img src="Images/create-kv-tags.png" alt="Add tag to key vault screenshot" width="75%"/>
   
 14)	Press on the “Review + create” to create the Key Vault.
