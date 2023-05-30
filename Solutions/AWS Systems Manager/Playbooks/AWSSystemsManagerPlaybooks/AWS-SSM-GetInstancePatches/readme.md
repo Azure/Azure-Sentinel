@@ -5,7 +5,7 @@
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
  1. Get the Hostnames and Private IP addresses from incident entities.
- 2. Get the Instance IDs from AWS EC2 using the Hostnames and Private IP Addresses.
+ 2. Get the Instance IDs of Managed EC2 instances using the Hostnames and Private IP Addresses.
  3. Get the missing patches for the Instance IDs.
  4. Add the missing patches to the incident comment.
 
