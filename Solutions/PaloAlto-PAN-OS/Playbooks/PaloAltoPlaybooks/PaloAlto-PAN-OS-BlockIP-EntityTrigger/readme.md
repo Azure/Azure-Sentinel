@@ -39,6 +39,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
     * Teams ChannelId: Enter the Teams Group id to send the adaptive card
      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
     * Predefined address group name: Enter the predefined address group name here to Block IP / Unblock IP
+	* CustomConnectorName : Name of the custom connector, if you want to change the default name, make sure to use the same in all PaloAlto automation playbooks as well
     
 
 ### Post-Deployment instructions 
@@ -54,6 +55,18 @@ Once deployment is complete, you will need to authorize each connection.
 #### b. Configurations in Sentinel
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky IP
 2. Configure the automation rules to trigger this playbook
+
+#### c. Assign Playbook Microsoft Sentinel Responder Role
+1. Select the Playbook (Logic App) resource
+2. Click on Identity Blade
+3. Choose Systen assigned tab
+4. Click on Azure role assignments
+5. Click on Add role assignments
+6. Select Scope - Resource group
+7. Select Subscription - where Playbook has been created
+8. Select Resource group - where Playbook has been created
+9. Select Role - Microsoft Sentinel Responder
+10. Click Save (It takes 3-5 minutes to show the added role.)
 
 
 ## Playbook steps explained
