@@ -80,13 +80,13 @@ Similarly, you can view your enrichment widgets as part of an incident investiga
 
 If you received in all widgets the message "The widget configuration store has not been initialized" as shown below, make sure that you followed the instructions in the section [Create a Key Vault to store widgets credentials](#create-a-key-vault-to-store-widgets-credentials) above. If you have done so, but still get the message, try [creating the required Key Vault manually](#manually-creating-the-key-vault).
 
-![The widget configuration store has not been initialized message screenshot](images/configuration-store-has-not-been-initialized.png)
+<img src="Images/configuration-store-has-not-been-initialized.png" alt="The widget configuration store has not been initialized message screenshot" width="75%"/>
 
 ### The widget has not been configured
 
 If you received in a widget the message "The widget has not been configured as shown below, make sure that you followed the instruction in the section [Configuring widgets](#configure-widgets) above.
 
-![The widget has not been configured screenshot](images/widget-has-not-been-configured.png)
+<img src="Images/widget-has-not-been-configured.png" alt="The widget has not been configured screenshot" width="75%"/>
 
 ### Locating the workspace information
 
