@@ -41,7 +41,7 @@ For each widget, configure the secrets and other parameters it requires using th
 
 ![Anomali ARM deployment screenshot](Images/anomali-arm-deployment.png)
 
-<img src="Images/anomali-arm-deployment.png" alt="Anomali ARM deployment screenshot" width="200"/>
+<img src="Images/anomali-arm-deployment.png" alt="Anomali ARM deployment screenshot" width="75%"/>
 
 #### Configure Recorded future
 
