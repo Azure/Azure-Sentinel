@@ -725,8 +725,8 @@ class SystemInfo:
             sed_command = "sed -i 's/\\(MDSD_OPTIONS=\".*\\)\"/\\1 {}\"/' {}".format(flag, file_path)
             subprocess.call(sed_command, shell=True)
             subprocess.call(agent_restart_command, shell=True)
-            # Sleep for 10 seconds
-            time.sleep(10)
+        # Sleep for 10 seconds
+        time.sleep(10)
         # Remove the flag using sed
         sed_command = "sed -i 's/ {}//' {}".format(flag, file_path)
         subprocess.call(sed_command, shell=True)
