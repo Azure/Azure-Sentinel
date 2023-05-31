@@ -353,7 +353,7 @@ class DCRConfigurationVerifications:
         """
         Verifying there is a DCR on the machine for forwarding cef data
         """
-        command_name = "verify_DCR_content_has_CEF_stream"
+        command_name = "verify_DCR_content_has_stream"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
             self.STREAM_NAME[STREAM_SCENARIO])
         result_keywords_array = [self.STREAM_NAME[STREAM_SCENARIO]]
@@ -368,7 +368,7 @@ class DCRConfigurationVerifications:
         """
         Verifying that the CEF DCR on the machine has valid content with all necessary DCR components
         """
-        command_name = "verify_CEF_dcr_has_valid_content"
+        command_name = "verify_dcr_has_valid_content"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
             self.STREAM_NAME[STREAM_SCENARIO])
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
@@ -392,7 +392,7 @@ class DCRConfigurationVerifications:
         """
         Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
         """
-        command_name = "check_cef_multi_homing"
+        command_name = "check_multi_homing"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
             self.STREAM_NAME[STREAM_SCENARIO])
         command_object = CommandVerification(command_name, command_to_run)
@@ -584,19 +584,22 @@ class IncomingEventsVerifications:
     # CONSTANTS
     global STREAM_SCENARIO
     FIXED_CEF_MESSAGE = "0|TestCommonEventFormat|MOCK|common=event-format-test|end|TRAFFIC|1|rt=$common=event-formatted-receive_time deviceExternalId=0002D01655 src=1.1.1.1 dst=2.2.2.2 sourceTranslatedAddress=1.1.1.1 destinationTranslatedAddress=3.3.3.3 cs1Label=Rule cs1=CEF_TEST_InternetDNS"
-    CISCO_FIXED_MESSAGE = "Deny inbound TCP src inet:1.1.1.1 dst inet:2.2.2.2"
-    STREAM_MESSAGE = {"cef": FIXED_CEF_MESSAGE, "asa": CISCO_FIXED_MESSAGE}
-    IDENT_NAME = {"cef": "CEF:", "asa": "%ASA-7-106010:"}
+    FIXED_CISCO_MESSAGE = "Deny inbound TCP src inet:1.1.1.1 dst inet:2.2.2.2"
+    FIXED_FTD_MESSAGE = "Teardown dynamic UDP translation from inside:10.51.100.1/54453 to outside:10.0.2.3/54453 duration 0:00:00"
+    STREAM_MESSAGE = {"cef": FIXED_CEF_MESSAGE, "asa": FIXED_CISCO_MESSAGE, "ftd": FIXED_FTD_MESSAGE}
+    IDENT_NAME = {"cef": "CEF", "asa": "%ASA-7-106010", 'ftd': "%FTD-6-305012"}
     TCPDUMP_NOT_INSTALLED_ERROR_MESSAGE = "Notice that \'tcpdump\' is not installed in your Linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'."
     LOGGER_NOT_INSTALLED_ERROR_MESSAGE = "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace."
 
-    def handle_tcpdump_line(self, line):
+    @staticmethod
+    def handle_tcpdump_line(line, ident):
         """
         Validate there are incoming events for the relevant stream.
         :param line: a text line from the tcpdump stream
         :return: True if the stream exists in the line. Otherwise, false.
+        :ident the ident of the stream being sent.
         """
-        if self.IDENT_NAME[STREAM_SCENARIO] in line:
+        if ident in line:
             return True
         return False
 
@@ -609,8 +612,7 @@ class IncomingEventsVerifications:
         tcpdump_time_restriction = 10
         start_seconds = int(round(time.time()))
         end_seconds = int(round(time.time()))
-        mock_message_counter = 0
-        command_name = "listen_to_incoming_cef_events"
+        command_name = "listen_to_incoming_events"
         command_to_run = "sudo tcpdump -A -ni any port 514 -vv"
         result_keywords_array = [self.IDENT_NAME[STREAM_SCENARIO]]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
@@ -627,27 +629,38 @@ class IncomingEventsVerifications:
             return False
         poll_obj = select.poll()
         poll_obj.register(tcp_dump.stdout, select.POLLIN)
+        found_cisco_messages = {'asa': False, "ftd": False}
         while (end_seconds - start_seconds) < tcpdump_time_restriction:
             if mock_message is True:
                 # Sending mock messages
-                mock_message_counter += 1
-                self.send_cef_message_local(514, 1)
+                if STREAM_SCENARIO == "asa":
+                    self.send_message_local(514, 1, send_ftd=True)
+                else:
+                    self.send_message_local(514, 1)
             poll_result = poll_obj.poll(0)
             if poll_result:
                 line = str(tcp_dump.stdout.readline().decode('utf-8').strip("\n"))
-                if self.handle_tcpdump_line(line):
-                    command_object.command_result = line
-                    command_object.run_full_verification()
-                    print_ok("Found {0} events in stream. Please verify {0} events arrived at your workspace".format(STREAM_SCENARIO))
-                    return True
+                for ident in self.IDENT_NAME.keys():
+                    if self.handle_tcpdump_line(line, self.IDENT_NAME[ident]):
+                        command_object.command_result = line
+                        command_object.run_full_verification()
+                        found_cisco_messages[ident] = True
+                        if ident == "cef" or False not in found_cisco_messages.values():
+                            print_ok("Found {0} in stream. Please verify {0} events arrived at your workspace".format(
+                                ident.upper()))
+                            return True
             end_seconds = int(round(time.time()))
+        if found_cisco_messages['asa'] == True:
+            print_ok("Found asa events in stream but not ftd events. Please verify asa events arrived at your workspace and that no ftd events are being sent")
+            return True
+
         print_error("Could not locate {0} message in tcpdump. Please verify {0} events can be sent to the machine and"
-                    " there is not firewall blocking incoming traffic".format(STREAM_SCENARIO))
+                    " there is not firewall blocking incoming traffic".format(STREAM_SCENARIO.upper()))
         command_object.command_result = str(line)
         command_object.run_full_verification()
         return False
 
-    def send_cef_message_local(self, port, amount):
+    def send_message_local(self, port, amount, send_ftd=False):
         """
         Generate local CEF events in a given amount to a given port
         :param port: A destination port to send the events
@@ -656,11 +669,16 @@ class IncomingEventsVerifications:
         try:
             for index in range(0, amount):
                 command_tokens = ["logger", "-p", "local4.warn", "-t", self.IDENT_NAME[STREAM_SCENARIO],
-                 self.STREAM_MESSAGE[STREAM_SCENARIO], "-P", str(port), "-n", "127.0.0.1"]
+                self.STREAM_MESSAGE[STREAM_SCENARIO], "--rfc3164", "-P", str(port), "-n", "127.0.0.1"]
                 logger = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
                 o, e = logger.communicate()
-                if e is not None:
-                    print("Error could not send mock message")
+                if send_ftd:
+                    command_tokens = ["logger", "-p", "local4.warn", "-t", self.IDENT_NAME['ftd'],
+                    self.STREAM_MESSAGE['ftd'], "--rfc3164", "-P", str(port), "-n", "127.0.0.1"]
+                    logger = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
+                    o, e = logger.communicate()
+            if e is not None:
+                print("Error could not send mock message")
         except OSError:
             print(self.LOGGER_NOT_INSTALLED_ERROR_MESSAGE)
 
@@ -669,7 +687,7 @@ class IncomingEventsVerifications:
         This function is only called by main and runs all the tests in this class
         """
         if not self.incoming_logs_validations():
-            print_notice("Generating CEF mock events and trying again")
+            print_notice("\nGenerating mock events and trying again")
             self.incoming_logs_validations(mock_message=True)
 
 
@@ -782,8 +800,7 @@ def getargs(should_print=True):
     if should_print:
         for arg in vars(args):
             if getattr(args, arg):
-                print_notice(arg)
-        print('\n')
+                print_notice("The scenario chosen is: {}".format(arg))
     return args
 
 
@@ -818,7 +835,7 @@ def main():
         (SyslogDaemonVerifications(), "Starting validation tests for the Syslog daemon"),
         (OperatingSystemVerifications(), "Starting validation tests for the operating system"),
         (IncomingEventsVerifications(), "Starting validation tests for capturing incoming events")]
-    print_notice("\nStarting to run the CEF validation script")
+    print_notice("\nStarting to run the validation script for the {} scenario".format(STREAM_SCENARIO))
     time.sleep(1)
     subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
