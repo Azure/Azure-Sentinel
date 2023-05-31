@@ -11,50 +11,67 @@ requiredDataConnectors:
   - connectorId: BehaviorAnalytics
     dataTypes:
       - IdentityInfo
-queryFrequency: 1d
-queryPeriod: 1d
+queryFrequency: 1h
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - PrivilegeEscalation
 relevantTechniques:
   - T1078.004
-tags:
-  - GuestorExternalIdentities
 query: |
-  let lookback = 1d;
-  let GlobalAdmins = IdentityInfo
-  | where TimeGenerated > ago(lookback)
-  | extend IsGlobalAdmin = set_has_element(AssignedRoles, "Global Administrator")
-  | where IsGlobalAdmin == true
-  | distinct AccountUPN;
-  GlobalAdmins
-  | join kind=inner ( AuditLogs
-  | where TimeGenerated > ago(lookback)
-  | where OperationName=~ "Update user" 
-  | where Result =~ "success" 
-  | mv-expand TargetResources 
-  | mv-expand TargetResources.modifiedProperties 
-  | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) , oldValue_ = tostring(TargetResources_modifiedProperties.oldValue), newValue_ = tostring(TargetResources_modifiedProperties.newValue)
-  | where displayName_ == "UserPrincipalName" and oldValue_ !has "#EXT" and newValue_ has "#EXT"
-  | extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) 
-  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) , IPAddress = tostring(InitiatedBy.["user"].["ipAddress"])
-  ) on $left.AccountUPN == $right.oldValue_
-  | project TimeGenerated, AADTenantId, IPAddress, Initiator, displayName_, oldValue_, newValue_
+  let query_frequency = 1h;
+  let query_period = 14d;
+  IdentityInfo
+  | where TimeGenerated > ago(query_period)
+  | where set_has_element(AssignedRoles, "Global Administrator")
+  | distinct AccountUPN, AccountObjectId
+  | join kind=inner (
+      AuditLogs
+      | where TimeGenerated > ago(query_frequency)
+      | where OperationName=~ "Update user" and Result =~ "success"
+      // | where isnotempty(InitiatedBy["user"])
+      | mv-expand TargetResource = TargetResources
+      | where TargetResource["type"] == "User"
+      | extend AccountObjectId = tostring(TargetResource["id"])
+      | where tostring(TargetResource["modifiedProperties"]) != "[]"
+      | mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
+          summarize modifiedProperties = make_bag(
+              bag_pack(tostring(modifiedProperty["displayName"]),
+                  bag_pack("oldValue", trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
+                      "newValue", trim(@'[\"\s]+', tostring(modifiedProperty["newValue"])))))
+      )
+      | where not(tostring(modifiedProperties["Included Updated Properties"]["newValue"]) in ("LastDirSyncTime", ""))
+      | where not(tostring(modifiedProperties["Included Updated Properties"]["newValue"]) == "StrongAuthenticationPhoneAppDetail" and isnotempty(modifiedProperties["StrongAuthenticationPhoneAppDetail"]) and tostring(array_sort_asc(extract_all(@'\"Id\"\:\"([^\"]+)\"', tostring(modifiedProperties["StrongAuthenticationPhoneAppDetail"]["newValue"])))) == tostring(array_sort_asc(extract_all(@'\"Id\"\:\"([^\"]+)\"', tostring(modifiedProperties["StrongAuthenticationPhoneAppDetail"]["oldValue"])))))
+      | extend
+          Initiator = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["displayName"]), tostring(InitiatedBy["user"]["userPrincipalName"])),
+          InitiatorId = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["servicePrincipalId"]), tostring(InitiatedBy["user"]["id"])),
+          IPAddress = tostring(InitiatedBy[tostring(bag_keys(InitiatedBy)[0])]["ipAddress"])
+  ) on AccountObjectId
+  | project TimeGenerated, Category, Identity, Initiator, IPAddress, OperationName, Result, AccountUPN, InitiatedBy, AdditionalDetails, TargetResources, AccountObjectId, InitiatorId, CorrelationId
+  | extend
+      InitiatorName = tostring(split(Initiator, "@")[0]),
+      InitiatorUPNSuffix = tostring(split(Initiator, "@")[1]),
+      AccountName = tostring(split(AccountUPN, "@")[0]),
+      AccountUPNSuffix = tostring(split(AccountUPN, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Initiator
+      - identifier: Name
+        columnName: InitiatorName
+      - identifier: UPNSuffix
+        columnName: InitiatorUPNSuffix
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: displayName_
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
 metadata:
     source:
