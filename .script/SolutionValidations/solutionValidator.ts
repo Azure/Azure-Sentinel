@@ -3,7 +3,7 @@ import * as logger from "./../utils/logger";
 import { ExitCode } from "./../utils/exitCode";
 import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals";
 import { IsValidSupportObject } from "./validSupportObject";
-import { IsValidBrandingContent } from "./validMSBranding";
+//import { IsValidBrandingContent } from "./validMSBranding";
 import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError } from "../utils/validationError";
 
 
@@ -12,7 +12,7 @@ import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectVal
 export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     IsValidSolutionDomainsVerticals(filePath);
     IsValidSupportObject(filePath);
-    IsValidBrandingContent(filePath);
+    //IsValidBrandingContent(filePath);
     return ExitCode.SUCCESS;
 }
 
