@@ -714,7 +714,7 @@ class SystemInfo:
             '%', '%%').replace('\\n', '\n')
 
     def trace_activation(self):
-        flag = '-T 0x2'
+        flag = '-T 0x1002'
         file_path = '/etc/default/azuremonitoragent'
         # Add the flag using sed
         sed_command = "sed -i 's/\\(MDSD_OPTIONS=\".*\\)\"/\\1 {}\"/' {}".format(flag, file_path)
