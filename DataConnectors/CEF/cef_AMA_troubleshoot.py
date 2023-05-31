@@ -806,8 +806,8 @@ def main():
         system_info.handle_commands()
         print(
             "Finished collecting data \nIn order to open a support case please browse: {}".format(PATH_FOR_CSS_TICKET[machine_env]))
-    with open(LOG_OUTPUT_FILE, 'a') as file:
-        file.write('*' * 10 + 'FINISHED COLLECTION' + '*' * 10)
+        with open(LOG_OUTPUT_FILE, 'a') as file:
+            file.write('*' * 10 + 'FINISHED COLLECTION' + '*' * 10)
     time.sleep(1)
 
     class_tests_array = [
