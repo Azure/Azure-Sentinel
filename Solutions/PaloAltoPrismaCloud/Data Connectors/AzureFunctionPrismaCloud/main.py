@@ -68,7 +68,7 @@ class PrismaCloudConnector:
         self.alerts_state_manager = StateManagerAsync(FILE_SHARE_CONN_STRING, share_name='prismacloudcheckpoint', file_path='prismacloudlastalert')
         self.auditlogs_state_manager = StateManagerAsync(FILE_SHARE_CONN_STRING, share_name='prismacloudcheckpoint', file_path='prismacloudlastauditlog')
         self.sentinel = AzureSentinelMultiConnectorAsync(self.session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
-        self.sentinel1 = AzureSentinelConnectorAsync(self.session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
+        self.sentinel1 = AzureSentinelConnectorAsync(self.session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOGTYPE, queue_size=10000)
         self.sent_alerts = 0
         self.sent_audit_logs = 0
         self.last_alert_ts = None
