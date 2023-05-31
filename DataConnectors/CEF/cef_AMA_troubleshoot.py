@@ -796,12 +796,12 @@ def getargs(should_print=True):
 def main():
     args = getargs()
     verify_root_privileges()
+    subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
+                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     if args.collect:
         print_notice("Starting to collect data. This may take a couple of seconds")
         machine_env = find_dcr_cloud_environment()
         time.sleep(2)
-        subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
         system_info = SystemInfo()
         system_info.handle_commands()
         print(
