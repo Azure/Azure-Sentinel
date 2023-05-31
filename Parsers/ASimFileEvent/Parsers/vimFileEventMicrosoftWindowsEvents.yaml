@@ -1,7 +1,7 @@
 Parser:
   Title: File Event ASIM filtering parser for Microsoft Windows Events
-  Version: '0.1.3'
-  LastUpdated: May 25, 2023
+  Version: '0.2.1'
+  LastUpdated: May 31, 2023
 Product:
   Name: Microsoft Windows Events
 Normalization:
@@ -18,29 +18,29 @@ ParserName: vimFileEventMicrosoftWindowsEvents
 ParserQuery: |
 let Parser=()
 {  
-  let 5140AccessMaskLookup = datatable (AccessMask:string,EventType:string)
+  let EventType5140Lookup = datatable (AccessMask:string,EventType:string)
   [
-      "0x1", "ReadData"
-      , "0x2", "WriteData"
-      , "0x4", "AppendData"
-      , "0x8", "ReadEA"
-      , "0x10", "WriteEA"
-      , "0x20", "Execute/Traverse"
-      , "0x40", "DeleteChild"
-      , "0x80", "ReadAttributes"
-      , "0x100", "WriteAttributes"
-      , "0x10000", "Delete"
-      , "0x20000", "Read_Control"
-      , "0x40000", "Write_Dac"
-      , "0x80000", "Write_Owner"
-      , "0x100000", "Synchronize"
-      , "0x1000000", "Access_Sys_Sec"
+      "0x1", "FileAccessed"
+      , "0x2", "FileModified"
+      , "0x4", "FileModified"
+      , "0x8", "FileAccessed"
+      , "0x10", "FileModified"
+      , "0x20", "FileAccessed"
+      , "0x40", "FileDeleted"
+      , "0x80", "FileAccessed"
+      , "0x100", "FileModified"
+      , "0x10000", "FileDeleted"
+      , "0x20000", "FileAccessed"
+      , "0x40000", "FileModified"
+      , "0x80000", "FileModified"
+      , "0x100000", "FileAccessed"
+      , "0x1000000", "FileAccessed"
   ];
-  let 5140AccessListLookup = datatable (AccessList:string,EventType:string)
+  let EventSubType5140Lookup = datatable (AccessList:string,EventSubType:string)
   [
-      "%%4416", "ListDirectory"
-      , "%%4417", "AddFile"
-      , "%%4418", "AddSubDirectory/CreatePipeInstance"
+      "%%4416", "Preview"
+      , "%%4417", "Checkin"
+      , "%%4418", "Extended"
       , "%%4419", "N/A"
       , "%%4420", "N/A"
       , "%%4421", "N/A"
@@ -54,7 +54,7 @@ let Parser=()
       , "%%1541", "N/A"
       , "%%1542", "N/A"
   ];
-  let 4663AccessMaskLookup = datatable (AccessMask:string,EventType:string)
+  let EventType4663Lookup = datatable (AccessMask:string,EventType:string)
   [
       "0x1", "ObjectAccessed"
       , "0x10", "MetadataModified"
@@ -70,12 +70,12 @@ let Parser=()
       , "0x80", "MetadataAccessed"
       , "0x80000", "MetadataModified"
   ];
-  let CommonUserTypeLookup = datatable (AccountType:string, ActorUserType:string)
+  let ActorUserTypeLookup = datatable (AccountType:string, ActorUserType:string)
   [
     'User', 'Regular',
     'Machine', 'Machine'
   ];    
-  let CommonKnownSIDs = datatable (sid:string, username:string, type:string)
+  let SIDCommonLookup = datatable (sid:string, username:string, type:string)
   [
     'S-1-5-18', 'Local System', 'Simple',
     'S-1-0-0', 'Nobody', 'Simple'
@@ -119,7 +119,7 @@ let Parser=()
             , SubjectLogonId
             , HandleId
     )
-        | lookup 4663AccessMaskLookup on AccessMask
+        | lookup EventType4663Lookup on AccessMask
         | extend ActingProcessName = ProcessName
             , ActingProcessId = tostring(toint(ProcessId))
             , TargetFilePath = ObjectName
@@ -133,16 +133,16 @@ let Parser=()
         | where EventID == 5140
             and ObjectType == "File"
         | project TimeGenerated, EventID, AccessMask, AccessList, SubjectUserSid, AccountType, Computer, SubjectUserName, SubjectAccount, SubjectLogonId, ShareName
-        | lookup 5140AccessMaskLookup on AccessMask
-        | lookup 5140AccessListLookup on AccessList
+        | lookup EventType5140Lookup on AccessMask
+        | lookup EventSubType5140Lookup on AccessList
         | extend TargetFilePath = ShareName
         | project-rename FilePath = ShareName
     ;
   union isfuzzy=false
     4663events
     , 5140events
-        | lookup CommonUserTypeLookup on AccountType
-        | lookup CommonKnownSIDs on $left.SubjectUserSid == $right.sid
+        | lookup ActorUserTypeLookup on AccountType
+        | lookup SIDCommonLookup on $left.SubjectUserSid == $right.sid
         | extend ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount)
             , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
             , EventStartTime = TimeGenerated
