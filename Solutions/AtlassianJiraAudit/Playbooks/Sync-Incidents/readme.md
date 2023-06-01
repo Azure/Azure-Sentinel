@@ -58,7 +58,7 @@ All Logic Apps need to be updated with the correct ID's of the fields.
 | Tenant Name | customfield_10149 | Select List (Single Choice) |
 | Created At | customfield_10154 | Date Time Picker |
 | Att&ck Tactics | customfield_10155 | Select List (Multiple choices) |
-| Affected User | customfield_10058 | Text Field (Multiline) |
+| Affected User | customfield_10158 | Text Field (Multiline) |
 | Subscription ID | customfield_10162 | Text Field (Singline) |
 | Sentinel Resource Group | customfield_10169 | Text Field (Singline) |
 | Sentinel Workspace Name | customfield_10070 | Text Field (Singline) |
