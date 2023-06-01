@@ -61,7 +61,7 @@ All Logic Apps need to be updated with the correct ID's of the fields.
 | Affected User | customfield_10158 | Text Field (Multiline) |
 | Subscription ID | customfield_10162 | Text Field (Singline) |
 | Sentinel Resource Group | customfield_10169 | Text Field (Singline) |
-| Sentinel Workspace Name | customfield_10070 | Text Field (Singline) |
+| Sentinel Workspace Name | customfield_10170 | Text Field (Singline) |
 | Sentinel Workspace ID | customfield_10172 | Text Field (Singline) |
 | Sentinel Incident ID | customfield_10173 | Text Field (Singline) |
 | Sentinel Incident ARM ID | customfield_10175 | Text Field (Singline) |
