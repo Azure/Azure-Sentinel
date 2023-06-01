@@ -63,7 +63,7 @@ All Logic Apps need to be updated with the correct ID's of the fields.
 | Sentinel Resource Group | customfield_10169 | Text Field (Singline) |
 | Sentinel Workspace Name | customfield_10070 | Text Field (Singline) |
 | Sentinel Workspace ID | customfield_10172 | Text Field (Singline) |
-| Sentinel Incident ID | customfield_10172 | Text Field (Singline) |
+| Sentinel Incident ID | customfield_10173 | Text Field (Singline) |
 | Sentinel Incident ARM ID | customfield_10175 | Text Field (Singline) |
 
 The Att&ck Tactics list contains all Sentinel Tactics.
