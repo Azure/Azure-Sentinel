@@ -1,16 +1,18 @@
-import requests
-from requests.packages.urllib3.util.retry import Retry
-import urllib3
-import os
-import zlib
-import json
-import azure.functions as func
 import base64
-import hmac
-import hashlib
 import datetime
-import re
+import hashlib
+import hmac
+import json
 import logging
+import os
+import re
+import zlib
+
+import azure.functions as func
+import requests
+import urllib3
+from requests.packages.urllib3.util.retry import Retry
+
 from .state_manager import StateManager
 
 customer_id = os.environ['WorkspaceID'] 
@@ -138,7 +140,7 @@ class ImpervaFilesHandler:
                 events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
         else :
             logging.info("File is encrypted with file header : {}".format(file_header))
-            events_data = file_data
+            events_data = str(file_data)
         logging.info("decoded events_data".format(events_data))
         if events_data is not None:
             for line in events_data.splitlines():
