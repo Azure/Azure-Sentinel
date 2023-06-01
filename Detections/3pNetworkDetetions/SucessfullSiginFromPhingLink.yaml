@@ -1,24 +1,32 @@
 id: 779731f7-8ba0-4198-8524-5701b7defddc
-name: M365D Alerts Correlation to 3P Network Activity involved successful signing Activity
+name: M365D Alerts Correlation to non microsoft Network device network activity involved in successful signing Activity
 description: |
-  'Detecte alert Title with "Phishing link click observed in Network Traffic","Phish delivered due to an IP allow policy","A potentially malicious URL click was detected","High Risk Sign-in Observed in Network Traffic","A user clicked through to a potentially malicious URL","Suspicious network connection to AitM phishing site"
-  ,"Messages containing malicious entity not removed after delivery","Email messages containing malicious URL removed after delivery","Email reported by user as malware or phish","Phish delivered due to an ETR override","Phish not zapped because ZAP is disabled","which was observed successful connection with Phishing URL from 3P Network telemetry and also followed successful signing attempts'
+  'This content is employed to correlate with M365D phishing-related alerts. It focuses on instances where a user successfully connects to a phishing URL from a non-Microsoft network device and subsequently makes successful signing attempts from the phishing IP address.'
 severity:	Medium
 requiredDataConnectors:
-  - connectorId: OfficeATP
+  - connectorId:  OfficeATP
     dataTypes:
-      - OfficeATP
-      - Office365	
-      - CommonSecurityLog
-      - SigninLogs    
+    - SecurityAlert
+  - connectorId:  PaloAltoNetworks
+    dataTypes:
+    - CommonSecurityLog (PaloAlto)
+  - connectorId:  Fortinet
+    dataTypes:
+    - CommonSecurityLog (Fortinet)
+  - connectorId:  CheckPoint
+    dataTypes:
+    - CommonSecurityLog (CheckPoint)
+  - connectorId:  Zscaler
+    dataTypes:
+    - CommonSecurityLog (Zscaler)   
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - CredentialAccess
+  -  PrivilegeEscalation
 relevantTechniques:
-  - T1212
+  - T1078
 query: |
     let Alert_List= dynamic([
     "Phishing link click observed in Network Traffic", 
@@ -32,7 +40,8 @@ query: |
     "Email reported by user as malware or phish",
     "Phish delivered due to an ETR override",
     "Phish not zapped because ZAP is disabled"]);
-    SecurityAlert | where AlertName in~ (Alert_List)
+    SecurityAlert
+    | where AlertName in~ (Alert_List)
     //Findling Alerts which has the URL
     | where Entities has "url"
     //extracting Entities 
@@ -62,13 +71,16 @@ query: |
         AccountUpn=take_any(EntityUPN),
         IPAddress=take_any(EntityIp),
         HostName=take_any(EntityHost),
-        Url=take_any(EntityUrl),
+        Url=tostring(tolower(take_any(EntityUrl))),
         AlertTime= min(TimeGenerated),
         make_set(SystemAlertId)
         by ProductName, AlertName
     // matching with 3rd party network logs and 3p Alerts 
     | join kind= inner (CommonSecurityLog
         | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
+        | where DeviceAction != "Block"
+        | where isnotempty(DestinationHostName) 
+        | where isnotempty(RequestURL)
         | project
             3plogTime=TimeGenerated,
             DeviceVendor,
@@ -76,9 +88,9 @@ query: |
             Activity,
             DestinationHostName,
             DestinationIP,
-            RequestURL,
+            RequestURL=tostring(tolower(RequestURL)),
             MaliciousIP,
-            SourceUserName,
+            SourceUserName=tostring(tolower(SourceUserName)),
             IndicatorThreatType,
             ThreatSeverity,
             ThreatConfidence,
@@ -102,14 +114,18 @@ query: |
             ClientAppUsed,
             RiskState,
             RiskLevelDuringSignIn,
-            UserPrincipalName)
+            UserPrincipalName=tostring(tolower(UserPrincipalName)),
+            Name = tostring(split(UserPrincipalName, "@")[0]),
+            UPNSuffix =tostring(split(UserPrincipalName, "@")[1]))
         on $left.DestinationIP == $right.IPAddress and $left.SourceUserName == $right.UserPrincipalName  
-    | where SigniningTime between ((AlertTime - 6h) .. (AlertTime + 6h)) and 3plogTime between ((AlertTime - 6h) .. (AlertTime + 6h))   
+    | where SigniningTime between ((AlertTime - 6h) .. (AlertTime + 6h)) and 3plogTime between ((AlertTime - 6h) .. (AlertTime + 6h))      
 entityMappings:
     - entityType: Account
       fieldMappings:
-      - identifier: FullName
-        columnName: SourceUserName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
     - entityType: IP
       fieldMappings:
       - identifier: Address
@@ -124,8 +140,4 @@ entityMappings:
         columnName: SourceSystem
 version: 1.0.0
 kind: Scheduled
-metadata:
-    source:
-        kind: Research
-    author:
-        name: Arjun Trivedi
+
