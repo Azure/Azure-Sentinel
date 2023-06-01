@@ -42,30 +42,37 @@ function validateFileContent(filePath: string, attributeNames: string[], errors:
     const fileContent = fs.readFileSync(filePath, "utf8");
     const jsonContent = JSON.parse(fileContent);
 
-    traverseAttributes(jsonContent, attributeNames, errors);
+    traverseAttributes(jsonContent, attributeNames, filePath, errors);
 }
 
-function traverseAttributes(jsonContent: any, attributeNames: string[], errors: string[]): void {
+function traverseAttributes(jsonContent: any, attributeNames: string[], filePath: string, errors: string[]): void {
     for (const key in jsonContent) {
         if (jsonContent.hasOwnProperty(key)) {
             const attributeValue = jsonContent[key];
             if (attributeNames.includes(key) && typeof attributeValue === "string") {
-                validateAttribute(attributeValue, errors);
+                validateAttribute(attributeValue, key, filePath, errors);
             }
             if (typeof attributeValue === "object" && attributeValue !== null) {
-                traverseAttributes(attributeValue, attributeNames, errors);
+                traverseAttributes(attributeValue, attributeNames, filePath, errors);
             }
         }
     }
 }
 
-function validateAttribute(attributeValue: string, errors: string[]): void {
-    // write to console log attributevalue
-    console.log(`Validating text : ${attributeValue}`);
-    
+function validateAttribute(attributeValue: string, attributeName: string, filePath: string, errors: string[]): void {
+    console.log(`Validating text in '${attributeName}': ${attributeValue}`);
+
     const sentinelRegex = /(?<!Microsoft\s)(?<!-)\bSentinel\b/g;
     let match;
     while ((match = sentinelRegex.exec(attributeValue))) {
-        errors.push(`Inaccurate product branding used at index ${match.index + 1}. Use "Microsoft Sentinel" instead of "Sentinel"`);
+        const index = match.index;
+        const errorIndex = getIndexInOriginalFile(attributeValue, index, filePath);
+        errors.push(`Inaccurate product branding used in '${attributeName}' at index ${errorIndex + 1}. Use "Microsoft Sentinel" instead of "Sentinel"`);
     }
+}
+
+function getIndexInOriginalFile(attributeValue: string, index: number, filePath: string): number {
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    const startIndex = fileContent.indexOf(attributeValue);
+    return startIndex + index;
 }
