@@ -26,7 +26,9 @@ export function IsValidBrandingContent(filePath: string): ExitCode {
     } else if (filePath.endsWith("createUiDefinition.json")) {
         validateFileContent(filePath, attributeConfig.createUIDefinitionAttributes, errors);
     } else {
-        console.warn(`Could not identify JSON file as mainTemplate.json or createUiDefinition.json. Skipping. File path: ${filePath}`);
+        console.warn(
+            `Could not identify JSON file as mainTemplate.json or createUiDefinition.json. Skipping. File path: ${filePath}`
+        );
     }
 
     // Throw a single error with all the error messages concatenated
@@ -42,41 +44,33 @@ function validateFileContent(filePath: string, attributeNames: string[], errors:
     const fileContent = fs.readFileSync(filePath, "utf8");
     const jsonContent = JSON.parse(fileContent);
 
-    traverseAttributes(jsonContent, attributeNames, filePath, errors);
+    traverseAttributes(jsonContent, attributeNames, "", errors);
 }
 
-function traverseAttributes(jsonContent: any, attributeNames: string[], filePath: string, errors: string[]): void {
+function traverseAttributes(jsonContent: any, attributeNames: string[], currentPath: string, errors: string[]): void {
     for (const key in jsonContent) {
         if (jsonContent.hasOwnProperty(key)) {
             const attributeValue = jsonContent[key];
+            const attributePath = currentPath ? `${currentPath}.${key}` : key;
+
             if (attributeNames.includes(key) && typeof attributeValue === "string") {
-                validateAttribute(attributeValue, key, filePath, errors);
+                validateAttribute(attributeValue, attributePath, errors);
             }
             if (typeof attributeValue === "object" && attributeValue !== null) {
-                traverseAttributes(attributeValue, attributeNames, filePath, errors);
+                traverseAttributes(attributeValue, attributeNames, attributePath, errors);
             }
         }
     }
 }
 
-function validateAttribute(attributeValue: string, attributeName: string, filePath: string, errors: string[]): void {
-    console.log(`Validating text in '${attributeName}': ${attributeValue}`);
+function validateAttribute(attributeValue: string, attributePath: string, errors: string[]): void {
+    console.log(`Validating text in '${attributePath}': ${attributeValue}`);
 
     const sentinelRegex = /(?<!Microsoft\s)(?<!-)\bSentinel\b/g;
     let match;
     while ((match = sentinelRegex.exec(attributeValue))) {
         const word = match[0];
-        const index = match.index;
-        const errorIndex = getIndexInOriginalFile(attributeValue, index, filePath);
-        errors.push(`Inaccurate product branding used in '${attributeName}' at index ${errorIndex + 1}. Use "Microsoft Sentinel" instead of "${word}"`);
+        const error = `Inaccurate product branding used in '${attributePath}'. Use "Microsoft Sentinel" instead of "${word}"`;
+        errors.push(error);
     }
-}
-
-function getIndexInOriginalFile(attributeValue: string, index: number, filePath: string): number {
-    const fileContent = fs.readFileSync(filePath, "utf8");
-    const startIndex = fileContent.indexOf(attributeValue);
-    const substringBeforeMatch = attributeValue.slice(0, index);
-    const substringBeforeMatchIndex = attributeValue.indexOf(substringBeforeMatch);
-    const wordIndexInFile = startIndex + substringBeforeMatchIndex;
-    return wordIndexInFile + 1;
 }
