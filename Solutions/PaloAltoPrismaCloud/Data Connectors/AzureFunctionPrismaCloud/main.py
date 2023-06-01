@@ -86,15 +86,17 @@ class PrismaCloudConnector:
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
             last_alert_ts_ms = alert['alertTime']
+            logging.info('alertDetails: {}'.format(alert))
             #alert = self.clear_alert(alert)
-            policy_complianceMetadata = alert['policy_complianceMetadata']
-            logging.info('Verifying the size of the policy_complianceMetadata and splitting into multiple columns based on size')
-            queue_list = self.sentinel1._split_big_request(policy_complianceMetadata)
-            count = 1
-            for q in queue_list:
-                columnname = 'policy_complianceMetadataPart' + str(count)
-                alert[columnname] = q
-                count+=1
+            if 'policy_complianceMetadata' in alert:
+                policy_complianceMetadata = alert['policy_complianceMetadata']
+                logging.info('Verifying the size of the policy_complianceMetadata and splitting into multiple columns based on size')
+                queue_list = self.sentinel1._split_big_request(policy_complianceMetadata)
+                count = 1
+                for q in queue_list:
+                    columnname = 'policy_complianceMetadataPart' + str(count)
+                    alert[columnname] = q
+                    count+=1
             alert = self.clear_alert(alert)
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
