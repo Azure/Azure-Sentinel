@@ -1,13 +1,24 @@
 id: 042f2801-a375-4cfd-bd29-041fc7ed88a0
-name: Risky User observed in sucessfull 3P network activity 
+name: Risky User observed in non-microsoft network device 
 description: |
-  'Risky User was observed in potential suspicious network activity via 3P Network activity logs '
+  'This content is utilized to identify instances of successful login by risky users, who have been observed engaging in potentially suspicious network activity on non-Microsoft network devices.'
 severity: Medium
 requiredDataConnectors:
   - connectorId:  AzureActiveDirectory
     dataTypes:
-        - CommonSecurityLog
         - SigninLogs 
+  - connectorId:  PaloAltoNetworks
+    dataTypes:
+    - CommonSecurityLog (PaloAlto)
+  - connectorId:  Fortinet
+    dataTypes:
+    - CommonSecurityLog (Fortinet)
+  - connectorId:  CheckPoint
+    dataTypes:
+    - CommonSecurityLog (CheckPoint)
+  - connectorId:  Zscaler
+    dataTypes:
+    - CommonSecurityLog (Zscaler)
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -39,30 +50,31 @@ query: |
         RiskLevelAggregated,
         RiskLevelDuringSignIn,
         RiskState,
-        UserPrincipalName,
+        UserPrincipalName=tostring(tolower(UserPrincipalName)),
         SourceSystem
     | join kind=inner (
         CommonSecurityLog
         | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
+        | where DeviceAction != "Block"
         | where isnotempty(DestinationHostName) 
         | where isnotempty(RequestURL)
         | summarize
             min(TimeGenerated),
             max(TimeGenerated),
-            Activity=make_set(Activity),
-            DeviceProduct=make_set(DeviceProduct),
-            DeviceVendor=make_set(DeviceVendor)
-            by DestinationHostName, DestinationIP, RequestURL, SourceUserName
-        | extend 3p_observed_Time= min_TimeGenerated)
+            Activity=make_set(Activity)
+            by DestinationHostName, DestinationIP, RequestURL, SourceUserName=tostring(tolower(SourceUserName)),DeviceVendor,DeviceProduct
+        | extend 3p_observed_Time= min_TimeGenerated,Name = tostring(split(SourceUserName,"@")[0]),UPNSuffix =tostring(split(SourceUserName,"@")[1]))
         on $left.IPAddress == $right.DestinationIP and $left.UserPrincipalName == $right.SourceUserName
     | extend Timediff = datetime_diff('day', 3p_observed_Time, Signin_Time)
-    | where Timediff <= 2 and Timediff >= 0
+    | where Timediff <= 1 and Timediff >= 0
 
 entityMappings:
     - entityType: Account
       fieldMappings:
-      - identifier: FullName
-        columnName: SourceUserName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
     - entityType: IP
       fieldMappings:
       - identifier: Address
@@ -77,8 +89,3 @@ entityMappings:
         columnName: SourceSystem
 version: 1.0.0
 kind: Scheduled
-metadata:
-    source:
-        kind: Research
-    author:
-        name: Arjun Trivedi
