@@ -1,93 +1,79 @@
-id: dd0a6029-ecef-4507-89c4-fc355ac52111
-name: TI map Domain entity to CommonSecurityLog
+id: ef895ada-e8e8-4cf0-9313-b1ab67fab69f
+name: Authentication Attempt from New Country
 description: |
-  Identifies a match in CommonSecurityLog table from any Domain IOC from TI
+  Detects when there is a login attempt from a country that has not seen a successful login in the previous 14 days.
+  Threat actors may attempt to authenticate with credentials from compromised accounts - monitoring attempts from anomalous locations may help identify these attempts.
+  Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.
+  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins
 severity: Medium
 requiredDataConnectors:
-  - connectorId: ThreatIntelligence
+  - connectorId: AzureActiveDirectory
     dataTypes:
-      - ThreatIntelligenceIndicator
-  - connectorId: ThreatIntelligenceTaxii
-    dataTypes:
-      - ThreatIntelligenceIndicator
-  - connectorId: MicrosoftDefenderThreatIntelligence
-    dataTypes:
-      - ThreatIntelligenceIndicator
-queryFrequency: 1h
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
 query: |
-  // Define the time range for data retrieval
-  let dt_lookBack = 1h; // Look back 1 hour
-  let ioc_lookBack = 14d; // Look back 14 days
-  // Create a list of top-level domains (TLDs) from the threat feed data for later validation
-  let list_tlds =
-      ThreatIntelligenceIndicator
-      // Filter indicators based on the specified time range and active indicators
-      | where TimeGenerated >= ago(ioc_lookBack)
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-      | where Active == true and ExpirationDateTime > now()
-      | where isnotempty(DomainName)
-      // Convert domain names to lowercase for consistency
-      | extend DomainName = tolower(DomainName)
-      // Split domain names into parts and extract the TLD
-      | extend parts = split(DomainName, '.')
-      | extend tld = parts[(array_length(parts) - 1)]
-      // Count the occurrences of each TLD
-      | summarize count() by tostring(tld)
-      // Create a list of TLDs
-      | summarize make_list(tld);
-  // Retrieve threat intelligence indicators within the specified time range
-  let Domain_Indicators =
-      ThreatIntelligenceIndicator
-      | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-      | where Active == true
-      // Filter indicators that have a non-empty domain name
-      | where isnotempty(DomainName)
-      | extend TI_DomainEntity = DomainName;
-  // Join threat intelligence indicators with common security logs
-  Domain_Indicators
-  | join kind=innerunique (
-      CommonSecurityLog
-      // Filter common security logs based on the specified time range
-      | extend IngestionTime = ingestion_time()
-      | where IngestionTime > ago(dt_lookBack)
-      | where DeviceEventClassID =~ 'url'
-      // Uncomment the line below to only alert on allowed connections
-      //| where DeviceAction !~ "block-url"
-      // Extract the domain from RequestURL, if not present, extract it from AdditionalExtensions
-      | extend PA_Url = column_ifexists("RequestURL", "None")
-      | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith "PanOS", extract("([^\\\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
-      | extend PA_Url = iif(PA_Url !startswith "http://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), iif(PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url))
-      | extend Domain = trim('"', tostring(parse_url(PA_Url).Host))
-      | where isnotempty(Domain)
-      | extend Domain = tolower(Domain)
-      | extend parts = split(Domain, '.')
-      | extend tld = parts[(array_length(parts) - 1)]
-      // Validate parsed domain by checking if the TLD is in the threat feed's TLD list
-      | where tld in~ (list_tlds)
-      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
-  ) on $left.TI_DomainEntity == $right.Domain
-  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
-  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
-  | extend timestamp = CommonSecurityLog_TimeGenerated
+  // Combine two sign-in logs tables, AADNonInteractiveUserSignInLogs and SigninLogs
+  let CombinedSignInLogs = union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs;
+  // Fetch Azure IP address ranges data from a JSON file hosted on GitHub
+  let AzureRanges = externaldata(changeNumber: string, cloud: string, values: dynamic)
+  ["https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MSFTIPRanges/ServiceTags_Public.json"] with(format='multijson')
+  | mv-expand values
+  | extend Name = values.name, AddressPrefixes = tostring(values.properties.addressPrefixes);
+  // Identify known locations to be excluded from analysis
+  let ExcludedKnownLocations = CombinedSignInLogs
+  | where TimeGenerated between (ago(14d)..ago(1d))
+  | where ResultType == 0
+  | summarize by Location;
+  // Find sign-in locations matching specific criteria
+  let MatchedLocations = materialize(CombinedSignInLogs
+  | where TimeGenerated > ago(1d)
+  | where ResultType !in (50126, 50053, 50074, 70044)
+  | where Location !in (ExcludedKnownLocations));
+  // Match IP addresses of matched locations with Azure IP address ranges
+  let MatchedIPs = MatchedLocations
+  | evaluate ipv4_lookup(AzureRanges, IPAddress, AddressPrefixes)
+  | project IPAddress;
+  // Exclude IP addresses that are already matched with Azure IP address ranges
+  let MaxSetSize = 5; // Set the maximum size limit for make_set
+  let ExcludedIPs = MatchedLocations
+  | where not (IPAddress in (MatchedIPs))
+  | where isnotempty(Location)
+  | extend LocationDetails_dynamic = column_ifexists("LocationDetails_dynamic", "")
+  | extend DeviceDetail_dynamic = column_ifexists("DeviceDetail_dynamic", "")
+  | extend LocationDetails = iif(isnotempty(LocationDetails_dynamic), LocationDetails_dynamic, parse_json(LocationDetails_string))
+  | extend DeviceDetail = iif(isnotempty(DeviceDetail_dynamic), DeviceDetail_dynamic, parse_json(DeviceDetail_string))
+  | extend City = tostring(LocationDetails.city)
+  | extend State = tostring(LocationDetails.state)
+  | extend Place = strcat(City, " - ", State)
+  | extend DeviceId = tostring(DeviceDetail.deviceId)
+  | extend Result = strcat(tostring(ResultType), " - ", ResultDescription)
+  | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated), 
+    make_set(Result, MaxSetSize), make_set(IPAddress, MaxSetSize), 
+    make_set(UserAgent, MaxSetSize), make_set(Place, MaxSetSize), 
+    make_set(DeviceId, MaxSetSize) by UserPrincipalName, Location, Category;
 entityMappings:
-  - entityType: Host
+  - entityType: Account
     fieldMappings:
-      - identifier: HostName
-        columnName: DeviceName
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: SourceIP
-  - entityType: URL
-    fieldMappings:
-      - identifier: Url
-        columnName: PA_Url
-version: 1.4.0
+      - identifier: UPNSuffix
+        columnName: UserPrincipalName
+version: 1.1.0
 kind: Scheduled
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Pete Bryan
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Others" ]
