@@ -67,12 +67,12 @@ function validateAttribute(attributeValue: string, attributeName: string, filePa
     while ((match = sentinelRegex.exec(attributeValue))) {
         const word = match[0];
         const index = match.index;
-        const errorIndex = getIndexInOriginalFile(attributeValue, index, word, filePath);
+        const errorIndex = getIndexInOriginalFile(attributeValue, index, filePath);
         errors.push(`Inaccurate product branding used in '${attributeName}' at index ${errorIndex + 1}. Use "Microsoft Sentinel" instead of "${word}"`);
     }
 }
 
-function getIndexInOriginalFile(attributeValue: string, index: number, word: string, filePath: string): number {
+function getIndexInOriginalFile(attributeValue: string, index: number, filePath: string): number {
     const fileContent = fs.readFileSync(filePath, "utf8");
     const startIndex = fileContent.indexOf(attributeValue);
     const substringBeforeMatch = attributeValue.slice(0, index);
