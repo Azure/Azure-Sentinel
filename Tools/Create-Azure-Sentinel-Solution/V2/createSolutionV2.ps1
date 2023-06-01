@@ -988,7 +988,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($null -ne $playbookData -and $null -ne $playbookData.parameters){
                                         foreach($param in $playbookData.parameters.PsObject.Properties)
                                         {
-                                            if($functionAppList.ContainsKey($param.Value.defaultValue))
+                                            if($param.Value -match "defaultValue" -and $functionAppList.ContainsKey($param.Value.defaultValue))
                                             {
                                                 $playbookDependencies += [PSCustomObject] @{
                                                         kind = "AzureFunction";
