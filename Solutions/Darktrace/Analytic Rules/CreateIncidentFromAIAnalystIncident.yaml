@@ -8,50 +8,60 @@ requiredDataConnectors:
     dataTypes:
       - darktrace_model_alerts_CL
 queryFrequency: 5m
-queryPeriod: 5m
+queryPeriod: 5m 
 triggerOperator: gt
 triggerThreshold: 0
 tactics: [] # no tactics are ingested for AIA events at the moment 
 relevantTechniques: []
 query: |
-  darktrace_model_alerts_CL
-  | where dtProduct_s == "AI Analyst"
-  | project-rename  EventStartTime=startTime_s
-  | project-rename EventEndTime = endTime_s
-  | project-rename NetworkRuleName=title_s
-  | project-rename CurrentGroup=externalId_g //externalId is the Current Group ID from Darktrace 
-  | project-rename ThreatCategory=dtProduct_s
-  | extend ThreatRiskLevel=score_d //This is the event score, which is different from the GroupScore
-  | project-rename SrcHostname=hostname_s
-  | project-rename DarktraceLink=url_s
-  | project-rename Summary=summary_s
-  | project-rename GroupScore=groupScore_d
-  | project-rename GroupCategory=groupCategory_s
-  | project-rename SrcDeviceName=bestDeviceName_s
+  darktrace_model_alerts_CL 
+  | where dtProduct_s =="AI Analyst"
+  | project-rename  EventStartTime=startTime_s, EventEndTime = endTime_s, NetworkRuleName=title_s, DtCurrentGroup=externalId_g, ThreatCategory=dtProduct_s, ThreatRiskLevel=score_d, SrcHostname=hostname_s, SrcIpAddr=deviceIP_s, DtURL=url_s, DtSummary=summary_s, DtGroupScore=groupScore_d, DtGroupCategory=groupCategory_s, DtSrcDeviceName=bestDeviceName_s, DtIndentifier=identifier_s, ActivityID=activityId_s, DtGroupingID=groupingId_s, DtGroupByActivity=groupByActivity_b, DtSummaryFirstSentence=summaryFirstSentence_s, DtNewEvent=newEvent_b, DtCGLegacy=currentGroup_s, DtGroupPreviousGroups=groupPreviousGroups_s, DtTime=time_s, DtSeverity=Severity, DtLongitude=longitude_d, DtLatitude=latitude_d  
+  | extend EventVendor = "Darktrace", EventProduct = "Darktrace DETECT", DtSentinelCategory=DtGroupCategory
+  | extend DtSentinelCategory = case (DtGroupCategory == "compliance", "Low", 
+                                      DtGroupCategory == "suspicious", "Medium",
+                                      "High") //compliance -> low, suspcious -> medium, critical -> high
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 entityMappings: 
  - entityType: Host
    fieldMappings:
-    - identifier: "HostName"
-      columnName: "SrcDeviceName"
+    - identifier: HostName
+      columnName: SrcHostname
+ - entityType: IP
+   fieldMappings:
+    - identifier: Address
+      columnName: SrcIpAddr
 customDetails:
   EventStartTime: EventStartTime
-  Title: NetworkRuleName
-  CurrentGroupID: CurrentGroup
-  EventScore: ThreatRiskLevel
-  IncidentSummary: Summary
-  DarktraceLink: DarktraceLink
   EventEndTime: EventEndTime
-  GroupScore: GroupScore
-  GroupCategory: GroupCategory
-  SrcDeviceName: SrcDeviceName
+  NetworkRuleName: NetworkRuleName
+  DtCurrentGroup: DtCurrentGroup
+  ThreatRiskLevel: ThreatRiskLevel
+  DtSummary: DtSummary
+  DtGroupScore: DtGroupScore
+  DtGroupCategory: DtGroupCategory
+  DtSentinelCategory: DtSentinelCategory
+  DtSrcDeviceName: DtSrcDeviceName
+  DtNewEvent: DtNewEvent
+  DtSeverity: DtSeverity
 alertDetailsOverride: 
-  alertDisplayNameFormat: '{{NetworkRuleName}}'
-  alertDescriptionFormat: '{{Summary}}'
-  alertTacticsColumnName: 
-  alertSeverityColumnName: 
-version: 1.0.0
+  alertDisplayNameFormat: 'Darktrace: {{ThreatRiskLevel}} - {{NetworkRuleName}}'
+  alertDescriptionFormat: '{{DtSummary}}'
+  alertTacticsColumnName: # leave empty
+  alertSeverityColumnName: # leave empty 
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: DtURL
+    - alertProperty: ProviderName
+      value: EventVendor
+    - alertProperty: ProductName
+      value: EventProduct
+    - alertProperty: ProductComponentName
+      value: ThreatCategory
+    - alertProperty: Severity
+      value: DtSentinelCategory
+version: 1.1.0
 kind: NRT               
 
 

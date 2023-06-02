@@ -1,0 +1,100 @@
+id: 999e9f5d-db4a-4b07-a206-29c4e667b7e8
+name: (Preview) TI map Domain entity to Dns Events (ASIM DNS Schema)
+description: |
+  Identifies a match in DNS events from any Domain IOC from TI
+  This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+tags:
+  - Id: 85aca4d1-5d15-4001-abd9-acb86ca1786a
+    version: 1.0.0
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
+query: |
+  let HAS_ANY_MAX = 10000;
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let DomainTIs= ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    // Picking up only IOC's that contain the entities we want
+    | where isnotempty(DomainName)
+    | where Active == true
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId;
+  let Domains = DomainTIs | where isnotempty(DomainName) |summarize NDomains=dcount(DomainName), DomainsList=make_set(DomainName) 
+    | project DomainList = iff(NDomains > HAS_ANY_MAX, dynamic([]), DomainsList) ;
+  DomainTIs
+    | join (
+        _Im_Dns(starttime=ago(dt_lookBack), domain_has_any=toscalar(Domains))
+        | extend DNS_TimeGenerated = TimeGenerated
+  ) on $left.DomainName==$right.DnsQuery
+  | where DNS_TimeGenerated < ExpirationDateTime
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, DnsQuery, DnsQueryType
+  | extend timestamp = DNS_TimeGenerated, HostCustomEntity = Dvc, IPCustomEntity = SrcIpAddr, URLCustomEntity = Url
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+customDetails:
+  LatestIndicatorTime: LatestIndicatorTime
+  Description: Description
+  ActivityGroupNames: ActivityGroupNames
+  IndicatorId: IndicatorId
+  ThreatType: ThreatType
+  ExpirationDateTime: ExpirationDateTime
+  ConfidenceScore: ConfidenceScore
+  DNSRequestTime: DNS_TimeGenerated
+  SourceIPAddress: SrcIpAddr
+  DnsQuery: DnsQuery
+  QueryType: DnsQueryType
+version: 1.1.3
+kind: Scheduled
