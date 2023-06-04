@@ -1,0 +1,108 @@
+id: 67775878-7f8b-4380-ac54-115e1e828901
+name: (Preview) TI map IP entity to DNS Events (ASIM DNS schema)
+description: |
+  'This rule identifies DNS requests for which response IP address is a known IoC. <br><br>
+  This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+tags:
+  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/ThreatIntelligenceIndicator/IPEntity_DnsEvents.yaml
+    version: 1.0.0
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let IP_TI = 
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  | extend IoC = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,"NO_IP")
+  | where IoC != "NO_IP"
+  ;
+  IP_TI
+  | join kind=innerunique // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  (
+  _Im_Dns(starttime=ago(dt_lookBack))
+  | where isnotempty(DnsResponseName)
+  | summarize imDns_mintime=min(TimeGenerated), imDns_maxtime=max(TimeGenerated) by SrcIpAddr, DnsQuery, DnsResponseName, Dvc, EventProduct, EventVendor
+  | extend addresses = extract_all (@'(\d+\.\d+\.\d+\.\d+)', DnsResponseName)
+  | mv-expand IoC = addresses to typeof(string)
+  )
+  on IoC
+  | where imDns_mintime < ExpirationDateTime
+  | project imDns_mintime, imDns_maxtime, Description, ActivityGroupNames, IndicatorId, ThreatType, LatestIndicatorTime, ExpirationDateTime, ConfidenceScore, SrcIpAddr, IoC, Dvc, EventVendor, EventProduct, DnsQuery, DnsResponseName
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Dvc
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IoC
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+
+customDetails:
+  LatestIndicatorTime: LatestIndicatorTime
+  Description: Description
+  ActivityGroupNames: ActivityGroupNames
+  IndicatorId: IndicatorId
+  ThreatType: ThreatType
+  ExpirationDateTime: ExpirationDateTime
+  ConfidenceScore: ConfidenceScore
+  DNSRequestTime: imDns_mintime
+  SourceIPAddress: SrcIpAddr
+  DnsQuery: DnsQuery
+
+alertDetailsOverride:
+  alertDisplayNameFormat: The response {{IoC}} to DNS query matched an IoC 
+  alertDescriptionFormat: The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.
+
+version: 1.2.1
+kind: Scheduled

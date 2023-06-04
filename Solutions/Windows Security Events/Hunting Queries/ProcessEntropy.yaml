@@ -1,11 +1,11 @@
 id: 05208917-82de-46f7-a190-a65739a690f4
 name: Entropy for Processes for a given Host
 description: |
-  'Entropy calculation used to help identify Hosts where they have a high variety of processes(a high entropy process list on a given Host over time).
-  This helps us identify rare processes on a given Host. Rare here means a process shows up on the Host relatively few times in the the last 7days.
-  The Weight is calculated based on the Entropy, Process Count and Distinct Hosts with that Process. The lower the Weight/ProcessEntropy the, more interesting.
+  'Entropy calculation used to help identify Hosts where they have a high variety of processes (a high entropy process list on a given Host over time).
+  This helps us identify rare processes on a given Host. Rare here means a process shows up on the Host relatively few times in the last 7days.
+  The Weight is calculated based on the Entropy, Process Count and Distinct Hosts with that Process. The lower the Weight/ProcessEntropy, the more interesting.
   The Weight calculation increases the Weight if the process executes more than once on the Host or has executed on more than 1 Hosts.
-  In general, this should identify processes on a Host that are rare and rare for the environment.
+  In general, this should identify processes on a Host that are rare for the environment.
   References: https://medium.com/udacity/shannon-entropy-information-gain-and-picking-balls-from-buckets-5810d35d54b4
   https://en.wiktionary.org/wiki/Shannon_entropy'
 requiredDataConnectors:
@@ -18,7 +18,6 @@ requiredDataConnectors:
 tactics:
   - Execution
 query: |
-
   // exclude when over # of machines have the process
   let excludeThreshold = 10;
   // exclude when more than percent (default 10%)
@@ -32,7 +31,7 @@ query: |
   let removeHigh = SecurityEvent 
   | where TimeGenerated >= ago(1d)
   | where EventID == 4688 | summarize count() by NewProcessName = tolower(NewProcessName) | where count_ > maxLimit
-  | summarize make_set(NewProcessName);
+  | summarize make_set(NewProcessName, 1000);
   let SecEvents = SecurityEvent
   | where TimeGenerated >= ago(1d)
   | where EventID == 4688 | where tolower(NewProcessName) !in~ (removeHigh)
@@ -128,5 +127,23 @@ query: |
   | project-reorder StartTime, EndTime, ResultCount, EventID, Computer, SubjectUserSid, Account, AccountType, Weight, ProcessEntropy,  
   Process, NewProcessName, CommandLine, ParentProcessName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, SourceComputerId
   | sort by Weight asc, ProcessEntropy asc, NewProcessName asc 
-  | extend timestamp = StartTime, HostCustomEntity = Computer, AccountCustomEntity = Account
-  
+  | extend timestamp = StartTime, NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = split(Computer, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain 
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1
+
