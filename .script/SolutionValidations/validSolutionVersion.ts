@@ -1,4 +1,4 @@
-import { MainTemplateDomainVerticalValidationError } from "./../utils/validationError";
+import { MainTemplateSolutionVersionUpdateValidation } from "./../utils/validationError";
 import { ExitCode } from "../utils/exitCode";
 import fs from "fs";
 import { GetPRDetails } from "../utils/gitWrapper";
@@ -59,12 +59,12 @@ export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
                 );
             }
         } else {
-            throw new MainTemplateDomainVerticalValidationError(
+            throw new MainTemplateSolutionVersionUpdateValidation(
                 `No main metadata resource with kind 'Solution' or version number found in the main template file: ${filePath}`
             );
         }
     } else {
-        throw new MainTemplateDomainVerticalValidationError(
+        throw new MainTemplateSolutionVersionUpdateValidation(
             `No resources found in the main template file: ${filePath}`
         );
     }
