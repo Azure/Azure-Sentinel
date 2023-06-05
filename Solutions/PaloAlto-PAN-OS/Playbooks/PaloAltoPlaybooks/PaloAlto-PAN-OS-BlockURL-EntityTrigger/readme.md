@@ -10,13 +10,13 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 2. The SOC can act on risky URL based on the information provided in the adaptive card, or ignore.
 
 
-![PaloAlto-PAN-OS-BlockURL](./designerScreenshot.PNG)<br>
+![PaloAlto-PAN-OS-BlockURL](./images/designerscreenshot_lighttheme.PNG)<br>
 
 **This is the adaptive card SOC will receive when playbook is triggered for each risky URL for taking actions like block/unblock/ignore ::**<br><br>
-![Adaptive Card example](./AdaptiveCardtoBlockorUnblock.PNG)<br>
+![Adaptive Card example](./images/AdaptiveCardtoBlockorUnblock.PNG)<br>
 
 **This is the consolidate adaptive card about the summary of actions taken on URL and the incident configuration ::**<br><br>
-![Consolidated Adaptive Card example](./SummarizedAdaptiveCard.PNG)<br>
+![Consolidated Adaptive Card example](./images/SummarizedAdaptiveCard.PNG)<br>
 
 ### Prerequisites 
 1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
@@ -153,9 +153,9 @@ If URL is a member of predefined address group
 
  ii) Set dynamic action name dynamically (UnBlock URL from predefined address group)
 
- iii) Filter array URL address from the list of address objects to unreference URL address from the existing group members
+ iii) Filter array URL address from the list of address objects to unreferenced URL address from the existing group members
 
- iv) unreference URL address from the existing group members
+ iv) unreferenced URL address from the existing group members
 
 If URL is not a member of predefined address group
 
@@ -186,7 +186,7 @@ b. If not Ignored
 
  i) capture the action taken on URL address to display on consolidated adaptive card
 
- ii) check if SOC choosed Block URL and no address object is present for that URL
+ ii) check if SOC chooses Block URL and no address object is present for that URL
 
 if SOC chooses Block URL and no address object is present for that URL
 
