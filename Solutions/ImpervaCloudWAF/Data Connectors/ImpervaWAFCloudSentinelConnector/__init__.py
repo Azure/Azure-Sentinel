@@ -141,7 +141,7 @@ class ImpervaFilesHandler:
         else :
             logging.info("File is encrypted with file header : {}".format(file_header))
             events_data = str(file_data)
-        logging.info("decoded events_data".format(events_data))
+        logging.info("decoded events_data {}".format(events_data))
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
