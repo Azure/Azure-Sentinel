@@ -1,0 +1,63 @@
+id: 48c026d8-7f36-4a95-9568-6f1420d66e37
+kind: Scheduled
+name: Subscription moved to another tenant
+description: |
+  'This detection uses AzureActivity logs (Security category) to identify when a subscription is moved to another tenant.
+  A threat actor may move a subscription into their own tenant to circumvent local resource deployment and logging policies.
+  Once moved, threat actors may deploy resources and perform malicious activities such as crypto mining.
+  This is a technique known as "subscription hijacking". More information can be found here: https://techcommunity.microsoft.com/t5/microsoft-365-defender-blog/hunt-for-compromised-azure-subscriptions-using-microsoft/ba-p/3607121'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryPeriod: 20m
+queryFrequency: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+  let queryFrequency = 5m;
+  let eventCapture = "moved from tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) to tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
+  AzureActivity
+  | where ingestion_time() > ago(queryFrequency)
+  | where CategoryValue =~ "Security"
+  | where OperationNameValue =~ "Microsoft.Subscription/updateTenant/action"
+  | extend Properties_d = coalesce(parse_json(Properties), Properties_d)
+  | where isnotempty(Properties_d)
+  | extend Summary = tostring(Properties_d.message)
+  | extend EventCapture = extract_all(eventCapture, Summary)
+  | extend SourceTenantId = iff(isnotempty(EventCapture), EventCapture[0][0], "")
+  | extend DestinationTenantId = iff(isnotempty(EventCapture), EventCapture[0][1], "")
+  | extend 
+      Name = split(Caller, "@", 0)[0],
+      UPNSuffix = split(Caller, "@", 1)[0]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings: 
+      - identifier: ResourceId
+        columnName: _ResourceId                 
+  - entityType: Account
+    fieldMappings: 
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+customDetails:
+  DestinationTenantId: DestinationTenantId
+  SourceTenantId: SourceTenantId
+alertDetailsOverride:
+  alertDescriptionFormat: |
+    The user {{Caller}} moved a subscription:
+    
+    {{Summary}}
+    
+    If this was not expected, it may indicate a subscription hijacking event.
+  alertDisplayNameFormat: |
+    Subscription {{SubscriptionId}} changed tenants
+version: 1.0.0
