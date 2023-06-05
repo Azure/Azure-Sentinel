@@ -21,6 +21,7 @@ shared_key = os.environ['WorkspaceKey']
 cluster_id = os.environ['ProofpointClusterID']
 _token = os.environ['ProofpointToken']
 time_delay_minutes = 60
+time_delay_days = os.environ['time_delay_days']
 event_types = ["maillog","message"]
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
@@ -52,7 +53,8 @@ class Proofpoint_api:
         self.gen_timeframe(time_delay_minutes=self.time_delay_minutes)
 
     def gen_timeframe(self, time_delay_minutes):
-        before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes)
+        current_time = datetime.datetime.utcnow() - datetime.timedelta(days=time_delay_days)
+        before_time = current_time -  datetime.timedelta(minutes=time_delay_minutes)
         self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
 
