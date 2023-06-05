@@ -66,8 +66,8 @@ export class InvalidFileContentError extends Error implements ValidationError {
     }
 }
 
-export class InvalidFileContentError extends Error implements ValidationError {
-    public name = "MainTemplateSupportObjectValidationError";
+export class MainTemplateSolutionVersionUpdateValidation extends Error implements ValidationError {
+    public name = "MainTemplateSolutionVersionUpdateValidation";
     constructor(message?: string) {
         super(message);
     }
