@@ -22,7 +22,8 @@ NOT_RUN_TESTS_COUNT = 0
 SCRIPT_HELP_MESSAGE = "Usage: python AMA_troubleshoot.py [STREAM_NAME] [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generates a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
                       "     --cef/--CEF run the troubleshooting script for the CEF scenario." \
-                      "     --ASA/--CISCO run the troubleshooting script for the Cisco scenario." \
+                      "     --asa/--ASA run the troubleshooting script for the Cisco ASA scenario." \
+                      "     --ftd/--FTD run the troubleshooting script for the Cisco FTD scenario." \
                       "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
                       "     -h,             --help display the help and exit\n\n" \
                       "Example:\n" \
