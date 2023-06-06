@@ -54,7 +54,7 @@ export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
             } else if (currentVersion && !previousVersion) {
                 console.log(`Version number could not be determined for the previous version. Current Version: ${currentVersion}`);
             } else if (currentVersion && previousVersion === currentVersion) {
-                throw new MainTemplateDomainVerticalValidationError(
+                throw new MainTemplateSolutionVersionUpdateValidation(
                     `Solution version number is the same as the previous version. Version: ${currentVersion}`
                 );
             }
