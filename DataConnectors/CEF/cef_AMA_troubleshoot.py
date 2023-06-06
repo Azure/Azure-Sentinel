@@ -621,7 +621,7 @@ class IncomingEventsVerifications:
         start_seconds = int(round(time.time()))
         end_seconds = int(round(time.time()))
         mock_message_counter = 0
-        mock_message_max = 5
+        mock_message_max = 3
         command_name = "listen_to_incoming_events"
         command_to_run = "sudo tcpdump -A -ni any port 514 -vv"
         result_keywords_array = [self.IDENT_NAME[STREAM_SCENARIO]]
@@ -643,19 +643,19 @@ class IncomingEventsVerifications:
             if mock_message is True and mock_message_counter < mock_message_max:
                 # Sending mock messages
                 mock_message_counter += 1
-                self.send_message_local(514, 1)
-                print("sent message number" + str(mock_message_counter))
-            poll_result = poll_obj.poll(0)
-            print("checking the poll")
+                self.send_message_local(514, 2)
+            poll_result = poll_obj.poll(2500)
             if poll_result:
-                print("I'm in poll result")
-                line = str(tcp_dump.stdout.readline().decode('utf-8').strip("\n"))
-                if self.handle_tcpdump_line(line, self.IDENT_NAME[STREAM_SCENARIO]):
-                    command_object.command_result = line
-                    command_object.run_full_verification()
-                    print_ok("Found {0} in stream. Please verify {0} events arrived at your workspace".format(
-                    STREAM_SCENARIO.upper()))
-                    return True
+                while line:
+                    line = tcp_dump.stdout.readline().decode('utf-8').strip("\n")
+                    if not line:
+                        break
+                    if self.handle_tcpdump_line(line, self.IDENT_NAME[STREAM_SCENARIO]):
+                        command_object.command_result = line
+                        command_object.run_full_verification()
+                        print_ok("Found {0} in stream. Please verify {0} events arrived at your workspace".format(
+                        STREAM_SCENARIO.upper()))
+                        return True
             end_seconds = int(round(time.time()))
         print_error("Could not locate {0} message in tcpdump. Please verify {0} events can be sent to the machine and"
                     " there is not firewall blocking incoming traffic".format(STREAM_SCENARIO.upper()))
