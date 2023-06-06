@@ -5,7 +5,7 @@ import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals";
 import { IsValidSupportObject } from "./validSupportObject";
 import { IsValidBrandingContent } from "./validMSBranding";
 import { IsVersionUpdated } from "./validSolutionVersion";
-import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError } from "../utils/validationError";
+import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, MainTemplateSolutionVersionUpdateValidation } from "../utils/validationError";
 
 
 
@@ -44,6 +44,9 @@ let CheckOptions = {
         }
         else if (e instanceof InvalidFileContentError) {
             logger.logError("Validation for Microsoft Sentinel Branding Failed.");
+        }
+        else if (e instanceof MainTemplateSolutionVersionUpdateValidation) {
+            logger.logError("Solution Version not updated in the Main Template.");
         }
     },
     // Callback function to handle final failure
