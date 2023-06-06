@@ -9,6 +9,8 @@ const workingDir: string = process.cwd();
 const git: SimpleGit = gitP(workingDir);
 
 export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
+    console.log(`Validating that the version in the main template.`);
+
     if (!filePath.endsWith("mainTemplate.json")) {
         console.warn(`Could not identify JSON file as a main template. Skipping file path: ${filePath}`);
         return ExitCode.SUCCESS;
