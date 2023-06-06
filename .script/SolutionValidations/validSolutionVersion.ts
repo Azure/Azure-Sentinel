@@ -17,6 +17,7 @@ export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
             console.warn(`Could not identify JSON file as a main template. Skipping file path: ${filePath}`);
             return ExitCode.SUCCESS;
         }
+        console.log(`Getting PR details`);
 
         const pr = await GetPRDetails();
 
@@ -30,16 +31,16 @@ export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
 
         console.log(`Diff summary for file ${filePath}:\n${diffSummary}`);
 
-
-
-
         const jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
 
         if (
             jsonFile.hasOwnProperty("resources") &&
             Array.isArray(jsonFile.resources) &&
             jsonFile.resources.length > 0
         ) {
+            console.log(`Getting the main metadata.`);
+
             const mainMetadataResource = jsonFile.resources.find((resource: any) => {
                 return (
                     resource.type === "Microsoft.OperationalInsights/workspaces/providers/metadata" &&
@@ -52,6 +53,8 @@ export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
 
             if (mainMetadataResource) {
                 const previousVersion = mainMetadataResource.properties.version;
+
+                console.log(`Previous version: ${previousVersion}`);
 
                 const diffVersionMatch = diffSummary.match(/"version":\s*"(\d+\.\d+\.\d+)"/);
                 const currentVersion = diffVersionMatch ? diffVersionMatch[1] : null;
