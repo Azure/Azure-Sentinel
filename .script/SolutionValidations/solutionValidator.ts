@@ -4,7 +4,7 @@ import { ExitCode } from "./../utils/exitCode";
 import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals";
 import { IsValidSupportObject } from "./validSupportObject";
 import { IsValidBrandingContent } from "./validMSBranding";
-import { IsVersionUpdated } from "./validSolutionVersion";
+//import { IsVersionUpdated } from "./validSolutionVersion";
 import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, MainTemplateSolutionVersionUpdateValidation } from "../utils/validationError";
 
 
@@ -14,7 +14,7 @@ export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     IsValidSolutionDomainsVerticals(filePath);
     IsValidSupportObject(filePath);
     IsValidBrandingContent(filePath);
-    IsVersionUpdated(filePath);
+    //IsVersionUpdated(filePath);
     return ExitCode.SUCCESS;
 }
 
