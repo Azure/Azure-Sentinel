@@ -60,7 +60,7 @@ Once deployment is complete, you will need to authorize each connection.
 #### c. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource
 2. Click on Identity Blade
-3. Choose Systen assigned tab
+3. Choose System assigned tab
 4. Click on Azure role assignments
 5. Click on Add role assignments
 6. Select Scope - Resource group
