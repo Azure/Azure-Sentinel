@@ -90,7 +90,7 @@ class DataminrPulseConfigureSettings:
         try:
             __method_name = inspect.currentframe().f_code.co_name
             applogger.debug(
-                "{}(method={}) Calling DataMinrPulse API for endpoint={}".format(
+                "{}(method={}) Calling DataminrPulse API for endpoint={}".format(
                     self.logs_starts_with, __method_name, endpoint
                 )
             )
@@ -146,7 +146,7 @@ class DataminrPulseConfigureSettings:
                 )
             else:
                 applogger.error(
-                    "{}(method={}) Error while calling DataMinr API: StatusCode={} , Message={}".format(
+                    "{}(method={}) Error while calling Dataminr API: StatusCode={} , Message={}".format(
                         self.logs_starts_with,
                         __method_name,
                         response.status_code,
@@ -225,7 +225,7 @@ class DataminrPulseConfigureSettings:
             raise DataminrPulseException(err)
 
     def get_lists(self):
-        """To fetch lists from DataMinr API.
+        """To fetch lists from Dataminr API.
 
         Args:
             names (list): names of lists
@@ -236,7 +236,7 @@ class DataminrPulseConfigureSettings:
         try:
             __method_name = inspect.currentframe().f_code.co_name
             applogger.debug(
-                "{}(method={}) Getting lists from DataMinr API.".format(
+                "{}(method={}) Getting lists from Dataminr API.".format(
                     self.logs_starts_with, __method_name
                 )
             )

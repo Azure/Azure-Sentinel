@@ -8,7 +8,7 @@
 
 ## Summary<a name="Summary"></a>
 
-This playbook provides an end-to-end example of how alert enrichment works. This will extract the IP, Domain, HostName, URL or Hashes from network session, WebSession, DNS or fileEvent any of the ASIM data and call the Get alerts API of Dataminr Pulse to get the data associated with that parameter and enrich the incident by adding Dataminr Pulse alerts data as an incident comment.
+This playbook provides an end-to-end example of how alert enrichment works. This will extract the IP, Domain, HostName, URL or Hashes from the generated incident and call the Get alerts API of Dataminr Pulse to get the data associated with that parameter and enrich the incident by adding Dataminr Pulse alerts data as an incident comment.
 
 ### Prerequisites<a name="Prerequisites"></a>
 
@@ -65,14 +65,31 @@ Add access policy for playbook's managed identity to read, write secrets of keyv
 
 #### d. Configurations in Microsoft Sentinel
 
-1. In Microsoft Sentinel, one should have deployed [ASimNetworkSession](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession), [ASimDns](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession), [ASimWebSession](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession) & [imFileEvent](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession) ASIM parsers. 
-2. In Microsoft Sentinel, Configure the analytic rules to trigger an incident based on data available in ASimNetworkSession, ASimDns, ASimWebSession & imFileEvent.
-3. In Microsoft Sentinel, Configure the automation rules to trigger the playbook. 
-  >> * Go to Microsoft Sentinel -> <your workspace> -> Automation 
-  >> * Click on **Create** -> **Automation rule**
-  >> * Provide name for your rule
-  >> * In Analytic rule name condition, select 4 analytic rules which you have created related to ASIM parsers.
-  >> * In Actions dropdown select **Run playbook**
-  >> * In second dropdown select your deployed playbook
-  >> * Click on **Apply**
-  >> * Save the Automation rule.
+1. In Microsoft Sentinel, Configure the analytic rules to trigger an incident.
+  * Analytic Rule must contain atleast one of the below fields mapped in Custom Details to successfully run this playbook.
+    * DstDomain
+    * DstHostname
+    * DstIpAddr
+    * DstMacAddr
+    * SrcDomain
+    * SrcFileMD5
+    * SrcFileSHA1
+    * SrcFileSHA256
+    * SrcFileSHA512
+    * SrcHostname
+    * SrcIpAddr
+    * SrcMacAddr
+    * TargetFileMD5
+    * TargetFileSHA1
+    * TargetFileSHA256
+    * TargetFileSHA512
+    * Url
+2. In Microsoft Sentinel, Configure the automation rules to trigger the playbook. 
+  * Go to Microsoft Sentinel -> <your workspace> -> Automation 
+  * Click on **Create** -> **Automation rule**
+  * Provide name for your rule
+  * In Analytic rule name condition, select analytic rule which you have created.
+  * In Actions dropdown select **Run playbook**
+  * In second dropdown select your deployed playbook
+  * Click on **Apply**
+  * Save the Automation rule.
