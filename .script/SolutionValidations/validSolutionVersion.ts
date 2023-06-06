@@ -19,7 +19,7 @@ export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
             return ExitCode.SUCCESS;
         }
         console.log(`Getting PR details for commit`);
-        filePath = workingDir + '/' + filePath;
+        
         console.log(`File path: ${filePath}`);
         const pr = await GetPRDetails();
 
