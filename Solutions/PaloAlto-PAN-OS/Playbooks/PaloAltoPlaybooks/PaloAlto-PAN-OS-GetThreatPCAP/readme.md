@@ -27,9 +27,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAltoPlaybooks%2F
-PaloAlto-PAN-OS-GetThreatPCAP%2Fazuredeploy.json)   [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAltoPlaybooks%2F
-PaloAlto-PAN-OS-GetThreatPCAP%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAltoPlaybooks%2FPaloAlto-PAN-OS-GetThreatPCAP%2Fazuredeploy.json)   [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAltoPlaybooks%2FPaloAlto-PAN-OS-GetThreatPCAP%2Fazuredeploy.json)
 
 
 2. Fill in the required parameters:
@@ -51,8 +49,9 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for other connections such as Blob Store connection and PAN-OS API connection (For authorizing the PAN-OS API connection, API Key needs to be provided)
 
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky IP
-2. Configure the automation rules to trigger this playbook
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with results having column "TimeGenerated", "Computer", "pcap_id", "sessionid", "event_time".
+2. Entity mapping not needed beacuse playbook will internally hit the query again and fetches the required column from result. 
+3. Configure the automation rules to trigger this playbook
 
 #### c. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource
