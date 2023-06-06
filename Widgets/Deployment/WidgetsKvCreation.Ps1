@@ -59,7 +59,7 @@ function Write-Log {
 }
 "@
     try { # Send trace to Appinsights
-        Invoke-WebRequest -Uri https://dc.services.visualstudio.com/v2/track -Method POST -Body $appinsightsTraceBody | out-null -SilentlyContinue
+        Invoke-WebRequest -Uri https://dc.services.visualstudio.com/v2/track -Method POST -Body $appinsightsTraceBody | out-null
     } catch {}
 
 	if ($isError)
