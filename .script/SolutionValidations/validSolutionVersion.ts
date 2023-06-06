@@ -2,11 +2,12 @@ import { MainTemplateSolutionVersionUpdateValidation } from "./../utils/validati
 import { ExitCode } from "../utils/exitCode";
 import fs from "fs";
 import { GetPRDetails } from "../utils/gitWrapper";
-import gitP, { SimpleGit } from 'simple-git/promise';
+import gitP, { SimpleGit } from 'simple-git';
 
 
 const workingDir: string = process.cwd();
-const git: SimpleGit = gitP(workingDir);
+const git: SimpleGit = gitP();
+
 
 export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
     //add try catch block
