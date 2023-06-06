@@ -5,7 +5,7 @@ import { GetPRDetails } from "../utils/gitWrapper";
 import gitP, { SimpleGit } from 'simple-git';
 
 
-const workingDir: string = process.cwd();
+//const workingDir: string = process.cwd();
 const git: SimpleGit = gitP();
 
 
