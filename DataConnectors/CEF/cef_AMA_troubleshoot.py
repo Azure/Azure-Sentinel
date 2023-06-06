@@ -11,7 +11,6 @@ PY3 = sys.version_info.major == 3
 # GENERAL SCRIPT CONSTANTS
 DEFAULT_MACHINE_ENV = "Prod"
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
-COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 PATH_FOR_CSS_TICKET = {
     "Prod": "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview",
     "MK": "https://portal.azure.cn/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview",
@@ -715,9 +714,9 @@ class SystemInfo:
         "syslog_ng_dir": ["sudo ls -la /etc/syslog-ng/conf.d/"],
         "syslog_ng_dir_content": ["sudo grep -r ^ /etc/syslog-ng/conf.d/"],
         "is_syslog_ng_running_from_boot": ["sudo sudo systemctl list-unit-files --type=service | grep syslog-ng"],
-        "agent_log_snip_err": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
-        "agent_log_snip_warn": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.warn"],
-        "agent_log_snip_info": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.info"],
+        "agent_log_snip_err": ["sudo tail -n 100 /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
+        "agent_log_snip_warn": ["sudo tail -n 100 /var/opt/microsoft/azuremonitoragent/log/mdsd.warn"],
+        "agent_log_snip_info": ["sudo tail -n 100 /var/opt/microsoft/azuremonitoragent/log/mdsd.info"],
         "is_AMA__running_from_boot": ["sudo systemctl list-unit-files --type=service | grep azuremonitoragent"],
         "AMA_service_status": ["sudo systemctl status azuremonitoragent"],
         "DCR_config_dir": ["sudo ls -la /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
@@ -732,11 +731,30 @@ class SystemInfo:
         Format a collect command details in a built-in format
         """
         return str(
-            DELIMITER + "command: " + str(command_object.command_name) + '\n' + "output: " + str(
+            DELIMITER + "command: " + str(command_object.command_name) + '\n' + "output:\n" + str(
                 command_object.command_result) + DELIMITER).replace(
             '%', '%%').replace('\\n', '\n')
 
-    def append_content_to_file(self, command_object, file_path=COLLECT_OUTPUT_FILE):
+    def trace_activation(self):
+        flag = '-T 0x1002'
+        file_path = '/etc/default/azuremonitoragent'
+        # Check if the flag already exists
+        check_if_trace_exists = "sed -n '/^MDSD_OPTIONS=.*{}/p' {}".format(flag, file_path)
+        flag_exists = subprocess.call(check_if_trace_exists, shell=True) == 0
+        agent_restart_command = "sudo systemctl restart azuremonitoragent"
+        if not flag_exists:
+            # Add the flag using sed
+            sed_command = "sed -i 's/\\(MDSD_OPTIONS=\".*\\)\"/\\1 {}\"/' {}".format(flag, file_path)
+            subprocess.call(sed_command, shell=True)
+            subprocess.call(agent_restart_command, shell=True)
+        # Sleep for 10 seconds
+        time.sleep(10)
+        # Remove the flag using sed
+        sed_command = "sed -i 's/ {}//' {}".format(flag, file_path)
+        subprocess.call(sed_command, shell=True)
+        subprocess.call(agent_restart_command, shell=True)
+
+    def append_content_to_file(self, command_object, file_path=LOG_OUTPUT_FILE):
         """
         :param command_object: consists of the name and the output
         :param file_path: a file to share the commands outputs
@@ -753,6 +771,7 @@ class SystemInfo:
         """
         This function handles the whole command flow from running to documenting.
         """
+        self.trace_activation()
         for command_name in self.commands_dict.keys():
             command_object = CommandVerification(command_name, self.commands_dict[command_name])
             command_object.run_command()
@@ -816,18 +835,18 @@ def main():
     else:
         print_error("Invalid stream name provided. The supported streams are either \'--CEF\' or \'--ASA\' or \'--FTD\'. Please try again.")
         sys.exit()
+    subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
+                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     if args.collect:
         print_notice("Starting to collect data. This may take a couple of seconds")
         machine_env = find_dcr_cloud_environment()
         time.sleep(2)
-        subprocess.Popen(['rm', '-f', COLLECT_OUTPUT_FILE],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
         system_info = SystemInfo()
         system_info.handle_commands()
         print(
-            "Finished collecting data \nPlease provide CSS with this file for further investigation- {} \n"
-            "In order to open a support case please browse: {}".format(
-                COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET[machine_env]))
+            "Finished collecting data \nIn order to open a support case please browse: {}".format(PATH_FOR_CSS_TICKET[machine_env]))
+        with open(LOG_OUTPUT_FILE, 'a') as file:
+            file.write('*' * 10 + 'FINISHED COLLECTION' + '*' * 10)
         time.sleep(1)
 
     class_tests_array = [
@@ -838,8 +857,6 @@ def main():
         (IncomingEventsVerifications(), "Starting validation tests for capturing incoming events")]
     print_notice("\nStarting to run the validation script for the {} scenario".format(STREAM_SCENARIO))
     time.sleep(1)
-    subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
-                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     print_notice("Please validate you are sending CEF messages to the agent machine")
     for class_test in class_tests_array:
         print_notice("\n----- {} {}".format(class_test[1], '-' * (60 - len(class_test[1]))))
