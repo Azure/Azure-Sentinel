@@ -333,7 +333,7 @@ class DCRConfigurationVerifications:
     DCR_MISSING_CEF_STREAM_ERR = "Could not detect any data collection rule for the provided datatype. No such events will " \
                                  "be collected from this machine to any workspace. Please create a DCR using the following documentation- " \
                                  "{} and run again".format(DCR_DOC)
-    CEF_MULTI_HOMING_MESSAGE = "Detected multiple collection rules sending the same stream. This scenario is called multi-homing and might have effect on the agent's performance"
+    MULTI_HOMING_MESSAGE = "Detected multiple collection rules sending the same stream. This scenario is called multi-homing and might have effect on the agent's performance"
 
     def verify_dcr_exists(self):
         """
@@ -354,9 +354,13 @@ class DCRConfigurationVerifications:
         Verifying there is a DCR on the machine for forwarding cef data
         """
         command_name = "verify_DCR_content_has_stream"
+        if STREAM_SCENARIO == 'ftd':
+            self.STREAM_SCENARIO = 'asa'
+        else:
+            self.STREAM_SCENARIO = STREAM_SCENARIO
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
-            self.STREAM_NAME[STREAM_SCENARIO])
-        result_keywords_array = [self.STREAM_NAME[STREAM_SCENARIO]]
+            self.STREAM_NAME[self.STREAM_SCENARIO])
+        result_keywords_array = [self.STREAM_NAME[self.STREAM_SCENARIO]]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
@@ -369,8 +373,10 @@ class DCRConfigurationVerifications:
         Verifying that the CEF DCR on the machine has valid content with all necessary DCR components
         """
         command_name = "verify_dcr_has_valid_content"
+        if STREAM_SCENARIO == 'ftd':
+            self.STREAM_SCENARIO = 'asa'
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
-            self.STREAM_NAME[STREAM_SCENARIO])
+            self.STREAM_NAME[self.STREAM_SCENARIO])
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "opinsights.azure", "id"]
@@ -393,14 +399,16 @@ class DCRConfigurationVerifications:
         Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
         """
         command_name = "check_multi_homing"
+        if STREAM_SCENARIO == 'ftd':
+            self.STREAM_SCENARIO = 'asa'
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
-            self.STREAM_NAME[STREAM_SCENARIO])
+            self.STREAM_NAME[self.STREAM_SCENARIO])
         command_object = CommandVerification(command_name, command_to_run)
         command_object.run_command()
         try:
             if int(command_object.command_result) > 1:
                 command_object.run_full_verification(should_fail=True)
-                print_warning(self.CEF_MULTI_HOMING_MESSAGE)
+                print_warning(self.MULTI_HOMING_MESSAGE)
             else:
                 command_object.is_successful = True
                 command_object.document_result()
@@ -612,6 +620,8 @@ class IncomingEventsVerifications:
         tcpdump_time_restriction = 10
         start_seconds = int(round(time.time()))
         end_seconds = int(round(time.time()))
+        mock_message_counter = 0
+        mock_message_max = 5
         command_name = "listen_to_incoming_events"
         command_to_run = "sudo tcpdump -A -ni any port 514 -vv"
         result_keywords_array = [self.IDENT_NAME[STREAM_SCENARIO]]
@@ -629,38 +639,31 @@ class IncomingEventsVerifications:
             return False
         poll_obj = select.poll()
         poll_obj.register(tcp_dump.stdout, select.POLLIN)
-        found_cisco_messages = {'asa': False, "ftd": False}
         while (end_seconds - start_seconds) < tcpdump_time_restriction:
-            if mock_message is True:
+            if mock_message is True and mock_message_counter < mock_message_max:
                 # Sending mock messages
-                if STREAM_SCENARIO == "asa":
-                    self.send_message_local(514, 1, send_ftd=True)
-                else:
-                    self.send_message_local(514, 1)
+                mock_message_counter += 1
+                self.send_message_local(514, 1)
+                print("sent message number" + str(mock_message_counter))
             poll_result = poll_obj.poll(0)
+            print("checking the poll")
             if poll_result:
+                print("I'm in poll result")
                 line = str(tcp_dump.stdout.readline().decode('utf-8').strip("\n"))
-                for ident in self.IDENT_NAME.keys():
-                    if self.handle_tcpdump_line(line, self.IDENT_NAME[ident]):
-                        command_object.command_result = line
-                        command_object.run_full_verification()
-                        found_cisco_messages[ident] = True
-                        if ident == "cef" or False not in found_cisco_messages.values():
-                            print_ok("Found {0} in stream. Please verify {0} events arrived at your workspace".format(
-                                ident.upper()))
-                            return True
+                if self.handle_tcpdump_line(line, self.IDENT_NAME[STREAM_SCENARIO]):
+                    command_object.command_result = line
+                    command_object.run_full_verification()
+                    print_ok("Found {0} in stream. Please verify {0} events arrived at your workspace".format(
+                    STREAM_SCENARIO.upper()))
+                    return True
             end_seconds = int(round(time.time()))
-        if found_cisco_messages['asa'] == True:
-            print_ok("Found asa events in stream but not ftd events. Please verify asa events arrived at your workspace and that no ftd events are being sent")
-            return True
-
         print_error("Could not locate {0} message in tcpdump. Please verify {0} events can be sent to the machine and"
                     " there is not firewall blocking incoming traffic".format(STREAM_SCENARIO.upper()))
         command_object.command_result = str(line)
         command_object.run_full_verification()
         return False
 
-    def send_message_local(self, port, amount, send_ftd=False):
+    def send_message_local(self, port, amount):
         """
         Generate local CEF events in a given amount to a given port
         :param port: A destination port to send the events
@@ -672,13 +675,8 @@ class IncomingEventsVerifications:
                 self.STREAM_MESSAGE[STREAM_SCENARIO], "--rfc3164", "-P", str(port), "-n", "127.0.0.1"]
                 logger = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
                 o, e = logger.communicate()
-                if send_ftd:
-                    command_tokens = ["logger", "-p", "local4.warn", "-t", self.IDENT_NAME['ftd'],
-                    self.STREAM_MESSAGE['ftd'], "--rfc3164", "-P", str(port), "-n", "127.0.0.1"]
-                    logger = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
-                    o, e = logger.communicate()
-            if e is not None:
-                print("Error could not send mock message")
+                if e is not None:
+                    print("Error could not send mock message")
         except OSError:
             print(self.LOGGER_NOT_INSTALLED_ERROR_MESSAGE)
 
@@ -796,6 +794,7 @@ def getargs(should_print=True):
     parser.add_argument('collect', nargs='?', help='Collect syslog message samples to file')
     parser.add_argument('--CEF', '--cef', action='store_true', default=False, help='Validate CEF DCR and events')
     parser.add_argument('--ASA', '--asa', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
+    parser.add_argument('--FTD', '--ftd', action='store_true', default=False, help='Validate Cisco FTD DCR and events')
     args = parser.parse_args()
     if should_print:
         for arg in vars(args):
@@ -812,8 +811,10 @@ def main():
         STREAM_SCENARIO = "cef"
     elif args.ASA:
             STREAM_SCENARIO = "asa"
+    elif args.FTD:
+        STREAM_SCENARIO = "ftd"
     else:
-        print_error("Invalid stream name provided. The supported streams are either \'--CEF\' or \'--ASA\'. Please try again.")
+        print_error("Invalid stream name provided. The supported streams are either \'--CEF\' or \'--ASA\' or \'--FTD\'. Please try again.")
         sys.exit()
     if args.collect:
         print_notice("Starting to collect data. This may take a couple of seconds")
