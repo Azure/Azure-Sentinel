@@ -2,7 +2,7 @@ import { MainTemplateSolutionVersionUpdateValidation } from "./../utils/validati
 import { ExitCode } from "../utils/exitCode";
 import fs from "fs";
 import { GetPRDetails } from "../utils/gitWrapper";
-import gitP, { SimpleGit } from 'simple-git';
+import gitP, { SimpleGit } from 'simple-git/promise';
 
 
 const workingDir: string = process.cwd();
@@ -18,7 +18,8 @@ export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
             return ExitCode.SUCCESS;
         }
         console.log(`Getting PR details for commit`);
-
+        filePath = workingDir + '/' + filePath;
+        console.log(`File path: ${filePath}`);
         const pr = await GetPRDetails();
 
         if (typeof pr === "undefined") {
