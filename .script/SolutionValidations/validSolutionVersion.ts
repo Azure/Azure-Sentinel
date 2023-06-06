@@ -17,7 +17,7 @@ export async function IsVersionUpdated(filePath: string): Promise<ExitCode> {
             console.warn(`Could not identify JSON file as a main template. Skipping file path: ${filePath}`);
             return ExitCode.SUCCESS;
         }
-        console.log(`Getting PR details`);
+        console.log(`Getting PR details for commit`);
 
         const pr = await GetPRDetails();
 
