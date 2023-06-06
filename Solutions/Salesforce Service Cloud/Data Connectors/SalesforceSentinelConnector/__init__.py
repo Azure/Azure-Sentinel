@@ -1,17 +1,17 @@
-import datetime
-import logging
-import json 
-import requests
-import hashlib
-import hmac
 import base64
 import csv
+import datetime
+import hashlib
+import hmac
+import json
+import logging
 import os
+import re
 import sys
 import tempfile
-import re
-import azure.functions as func
 
+import azure.functions as func
+import requests
 
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
@@ -206,6 +206,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info(f'Script started')
     global instance_url,token,headers,customer_id,shared_key,log_type,users,temp_dir,file_in_tmp_path
     csv.field_size_limit(sys.maxsize)
+    sys.setrecursionlimit(1500)
     users = dict()
     token = _get_token()[0]
     instance_url = _get_token()[1]
