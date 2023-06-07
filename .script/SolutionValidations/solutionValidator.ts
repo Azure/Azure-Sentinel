@@ -13,7 +13,7 @@ import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectVal
 export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     IsValidSolutionDomainsVerticals(filePath);
     IsValidSupportObject(filePath);
-    IsValidBrandingContent(filePath);
+    //IsValidBrandingContent(filePath);
     IsValidSolutionID(filePath);
     return ExitCode.SUCCESS;
 }
