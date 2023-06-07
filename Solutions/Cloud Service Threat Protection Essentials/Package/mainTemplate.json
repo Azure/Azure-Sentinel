@@ -40,7 +40,7 @@
     "huntingQueryId1": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('_huntingQuerycontentId1'))]",
     "huntingQueryTemplateSpecName1": "[concat(parameters('workspace'),'-hq-',uniquestring(variables('_huntingQuerycontentId1')))]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "huntingQueryVersion2": "1.0.0",
+    "huntingQueryVersion2": "1.0.1",
     "huntingQuerycontentId2": "8eff7055-9138-4edc-b8f0-48ea27e23c3c",
     "_huntingQuerycontentId2": "[variables('huntingQuerycontentId2')]",
     "huntingQueryId2": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('_huntingQuerycontentId2'))]",
@@ -49,7 +49,7 @@
   "resources": [
     {
       "type": "Microsoft.Resources/templateSpecs",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-02-01",
       "name": "[variables('huntingQueryTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -58,12 +58,12 @@
       },
       "properties": {
         "description": "Cloud Service Threat Protection Essentials Hunting Query 1 with template",
-        "displayName": "Cloud Service Threat Protection Hunting Query template"
+        "displayName": "Cloud Service Threat Protection Essentials HQ template"
       }
     },
     {
       "type": "Microsoft.Resources/templateSpecs/versions",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-02-01",
       "name": "[concat(variables('huntingQueryTemplateSpecName1'),'/',variables('huntingQueryVersion1'))]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -74,7 +74,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "AzureResourceAssignedPublicIP_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "AzureResourceAssignedPublicIP_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion1')]",
@@ -88,14 +88,14 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "Azure Resources assigned Public IP Addresses",
+                "displayName": "Azure Resources Assigned Public IP Addresses",
                 "category": "Hunting Queries",
-                "query": "let OperationNames = dynamic([\"microsoft.compute/virtualMachines/write\", \"microsoft.resources/deployments/write\"]);\nAzureActivity\n// We look for any Operation that modified and then was accepted or succeeded where a publicipaddress component is referenced\n| where OperationNameValue in~ (OperationNames)\n| where ActivityStatusValue has_any (\"Succeeded\", \"Accepted\")\n| where Properties contains \"publicipaddress\"\n//| extend frontendIPConfigurations = Properties.responseBody.properties.frontendIPConfigurations\n// parsing the publicIPAddress from Properties. It is only available if the allocation method is Static.\n| parse Properties with * \"publicIPAddress\\\\\" PublicIPAddressParse\n| extend publicIPAddress_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).ipAddress) \n| extend publicIPAddressVersion_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAddressVersion) \n| extend publicIPAllocationMethod_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAllocationMethod) \n| extend scope_ = tostring(parse_json(Authorization).scope) \n| project TimeGenerated, OperationNameValue, publicIPAllocationMethod_ , publicIPAddressVersion_, scope_ , Caller, CallerIpAddress, ActivityStatusValue, Resource \n// Join in the AzureNetworkAnalytics so that we can determine if any connections were made via the public ip address and get the currently assigned ip address when allocation method is Dynamic\n| join kind= inner (\nunion isfuzzy=true\n(AzureNetworkAnalytics_CL\n// Controlling for Schema Version and later parsing - This is Version 2 and Public IPs only\n| where isnotempty(FASchemaVersion_s) and isnotempty(DestPublicIPs_s)\n| extend SchemaVersion = FASchemaVersion_s\n| extend PublicIPs = tostring(split(DestPublicIPs_s,\"|\")[0])\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FirstProcessedTimeUTC = min(FlowStartTime_t), LastProcessedTimeUtc = max(FlowEndTime_t), \nRegions = makeset(Region_s), AzureRegions = makeset(AzureRegion_s), VMs = makeset(VM_s), MACAddresses = makeset(MACAddress_s), PublicIPs = makeset(PublicIPs), DestPort = makeset(DestPort_d), SrcIP = makeset(SrcIP_s), \nActivityCount = count() by NSGRule_s, NSGList_s, SubNet = Subnet1_s, FlowDirection_s, Subscription = Subscription1_g, Tags_s, SchemaVersion\n//NSGList_s contains the subscription ID, remove that as we already have a field for this and now it will match what we get for SchemaVersion 1\n| extend NSG = case(isnotempty(NSGList_s), strcat(split(NSGList_s, \"/\")[-2],\"/\",split(NSGList_s, \"/\")[-1]), \"NotAvailable\")\n// Depending on the SchemaVersion, we will need to provide the NSG_Name for matching against the resource identified in AzureActivity\n| extend NSG_Name = tostring(split(NSG, \"/\")[-1])\n),\n(\nAzureNetworkAnalytics_CL \n// Controlling for Schema Version and later parsing - This is Version 1\n| where isempty(FASchemaVersion_s)\n// Controlling for public IPs only\n| where isnotempty(PublicFrontendIPs_s) or isnotempty(PublicIPAddresses_s)\n| where PublicFrontendIPs_s != \"null\" or PublicIPAddresses_s != \"null\"\n| extend SchemaVersion = SchemaVersion_s\n// The Public IP can be indicated in one of 2 locations, assigning here for easy union results\n| extend PublicIPs = case(isnotempty(PublicFrontendIPs_s), PublicFrontendIPs_s,\nPublicIPAddresses_s) \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FirstProcessedTimeUTC = min(TimeProcessed_t), LastProcessedTimeUtc = max(TimeProcessed_t), \nRegions = makeset(Region_s), AzureRegions = makeset(DiscoveryRegion_s), VMs = makeset(VirtualMachine_s), MACAddresses = makeset(MACAddress_s), PublicIPs = makeset(PublicIPs), \nSrcIP = makeset(PrivateIPAddresses_s), Name = makeset(Name_s), DestPort = makeset(DestinationPortRange_s),\nActivityCount = count() by NSG = NSG_s, SubNet = Subnetwork_s, Subscription = Subscription_g, Tags_s, SchemaVersion\n// Some events don't have an NSG listed, populating so it is clear it is not available in the datatype\n| extend NSG = case(isnotempty(NSG), NSG, \"NotAvailable\")\n// Depending on the SchemaVersion, we will need to provide the NSG_Name for matching against the resource identified in AzureActivity\n| extend NSG_Name = tostring(split(NSG, \"/\")[-1])\n)\n| project StartTimeUtc, EndTimeUtc, FirstProcessedTimeUTC, LastProcessedTimeUtc, PublicIPs, NSG, NSG_Name, SrcIP, DestPort, SubNet, Name, VMs, MACAddresses, ActivityCount, Regions, AzureRegions, Subscription, Tags_s, SchemaVersion\n) on $left.Resource == $right.NSG_Name\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress\n",
+                "query": "let OperationNames = dynamic([\"microsoft.compute/virtualMachines/write\", \"microsoft.resources/deployments/write\"]);\nAzureActivity\n// We look for any Operation that modified and then was accepted or succeeded where a public ip address component is referenced\n| where OperationNameValue in~ (OperationNames)\n| where ActivityStatusValue has_any (\"Succeeded\", \"Accepted\")\n| where Properties contains \"publicipaddress\"\n//| extend frontendIPConfigurations = Properties.responseBody.properties.frontendIPConfigurations\n// parsing the publicIPAddress from Properties. It is only available if the allocation method is Static.\n| parse Properties with * \"publicIPAddress\\\\\" PublicIPAddressParse\n| extend parsedProperties_ = parse_json(tostring(parse_json(Properties).responseBody)).properties\n| extend publicIPAddress_ = tostring(parse_json(tostring(parsedProperties_)).ipAddress) \n| extend publicIPAddressVersion_ = tostring(parse_json(tostring(parsedProperties_)).publicIPAddressVersion) \n| extend publicIPAllocationMethod_ = tostring(parse_json(tostring(parsedProperties_)).publicIPAllocationMethod) \n| extend scope_ = tostring(parse_json(Authorization).scope) \n| project TimeGenerated, OperationNameValue, publicIPAllocationMethod_ , publicIPAddressVersion_, scope_ , Caller, CallerIpAddress, ActivityStatusValue, Resource \n// Join in the AzureNetworkAnalytics so that we can determine if any connections were made via the public ip address and get the currently assigned ip address when allocation method is Dynamic\n| join kind= inner (\nunion isfuzzy=true\n(AzureNetworkAnalytics_CL\n// Controlling for Schema Version and later parsing - This is Version 2 and Public IPs only\n| where isnotempty(FASchemaVersion_s) and isnotempty(DestPublicIPs_s)\n| extend SchemaVersion = FASchemaVersion_s\n| extend PublicIPs = tostring(split(DestPublicIPs_s,\"|\")[0])\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FirstProcessedTimeUTC = min(FlowStartTime_t), LastProcessedTimeUtc = max(FlowEndTime_t), \nRegions = make_set(Region_s, 1000), AzureRegions = make_set(AzureRegion_s, 1000), VMs = make_set(VM_s, 1000), MACAddresses = make_set(MACAddress_s, 1000), PublicIPs = make_set(PublicIPs, 1000), DestPort = make_set(DestPort_d, 1000), SrcIP = make_set(SrcIP_s, 1000), \nActivityCount = count() by NSGRule_s, NSGList_s, SubNet = Subnet1_s, FlowDirection_s, Subscription = Subscription1_g, Tags_s, SchemaVersion\n//NSGList_s contains the subscription ID, remove that as we already have a field for this and now it will match what we get for SchemaVersion 1\n| extend NSG = case(isnotempty(NSGList_s), strcat(split(NSGList_s, \"/\")[-2],\"/\",split(NSGList_s, \"/\")[-1]), \"NotAvailable\")\n// Depending on the SchemaVersion, we will need to provide the NSG_Name for matching against the resource identified in AzureActivity\n| extend NSG_Name = tostring(split(NSG, \"/\")[-1])\n),\n(\nAzureNetworkAnalytics_CL \n// Controlling for Schema Version and later parsing - This is Version 1\n| where isempty(FASchemaVersion_s)\n// Controlling for public IPs only\n| where isnotempty(PublicFrontendIPs_s) or isnotempty(PublicIPAddresses_s)\n| where PublicFrontendIPs_s != \"null\" or PublicIPAddresses_s != \"null\"\n| extend SchemaVersion = SchemaVersion_s\n// The Public IP can be indicated in one of 2 locations, assigning here for easy union results\n| extend PublicIPs = case(isnotempty(PublicFrontendIPs_s), PublicFrontendIPs_s,\nPublicIPAddresses_s) \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FirstProcessedTimeUTC = min(TimeProcessed_t), LastProcessedTimeUtc = max(TimeProcessed_t), \nRegions = make_set(Region_s, 1000), AzureRegions = make_set(DiscoveryRegion_s, 1000), VMs = make_set(VirtualMachine_s, 1000), MACAddresses = make_set(MACAddress_s, 1000), PublicIPs = make_set(PublicIPs, 1000), \nSrcIP = make_set(PrivateIPAddresses_s, 1000), Name = make_set(Name_s, 1000), DestPort = make_set(DestinationPortRange_s, 1000),\nActivityCount = count() by NSG = NSG_s, SubNet = Subnetwork_s, Subscription = Subscription_g, Tags_s, SchemaVersion\n// Some events don't have an NSG listed, populating so it is clear it is not available in the datatype\n| extend NSG = case(isnotempty(NSG), NSG, \"NotAvailable\")\n// Depending on the SchemaVersion, we will need to provide the NSG_Name for matching against the resource identified in AzureActivity\n| extend NSG_Name = tostring(split(NSG, \"/\")[-1])\n)\n| project StartTimeUtc, EndTimeUtc, FirstProcessedTimeUTC, LastProcessedTimeUtc, PublicIPs, NSG, NSG_Name, SrcIP, DestPort, SubNet, Name, VMs, MACAddresses, ActivityCount, Regions, AzureRegions, Subscription, Tags_s, SchemaVersion\n) on $left.Resource == $right.NSG_Name\n| extend UserName = iff(Caller contains '@', tostring(split(Caller, '@')[0]), '')\n| extend UPNSuffix = iff(Caller contains '@', tostring(split(Caller, '@')[1]), '')\n| extend AadUserId = iff(Caller !contains '@', tostring(Caller), '')\n| extend Account_0_Name = Caller\n| extend Account_0_UPNSuffix = UPNSuffix\n| extend Account_0_AadUserId = AadUserId\n| extend IP_0_Address = CallerIpAddress\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "Identifies when public IP addresses are assigned to Azure Resources.  Additionally, shows connections to those resources.\nResources: \nhttps://docs.microsoft.com/azure/azure-monitor/insights/azure-networking-analytics\nhttps://docs.microsoft.com/azure/network-watcher/traffic-analytics-schema"
+                    "value": "This query identifies instances when public IP addresses are assigned to Azure Resources and show connections to those resources.\nResources: \nhttps://docs.microsoft.com/azure/azure-monitor/insights/azure-networking-analytics\nhttps://docs.microsoft.com/azure/network-watcher/traffic-analytics-schema"
                   },
                   {
                     "name": "tactics",
@@ -141,7 +141,7 @@
     },
     {
       "type": "Microsoft.Resources/templateSpecs",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-02-01",
       "name": "[variables('huntingQueryTemplateSpecName2')]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -150,12 +150,12 @@
       },
       "properties": {
         "description": "Cloud Service Threat Protection Essentials Hunting Query 2 with template",
-        "displayName": "Cloud Service Threat Protection Hunting Query template"
+        "displayName": "Cloud Service Threat Protection Essentials HQ template"
       }
     },
     {
       "type": "Microsoft.Resources/templateSpecs/versions",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-02-01",
       "name": "[concat(variables('huntingQueryTemplateSpecName2'),'/',variables('huntingQueryVersion2'))]",
       "location": "[parameters('workspace-location')]",
       "tags": {
@@ -166,7 +166,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "AzureKeyVaultAccessManipulation_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "AzureKeyVaultAccessManipulation_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion2')]",
@@ -182,12 +182,12 @@
                 "eTag": "*",
                 "displayName": "Azure Key Vault Access Policy Manipulation",
                 "category": "Hunting Queries",
-                "query": "let timeframe = 10m;\nAzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where OperationName == \"VaultPatch\"\n| where ResultType == \"Success\"\n| extend UserObjectAdded = column_ifexists(\"addedAccessPolicy_ObjectId_g\",\"\")\n| extend AddedActor = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_name_s\n| extend KeyAccessAdded = tostring(column_ifexists(\"addedAccessPolicy_Permissions_keys_s\",\"\"))\n| extend SecretAccessAdded = tostring(column_ifexists(\"addedAccessPolicy_Permissions_secrets_s\",\"\"))\n| extend CertAccessAdded = tostring(column_ifexists(\"addedAccessPolicy_Permissions_certificates_s\",\"\"))\n| where isnotempty(UserObjectAdded)\n| project AccessAddedTime=TimeGenerated, ResourceType, OperationName, ResultType, KeyVaultName=id_s, AddedActor, UserObjectAdded, KeyAccessAdded, SecretAccessAdded, CertAccessAdded\n| join kind=inner \n( \nAzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where OperationName == \"VaultPatch\"\n| where ResultType == \"Success\"\n| extend RemovedActor = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_name_s\n| extend UserObjectRemoved = column_ifexists(\"removedAccessPolicy_ObjectId_g\", \"\")\n| extend KeyAccessRemoved = tostring(column_ifexists(\"removedAccessPolicy_Permissions_keys_s\",\"\"))\n| extend SecretAccessRemoved = tostring(column_ifexists(\"removedAccessPolicy_Permissions_secrets_s\",\"\"))\n| extend CertAccessRemoved = tostring(column_ifexists(\"removedAccessPolicy_Permissions_certificates_s\",\"\"))\n| where isnotempty(UserObjectRemoved)\n| project AccessRemovedTime=TimeGenerated, ResourceType, OperationName, ResultType, KeyVaultName=id_s, RemovedActor, UserObjectRemoved, KeyAccessRemoved, SecretAccessRemoved, CertAccessRemoved\n)\non KeyVaultName\n| extend TimeDelta = abs(AccessAddedTime - AccessRemovedTime)\n| where TimeDelta < timeframe\n| project KeyVaultName, AccessAddedTime, AddedActor, UserObjectAdded, KeyAccessAdded, SecretAccessAdded, CertAccessAdded, AccessRemovedTime, RemovedActor, UserObjectRemoved, KeyAccessRemoved, SecretAccessRemoved, CertAccessRemoved, TimeDelta\n| extend timestamp = AccessAddedTime, AccountCustomEntity = UserObjectAdded\n",
+                "query": "let timeframe = 10m;\nAzureDiagnostics\n| where ResourceType =~ \"VAULTS\"\n| where OperationName =~ \"VaultPatch\"\n| where ResultType =~ \"Success\"\n| extend UserObjectAdded = column_ifexists(\"addedAccessPolicy_ObjectId_g\",\"\")\n| extend AddedActor = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_name_s\n| extend KeyAccessAdded = tostring(column_ifexists(\"addedAccessPolicy_Permissions_keys_s\",\"\"))\n| extend SecretAccessAdded = tostring(column_ifexists(\"addedAccessPolicy_Permissions_secrets_s\",\"\"))\n| extend CertAccessAdded = tostring(column_ifexists(\"addedAccessPolicy_Permissions_certificates_s\",\"\"))\n| where isnotempty(UserObjectAdded)\n| project AccessAddedTime=TimeGenerated, ResourceType, OperationName, ResultType, KeyVaultName=id_s, AddedActor, UserObjectAdded, KeyAccessAdded, SecretAccessAdded, CertAccessAdded\n| join kind=inner \n( \nAzureDiagnostics\n| where ResourceType =~ \"VAULTS\"\n| where OperationName =~ \"VaultPatch\"\n| where ResultType =~ \"Success\"\n| extend RemovedActor = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_name_s\n| extend UserObjectRemoved = column_ifexists(\"removedAccessPolicy_ObjectId_g\", \"\")\n| extend KeyAccessRemoved = tostring(column_ifexists(\"removedAccessPolicy_Permissions_keys_s\",\"\"))\n| extend SecretAccessRemoved = tostring(column_ifexists(\"removedAccessPolicy_Permissions_secrets_s\",\"\"))\n| extend CertAccessRemoved = tostring(column_ifexists(\"removedAccessPolicy_Permissions_certificates_s\",\"\"))\n| where isnotempty(UserObjectRemoved)\n| project AccessRemovedTime=TimeGenerated, ResourceType, OperationName, ResultType, KeyVaultName=id_s, RemovedActor, UserObjectRemoved, KeyAccessRemoved, SecretAccessRemoved, CertAccessRemoved\n)\non KeyVaultName\n| extend TimeDelta = abs(AccessAddedTime - AccessRemovedTime)\n| where TimeDelta < timeframe\n| project KeyVaultName, AccessAddedTime, AddedActor, UserObjectAdded, KeyAccessAdded, SecretAccessAdded, CertAccessAdded, AccessRemovedTime, RemovedActor, UserObjectRemoved, KeyAccessRemoved, SecretAccessRemoved, CertAccessRemoved, TimeDelta\n| extend Account_0_AadUserId = UserObjectAdded\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "Identifies when a user is added and then removed to an Azure Key Vault access policy within a short time period. \nThis may be a sign of credential access and persistence."
+                    "value": "This query identifies instances where a user is added and subsequently removed from an Azure Key Vault access policy within a short duration, which could indicate attempts to credential access and persistence."
                   },
                   {
                     "name": "tactics",
@@ -236,7 +236,7 @@
       "apiVersion": "2022-01-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.1",
+        "version": "2.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
