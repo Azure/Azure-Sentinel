@@ -3,7 +3,7 @@ import * as logger from "./../utils/logger";
 import { ExitCode } from "./../utils/exitCode";
 import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals";
 import { IsValidSupportObject } from "./validSupportObject";
-import { IsValidBrandingContent } from "./validMSBranding";
+//import { IsValidBrandingContent } from "./validMSBranding";
 import { IsValidSolutionID } from "./validSolutionID";
 import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, InvalidSolutionIDValidationError } from "../utils/validationError";
 
