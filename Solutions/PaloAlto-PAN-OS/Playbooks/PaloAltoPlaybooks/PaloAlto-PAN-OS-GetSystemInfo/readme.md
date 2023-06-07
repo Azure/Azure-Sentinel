@@ -25,16 +25,12 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json)   [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAltoPlaybooks%2FPaloAlto-PAN-OS-GetSystemInfo%2Fazuredeploy.json)   [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAltoPlaybooks%2FPaloAlto-PAN-OS-GetSystemInfo%2Fazuredeploy.json)
 
 
 2. Fill in the required parameters:
-    * Playbook Name: The playbook name here (e.g. PaloAlto-PAN-OS-GetThreatPCAP)
-    * :  The blob storage account where the threat PCAP will be stored
-    * LogAnalyticsResourceGroup: The Log Analytics resource group for logging for the Playbook.
-    * LogAnalyticsResourceName: The Log Analytics resource for logging for the Playbook.
-
-    
+    * Playbook Name: The playbook name here (e.g. PaloAlto-PAN-OS-GetSystemInfo)
+	* CustomConnectorName : Name of the custom connector, if you want to change the default name, make sure to use the same in all PaloAlto automation playbooks as well	
 
 ### Post-Deployment instructions 
 #### a. Authorize connections
@@ -50,6 +46,17 @@ Once deployment is complete, you will need to authorize each connection.
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky IP
 2. Configure the automation rules to trigger this playbook
 
+#### c. Assign Playbook Microsoft Sentinel Responder Role
+1. Select the Playbook (Logic App) resource
+2. Click on Identity Blade
+3. Choose Systen assigned tab
+4. Click on Azure role assignments
+5. Click on Add role assignments
+6. Select Scope - Resource group
+7. Select Subscription - where Playbook has been created
+8. Select Resource group - where Playbook has been created
+9. Select Role - Microsoft Sentinel Responder
+10. Click Save (It takes 3-5 minutes to show the added role.)
 
 ## Playbook steps explained
 

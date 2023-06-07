@@ -11,13 +11,13 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 2. The SOC can take action on risky IP based on the information provided in the adaptive card.
 
 
-![PaloAlto-PAN-OS-BlockIP](./designerScreenshot.PNG)<br>
+![PaloAlto-PAN-OS-BlockIP](./images/designerscreenshot_lighttheme.PNG)<br>
 
 **This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore:**<br><br>
-![Adaptive Card example](./AdaptiveCardtoBlockorUnblock.PNG)<br>
+![Adaptive Card example](./images/AdaptiveCardtoBlockorUnblock.PNG)<br>
 
 **This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration:**<br><br>
-![Consolidated Adaptive Card example](./SummarizedAdaptiveCard.PNG)<br>
+![Consolidated Adaptive Card example](./images/SummarizedAdaptiveCard.PNG)<br>
 
 ### Prerequisites 
 1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
@@ -30,7 +30,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAltoPlaybooks%2FPaloAlto-PAN-OS-BlockIP-EntityTrigger%2Fazuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAltoPlaybooks%2FPaloAlto-PAN-OS-BlockIP-EntityTrigger%2Fazuredeploy.json)
 
 
 2. Fill in the required parameters:
@@ -39,6 +39,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
     * Teams ChannelId: Enter the Teams Group id to send the adaptive card
      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
     * Predefined address group name: Enter the predefined address group name here to Block IP / Unblock IP
+	* CustomConnectorName : Name of the custom connector, if you want to change the default name, make sure to use the same in all PaloAlto automation playbooks as well
     
 
 ### Post-Deployment instructions 
@@ -54,6 +55,18 @@ Once deployment is complete, you will need to authorize each connection.
 #### b. Configurations in Sentinel
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky IP
 2. Configure the automation rules to trigger this playbook
+
+#### c. Assign Playbook Microsoft Sentinel Responder Role
+1. Select the Playbook (Logic App) resource
+2. Click on Identity Blade
+3. Choose System assigned tab
+4. Click on Azure role assignments
+5. Click on Add role assignments
+6. Select Scope - Resource group
+7. Select Subscription - where Playbook has been created
+8. Select Resource group - where Playbook has been created
+9. Select Role - Microsoft Sentinel Responder
+10. Click Save (It takes 3-5 minutes to show the added role.)
 
 
 ## Playbook steps explained
@@ -141,11 +154,11 @@ a)If IP is a member of predefined address group
 
  ii) Set dynamic action name dynamically (unblock IP from predefined address group)
 
- iii) Filter array IP address from the list of address objects to unreference IP address from the existing group members
+ iii) Filter array IP address from the list of address objects to unreferenced IP address from the existing group members
 
- iv) unreference IP address from the existing group members
+ iv) unreferenced IP address from the existing group members
 
-b)If Ip is not a member of predefined address group
+b)If IP is not a member of predefined address group
 
  i) Append address group text to adaptive card dynamically
 
@@ -173,7 +186,7 @@ b. If not Ignored
 
  i) capture the action taken on IP address to display on consolidated adaptive card
 
- ii) check if SOC choosed Block Ip and no address object is present for that IP
+ ii) check if SOC chooses Block IP and no address object is present for that IP
 
  if SOC chooses block IP and no address object is present for that IP
 
