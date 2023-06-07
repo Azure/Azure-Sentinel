@@ -1,5 +1,5 @@
 # SlashNext Security Events for Microsoft Sentinel
-<img src="../SlashNext/Playbooks/logo/slashnext-logo.png" alt="drawing" width="50%"/><br>
+<img src="./logo/slashnext-logo.png" alt="drawing" width="50%"/><br>
 
 ## Overview
 
@@ -20,8 +20,8 @@ The PlayBook will get list of events occured to a customer and log them in Log A
     * Enable Web Incidents: To enable web incidents logging.
     * Enable SMS Incidents: To enable SMS/Mobile incidents logging.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSlashNext_SIEM%2Fdeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSlashNext_SIEM%2Fdeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSlashNext%20SIEM%2FPlayBook%2Fdeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSlashNext%20SIEM%2FPlayBook%2Fdeploy.json)
 
 ### Post-Deployment Instructions
 Open PlayBook design.
