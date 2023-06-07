@@ -114,8 +114,11 @@ def process_auth_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
     else:
         logging.info('Last timestamp is not known. Getting data for last 24h')
         mintime = int(time.time() - 86400) * 1000
-
-    maxtime = int(time.time() - 120) * 1000
+        diff = maxtime - mintime
+        if(diff < 3600):
+            maxtime = int(mintime) + 3600
+        else:
+            maxtime = int(time.time() - 120) * 1000
 
     for event in get_auth_logs(admin_api, mintime, maxtime):
         sentinel.send(event)
