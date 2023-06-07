@@ -1,0 +1,51 @@
+id: 7e5f3a9a-542c-417a-a429-4ed500c5c4d8
+name: Domain controller installation media creation 
+description: |
+   'This hunting query helps to detect attempts to create installation media from domain controllers, either remotely or locally using a commandline tool called ntdsutil. These media are intended to be used in the 
+    installation of new domain controllers.'
+requiredDataConnectors:
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1003
+tags:
+  - VoltTyphoon
+query: |
+  (union isfuzzy=true 
+  (SecurityEvent
+  | where EventID == 4688
+  | where CommandLine has_all ("ntdsutil", "ac i ntds", "create full")
+  | project TimeGenerated, Computer, Account, Process, ProcessId, NewProcessName, NewProcessId, CommandLine, ParentProcessName, _ResourceId, SourceComputerId, SubjectLogonId, SubjectUserSid
+  ),
+  (WindowsEvent
+  | where EventID == 4688 
+  | extend CommandLine = tostring(EventData.CommandLine)
+  | where CommandLine has_all ("ntdsutil", "ac i ntds", "create full")
+  | extend NewProcessName = tostring(EventData.NewProcessName), NewProcessId = tostring(EventData.NewProcessId)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1]),  ProcessId = tostring(EventData.ProcessId)
+  | extend Account =  strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName) 
+  | extend SubjectUserName = tostring(EventData.SubjectUserName), SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectLogonId = tostring(EventData.SubjectLogonId)
+  | project TimeGenerated, Computer, Account, Process, ProcessId, NewProcessName, NewProcessId, CommandLine, ParentProcessName, _ResourceId, SubjectUserName, SubjectDomainName, SubjectLogonId
+  ) 
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: Process
+version: 1.0.0
