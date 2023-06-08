@@ -24,7 +24,7 @@ The playbook can be triggered manually from a Host Entity to get the missing pat
     * Playbook Name
     * Functions App Name
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWSAthena%2FPlaybooks%2FAWSAthenaPlaybooks%2FAWSAthena-GetQueryResults%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWSAthena%2FPlaybooks%2FAWSAthenaPlaybooks%2FAWSAthena-GetQueryResults%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS%2520Systems%2520Manager%2FPlaybooks%2FAWSSystemsManagerPlaybooks%2FAWS-SSM-GetInstancePatches-HostEntityTrigger%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS%2520Systems%2520Manager%2FPlaybooks%2FAWSSystemsManagerPlaybooks%2FAWS-SSM-GetInstancePatches-HostEntityTrigger%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
