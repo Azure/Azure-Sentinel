@@ -1715,7 +1715,7 @@
                 "description": "Detects when dormant VM was started.",
                 "displayName": "VMware ESXi - Dormant VM started",
                 "enabled": false,
-                "query": "let vm_p_off =\nVMwareESXi\n| where TimeGenerated > ago(14d)\n| where SyslogMessage has ('VmPoweredOffEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize LastPowerOffTime=max(TimeGenerated) by DstHostname\n| where datetime_diff('day',datetime(now),LastPowerOffTime) >= 20; \nlet vm_p_on =\nVMwareESXi\n| where TimeGenerated > ago(14d)\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize LastPowerOnTime=max(TimeGenerated) by DstHostname\n| where datetime_diff('day',datetime(now),LastPowerOnTime) >= 20;\nlet off_vms =\nvm_p_on\n| join (vm_p_off) on DstHostname\n| where LastPowerOffTime > LastPowerOnTime\n| summarize p_off_vm = makeset(DstHostname)\n| extend k=1;\nVMwareESXi\n| where TimeGenerated between (ago(24h) .. datetime(now))\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| extend k=1\n| join (off_vms) on k\n| where p_off_vm !has DstHostname\n| summarize rec_p_on = makeset(DstHostname)\n| extend hostname = iff(array_length(rec_p_on) > 0, rec_p_on[0], \"\")\n| extend NTDomain = tostring(split(hostname, '\\\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0])\n",
+                "query": "let vm_p_off =\nVMwareESXi\n| where TimeGenerated > ago(14d)\n| where SyslogMessage has ('VmPoweredOffEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize LastPowerOffTime=max(TimeGenerated) by DstHostname\n| where datetime_diff('day',datetime(now),LastPowerOffTime) >= 20; \nlet vm_p_on =\nVMwareESXi\n| where TimeGenerated > ago(14d)\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize LastPowerOnTime=max(TimeGenerated) by DstHostname\n| where datetime_diff('day',datetime(now),LastPowerOnTime) >= 20;\nlet off_vms =\nvm_p_on\n| join (vm_p_off) on DstHostname\n| where LastPowerOffTime > LastPowerOnTime\n| summarize p_off_vm = makeset(DstHostname,200)\n| extend k=1;\nVMwareESXi\n| where TimeGenerated between (ago(24h) .. datetime(now))\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| extend k=1\n| join (off_vms) on k\n| where p_off_vm !has DstHostname\n| summarize rec_p_on = makeset(DstHostname,200)\n| extend hostname = iff(array_length(rec_p_on) > 0, rec_p_on[0], \"\")\n| extend NTDomain = tostring(split(hostname, '\\\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0])\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -1726,10 +1726,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1740,7 +1740,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "HostName",
@@ -1750,7 +1749,8 @@
                         "columnName": "NTDomain",
                         "identifier": "NTDomain"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   }
                 ]
               }
@@ -1841,10 +1841,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1855,13 +1855,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "HostCustomEntity",
                         "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   }
                 ]
               }
@@ -1952,10 +1952,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1966,13 +1966,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "HostCustomEntity",
                         "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   }
                 ]
               }
@@ -2052,7 +2052,7 @@
                 "description": "Detects when multiple new VMs were started.",
                 "displayName": "VMware ESXi - Multiple new VMs started",
                 "enabled": false,
-                "query": "let threshold = 5;\nlet a_vm = \nVMwareESXi\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize vm_l = makeset(DstHostname)\n| extend k=1;\nVMwareESXi\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| extend SrcUsername = extract(@'\\[info\\]\\s+\\[(.*?)\\]', 1, SyslogMessage)\n| extend k = 1\n| join (a_vm) on k\n| where vm_l !has DstHostname\n| summarize n_vm = makeset(DstHostname) by SrcUsername, bin(TimeGenerated, 10m)\n| where array_length(n_vm) >= threshold\n| extend hostname = iff(array_length(n_vm) > 0, n_vm[0], \"\")\n| extend NTDomain = tostring(split(hostname, '\\\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0])\n",
+                "query": "let threshold = 5;\nlet a_vm = \nVMwareESXi\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize vm_l = makeset(DstHostname,200)\n| extend k=1;\nVMwareESXi\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| extend SrcUsername = extract(@'\\[info\\]\\s+\\[(.*?)\\]', 1, SyslogMessage)\n| extend k = 1\n| join (a_vm) on k\n| where vm_l !has DstHostname\n| summarize n_vm = makeset(DstHostname,200) by SrcUsername, bin(TimeGenerated, 10m)\n| where array_length(n_vm) >= threshold\n| extend hostname = iff(array_length(n_vm) > 0, n_vm[0], \"\")\n| extend NTDomain = tostring(split(hostname, '\\\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0])\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -2063,10 +2063,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2077,7 +2077,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "HostName",
@@ -2087,7 +2086,8 @@
                         "columnName": "NTDomain",
                         "identifier": "NTDomain"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   }
                 ]
               }
@@ -2167,7 +2167,7 @@
                 "description": "Detects when multiple VMs ware stopped by user.",
                 "displayName": "VMware ESXi - Multiple VMs stopped",
                 "enabled": false,
-                "query": "let threshold = 5;\nVMwareESXi\n| where SyslogMessage has ('VmPoweredOffEvent')\n| extend SrcUsername = extract(@'\\[info\\]\\s+\\[(.*?)\\]', 1, SyslogMessage)\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize st_vm = makeset(DstHostname) by SrcUsername, bin(TimeGenerated, 5m)\n| where array_length(st_vm) > threshold\n| extend hostname = iff(array_length(st_vm) > 0, st_vm[0], \"\")\n| extend NTDomain = tostring(split(hostname, '\\\\', 0)[0]), Name = tostring(split(SrcUsername, '\\\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0]), DnsDomain = tostring(split(SrcUsername, '\\\\', 1)[0])\n",
+                "query": "let threshold = 5;\nVMwareESXi\n| where SyslogMessage has ('VmPoweredOffEvent')\n| extend SrcUsername = extract(@'\\[info\\]\\s+\\[(.*?)\\]', 1, SyslogMessage)\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize st_vm = makeset(DstHostname,200) by SrcUsername, bin(TimeGenerated, 5m)\n| where array_length(st_vm) > threshold\n| extend hostname = iff(array_length(st_vm) > 0, st_vm[0], \"\")\n| extend NTDomain = tostring(split(hostname, '\\\\', 0)[0]), Name = tostring(split(SrcUsername, '\\\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0]), DnsDomain = tostring(split(SrcUsername, '\\\\', 1)[0])\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -2178,10 +2178,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2192,7 +2192,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "Name",
@@ -2202,10 +2201,10 @@
                         "columnName": "DnsDomain",
                         "identifier": "DnsDomain"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "HostName",
@@ -2215,7 +2214,8 @@
                         "columnName": "NTDomain",
                         "identifier": "NTDomain"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   }
                 ]
               }
@@ -2306,10 +2306,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2320,13 +2320,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "HostCustomEntity",
                         "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   }
                 ]
               }
@@ -2417,10 +2417,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2431,13 +2431,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "AccountCustomEntity",
                         "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -2528,10 +2528,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2543,13 +2543,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2640,10 +2640,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2655,13 +2655,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2752,10 +2752,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2766,13 +2766,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "HostCustomEntity",
                         "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   }
                 ]
               }
@@ -2863,10 +2863,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "VMwareESXi",
                     "dataTypes": [
                       "VMwareESXi"
-                    ],
-                    "connectorId": "VMwareESXi"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2877,22 +2877,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "HostCustomEntity",
                         "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "AccountCustomEntity",
                         "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
