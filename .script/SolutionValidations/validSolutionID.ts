@@ -26,12 +26,12 @@ export function IsValidSolutionID(filePath: string): ExitCode {
         // Validate the solution ID format
         const regex = /^[^.]+\.[^.]+$/;
         if (!regex.test(solutionId)) {
-            throw new InvalidSolutionIDValidationError(`Invalid solution ID format. Expected format: publisherID.offerID. Found: ${solutionId}`);
+            throw new InvalidSolutionIDValidationError(`Invalid solution ID format. Expected format: publisherID.offerID. and it must be in lowercase. Found: ${solutionId}`);
         }
 
         // Validate the solution ID case (lowercase)
         if (solutionId !== solutionId.toLowerCase()) {
-            throw new InvalidSolutionIDValidationError(`Invalid solution ID case. Solution ID must be in lowercase. Found: ${solutionId}`);
+            throw new InvalidSolutionIDValidationError(`Invalid solution ID format. Expected format: publisherID.offerID. and it must be in lowercase. Found: ${solutionId}`);
         }
     } else {
         throw new InvalidSolutionIDValidationError(`Missing 'solutionId' attribute in the file. File path: ${filePath}`);
