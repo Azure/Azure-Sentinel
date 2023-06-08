@@ -20,7 +20,7 @@ export function IsValidSolutionID(filePath: string): ExitCode {
 
         // Validate if the solution ID is empty
         if (!solutionId) {
-            throw new InvalidSolutionIDValidationError(`Empty solution ID. Expected format: publisherID.offerID. Found empty value.`);
+            throw new InvalidSolutionIDValidationError(`Empty solution ID. Expected format: publisherID.offerID. and it must be in lowercase. Found empty value.`);
         }
 
         // Validate the solution ID format
