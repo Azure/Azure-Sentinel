@@ -4,8 +4,8 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Delete-App-Registration%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Delete-App-Registration%2Fmain%2Fazuredeploy.json)       
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Delete-App-Registration%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Delete-App-Registration%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel incident. If any app registration entities are found (i.e. any entities where kind == CloudApplication), they will be deleted. This playbook matches by name, since a unique app registration ID cannot currently be pulled into the entity list, so if there are multiple app registrations exactly matching the name(s) of the CloudApplication entities, all will be deleted.
 
@@ -19,8 +19,8 @@ This playbook is intended to be run from a Microsoft Sentinel incident. If any a
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* An [App Registration](https://github.com/Accelerynt-Security/AS-Delete-App-Registration#create-an-app-registration) for using the Microsoft Graph API
-* An [Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Delete-App-Registration#create-an-azure-key-vault-secret) containing your App Registration Secret 
+* An [App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Delete-App-Registration#create-an-app-registration) for using the Microsoft Graph API
+* An [Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Delete-App-Registration#create-an-azure-key-vault-secret) containing your App Registration Secret 
 
 
 # 
@@ -59,7 +59,7 @@ Click "**New client secret"**". After adding a description and selecting an expi
 
 ![DeleteAppRegistration_Create_App_Registration_7](Images/DeleteAppRegistration_Create_App_Registration_7.png)
 
-Copy the generated "**Value**" and save it for the next step, [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Delete-App-Registration#create-an-azure-key-vault-secret).
+Copy the generated "**Value**" and save it for the next step, [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Delete-App-Registration#create-an-azure-key-vault-secret).
 
 ![DeleteAppRegistration_Create_App_Registration_8](Images/DeleteAppRegistration_Create_App_Registration_8.png)
 
@@ -76,7 +76,7 @@ Choose a name for the secret, such as "**AS-Delete-App-Registration-Playbook-App
 
 ![DeleteAppRegistration_Key_Vault_2](Images/DeleteAppRegistration_Key_Vault_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-Delete-App-Registration#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Delete-App-Registration#granting-access-to-azure-key-vault).
 
 ![DeleteAppRegistration_Key_Vault_3](Images/DeleteAppRegistration_Key_Vault_3.png)
 
@@ -90,8 +90,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-Delete-App-Registration
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Delete-App-Registration%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Delete-App-Registration%2Fmain%2Fazuredeploy.json)                                             
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Delete-App-Registration%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Delete-App-Registration%2Fazuredeploy.json)                                             
 
 Click the "**Deploy to Azure**" button at the bottom and it will bring you to the custom deployment template.
 
@@ -103,13 +103,13 @@ In the **Instance Details** section:
 
 * **Playbook Name**: This can be left as "**AS-Delete-App-Registration**" or you may change it.  
 
-* **App Registration ID**: Enter the value of the Application (client) ID referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-Delete-App-Registration#create-an-app-registration).
+* **App Registration ID**: Enter the value of the Application (client) ID referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Delete-App-Registration#create-an-app-registration).
 
-* **App Registration Tenant**: Enter the value of the Directory (tenant) ID referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-Delete-App-Registration#create-an-app-registration).
+* **App Registration Tenant**: Enter the value of the Directory (tenant) ID referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Delete-App-Registration#create-an-app-registration).
 
-* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Delete-App-Registration#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Delete-App-Registration#create-an-azure-key-vault-secret).
 
-* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Delete-App-Registration#create-an-azure-key-vault-secret).
+* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Delete-App-Registration#create-an-azure-key-vault-secret).
 
 Towards the bottom, click on "**Review + create**". 
 
