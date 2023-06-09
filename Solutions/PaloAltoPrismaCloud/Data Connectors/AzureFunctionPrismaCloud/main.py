@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import aiohttp
 import json
 import time
@@ -25,6 +26,8 @@ LOGTYPE = os.environ.get('LogType',"alert, audit")
 
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
 MAX_PERIOD_MINUTES = 60 * 6
+
+sys.setrecursionlimit(10**9)
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
