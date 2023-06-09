@@ -22,24 +22,38 @@ tags:
 query: |
   AuditLogs
   | where ActivityDisplayName =~'Add member to role completed (PIM activation)'
-  | where Result == "failure"
-  | extend Role = tostring(TargetResources[3].displayName)
-  | extend User = tostring(TargetResources[2].displayName)
+  | where Result =~ "failure"
+  | mv-apply ResourceItem = TargetResources on 
+    (
+        where ResourceItem.type =~ "Role"
+        | extend Role = trim(@'"',tostring(ResourceItem.displayName))
+    )
+  | mv-apply ResourceItem = TargetResources on 
+    (
+        where ResourceItem.type =~ "User"
+        | extend User = trim(@'"',tostring(ResourceItem.userPrincipalName))
+    )
   | project-reorder TimeGenerated, User, Role, OperationName, Result, ResultDescription
-  | extend InitiatingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-  | extend AccountCustomEntity = User, IPCustomEntity = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | where isnotempty(InitiatedBy.user)
+  | extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName), InitiatingIpAddress = tostring(InitiatedBy.user.ipAddress)
+  | extend InitiatingName = tostring(split(InitiatingUser,'@',0)[0]), InitiatingUPNSuffix = tostring(split(InitiatingUser,'@',1)[0])
+  | extend UserName = tostring(split(User,'@',0)[0]), UserUPNSuffix = tostring(split(User,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: InitiatingUser
+      - identifier: Name
+        columnName: InitiatingName      
+      - identifier: UPNSuffix
+        columnName: InitiatingUPNSuffix
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: UserName      
+      - identifier: UPNSuffix
+        columnName: UserUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.2
+        columnName: InitiatingIpAddress
+version: 1.0.5
 kind: Scheduled

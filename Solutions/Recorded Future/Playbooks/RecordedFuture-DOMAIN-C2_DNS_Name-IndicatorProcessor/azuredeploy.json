@@ -1,0 +1,216 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "RecordedFuture-DOMAIN-C2_DNS_Name-TIProcessor",
+        "description": "This playbook leverages the Recorded Future API and automatically imports the C&C DNS Name Domain RiskList, as Threat Intelligence Indicators, for detection purposes in Microsoft Sentinel.\n\nThis playbook depends on RecordedFuture-ImportToSentinel that need to be installed **manually** before installing current playbook.",
+        "prerequisites": [
+            "First install the RecordedFuture-ImportToSentinel playbook.",
+            "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the documentation https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials"
+        ],
+        "postDeployment": [
+            "After deployment you have to open the playbook to configure all connections and press save."
+        ],
+        "prerequisitesDeployTemplateFile": "../RecordedFuture-ImportToSentinel/RecordedFuture-ImportToSentinel.json",
+        "lastUpdateTime": "2022-08-01T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Threat Intelligence" ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "RecordedFuture-DOMAIN-C2_DNS_Name-IndicatorProcessor",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-DOMAIN-C2_DNS_Name-TIProcessor",
+            "type": "String"
+        },
+        "PlaybookNameBatching": {
+            "defaultValue": "RecordedFuture-ImportToSentinel",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "RecordedFutureConnectionName": "recordedfuture-connectorv2"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('RecordedFutureConnectionName'))]"
+            ],
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "For_each": {
+                            "actions": {
+                                "Parse_JSON": {
+                                    "inputs": {
+                                        "content": "@items('For_each')",
+                                        "schema": {
+                                            "properties": {
+                                                "EvidenceDetails": {
+                                                    "properties": {
+                                                        "EvidenceDetails": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "Criticality": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "CriticalityLabel": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "EvidenceString": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Rule": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Timestamp": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "Rule",
+                                                                    "EvidenceString",
+                                                                    "CriticalityLabel",
+                                                                    "Timestamp",
+                                                                    "Criticality"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "Name": {
+                                                    "type": "string"
+                                                },
+                                                "Risk": {
+                                                    "type": "integer"
+                                                },
+                                                "riskString": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ParseJson"
+                                },
+                                "RecordedFuture-ImportToSentinel": {
+                                    "inputs": {
+                                        "batchName": "RFImportToSentinel",
+                                        "content": {
+                                            "action": "alert",
+                                            "additionalInformation": "@{body('Parse_JSON')?['EvidenceDetails']}",
+                                            "azureTenantId": "[subscription().tenantId]",
+                                            "confidence": "@int(body('Parse_JSON')?['Risk'])",
+                                            "description": "Recorded Future - DOMAIN - C2 DNS Name",
+                                            "domainName": "@{body('Parse_JSON')?['Name']}",
+                                            "expirationDateTime": "@{addHours(utcNow(),2)}",
+                                            "ingestedDateTime": "@{utcNow()}",
+                                            "targetProduct": "Azure Sentinel",
+                                            "threatType": "C2",
+                                            "tlpLevel": "amber"
+                                        },
+                                        "host": {
+                                            "triggerName": "Batch_messages",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('PlaybookNameBatching'))]"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SendToBatch"
+                                }
+                            },
+                            "foreach": "@body('Recorded_Future_RiskLists_and_SCF_Download')",
+                            "runAfter": {
+                                "Recorded_Future_RiskLists_and_SCF_Download": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Recorded_Future_RiskLists_and_SCF_Download": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['recordedfuture']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/fusion/files",
+                                "queries": {
+                                    "path": "/public/MicrosoftAzure/domain_c2_dns.json"
+                                }
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 2
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "recordedfuture": {
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/recordedfuturev2')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedFutureConnectionName'))]",
+                                "connectionName": "[variables('RecordedFutureConnectionName')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('RecordedFutureConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/recordedfuturev2')]"
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

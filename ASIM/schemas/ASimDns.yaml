@@ -1,0 +1,309 @@
+Schema:
+  Schema: Dns
+  Version: '0.1.7'
+  Last Updated: Jan 01 2023
+References:
+- Title: ASIM Dns Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+
+Include:
+
+# Metadata
+- Name: Enumerations
+  File: common/ASimEnumerations.yaml
+
+# Common fields
+- Name: Event Fields
+  File: common/ASimEventFields.yaml
+- Name: Inspection fields
+  File: common/ASimInspectionFields.yaml
+
+# Entities
+- Name: Dvc
+  File: common/ASimDvc.yaml
+- Name: Source user entity
+  File: entities/ASimUser.yaml
+  Role: Src
+- Name: Source process entity
+  File: entities/ASimProcess.yaml
+  Role: Src
+- Name: Source system entity
+  File: entities/ASimSystem.yaml
+  Role: Src
+- Name: Destination system entity
+  File: entities/ASimSystem.yaml
+  Role: Dst
+
+Fields:
+# Common fields overrides and additions
+- Name: EventType
+  Type: string
+  Class: Mandatory
+  Logical type: Enumerated
+  List of values: TBD
+  Description: For DNS records, this value would be the DNS op code.
+  References:
+  - https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
+
+- Name: EventSubType
+  Type: string
+  Class: Mandatory
+  Logical type: Enumerated
+  List of values: [ request response ]
+  Notes: For most sources, only the responses are logged, and therefore the value is often response.
+
+- Name: EventResultDetails
+  Type: string
+  Class: Mandatory
+  Logical type: Enumerated
+  List of values: TBD
+  Description: For DNS events, this field provides the DNS response code.
+  References:
+  - https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
+
+- Name: EventSchema
+  Type: string
+  Class: Mandatory
+  Logical type: Enumerated
+  List of values: [ Dns ]
+
+- Name: ThreatField
+  Class: Conditional
+  Type: string
+  Logical type: Enumerated
+  Description: The field for which a threat was identified. The value is either SrcIpAddr, DstIpAddr, Domain, or DnsResponseName..
+  List of values: [SrcIpAddr DstIpAddr Domain  DnsResponseName]
+
+- Name: ThreatIpAddr
+  Class: Optional
+  Type: string
+  Logical type: IP Address
+  Description: An IP address for which a threat was identified. The field ThreatField contains the name of the field ThreatFilePath represents.
+
+# Aliases
+- Name: User
+  Type: string
+  Class: Alias
+  Logical type: Username
+  Aliases: SrcUsername
+
+- Name: Process
+  Type: string
+  Class: Alias
+  Description: Alias to SrcProcessName
+  Aliases: SrcProcessName
+
+- Name: IpAddr
+  Type: string
+  Class: Alias
+  Logical type: IP Address
+  Description: Alias to SrcIpAddr
+  Aliases: SrcIpAddr
+
+- Name: Hostname
+  Type: string
+  Class: Alias
+  Description: Alias to SrcHostname
+  Aliases: SrcHostname
+
+# DNS event fields
+- Name: DnsQuery
+  Class: Mandatory
+  Type:  string
+  Description: The domain that the request tries to resolve.
+  Notes: |
+    - Some sources send valid FQDN queries in a different format. For example, in the DNS protocol itself, the query includes a dot (.) at the end, which must be removed.
+    - While the DNS protocol limits the type of value in this field to an FQDN, most DNS servers allow any value, and this field is therefore not limited to FQDN values only. Most notably, DNS tunneling attacks may use invalid FQDN values in the query field.
+    - While the DNS protocol allows for multiple queries in a single request, this scenario is rare, if it's found at all. If the request has multiple queries, store the first one in this field, and then and optionally keep the rest in the AdditionalFields field.
+  Example: www.malicious.com
+
+- Name: Domain
+  Class: Alias
+  Type: string
+  Aliases: DnsQuery
+  Description: Alias to DnsQuery.
+
+- Name: DnsQueryType
+  Class: Optional
+  Type: integer
+  Description: The DNS Resource Record Type codes.
+  Example: 28
+
+- Name: DnsQueryTypeName
+  Class: Recommended
+  Type: string
+  Logical type:  Enumerated
+  List of values: TBD
+  Description: The DNS Resource Record Type names.
+  Notes: |
+    - IANA doesn't define the case for the values, so analytics must normalize the case as needed.
+    - The value ANY is supported for the response code 255.
+    - The value TYPExxxx is supported for unmapped response codes, where xxxx is the numerical value of the response code, as reported by the BIND DNS server.
+    - If the source provides only a numerical query type code and not a query type name, the parser must include a lookup table to enrich with this value.
+  Example: AAAA
+
+- Name: DnsResponseName
+  Class: Optional
+  Type:  string
+  Description: The content of the response, as included in the record.
+  Notes: The DNS response data is inconsistent across reporting devices, is complex to parse, and has less value for source-agnostic analytics. Therefore the information model doesn't require parsing and normalization, and Microsoft Sentinel uses an auxiliary function to provide response information. For more information, see Handling DNS response.
+
+- Name: DnsResponseCodeName
+  Class: Alias
+  Type: string
+  Aliases: EventResultDetails
+  Description: Alias to EventResultDetails
+
+- Name: DnsResponseCode
+  Class: Optional
+  Type:  integer
+  Description: The DNS numerical response code.
+  Example: 3
+
+- Name: TransactionIdHex
+  Class:  Recommended
+  Type:  string
+  Description:  The DNS query unique ID as assigned by the DNS client, in hexadecimal format. Note that this value is part of the DNS protocol and different from DnsSessionId, the network layer session ID, typically assigned by the reporting device.
+
+- Name: NetworkProtocol
+  Class: Optional
+  Type: string
+  Logical type:  Enumerated
+  List of values: [TCP UDP]
+  Description: The transport protocol used by the network resolution event. The value can be UDP or TCP, and is most commonly set to UDP for DNS.
+  Example: UDP
+
+- Name: NetworkProtocolVersion
+  Class: Optional
+  Type: string
+  Logical type:  Enumerated
+  List of values: TBD
+
+- Name: DnsQueryClass
+  Class: Optional
+  Type:  integer
+  Description: The DNS class ID. In practice, only the IN class (ID 1) is used, and therefore this field is less valuable.
+
+- Name: DnsQueryClassName
+  Class: Optional
+  Type:  string
+  Logical type: Enumerated
+  List of values: TBD
+  Description: The DNS class name. In practice, only the IN class (ID 1) is used, and therefore this field is less valuable.
+  Example: IN
+
+- Name: DnsFlags
+  Class: Optional
+  Type: string
+  Description: List of strings  The flags field, as provided by the reporting device. If flag information is provided in multiple fields, concatenate them with comma as a separator.
+  Notes: Since DNS flags are complex to parse and are less often used by analytics, parsing, and normalization aren't required. Microsoft Sentinel can use an auxiliary function to provide flags information. For more information, see Handling DNS response.
+  Example: "DR"
+
+- Name: DnsNetworkDuration
+  Class: Optional
+  Type:  integer
+  Description:  The amount of time, in milliseconds, for the completion of DNS request.
+  Example: 1500
+
+- Name: Duration
+  Type: integer
+  Class: Alias
+  Aliases: DnsNetworkDuration
+  Description: Alias to DnsNetworkDuration
+
+- Name: DnsFlagsAuthenticated
+  Class: Optional
+  Type: bool
+  Description:  The DNS AD flag, which is related to DNSSEC, indicates in a response that all data included in the answer and authority sections of the response have been verified by the server according to the policies of that server. For more information, see RFC 3655 Section 6.1 for more information.
+
+- Name: DnsFlagsAuthoritative
+  Class: Optional
+  Type: bool
+  Description: The DNS AA flag indicates whether the response from the server was authoritative
+
+- Name: DnsFlagsCheckingDisabled
+  Class: Optional
+  Type: bool
+  Description: The DNS CD flag, which is related to DNSSEC, indicates in a query that non-verified data is acceptable to the system sending the query. For more information, see RFC 3655 Section 6.1 for more information.
+
+- Name: DnsFlagsRecursionAvailable
+  Class: Optional
+  Type: bool
+  Description: The DNS RA flag indicates in a response that that server supports recursive queries.
+
+- Name: DnsFlagsRecursionDesired
+  Class: Optional
+  Type: bool
+  Description: The DNS RD flag indicates in a request that that client would like the server to use recursive queries.
+
+- Name: DnsFlagsTruncated
+  Class: Optional
+  Type: bool
+  Description: The DNS TC flag indicates that a response was truncated as it exceeded the maximum response size.
+
+- Name: DnsFlagsZ
+  Class: Optional
+  Type: bool
+  Description: The DNS Z flag is a deprecated DNS flag, which might be reported by older DNS systems.
+
+- Name: DnsSessionId
+  Class: Optional
+  Type: string
+  Description:  The DNS session identifier as reported by the reporting device. This value is different from TransactionIdHex, the DNS query unique ID as assigned by the DNS client.
+  Example: EB4BFA28-2EAD-4EF7-BC8A-51DF4FDF5B55
+
+- Name: SessionId
+  Class: Alias
+  Type: string
+  Aliases: DnsSessionId
+  Description: Alias to DnsSessionId
+
+- Name: DnsResponseIpCountry
+  Class: Optional
+  Type: string
+  Logical type: Country
+  Description: The country associated with one of the IP addresses in the DNS response. For more information, see Logical types.
+  Example: USA
+
+- Name: DnsResponseIpRegion
+  Class: Optional
+  Type: string
+  Logical type: Region
+  Description: The region, or state, within a country associated with one of the IP addresses in the DNS response. For more information, see Logical types.
+  Example: Vermont
+
+- Name: DnsResponseIpCity
+  Class: Optional
+  Type: string
+  Logical type: City
+  Description: The city associated with one of the IP addresses in the DNS response. For more information, see Logical types.
+  Example: Burlington
+
+- Name: DnsResponseIpLatitude
+  Class: Optional
+  Type: float
+  Logical type:  Latitude
+  Description: The latitude of the geographical coordinate associated with one of the IP addresses in the DNS response. For more information, see Logical types.
+  Example: 44.475833
+
+- Name: DnsResponseIpLongitude
+  Class: Optional
+  Type: float
+  Logical type:  Longitude
+  Description: The longitude of the geographical coordinate associated with one of the IP addresses in the DNS response. For more information, see Logical types.
+  Example: 73.211944
+
+- Name: UrlCategory
+  Class: Optional
+  Type: string
+  Description: A DNS event source may also look up the category of the requested Domains. The field is called UrlCategory to align with the Microsoft Sentinel network schema.
+
+  Example: Educational \\ Phishing
+
+- Name: DomainCategory
+  Type: string
+  Class: Alias
+  Description: Alias to UrlCategory. DomainCategory is added as an alias that's fitting to DNS.
+  Aliases: UrlCategory
