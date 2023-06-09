@@ -8,6 +8,7 @@ using YamlDotNet.Serialization;
 using Microsoft.Azure.Sentinel.KustoServices.Implementation;
 using Kqlvalidations.Tests.FunctionSchemasLoaders;
 using System;
+using Newtonsoft.Json;
 
 namespace Kqlvalidations.Tests
 {
@@ -15,6 +16,7 @@ namespace Kqlvalidations.Tests
     {
         private readonly IKqlQueryAnalyzer _queryValidator;
         private const int TestFolderDepth = 3;
+        private const string UserMessageTemplate = "Template Id:{0} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.";
 
         public KqlValidationTests()
         {
@@ -25,6 +27,47 @@ namespace Kqlvalidations.Tests
                .WithCustomFunctionSchemasLoader(new ParsersCustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
                .WithCustomFunctionSchemasLoader(new CommonFunctionsLoader())
                .Build();
+        }
+
+
+        [Theory]
+        [ClassData(typeof(DataConnectorFilesTestData))]
+        public void Validate_DataConnectors_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            var dataConnector = ReadAndDeserializeDataConnectorJson(encodedFilePath);
+            var id = (string)dataConnector.Id;
+            //we ignore known issues
+            if (ShouldSkipTemplateValidation(id))
+            {
+                return;
+            }
+            foreach (var connectivityCriteria in dataConnector.ConnectivityCriterias)
+            {
+                //check only if connectivity criteria type is eqaul to "IsConnectedQuery"
+                if (connectivityCriteria.Type.Equals("IsConnectedQuery", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (var queryStr in connectivityCriteria.Value)
+                    {
+                        ValidateKql(id, queryStr);
+                    }
+                }
+
+            }
+
+            foreach (var sampleQuery in dataConnector.SampleQueries)
+            {
+                ValidateKql(id, sampleQuery.Query);
+            }
+
+            foreach (var graphQuery in dataConnector.GraphQueries)
+            {
+                ValidateKql(id, graphQuery.BaseQuery);
+            }
+
+            foreach (var datatype in dataConnector.DataTypes)
+            {
+                ValidateKql(id, datatype.LastDataReceivedQuery);
+            }
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -43,42 +86,6 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
-        }
-
-        // We pass File name to test because in the result file we want to show an informative name for the test
-        [Theory]
-        [ClassData(typeof(HuntingQueriesYamlFilesTestData))]
-        public void Validate_HuntingQueries_HaveValidTIData(string fileName, string encodedFilePath)
-        {
-            var res = ReadAndDeserializeYaml(encodedFilePath);
-            var id = (string)res["id"];
-
-            //we ignore known issues. We also ignore templates that are not in the skipped templates list.
-            if (ShouldSkipTemplateValidation(id))
-            {
-                return;
-            }
-
-            var queryStr = (string)res["query"];
-            ValidateKqlForLatestTIData(id, queryStr);
-        }
-
-        // We pass File name to test because in the result file we want to show an informative name for the test
-        [Theory]
-        [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_HaveValidTIData(string fileName, string encodedFilePath)
-        {
-            var res = ReadAndDeserializeYaml(encodedFilePath);
-            var id = (string)res["id"];
-
-            //we ignore known issues
-            if (ShouldSkipTemplateValidation(id))
-            {
-                return;
-            }
-
-            var queryStr = (string)res["query"];
-            ValidateKqlForLatestTIData(id, queryStr);
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -113,7 +120,7 @@ namespace Kqlvalidations.Tests
             {
                 var queryStr = (string)res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+                Assert.False(validationRes.IsValid, string.Format(UserMessageTemplate, id));
             }
 
         }
@@ -131,7 +138,7 @@ namespace Kqlvalidations.Tests
             {
                 var queryStr = (string)res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+                Assert.False(validationRes.IsValid, string.Format(UserMessageTemplate, id));
             }
 
         }
@@ -176,7 +183,7 @@ namespace Kqlvalidations.Tests
             {
                 var queryStr = (string)res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+                Assert.False(validationRes.IsValid, string.Format(UserMessageTemplate, id));
             }
 
         }
@@ -253,37 +260,6 @@ namespace Kqlvalidations.Tests
                     Errors: {validationResult.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
 
-        private void ValidateKqlForLatestTIData(string id, string queryStr)
-        {
-
-            //Condition to check below logic only when queryStr it contains "ThreatIntelligenceIndicator" followed by "|"
-            string tiTablepattern = @"ThreatIntelligenceIndicator\s*\|\s*";
-            bool match = Regex.IsMatch(queryStr, tiTablepattern);
-            if (match)
-            {
-                string queryPattern = @"ThreatIntelligenceIndicator\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\(\w+\)\s*\|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*(?:ExpirationDateTime\s*>\s*now\(\)\s*and\s*Active\s*==\s*true|Active\s*==\s*true\s*and\s*ExpirationDateTime\s*>\s*now\(\))";
-                bool queryMatch = Regex.IsMatch(queryStr, queryPattern);
-                Assert.True(
-                    queryMatch,
-                    queryMatch
-                       ? string.Empty
-        : @$"Template Id: {id} is not valid 
-        Errors: Content needs to use the latest Threat Intelligence data. Sample queries to get the latest Threat Intelligence data:
-        ThreatIntelligenceIndicator
-        | where TimeGenerated >= ago(ioc_lookBack)
-        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-        | where Active == true and ExpirationDateTime > now()
-
-        or
-
-        ThreatIntelligenceIndicator
-        | where TimeGenerated >= ago(ioc_lookBack)
-        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-        | where ExpirationDateTime > now() and Active == true");
-            }
-
-        }
-
         private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
         {
 
@@ -342,6 +318,13 @@ namespace Kqlvalidations.Tests
             string type = (string)dictionary["Type"];
             string defaultValue = ((string)dictionary.GetValueOrDefault("Default")) ?? TypesDatabase.TypeToDefaultValueMapping.GetValueOrDefault(type);
             return $"let {name}= {(type == "string" ? $"'{defaultValue}'" : defaultValue)};";
+        }
+
+        private DataConnectorSchema ReadAndDeserializeDataConnectorJson(string encodedFilePath)
+        {
+            var jsonString = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
+            DataConnectorSchema dataConnectorObject = JsonConvert.DeserializeObject<DataConnectorSchema>(jsonString);
+            return dataConnectorObject;
         }
     }
 
