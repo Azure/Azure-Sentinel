@@ -4,8 +4,8 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fmaster%2Fazuredeploy.json)    
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)    
 
 This playbook will use an Azure blob storage file to maintain a Zscaler custom URL category of your choice. The logic app is set to run every 5 minutes polling this blob storage file for changes. If any changes are made to the blob storage file, the Zscaler URL category values will be updated to match the file exactly. This will enable you to manage your Zscaler custom URL categories entirely from Microsoft Sentinel.
 Blob storage was opted for because unlike Microsoft Sentinel watchlists, the lastModified time attribute reflects changes to the contents of the file.
@@ -19,13 +19,13 @@ Blob storage was opted for because unlike Microsoft Sentinel watchlists, the las
 
 The following items are required under the template settings during deployment: 
 
-* The [root domain](https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#zscaler-root-domain) of your Zscaler organization
-* A configured Zscaler [admin account](https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#zscaler-admin-account)
-* A Zscaler [API key](https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#zscaler-api-key)
-* The name of the [Zscaler custom URL category](https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#zscaler-url-category) you wish to add the Microsoft Sentinel incident domains to
-* A Microsoft Azure [key vault secret](https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#create-an-azure-key-vault-secret) containing your Okta API Token
-* A Microsoft Azure [integration account](https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#create-an-integration-account)
-* A Microsoft Azure [blob storage file](https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#create-azure-blob-storage-file)
+* The [root domain](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#zscaler-root-domain) of your Zscaler organization
+* A configured Zscaler [admin account](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#zscaler-admin-account)
+* A Zscaler [API key](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#zscaler-api-key)
+* The name of the [Zscaler custom URL category](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#zscaler-url-category) you wish to add the Microsoft Sentinel incident domains to
+* A Microsoft Azure [key vault secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#create-an-azure-key-vault-secret) containing your Okta API Token
+* A Microsoft Azure [integration account](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#create-an-integration-account)
+* A Microsoft Azure [blob storage file](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#create-azure-blob-storage-file)
 
 # 
 ### Setup
@@ -130,7 +130,7 @@ Repeat this process for your Zscaler password.
 
 ![Zscaler_Key_Vault_3](Images/Zscaler_Key_Vault_3.png)
 
-Once both secrets have been added to the vault, navigate to the "**Access policies**" menu option. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#granting-access-to-azure-key-vault).
+Once both secrets have been added to the vault, navigate to the "**Access policies**" menu option. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category#granting-access-to-azure-key-vault).
 
 ![Zscaler_Key_Vault_4](Images/Zscaler_Key_Vault_4.png)
 
@@ -190,8 +190,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fmaster%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category%2Fazuredeploy.json)
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
@@ -292,4 +292,4 @@ Paste "**AS-Blob-Storage-Add-Domains-to-Zscaler-URL-Category**" into the princip
 
 Navigate to the "**Review + create**" section and click "**Create**".
 
-![Zscaler_Access_4](Images/Zscaler_Access_4.png)
+![Zscaler_Access_4](Images/Zscaler_Access_4.png
