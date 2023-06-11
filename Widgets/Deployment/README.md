@@ -46,7 +46,7 @@ For each widget, configure the secrets and other parameters it requires using th
 - [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsRecordedFutureARM) as shown below.
 - Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
 - Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
-- Enter the API key defined in your Recoded future account.
+- Enter your recorded future API key. Contact your Recorded Future represantiative to get your API key.
 - Press on the “Review + create” button and deploy the template – this should add a secret named “RecordedFuture” to your key vault.
 
 <img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future ARM deployment screenshot" width="75%"/>
