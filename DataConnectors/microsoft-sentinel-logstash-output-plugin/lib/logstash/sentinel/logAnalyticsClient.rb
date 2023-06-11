@@ -9,7 +9,7 @@ require 'rbconfig'
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal 
 class LogAnalyticsClient
-require "logstash/sentinel/utils"
+
 require "logstash/sentinel/logstashLoganalyticsConfiguration"
 require "logstash/sentinel/logAnalyticsAadTokenProvider"
 
@@ -33,8 +33,8 @@ require "logstash/sentinel/logAnalyticsAadTokenProvider"
 
     # Post REST request
 
-    return Utils::post_data_optional_proxy(@uri, body, headers,
-           @logstashLoganalyticsConfiguration.proxy_endpoint)
+    return RestClient::Request.execute(method: :post, url: @uri, payload: body, headers: headers,
+                                        proxy: @logstashLoganalyticsConfiguration.proxy_endpoint)
   end # def post_data
 
   # Static function to return if the response is OK or else

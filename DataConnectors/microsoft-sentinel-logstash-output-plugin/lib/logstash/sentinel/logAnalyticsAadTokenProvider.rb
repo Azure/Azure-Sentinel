@@ -1,6 +1,5 @@
 # encoding: utf-8
 require "logstash/sentinel/logstashLoganalyticsConfiguration"
-require "logstash/sentinel/utils"
 require 'rest-client'
 require 'json'
 require 'openssl'
@@ -60,11 +59,11 @@ class LogAnalyticsAadTokenProvider
   # Post the given json to Azure Loganalytics
   def post_token_request()
     # Create REST request header
-    header = get_header()
+    headers = get_header()
     begin
         # Post REST request 
-        response = Utils::post_data_optional_proxy(@token_request_uri, @token_request_body, header,
-                   @logstashLoganalyticsConfiguration.proxy_aad)
+        response = RestClient::Request.execute(method: :post, url: @token_request_uri, payload: @token_request_body, headers: headers,
+                                              proxy: @logstashLoganalyticsConfiguration.proxy_aad)
                    
         if (response.code == 200 || response.code == 201)
           return JSON.parse(response.body)
