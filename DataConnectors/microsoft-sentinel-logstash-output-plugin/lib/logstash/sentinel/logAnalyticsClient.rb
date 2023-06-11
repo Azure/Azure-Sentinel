@@ -18,7 +18,7 @@ require "logstash/sentinel/logAnalyticsAadTokenProvider"
     @logstashLoganalyticsConfiguration = logstashLoganalyticsConfiguration
     @logger = @logstashLoganalyticsConfiguration.logger
 
-    la_api_version = "2021-11-01-preview"
+    la_api_version = "2023-01-01"
     @uri = sprintf("%s/dataCollectionRules/%s/streams/%s?api-version=%s",@logstashLoganalyticsConfiguration.data_collection_endpoint, @logstashLoganalyticsConfiguration.dcr_immutable_id, logstashLoganalyticsConfiguration.dcr_stream_name, la_api_version)
     @aadTokenProvider=LogAnalyticsAadTokenProvider::new(logstashLoganalyticsConfiguration)
     @userAgent = getUserAgent()
