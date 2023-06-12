@@ -10,7 +10,7 @@ Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-
 
 | Playbook | Description | 🪂 |
 | --- | --- | --- |
-| [lock User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure-Samples%2Fapp-service-javascript-sap-cloud-sdk-quickstart%2Fmain%2Ftemplates%2Fazuredeploy.json) |
+| [lock User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMartinPankraz%2FAzure-Sentinel%2Fadd-sap-playbooks-standard%2FSolutions%2FSAP%2FPlaybooks%2FBasic-SAPLockUser-STD%2Ftemplate.json) |
 
 ## Step-by-Step Installation
 
