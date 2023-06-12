@@ -1,0 +1,677 @@
+Metadata-Version: 2.1
+Name: azure-storage-queue
+Version: 12.6.0
+Summary: Microsoft Azure Azure Queue Storage Client Library for Python
+Home-page: https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue
+Author: Microsoft Corporation
+Author-email: ascl@microsoft.com
+License: MIT License
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: License :: OSI Approved :: MIT License
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: azure-core (<2.0.0,>=1.26.0)
+Requires-Dist: cryptography (>=2.1.4)
+Requires-Dist: typing-extensions (>=4.0.1)
+Requires-Dist: isodate (>=0.6.1)
+Provides-Extra: aio
+Requires-Dist: azure-core[aio] (<2.0.0,>=1.26.0) ; extra == 'aio'
+
+# Azure Storage Queues client library for Python
+
+Azure Queue storage is a service for storing large numbers of messages that can be accessed from anywhere in the world via authenticated calls using HTTP or HTTPS. A single queue message can be up to 64 KiB in size, and a queue can contain millions of messages, up to the total capacity limit of a storage account.
+
+Common uses of Queue storage include:
+
+* Creating a backlog of work to process asynchronously
+* Passing messages between different parts of a distributed application
+
+[Source code](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/azure/storage/queue) | [Package (PyPI)](https://pypi.org/project/azure-storage-queue/) | [API reference documentation](https://aka.ms/azsdk-python-storage-queue-ref) | [Product documentation](https://docs.microsoft.com/azure/storage/) | [Samples](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples)
+
+## Getting started
+
+### Prerequisites
+* Python 3.7 or later is required to use this package. For more details, please read our page on [Azure SDK for Python version support policy](https://github.com/Azure/azure-sdk-for-python/wiki/Azure-SDKs-Python-version-support-policy).
+* You must have an [Azure subscription](https://azure.microsoft.com/free/) and an
+[Azure storage account](https://docs.microsoft.com/azure/storage/common/storage-account-overview) to use this package.
+
+### Install the package
+Install the Azure Storage Queues client library for Python with [pip](https://pypi.org/project/pip/):
+
+```bash
+pip install azure-storage-queue
+```
+
+### Create a storage account
+If you wish to create a new storage account, you can use the
+[Azure Portal](https://docs.microsoft.com/azure/storage/common/storage-quickstart-create-account?tabs=azure-portal),
+[Azure PowerShell](https://docs.microsoft.com/azure/storage/common/storage-quickstart-create-account?tabs=azure-powershell),
+or [Azure CLI](https://docs.microsoft.com/azure/storage/common/storage-quickstart-create-account?tabs=azure-cli):
+
+```bash
+# Create a new resource group to hold the storage account -
+# if using an existing resource group, skip this step
+az group create --name my-resource-group --location westus2
+
+# Create the storage account
+az storage account create -n my-storage-account-name -g my-resource-group
+```
+
+### Create the client
+The Azure Storage Queues client library for Python allows you to interact with three types of resources: the storage
+account itself, queues, and messages. Interaction with these resources starts with an instance of a [client](#clients).
+To create a client object, you will need the storage account's queue service endpoint URL and a credential that allows
+you to access the storage account:
+
+```python
+from azure.storage.queue import QueueServiceClient
+
+service = QueueServiceClient(account_url="https://<my-storage-account-name>.queue.core.windows.net/", credential=credential)
+```
+
+#### Looking up the account URL
+You can find the storage account's queue service URL using the
+[Azure Portal](https://docs.microsoft.com/azure/storage/common/storage-account-overview#storage-account-endpoints),
+[Azure PowerShell](https://docs.microsoft.com/powershell/module/az.storage/get-azstorageaccount),
+or [Azure CLI](https://docs.microsoft.com/cli/azure/storage/account?view=azure-cli-latest#az-storage-account-show):
+
+```bash
+# Get the queue service URL for the storage account
+az storage account show -n my-storage-account-name -g my-resource-group --query "primaryEndpoints.queue"
+```
+
+#### Types of credentials
+The `credential` parameter may be provided in a number of different forms, depending on the type of
+[authorization](https://docs.microsoft.com/azure/storage/common/storage-auth) you wish to use:
+1. To use a [shared access signature (SAS) token](https://docs.microsoft.com/azure/storage/common/storage-sas-overview),
+   provide the token as a string. If your account URL includes the SAS token, omit the credential parameter.
+   You can generate a SAS token from the Azure Portal under "Shared access signature" or use one of the `generate_sas()`
+   functions to create a sas token for the storage account or queue:
+
+    ```python
+    from datetime import datetime, timedelta
+    from azure.storage.queue import QueueServiceClient, generate_account_sas, ResourceTypes, AccountSasPermissions
+
+    sas_token = generate_account_sas(
+        account_name="<storage-account-name>",
+        account_key="<account-access-key>",
+        resource_types=ResourceTypes(service=True),
+        permission=AccountSasPermissions(read=True),
+        start=datetime.utcnow(),
+        expiry=datetime.utcnow() + timedelta(hours=1)
+    )
+
+    queue_service_client = QueueServiceClient(account_url="https://<my_account_name>.queue.core.windows.net", credential=sas_token)
+    ```
+
+2. To use a storage account [shared key](https://docs.microsoft.com/rest/api/storageservices/authenticate-with-shared-key/)
+   (aka account key or access key), provide the key as a string. This can be found in the Azure Portal under the "Access Keys"
+   section or by running the following Azure CLI command:
+
+    ```az storage account keys list -g MyResourceGroup -n MyStorageAccount```
+
+    Use the key as the credential parameter to authenticate the client:
+    ```python
+    from azure.storage.queue import QueueServiceClient
+    service = QueueServiceClient(account_url="https://<my_account_name>.queue.core.windows.net", credential="<account_access_key>")
+    ```
+
+3. To use an [Azure Active Directory (AAD) token credential](https://docs.microsoft.com/azure/storage/common/storage-auth-aad),
+   provide an instance of the desired credential type obtained from the
+   [azure-identity](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/identity/azure-identity#credentials) library.
+   For example, [DefaultAzureCredential](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/identity/azure-identity#defaultazurecredential)
+   can be used to authenticate the client.
+
+   This requires some initial setup:
+   * [Install azure-identity](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/identity/azure-identity#install-the-package)
+   * [Register a new AAD application](https://docs.microsoft.com/azure/active-directory/develop/quickstart-register-app) and give permissions to access Azure Storage
+   * [Grant access](https://docs.microsoft.com/azure/storage/common/storage-auth-aad-rbac-portal) to Azure Queue data with RBAC in the Azure Portal
+   * Set the values of the client ID, tenant ID, and client secret of the AAD application as environment variables:
+     AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+
+   Use the returned token credential to authenticate the client:
+    ```python
+        from azure.identity import DefaultAzureCredential
+        from azure.storage.queue import QueueServiceClient
+        token_credential = DefaultAzureCredential()
+
+        queue_service_client = QueueServiceClient(
+            account_url="https://<my_account_name>.queue.core.windows.net",
+            credential=token_credential
+        )
+    ```
+
+#### Creating the client from a connection string
+Depending on your use case and authorization method, you may prefer to initialize a client instance with a storage
+connection string instead of providing the account URL and credential separately. To do this, pass the storage
+connection string to the client's `from_connection_string` class method:
+
+```python
+from azure.storage.queue import QueueServiceClient
+
+connection_string = "DefaultEndpointsProtocol=https;AccountName=xxxx;AccountKey=xxxx;EndpointSuffix=core.windows.net"
+service = QueueServiceClient.from_connection_string(conn_str=connection_string)
+```
+
+The connection string to your storage account can be found in the Azure Portal under the "Access Keys" section or by running the following CLI command:
+
+```bash
+az storage account show-connection-string -g MyResourceGroup -n MyStorageAccount
+```
+
+## Key concepts
+The following components make up the Azure Queue Service:
+* The storage account itself
+* A queue within the storage account, which contains a set of messages
+* A message within a queue, in any format, of up to 64 KiB
+
+The Azure Storage Queues client library for Python allows you to interact with each of these components through the
+use of a dedicated client object.
+
+### Async Clients 
+This library includes a complete async API supported on Python 3.5+. To use it, you must
+first install an async transport, such as [aiohttp](https://pypi.org/project/aiohttp/).
+See
+[azure-core documentation](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/core/azure-core/CLIENT_LIBRARY_DEVELOPER.md#transport)
+for more information.
+
+Async clients and credentials should be closed when they're no longer needed. These
+objects are async context managers and define async `close` methods.
+
+### Clients
+Two different clients are provided to interact with the various components of the Queue Service:
+1. [QueueServiceClient](https://aka.ms/azsdk-python-storage-queue-queueserviceclient) -
+    this client represents interaction with the Azure storage account itself, and allows you to acquire preconfigured
+    client instances to access the queues within. It provides operations to retrieve and configure the account
+    properties as well as list, create, and delete queues within the account. To perform operations on a specific queue,
+    retrieve a client using the `get_queue_client` method.
+2. [QueueClient](https://aka.ms/azsdk-python-storage-queue-queueclient) -
+    this client represents interaction with a specific queue (which need not exist yet). It provides operations to
+    create, delete, or configure a queue and includes operations to send, receive, peek, delete, and update messages
+    within it.
+
+### Messages
+* **Send** - Adds a message to the queue and optionally sets a visibility timeout for the message.
+* **Receive** - Retrieves a message from the queue and makes it invisible to other consumers.
+* **Peek** - Retrieves a message from the front of the queue, without changing the message visibility.
+* **Update** - Updates the visibility timeout of a message and/or the message contents.
+* **Delete** - Deletes a specified message from the queue.
+* **Clear** - Clears all messages from the queue.
+
+
+## Examples
+
+The following sections provide several code snippets covering some of the most common Storage Queue tasks, including:
+
+* [Creating a queue](#creating-a-queue "Creating a queue")
+* [Sending messages](#sending-messages "Sending messages")
+* [Receiving messages](#receiving-messages "Receiving messages")
+
+### Creating a queue
+Create a queue in your storage account
+
+```python
+from azure.storage.queue import QueueClient
+
+queue = QueueClient.from_connection_string(conn_str="<connection_string>", queue_name="my_queue")
+queue.create_queue()
+```
+
+Use the async client to create a queue
+```python
+from azure.storage.queue.aio import QueueClient
+
+queue = QueueClient.from_connection_string(conn_str="<connection_string>", queue_name="my_queue")
+await queue.create_queue()
+```
+
+### Sending messages
+Send messages to your queue
+
+```python
+from azure.storage.queue import QueueClient
+
+queue = QueueClient.from_connection_string(conn_str="<connection_string>", queue_name="my_queue")
+queue.send_message("I'm using queues!")
+queue.send_message("This is my second message")
+```
+
+Send messages asynchronously
+
+```python
+import asyncio
+from azure.storage.queue.aio import QueueClient
+
+queue = QueueClient.from_connection_string(conn_str="<connection_string>", queue_name="my_queue")
+await asyncio.gather(
+    queue.send_message("I'm using queues!"),
+    queue.send_message("This is my second message")
+)
+```
+
+### Receiving messages
+Receive and process messages from your queue
+
+```python
+from azure.storage.queue import QueueClient
+
+queue = QueueClient.from_connection_string(conn_str="<connection_string>", queue_name="my_queue")
+response = queue.receive_messages()
+
+for message in response:
+    print(message.content)
+    queue.delete_message(message)
+
+# Printed messages from the front of the queue:
+# >> I'm using queues!
+# >> This is my second message
+```
+
+Receive and process messages in batches
+
+```python
+from azure.storage.queue import QueueClient
+
+queue = QueueClient.from_connection_string(conn_str="<connection_string>", queue_name="my_queue")
+response = queue.receive_messages(messages_per_page=10)
+
+for message_batch in response.by_page():
+    for message in message_batch:
+        print(message.content)
+        queue.delete_message(message)
+```
+
+Receive and process messages asynchronously
+
+```python
+from azure.storage.queue.aio import QueueClient
+
+queue = QueueClient.from_connection_string(conn_str="<connection_string>", queue_name="my_queue")
+response = queue.receive_messages()
+
+async for message in response:
+    print(message.content)
+    await queue.delete_message(message)
+```
+
+## Optional Configuration
+
+Optional keyword arguments that can be passed in at the client and per-operation level.
+
+### Retry Policy configuration
+
+Use the following keyword arguments when instantiating a client to configure the retry policy:
+
+* __retry_total__ (int): Total number of retries to allow. Takes precedence over other counts.
+Pass in `retry_total=0` if you do not want to retry on requests. Defaults to 10.
+* __retry_connect__ (int): How many connection-related errors to retry on. Defaults to 3.
+* __retry_read__ (int): How many times to retry on read errors. Defaults to 3.
+* __retry_status__ (int): How many times to retry on bad status codes. Defaults to 3.
+* __retry_to_secondary__ (bool): Whether the request should be retried to secondary, if able.
+This should only be enabled of RA-GRS accounts are used and potentially stale data can be handled.
+Defaults to `False`.
+
+### Other client / per-operation configuration
+
+Other optional configuration keyword arguments that can be specified on the client or per-operation.
+
+**Client keyword arguments:**
+
+* __connection_timeout__ (int): The number of seconds the client will wait to establish a connection to the server.
+Defaults to 20 seconds.
+* __read_timeout__ (int): The number of seconds the client will wait, between consecutive read operations, for a
+response from the server. This is a socket level timeout and is not affected by overall data size. Client-side read 
+timeouts will be automatically retried. Defaults to 60 seconds.
+* __transport__ (Any): User-provided transport to send the HTTP request.
+
+**Per-operation keyword arguments:**
+
+* __raw_response_hook__ (callable): The given callback uses the response returned from the service.
+* __raw_request_hook__ (callable): The given callback uses the request before being sent to service.
+* __client_request_id__ (str): Optional user specified identification of the request.
+* __user_agent__ (str): Appends the custom value to the user-agent header to be sent with the request.
+* __logging_enable__ (bool): Enables logging at the DEBUG level. Defaults to False. Can also be passed in at
+the client level to enable it for all requests.
+* __logging_body__ (bool): Enables logging the request and response body. Defaults to False. Can also be passed in at
+the client level to enable it for all requests.
+* __headers__ (dict): Pass in custom headers as key, value pairs. E.g. `headers={'CustomValue': value}`
+
+
+## Troubleshooting
+### General
+Storage Queue clients raise exceptions defined in [Azure Core](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/core/azure-core/README.md).
+
+This list can be used for reference to catch thrown exceptions. To get the specific error code of the exception, use the `error_code` attribute, i.e, `exception.error_code`.
+
+### Logging
+This library uses the standard
+[logging](https://docs.python.org/3/library/logging.html) library for logging.
+Basic information about HTTP sessions (URLs, headers, etc.) is logged at INFO
+level.
+
+Detailed DEBUG level logging, including request/response bodies and unredacted
+headers, can be enabled on a client with the `logging_enable` argument:
+```python
+import sys
+import logging
+from azure.storage.queue import QueueServiceClient
+
+# Create a logger for the 'azure.storage.queue' SDK
+logger = logging.getLogger('azure.storage.queue')
+logger.setLevel(logging.DEBUG)
+
+# Configure a console output
+handler = logging.StreamHandler(stream=sys.stdout)
+logger.addHandler(handler)
+
+# This client will log detailed information about its HTTP sessions, at DEBUG level
+service_client = QueueServiceClient.from_connection_string("your_connection_string", logging_enable=True)
+```
+
+Similarly, `logging_enable` can enable detailed logging for a single operation,
+even when it isn't enabled for the client:
+```py
+service_client.get_service_stats(logging_enable=True)
+```
+
+## Next steps
+### More sample code
+
+Get started with our [Queue samples](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples).
+
+Several Storage Queues Python SDK samples are available to you in the SDK's GitHub repository. These samples provide example code for additional scenarios commonly encountered while working with Storage Queues:
+
+* [queue_samples_hello_world.py](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples/queue_samples_hello_world.py) ([async version](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples/queue_samples_hello_world_async.py)) - Examples found in this article:
+    * Client creation
+    * Create a queue
+    * Send messages
+    * Receive messages
+
+* [queue_samples_authentication.py](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples/queue_samples_authentication.py) ([async version](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples/queue_samples_authentication_async.py)) - Examples for authenticating and creating the client:
+    * From a connection string
+    * From a shared access key
+    * From a shared access signature token
+    * From Azure Active Directory
+
+* [queue_samples_service.py](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples/queue_samples_service.py) ([async version](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples/queue_samples_service_async.py)) - Examples for interacting with the queue service:
+    * Get and set service properties
+    * List queues in a storage account
+    * Create and delete a queue from the service
+    * Get the QueueClient
+
+* [queue_samples_message.py](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples/queue_samples_message.py) ([async version](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-queue/samples/queue_samples_message_async.py)) - Examples for working with queues and messages:
+    * Set an access policy
+    * Get and set queue metadata
+    * Send and receive messages
+    * Delete specified messages and clear all messages
+    * Peek and update messages
+
+### Additional documentation
+For more extensive documentation on Azure Queue storage, see the [Azure Queue storage documentation](https://docs.microsoft.com/azure/storage/queues/) on docs.microsoft.com.
+
+## Contributing
+This project welcomes contributions and suggestions.  Most contributions require you to agree to a Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution. For details, visit https://cla.microsoft.com.
+
+When you submit a pull request, a CLA-bot will automatically determine whether you need to provide a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions provided by the bot. You will only need to do this once across all repos using our CLA.
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+
+# Release History
+
+## 12.6.0 (2023-02-22)
+
+### Features Added
+- Stable release of features from 12.6.0b1
+
+## 12.6.0b1 (2023-02-02)
+
+### Other Changes
+- Removed `msrest` dependency.
+- Added `typing-extensions>=4.0.1` as a dependency.
+- Added `isodate>=0.6.1` as a dependency.
+- Added extra dependency `aio` for installing optional async dependencies. Use `pip install azure-storage-queue[aio]` to install.
+
+## 12.5.0 (2022-10-11)
+
+### Features Added
+- Stable release of features from 12.5.0b1.
+
+### Other Changes
+- Changed the default value for `read_timeout` to 60 seconds for all clients.
+
+## 12.5.0b1 (2022-08-23)
+
+This version and all future versions will require Python 3.7+. Python 3.6 is no longer supported.
+
+### Features Added
+- Added support for `AzureNamedKeyCredential` as a valid `credential` type.
+
+## 12.4.0 (2022-07-07)
+
+### Features Added
+- Stable release of features from 12.4.0b1.
+
+## 12.4.0b1 (2022-06-15)
+
+### Features Added
+- Introduced version 2.0 of client-side encryption for Queue messages which utilizes AES-GCM-256 encryption.
+Version 1.0 is now deprecated and no longer considered secure. If you are using client-side encryption, it is
+**highly recommended** that you update to version 2.0.
+The encryption version can be specified on any client constructor via the `encryption_version`
+keyword (i.e. `encryption_version='2.0'`).
+
+## 12.3.0 (2022-05-09)
+
+### Features Added
+- Stable release of features from 12.3.0b1.
+
+### Bugs Fixed
+- Fixed a bug, introduced in the previous beta release, that caused Authentication errors when attempting to use
+an Account SAS with certain service level operations.
+
+## 12.3.0b1 (2022-04-14)
+
+### Features Added
+- Added support for `max_messages` in `receive_messages()` to specify the maximum number of messages to receive from the queue.
+
+### Other Changes
+- Updated SAS token generation to use the latest supported service version by default. Moving to the latest version
+also included a change to how account SAS is generated to reflect a change made to the service in SAS generation for
+service version 2020-12-06.
+- Updated documentation for `receive_messages()` to explain iterator behavior and life-cycle.
+- Added a sample to `queue_samples_message.py` (and async-equivalent) showcasing the use of `max_messages` in `receive_messages()`. 
+
+## 12.2.0 (2022-03-08)
+
+This version and all future versions will require Python 3.6+. Python 2.7 is no longer supported.
+
+### Bugs Fixed
+- Update `azure-core` dependency to avoid inconsistent dependencies from being installed.
+
+## 12.1.6 (2021-04-20)
+**Fixes**
+- Make `AccountName`, `AccountKey` etc. in conn_str case insensitive
+- Fixed unclosed `ThreadPoolExecutor` (#8955)
+
+## 12.1.5 (2021-01-13)
+**New features**
+- Added support for `AzureSasCredential` to allow SAS rotation in long living clients.
+
+## 12.1.4 (2020-11-10)
+**New feature**
+- Added `receive_message` on QueueClient to support receiving one message from queue (#14844, #14762)
+
+**Notes**
+- Updated dependency `azure-core` from  azure-core<2.0.0,>=1.6.0 to azure-core<2.0.0,>=1.9.0 to get continuation_token attr on AzureError.
+
+
+## 12.1.3 (2020-09-10)
+**Fixes**
+- Fixed QueueClient type declaration (#11392).
+
+## 12.1.2
+**Notes**
+- Updated dependency from azure-core<2.0.0,>=1.2.2 to azure-core<2.0.0,>=1.6.0
+
+## 12.1.1 (2020-03-10)
+
+**Fixes**
+- Responses are always decoded as UTF8
+
+**Notes**
+- The `StorageUserAgentPolicy` is now replaced with the `UserAgentPolicy` from azure-core. With this, the custom user agents are now added as a prefix instead of being appended.
+
+## 12.1.0 (2019-12-04)
+
+ **New features**
+- All the clients now have a `close()` method to close the sockets opened by the client when using without a context manager.
+
+## 12.0.0 (2019-10-31)
+
+**Breaking changes**
+
+- `QueueClient` now accepts only `account_url` with mandatory a string param `queue_name`.
+To use a queue_url, the method `from_queue_url` must be used.
+- `set_queue_access_policy` has required parameter `signed_identifiers`.
+- `NoRetry` policy has been removed. Use keyword argument `retry_total=0` for no retries.
+- `NoEncodePolicy` and `NoDecodePolicy` have been removed. Use `message_encode_policy=None` and `message_decode_policy=None`.
+- Removed types that were accidentally exposed from two modules. Only `QueueServiceClient` and `QueueClient`
+should be imported from azure.storage.queue.aio
+- Some parameters have become keyword only, rather than positional. Some examples include:
+  - `loop`
+  - `max_concurrency`
+  - `validate_content`
+  - `timeout` etc.
+- `QueueMessage` has had its parameters renamed from `insertion_time`, `time_next_visible`, `expiration_time`
+to `inserted_on`, `next_visible_on`, `expires_on`, respectively.
+- `Logging` has been renamed to `QueueAnalyticsLogging`.
+- `enqueue_message` is now called `send_message`.
+- Client and model files have been made internal. Users should import from the top level modules `azure.storage.queue` and `azure.storage.queue.aio` only.
+- The `generate_shared_access_signature` methods on both `QueueServiceClient` and `QueueClient` have been replaced by module level functions `generate_account_sas` and `generate_queue_sas`.
+- `get_service_stats` now returns a dict
+- `get_service_properties` now returns a dict with keys consistent to `set_service_properties`
+
+ **New features**
+
+- `ResourceTypes`, and `Services` now have method `from_string` which takes parameters as a string.
+
+**Fixes and improvements**
+
+- Fixed an issue where XML is being double encoded and double decoded.
+
+## 12.0.0b4 (2019-10-08)
+
+**Breaking changes**
+
+- Permission models.
+  - `AccountPermissions`, `QueuePermissions` have been renamed to
+  `AccountSasPermissions`, `QueueSasPermissions` respectively.
+  - enum-like list parameters have been removed from both of them.
+  - `__add__` and `__or__` methods are removed.
+- `max_connections` is now renamed to `max_concurrency`.
+
+**New features**
+
+- `AccountSasPermissions`, `QueueSasPermissions` now have method `from_string` which takes parameters as a string.
+
+## 12.0.0b3 (2019-09-10)
+
+**Dependency updates**
+- Adopted [azure-core](https://pypi.org/project/azure-core/) 1.0.0b3
+  - If you later want to revert to previous versions of azure-storage-queue, or another Azure SDK
+  library requiring azure-core 1.0.0b1 or azure-core 1.0.0b2, you must explicitly install
+  the specific version of azure-core as well. For example:
+
+  `pip install azure-core==1.0.0b2 azure-storage-queue==12.0.0b2`
+
+
+## 12.0.0b2 (2019-08-06)
+
+**Breaking changes**
+- The behavior of listing operations has been modified:
+    - The previous `marker` parameter has been removed.
+    - The iterable response object now supports a `by_page` function that will return a secondary iterator of batches of results. This function supports a `continuation_token` parameter to replace the previous `marker` parameter.
+- The new listing behaviour is also adopted by the `receive_messages` operation:
+    - The receive operation returns a message iterator as before.
+    - The returned iterator supports a `by_page` operation to receive messages in batches.
+
+**New features**
+- Added async APIs to subnamespace `azure.storage.queue.aio`.
+- Distributed tracing framework OpenCensus is now supported.
+
+**Dependency updates**
+- Adopted [azure-core](https://pypi.org/project/azure-core/) 1.0.0b2
+  - If you later want to revert to azure-storage-queue 12.0.0b1, or another Azure SDK
+  library requiring azure-core 1.0.0b1, you must explicitly install azure-core
+  1.0.0b1 as well. For example:
+
+  `pip install azure-core==1.0.0b1 azure-storage-queue==12.0.0b1`
+
+**Fixes and improvements**
+- General refactor of duplicate and shared code.
+
+
+## 12.0.0b1 (2019-07-02)
+
+Version 12.0.0b1 is the first preview of our efforts to create a user-friendly and Pythonic client library for Azure Storage Queues. For more information about this, and preview releases of other Azure SDK libraries, please visit
+https://aka.ms/azure-sdk-preview1-python.
+
+**Breaking changes: New API design**
+- Operations are now scoped to a particular client:
+    - `QueueServiceClient`: This client handles account-level operations. This includes managing service properties and listing the queues within an account.
+    - `QueueClient`: The client handles operations within a particular queue. This includes creating or deleting that queue, as well as enqueueing and dequeueing messages.
+
+    These clients can be accessed by navigating down the client hierarchy, or instantiated directly using URLs to the resource (account or queue).
+    For full details on the new API, please see the [reference documentation](https://azure.github.io/azure-sdk-for-python/storage.html#azure-storage-queue).
+- New message iterator, for receiving messages from a queue in a continuous stream.
+- New underlying REST pipeline implementation, based on the new `azure-core` library.
+- Client and pipeline configuration is now available via keyword arguments at both the client level, and per-operation. See reference documentation for a full list of optional configuration arguments.
+- Authentication using `azure-identity` credentials
+  - see the
+  [Azure Identity documentation](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/identity/azure-identity/README.md)
+  for more information
+- New error hierarchy:
+    - All service errors will now use the base type: `azure.core.exceptions.HttpResponseError`
+    - The are a couple of specific exception types derived from this base type for common error scenarios:
+        - `ResourceNotFoundError`: The resource (e.g. queue, message) could not be found. Commonly a 404 status code.
+        - `ResourceExistsError`: A resource conflict - commonly caused when attempting to create a resource that already exists.
+        - `ResourceModifiedError`: The resource has been modified (e.g. overwritten) and therefore the current operation is in conflict. Alternatively this may be raised if a condition on the operation is not met.
+        - `ClientAuthenticationError`: Authentication failed.
+- No longer have specific operations for `get_metadata` - use `get_properties` instead.
+- No longer have specific operations for `exists` - use `get_properties` instead.
+- Operations `get_queue_acl` and `set_queue_acl` have been renamed to `get_queue_access_policy` and `set_queue_access_policy`.
+- Operation `put_message` has been renamed to `enqueue_message`.
+- Operation `get_messages` has been renamed to `receive_messages`.
+
+## 2.0.1
+- Updated dependency on azure-storage-common.
+
+## 2.0.0
+- Support for 2018-11-09 REST version.
+
+## 1.4.0
+- azure-storage-nspkg is not installed anymore on Python 3 (PEP420-based namespace package)
+
+## 1.3.0
+- Support for 2018-03-28 REST version. Please see our REST API documentation and blog for information about the related added features.
+
+## 1.2.0rc1
+- Support for 2017-11-09 REST version. Please see our REST API documentation and blog for information about the related added features.
+- Added support for OAuth authentication for HTTPS requests(Please note that this feature is available in preview).
+
+## 1.1.0
+- Support for 2017-07-29 REST version. Please see our REST API documentation and blogs for information about the related added features.
+- Queue messages can now have an arbitrarily large or infinite time to live.
+- Error message now contains the ErrorCode from the x-ms-error-code header value.
+
+## 1.0.0
+- The package has switched from Apache 2.0 to the MIT license.
