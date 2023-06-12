@@ -8,20 +8,20 @@ Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-
 
 ## Playbooks
 
-| Playbook | Description | Deploy |
+| Playbook | Description | 🪂 |
 | --- | --- | --- |
-| [SEED-Basic-SAPLockUser-STD](./SEED-Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure-Samples%2Fapp-service-javascript-sap-cloud-sdk-quickstart%2Fmain%2Ftemplates%2Fazuredeploy.json) |
+| [lock User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure-Samples%2Fapp-service-javascript-sap-cloud-sdk-quickstart%2Fmain%2Ftemplates%2Fazuredeploy.json) |
 
 ## Step-by-Step Installation
 
 [🪂Custom Deployment](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template)
 
-1. Choose "Custom deployment" from the Azure Portal or above link and deploy the ARM template from [this folder](/).
+1. Choose "Custom deployment" from the Azure Portal or above link.
 2. Click "Build your own template in the editor" and paste the content of the ´template.json´ file of your desired playbook folder.
 3. Fill in the required parameters and click "Review + create".
 4. Click "Create" to deploy the ARM template.
 5. After the deployment is finished, navigate to the created Logic App and click "Edit".
-6. Click "Edit API connection" and work through the all the required connections.
+6. Click "Edit API connection" and work through the all the required connections till the Logic App can be saved.
 
 ## Export Logic Apps (Consumption) to Logic Apps (Standard)
 
