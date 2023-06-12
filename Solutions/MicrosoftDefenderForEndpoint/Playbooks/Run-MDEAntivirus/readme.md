@@ -51,7 +51,7 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 
 ## Screenshots
 **Incident Trigger**
-![Incident Trigger](./Run-MDEAntivirus/Run-MDEAntivirus-incident-trigger/images/designerDark.png)
+![Incident Trigger](./Run-MDEAntivirus-incident-trigger/images/designerDark.png)
 
 **Alert Trigger**
-![Alert Trigger](./Run-MDEAntivirus/Run-MDEAntivirus-alert-trigger/images/Run-MDEAntivirus_alert.png)
+![Alert Trigger](./Run-MDEAntivirus-alert-trigger/images/Run-MDEAntivirus_alert.png)
