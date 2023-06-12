@@ -10,8 +10,9 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsAadTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
     scope = CGI.escape("https://monitor.azure.com//.default")
+    @aad_uri = "https://login.microsoftonline.com"
     @token_request_body = sprintf("client_id=%s&scope=%s&client_secret=%s&grant_type=client_credentials", logstashLoganalyticsConfiguration.client_app_Id, scope, logstashLoganalyticsConfiguration.client_app_secret)
-    @token_request_uri = sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/token", logstashLoganalyticsConfiguration.tenant_id)
+    @token_request_uri = sprintf("%s/%s/oauth2/v2.0/token",@aad_uri, logstashLoganalyticsConfiguration.tenant_id)
     @token_state = {
       :access_token => nil,
       :expiry_time => nil,
@@ -60,20 +61,22 @@ class LogAnalyticsAadTokenProvider
   def post_token_request()
     # Create REST request header
     headers = get_header()
-    begin
+    while true
+      begin
         # Post REST request 
         response = RestClient::Request.execute(method: :post, url: @token_request_uri, payload: @token_request_body, headers: headers,
                                               proxy: @logstashLoganalyticsConfiguration.proxy_aad)
-                   
+                    
         if (response.code == 200 || response.code == 201)
           return JSON.parse(response.body)
-        else
-          @logger.trace("Rest client response from ADD API ['#{response}']")
-          raise ("Failed to get AAD token: http code " + response.code.to_s)
         end
-    rescue RestClient::ExceptionWithResponse => ewr
-        @logger.trace("Rest client response from ADD API ['#{ewr.response}']")
-        raise ("Failed to get AAD token: http code " + ewr.response.code.to_s)
+      rescue RestClient::ExceptionWithResponse => ewr
+        @logger.error("Exception while authenticating with AAD API ['#{ewr.response}']")          
+      rescue Exception => ex          
+        @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
+      end
+      @logger.error("Error while authenticating with AAD ('#{@aad_uri}'), retrying in 10 seconds.")
+      sleep 10
     end
   end # def post_token_request
 
