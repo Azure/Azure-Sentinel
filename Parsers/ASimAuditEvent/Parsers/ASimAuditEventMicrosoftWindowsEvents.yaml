@@ -25,7 +25,7 @@ ParserParams:
 ParserQuery: |
   let parser = (disabled:bool = false) {
     // Parsed Events Ids
-    let ParsedEventIds = dynamic([1102,4698,4699,4700,4701,4702,4929,5025,5027,5028,5029,5030,5034,5035,5037]);
+    let ParsedEventIds = dynamic([1102,4698,4699,4700,4701,4702,4929,5025,5027,5028,5029,5030,5034,5035,5037,7035,7036,7040,7045,2009,5136]);
     // Eventlog Event Ids
     let EventlogEventIds = dynamic([1102]);
     // Scheduled Task Event Ids
@@ -34,24 +34,34 @@ ParserQuery: |
     let ActiveDirectoryReplicaIds = dynamic([4929]);
     // Firewall Event Ids
     let FirewallEventIds = dynamic([5025,5027,5028,5029,5030,5034,5035,5037]);
+    // Service Event Ids
+    let ServiceEventIds = dynamic([7035,7036,7040,7045,2009]); 
+    // Directory Service Object Ids
+    let DirectoryServiceIds = dynamic([5136]);   
     // EventID Lookup
-    let EventIDLookup = datatable(EventID:int, Operation:string, EventType:string, Object:string, ObjectType:string)
+    let EventIDLookup = datatable(EventID:int, Operation:string, EventType:string, Object:string, ObjectType:string, EventResult:string)
     [   
-        1102, "Delete Logs", "Delete", "Security Logs", "Event Log",
-        4698, "Create Scheduled Task", "Create", "", "Scheduled Task",
-        4699, "Delete Scheduled Task", "Delete", "", "Scheduled Task",
-        4700, "Enable Scheduled Task", "Enable", "", "Scheduled Task",
-        4701, "Disable Scheduled Task ", "Disable", "", "Scheduled Task",
-        4702, "Update Scheduled Task", "Set", "", "Scheduled Task",
-        4929, "Remove Active Directory Replica Source Naming Context", "Delete", "", "Other",
-        5025, "Stop Firewall Service", "Disable", "Firewall Service", "Service",
-        5027, "Retrieve the Security Policy From The Local Storage", "Read", "Firewall Service", "Service",
-        5028, "Parse the new Security Policy", "Set", "Firewall Service", "Service",
-        5029, "Initialize the Firewall Driver", "Initialize", "Firewall Service", "Service",
-        5030, "Start the Firewall Service", "Start", "Firewall Service", "Service",
-        5034, "Stop Firewall Driver", "Stop", "Firewall Driver", "Driver",
-        5035, "Start Firewall Driver", "Start", "Firewall Driver", "Driver",
-        5037, "Terminating Firewall Driver", "Terminate", "Firewall Driver", "Driver"
+        1102, "Delete Logs", "Delete", "Security Logs", "Event Log", "Success",
+        4698, "Create Scheduled Task", "Create", "", "Scheduled Task", "Success",
+        4699, "Delete Scheduled Task", "Delete", "", "Scheduled Task", "Success",
+        4700, "Enable Scheduled Task", "Enable", "", "Scheduled Task", "Success",
+        4701, "Disable Scheduled Task ", "Disable", "", "Scheduled Task", "Success",
+        4702, "Update Scheduled Task", "Set", "", "Scheduled Task", "Success",
+        4929, "Remove Active Directory Replica Source Naming Context", "Delete", "", "Other", "Success",
+        5025, "Stop Firewall Service", "Disable", "Firewall Service", "Service", "Success",
+        5027, "Retrieve the Security Policy From The Local Storage", "Read", "Firewall Service", "Service", "Failure",
+        5028, "Parse the new Security Policy", "Set", "Firewall Service", "Service", "Failure",
+        5029, "Initialize the Firewall Driver", "Initialize", "Firewall Service", "Service", "Failure",
+        5030, "Start the Firewall Service", "Start", "Firewall Service", "Service", "Failure",
+        5034, "Stop Firewall Driver", "Stop", "Firewall Driver", "Driver", "Failure",
+        5035, "Start Firewall Driver", "Start", "Firewall Driver", "Driver", "Failure",
+        5037, "Terminating Firewall Driver", "Terminate", "Firewall Driver", "Driver", "Failure",
+        7035, "Start Control Sent", "Execute", "", "Service", "Success",
+        7036, "Enter Stop State", "Stop", "", "Service", "Success",
+        7040, "Changed Service Settings", "Set", "", "Service", "Success",
+        7045, "Install Service", "Install", "", "Service", "Success",
+        2009, "Load Group Policy", "Error", "", "Service", "Failure",
+        5136, "Modified Directory Services Object", "Set", "", "Directory Service Object", "Success"
     ];
     let ParsedEvents =
     union (
@@ -81,7 +91,9 @@ ParserQuery: |
                 ClientProcessId:string,
                 DestinationDRA:string,
                 SourceDRA:string,
-                SourceAddr:string
+                SourceAddr:string,
+                ObjectDN:string,
+                AttributeValue:string
             ) 
         with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
         | project-away EventData
@@ -103,7 +115,9 @@ ParserQuery: |
             ClientProcessId = tostring(EventData.ClientProcessId),
             DestinationDRA = tostring(EventData.DestinationDRA),
             SourceDRA = tostring(EventData.SourceDRA),
-            SourceAddr = tostring(EventData.SourceAddr)
+            SourceAddr = tostring(EventData.SourceAddr),
+            ObjectDN = tostring(EventData.ObjectDN),
+            AttributeValue = tostring(EventData.AttributeValue)
         | project-away EventData
     )
     | lookup EventIDLookup on EventID
@@ -111,7 +125,7 @@ ParserQuery: |
     // Parse EventLog
     let EventLog = ParsedEvents
     | where EventID in(EventlogEventIds)
-    | project-away Task*, *DRA, SourceAddr;
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue;
     // Parse Scheduled Task
     let ScheduledTask = ParsedEvents
     | where EventID in(ScheduledTaskEventIds)
@@ -123,7 +137,7 @@ ParserQuery: |
         )
     | extend 
         Value = NewValue
-    | project-away Task*, *DRA, SourceAddr
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
     ;
     // Parse ADR
     let ActiveDirectoryReplica = ParsedEvents
@@ -135,15 +149,31 @@ ParserQuery: |
     | extend 
         Value = NewValue,
         Object = OldValue
-    | project-away Task*, *DRA, SourceAddr
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
     ;
     // Parse WindowsFirewall
     let WindowsFirewall = ParsedEvents
     | where EventID in(FirewallEventIds)
-    | project-away Task*, *DRA, SourceAddr
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse ServiceEvent
+    let ServiceEvent = ParsedEvents
+    | where EventID in(ServiceEventIds)
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse DirectoryService
+    let DirectoryService = ParsedEvents
+    | where EventID in(DirectoryServiceIds)
+    | extend 
+        Object = ObjectDN
+    | project-rename 
+        NewValue = AttributeValue
+    | extend
+        Value = NewValue
+    | project-away Task*, *DRA, SourceAddr, ObjectDN
     ;
     // Union Events
-    union EventLog, ScheduledTask, ActiveDirectoryReplica, WindowsFirewall
+    union EventLog, ScheduledTask, ActiveDirectoryReplica, WindowsFirewall, ServiceEvent, DirectoryService
         | invoke _ASIM_ResolveDvcFQDN("Computer")
         | project-rename 
             ActorUserId = SubjectUserSid,
@@ -153,7 +183,6 @@ ParserQuery: |
             EventUid = _ItemId
         | extend
             EventCount = int(1),
-            EventResult = "Success",
             EventStartTime = TimeGenerated, 
             EventEndTime= TimeGenerated,
             EventProduct = 'Windows',
