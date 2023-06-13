@@ -92,7 +92,7 @@ class PrismaCloudConnector:
 
             if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
                 policy_complianceMetadata = alert['policy']['complianceMetadata']
-                logging.info('Verifying the size of the policy_complianceMetadata and splitting into multiple columns based on size')
+                #logging.info('Verifying the size of the policy_complianceMetadata and splitting into multiple columns based on size')
                 queue_list = self.sentinel1._split_big_request(policy_complianceMetadata)
                 count = 1
                 for q in queue_list:
