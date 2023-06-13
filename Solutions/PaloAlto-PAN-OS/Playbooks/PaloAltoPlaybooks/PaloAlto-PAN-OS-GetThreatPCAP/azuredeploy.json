@@ -1,0 +1,470 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+    "title": "Get Threat PCAP - Palo Alto PAN-OS XML API",
+    "description": "This playbook allows us to get a threat PCAP for a given PCAP ID.",
+    "mainSteps": ["When a new Sentinel incident is created, this playbook gets triggered and performs below actions: \n\n 1. Gets the various parameters from the alert \n\n 2. Gets the PCAP from the device. \n\n 3. Puts the PCAP in Blob Storage \n\n 4. Creates a Sentinel Incident and updates it with a link to the blob."],
+    "prerequisites": ["1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page. \n\n 2. Generate an API key.[Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation) \n\n 3. This playbook only works for Palo Alto incidents with a threat PCAP where the PCAP ID is not null or zero."],
+    "lastUpdateTime": "2022-07-25T00:00:00.000Z",
+    "entities": [ "hostname" ],
+	"prerequisitesDeployTemplateFile": "../../CustomConnector/PAN-OSXmlApiCustomConnector/azuredeploy.json",
+    "tags": [ "Enrichment", "Response from teams" ],
+    "support": {
+      "tier": "microsoft"
+    },
+    "author": {
+      "name": "microsoft"
+    },
+    "postDeployment": ["** a. Authorize connections ** Once deployment is complete, you will need to authorize each connection. \n\n 1. Click the Microsoft Sentinel connection resource \n\n 2. Click edit API connection \n\n 3. Click Authorize \n\n 4. Sign in \n\n 5. Click Save \n\n 6. Repeat steps for other connections such as Blob Store connection and PAN-OS API connection (For authorizing the PAN-OS API connection, API Key needs to be provided) \n\n ** b. Configurations in Sentinel ** 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky IP \n\n 2. Configure the automation rules to trigger this playbook"]
+  },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "PaloAlto-PAN-OS-GetThreatPcap",
+            "type": "string"
+        },
+        "LogAnalyticsResourceGroup": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for LogAnalyticsResourceGroup"
+            }
+        },
+        "LogAnalyticsResourceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for LogAnalyticsResourceName"
+            }
+        },
+        "Storage Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Storage Name"
+            }
+        },
+        "Container Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Container Name"
+            }
+        },
+		"CustomConnectorName": {
+            "defaultValue": "PAN-OSXmlApiCustomConnector",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the custom connector, if you want to change the default name, make sure to use the same in all Paloalto automation playbooks as well"
+            }
+        }	
+    },
+    "variables": {
+        "AzureblobConnectionName": "[concat('Azureblob-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "PaloaltoconnectorConnectionName": "[concat('Paloaltoconnector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Container Name": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Container Name')]"
+                        },
+                        "LogAnalyticsResourceGroup": {
+                            "type": "string",
+                            "defaultValue": "[parameters('LogAnalyticsResourceGroup')]"
+                        },
+                        "LogAnalyticsResourceName": {
+                            "type": "string",
+                            "defaultValue": "[parameters('LogAnalyticsResourceName')]"
+                        },
+                        "Storage Name": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Storage Name')]"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON_-_Result_of_Run_query')",
+                            "actions": {
+                                "If_PCAP_ID_Exists": {
+                                    "actions": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)": {
+                                                    "runAfter": {
+                                                        "Create_blob_(V2)": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>@{body('Create_blob_(V2)')?['Path']}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Create_blob_(V2)": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": "\"@{body('Query_Palo_Alto_XML_API')}\"",
+                                                        "headers": {
+                                                            "ReadFileMetadataFromServer": true
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('Storage Name')))}/files",
+                                                        "queries": {
+                                                            "folderPath": "/@{parameters('Container Name')}",
+                                                            "name": "@{concat('paloalto',string(items('For_each')['pcap_id']),string(items('For_each')['time_1']), '.pcap')}",
+                                                            "queryParametersSingleEncoded": true
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Query_Palo_Alto_XML_API": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Add_comment_to_incident_(V3)_3": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                "message": "<p>Playbook execution failed with error :<br>\nFor more details : please check Playbook run history .</p>"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/Incidents/Comment"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@string(body('Query_Palo_Alto_XML_API'))",
+                                                                "'status'"
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@string(body('Query_Palo_Alto_XML_API'))",
+                                                                "error"
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@string(body('Query_Palo_Alto_XML_API'))",
+                                                                "invalid"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Query_Palo_Alto_XML_API": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['paloaltoconnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/api/",
+                                                "queries": {
+                                                    "category": "threat-pcap",
+                                                    "device_name": "@items('For_each')['Computer']",
+                                                    "pcap-id": "@items('For_each')['pcap_id']",
+                                                    "search-time": "@items('For_each')['event_time']",
+                                                    "sessionid": "@items('For_each')['sessionid']",
+                                                    "type": "export"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>Kindly provided the properly mapped fields in query result :<br>\n<br>\nReference :<br>\n\"TimeGenerated\": \"2023-05-29T11:28:42.6809438Z\",<br>\n\"Computer\": \"trustedwindows\",<br>\n\"pcap_id\": \"2343hjh234\",<br>\n\"sessionid\": \"87yujh67\",<br>\n\"event_time\": \"2023/28/29 11:28:42\"<br>\n</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each')['pcap_id']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each')['pcap_id']",
+                                                        0
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_Result_of_Run_query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Parse_JSON_-_Result_of_Run_query": {
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Run_query_and_list_results')?['value']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "Computer": {
+                                                "type": "string"
+                                            },
+                                            "TimeGenerated": {
+                                                "type": "string"
+                                            },
+                                            "event_time": {
+                                                "type": "string"
+                                            },
+                                            "pcap_id": {
+                                                "type": "string"
+                                            },
+                                            "sessionid": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "TimeGenerated",
+                                            "Computer",
+                                            "pcap_id",
+                                            "sessionid",
+                                            "event_time"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{triggerBody()?['object']?['properties']?['alerts']?[0]?['properties']?['additionalData']?['Query']}\n| limit 10",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@parameters('LogAnalyticsResourceGroup')",
+                                    "resourcename": "@parameters('LogAnalyticsResourceName')",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "f70efef4-6505-4727-acd8-9d0b3bc0b80e",
+                                    "timerange": "Set in query"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
+                                "connectionName": "[variables('AzureblobConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureblob')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "paloaltoconnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PaloaltoconnectorConnectionName'))]",
+                                "connectionName": "[variables('PaloaltoconnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "PaloAlto-PAN-OS-GetThreatPcap",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('PaloaltoconnectorConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureblobConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureblobConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureblob')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('PaloaltoconnectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('PaloaltoconnectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        }
+    ]
+}
