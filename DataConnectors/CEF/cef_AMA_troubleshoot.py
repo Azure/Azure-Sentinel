@@ -633,7 +633,7 @@ class IncomingEventsVerifications:
         poll_obj = select.poll()
         poll_obj.register(tcp_dump.stdout, select.POLLIN)
         while (end_seconds - start_seconds) < tcpdump_time_restriction:
-            if mock_message and mock_message_counter < 20:
+            if mock_message and mock_message_counter < 10:
                 # Sending mock messages
                 mock_message_counter += 1
                 self.send_message_local(514, 1)
