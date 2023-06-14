@@ -343,7 +343,7 @@ class DCRConfigurationVerifications:
             return False
         return True
 
-    def verify_dcr_content_has_stream(self):
+    def verify_dcr_content_has_stream(self, dcr_stream):
         """
         Verifying there is a DCR on the machine for forwarding cef data
         """
