@@ -1,7 +1,13 @@
 <h2>Create Solution template for data Connectors</h2></br>
 
 Please go over the following steps to generate a solution template:
-- Add under "input" directory the relevant ARM resources files (dataConnectorDefinition, DataConnectors, DCR, tables).
+- Add under "input" directory the relevant ARM resources files (dataConnectorDefinition, DataConnectors, DCR, tables). </br>
+Each resource should have the right resource type:
+  - Table: Microsoft.OperationalInsights/workspaces/tables
+  - Dcr: Microsoft.Insights/dataCollectionRules
+  - DataConnectorDefinitions: Microsoft.SecurityInsights/dataConnectorDefinitions
+  - DataConnectors: Microsoft.SecurityInsights/dataConnectors
+
 - Update input/solutionMetadata.json file properties values according to your solution.
 - Update the dataConnectors resources (under "input" directory) to use the connector definition parameters. </br>
 For Example: 

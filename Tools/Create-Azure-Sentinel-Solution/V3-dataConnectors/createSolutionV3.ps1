@@ -1,6 +1,6 @@
-".functions\Format-Json.ps1"
-".function\Get-ConnectionsTemplateParameters.ps1"
-".function\Get-MetaDataResource.ps1"
+. "C:\Users\sagamzu\Downloads\V3-dataConnectors\V3-dataConnectors\functions\Format-Json.ps1"
+. "C:\Users\sagamzu\Downloads\V3-dataConnectors\V3-dataConnectors\functions\Get-ConnectionsTemplateParameters.ps1"
+. "C:\Users\sagamzu\Downloads\V3-dataConnectors\V3-dataConnectors\functions\Get-MetaDataResource.ps1"
 
 [hashtable]$templateKindByCounter = @{
     1 = "ConnectorDefinition"; 
@@ -126,8 +126,12 @@ foreach ($file in $(Get-ChildItem $inputFilesPath)) {
     }
     elseif($fileContent.type -eq "Microsoft.Insights/dataCollectionRules")
     {
-        $dcrEndpoint = "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
-        $fileContent.properties | Add-Member -MemberType NoteProperty -Name dataCollectionEndpointId -Value $dcrEndpoint
+        if([bool]($fileContent.PSobject.Properties.name -match "dataCollectionEndpointId") -eq $false)
+        {
+            $dcrEndpoint = "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
+            $fileContent.properties | Add-Member -MemberType NoteProperty -Name dataCollectionEndpointId -Value $dcrEndpoint
+        }
+        
         foreach ($logAnalyticDestination in $fileContent.properties.destinations.logAnalytics)
         {
             $logAnalyticDestination.workspaceResourceId = "[variables('workspaceResourceId')]"
@@ -157,7 +161,7 @@ foreach ($file in $(Get-ChildItem $inputFilesPath)) {
 }
 
 ## Build the full package resources
-$templateContentConnections.properties.mainTemplate.parameters = Get-ConnectionsTemplateParameters($activeResource);
+$templateContentConnections.properties.mainTemplate.parameters = Get-ConnectionsTemplateParameters $activeResource;
 $armResourceContentPackage = Get-ContentPackagesForSolution
 $baseMainTemplate.resources += $templateContentConnectorDefinition
 $baseMainTemplate.resources += $activeResource
