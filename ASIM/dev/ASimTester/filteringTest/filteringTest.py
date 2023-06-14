@@ -1,8 +1,11 @@
+__unittest = True #prevent stacktrace during assertions
+
 import unittest
 import os
 import sys
 import yaml
 import contextlib
+import argparse
 from datetime import datetime, timedelta, timezone
 from azure.monitor.query import LogsQueryClient, LogsQueryStatus
 from azure.identity import DefaultAzureCredential
@@ -11,52 +14,63 @@ from azure.identity import DefaultAzureCredential
 from schemasParameters import all_schemas_parameters
 
 
-REPO_PATH = f"{os.getcwd()}/../../../../"
+#REPO_PATH = f"{os.getcwd()}/../../../../"
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
-DAYS_DELTA = 729
+DAYS_DELTA = 730
 
 
-if len(sys.argv) == 3:
-    ws_id = sys.argv[1]
-    parser_file_relative_path = sys.argv[2]
-else:
-    print("Please provide the correct number of arguments")
-    exit(-1)
+argparse_parser = argparse.ArgumentParser()
+argparse_parser.add_argument("ws_id", help = "workspace ID")
+argparse_parser.add_argument("parser_file_relative_path", help = "relative path to the parser file")
+argparse_parser.add_argument("days_delta", default = 1, type = int, help = "number of days to query over ,default is set to  1", nargs='?')
+args = argparse_parser.parse_args()
+ws_id = args.ws_id
+parser_file_path = args.parser_file_relative_path
+days_delta = args.days_delta
+
 
 end_time = datetime.now(timezone.utc)
 start_time = end_time - timedelta(days = DAYS_DELTA)
+required_fields = ["ParserParams", "ParserQuery", "Normalization.Schema" ]
 no_test_list = [] # No data was found for testing
 partial_test_list = [] # Parameters with only one value in their relevant column
 
 
+def attempt_to_connect(credential):
+    try:
+        with contextlib.redirect_stderr(None):
+            client = LogsQueryClient(credential)
+            empty_query = ""
+            response = client.query_workspace(
+                    workspace_id = ws_id, 
+                    query = empty_query,
+                    timespan = timedelta(days = 1)
+                    )
+            if response.status == LogsQueryStatus.PARTIAL or response.status == LogsQueryStatus.FAILURE:
+                raise Exception()
+            else:
+                return client
+    except Exception as e:
+        return None
+    
+
 # Authenticating the user
-credential = DefaultAzureCredential(exclude_interactive_browser_credential = False)
-try:
-    with contextlib.redirect_stderr(None):
-        client = LogsQueryClient(credential)
-        empty_query = ""
-        response = client.query_workspace(
-                workspace_id = ws_id, 
-                query = empty_query,
-                timespan = timedelta(days = 1)
-                )
-        if response.status == LogsQueryStatus.PARTIAL:
-            raise Exception()
-except Exception as e:
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential = False, exclude_shared_token_cache_credential = True)
-client = LogsQueryClient(credential)
+client = attempt_to_connect(DefaultAzureCredential(exclude_interactive_browser_credential = False))
+if client is None:
+    client = attempt_to_connect(DefaultAzureCredential(exclude_interactive_browser_credential = False, exclude_shared_token_cache_credential = True))
+    if client is None:
+        print("Couldn't connect to workspace")
+        sys.exit()
+
 
 
 def get_parser(parser_path):
-    parser_full_path = f"{REPO_PATH}{parser_path}"
-    if os.path.exists(parser_full_path) or not parser_full_path.endswith('.yaml'):
-        try:
-            with open(parser_full_path, 'r') as file_stream:
-                return yaml.safe_load(file_stream)
-        except:
-            print(f"Cannot open file: {parser_path}")
-    else:
-        print(f"yml file does not exist: {parser_path}")
+    try:
+        with open(parser_path, 'r') as file_stream:
+            return yaml.safe_load(file_stream)
+    except:
+        raise Exception()
+
 
 
 # Creating a string of the parameters of a parser
@@ -76,64 +90,104 @@ def create_query_without_call(parser_file):
     return f"let query= ({params_str}) {{ {query_from_yaml} }};\n"
 
 
-class FilteringTest(unittest.TestCase):
-    def tests_main_func(self):
-        parser_file = get_parser(parser_file_relative_path)
-        with self.subTest():
-            self.handle_parser(parser_file)
+def create_call_without_parameter(column_name):
+    return f"query() | summarize count() by {column_name}\n" 
 
-    
-    def handle_parser(self, parser_file):
+
+def create_call_with_parameter(parameter, value, column_name):
+    return f"query({parameter}={value}) | summarize count() by {column_name}\n"
+
+
+class FilteringTest(unittest.TestCase):
+    def show_traceback(self, test, outcome):
+        # Override the show_traceback method to suppress traceback output
+        pass
+
+
+    def tests_main_func(self):
+        if not os.path.exists(parser_file_path):
+            self.fail(f"File path does not exist: {parser_file_path}")
+        if not parser_file_path.endswith('.yaml'): 
+            self.fail(f"Not a yaml file: {parser_file_path}")
+        try:
+            parser_file = get_parser(parser_file_path)
+        except:
+            self.fail(f"Cannot open file: {parser_file_path}")
+        self.check_required_fields(parser_file)
         no_call_query = create_query_without_call(parser_file)
+        self.check_data_in_workspace(no_call_query)
         columns_in_answer = self.get_columns_of_parser_answer(no_call_query)
         param_to_column_mapping = all_schemas_parameters[parser_file['Normalization']['Schema']]
         for param in parser_file['ParserParams']:
             with self.subTest():
-                self.handle_param(param, no_call_query, columns_in_answer, param_to_column_mapping)
+                column_name_in_table = param_to_column_mapping[param['Name']]
+                self.handle_param(param, no_call_query, columns_in_answer, column_name_in_table)            
                       
         
-    def handle_param(self, param, no_call_query, columns_in_answer, param_to_column_mapping):
+    def handle_param(self, param, no_call_query, columns_in_answer, column_name_in_table):
         param_name = param['Name']
         param_type = param['Type']
         if (param_name == "pack"):
             return 
         if (param_name == "disabled"):
             self.disabled_test(param, no_call_query)
-        elif  param_to_column_mapping[param_name] not in columns_in_answer:
+        elif  column_name_in_table not in columns_in_answer:
             return
         elif (param_type == "datetime"):
             pass
         elif (param_type == "dynamic"):
             pass
         else:
-            self.scalar_test(param, no_call_query, param_to_column_mapping)
+            self.scalar_test(param, no_call_query, column_name_in_table)
 
     
+    def check_data_in_workspace(self, no_call_query):
+        check_data_response = self.send_query(no_call_query + "query() | take 5")
+        if len(check_data_response.tables[0].rows) == 0:
+            self.fail("No data in the provided workspace")
+        
+            
+
+    def check_required_fields(self, parser_file):
+        missing_fields = []
+        for full_field in required_fields:
+            file = parser_file
+            fields = full_field.split('.')
+            for field_name in fields:
+                if field_name not in file:
+                    missing_fields.append(full_field)
+                    break
+                file = file[field_name]
+        if len(missing_fields) != 0:
+            self.fail(f"The following fields are missing in the file:\n{missing_fields}")
+        #self.assertTrue(len(missing_fields) == 0, f"The following fields are missing in the file:\n{missing_fields}")
+    
+
     # Test for parameter which are not datetime,dynamic or disabled
-    def scalar_test(self, param, no_call_query, param_to_column_mapping):
+    def scalar_test(self, param, no_call_query, column_name_in_table):
         param_name = param['Name']
-        no_filter_query = no_call_query + f"query() | summarize count() by {param_to_column_mapping[param_name]}\n"
+        no_filter_query = no_call_query + create_call_without_parameter(column_name_in_table)
         no_filter_response = self.send_query(no_filter_query)
-        if len(no_filter_response.tables[0].rows) == 0:
-            no_test_list.append(param_name)
-            return
+        self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
+        with  self.subTest():
+            self.assertNotEqual(len(no_filter_response.tables[0].rows), 1 )
         # Taking the first value returned in the response
         selected_value = no_filter_response.tables[0].rows[0][0]
         value_to_filter = f"\'{selected_value}\'" if param['Type']=="string" else selected_value
 
-        # Performing a query with a non-existing value, expecting to return no results
-        no_results_query = no_call_query + f"query({param_name}={DUMMY_VALUE}) | summarize count() by {param_to_column_mapping[param_name]}\n"
-        no_results_response = self.send_query(no_results_query)
-        self.assertEqual(0, len(no_results_response.tables[0].rows), "Returned results for non existing filter value")
-
         # Performing a filtering by the first value returned in the first response
-        query_with_filter = no_call_query + f"query({param_name}={value_to_filter}) | summarize count() by {param_to_column_mapping[param_name]}\n"
+        query_with_filter = no_call_query + create_call_with_parameter(param_name, value_to_filter, column_name_in_table)
+        #query_with_filter = no_call_query + f"query({param_name}={value_to_filter}) | summarize count() by {column_name_in_table}\n"
         if selected_value=="":
-            query_with_filter = no_call_query + f"query() | where isempty({param_to_column_mapping[param_name]}) | summarize count() by {param_to_column_mapping[param_name]}\n"
+            query_with_filter = no_call_query + f"query() | where isempty({column_name_in_table}) | summarize count() by {column_name_in_table}\n"
         filtered_response = self.send_query(query_with_filter)
-        self.assertEqual(1, len(filtered_response.tables[0].rows), "Expected to have results for only one value after filtering")
-        if len(no_filter_response.tables[0].rows) == 1:
-            partial_test_list.append(param_name)
+        self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering")
+
+        # Performing a query with a non-existing value, expecting to return no results
+        no_results_query = no_call_query + create_call_with_parameter(param_name, DUMMY_VALUE, column_name_in_table)
+        #no_results_query = no_call_query + f"query({param_name}={DUMMY_VALUE}) | summarize count() by {column_name_in_table}\n"
+        no_results_response = self.send_query(no_results_query)
+        self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value")
         
 
         
@@ -170,12 +224,14 @@ class FilteringTest(unittest.TestCase):
                 timespan = (start_time, end_time)
                 )
             if response.status == LogsQueryStatus.PARTIAL:
-                print(response.partial_error)
+                #print(response.partial_error)
                 self.fail("Query failed")
-            elif response.status == LogsQueryStatus.SUCCESS:
+            elif response.status == LogsQueryStatus.FAILURE:
+                self.fail(f"The following query failed:\n{query_str}")
+            else:
                 return response
         except HttpResponseError as err:
-            print (err)
+            #print (err)
             self.fail("Query failed")
 
 
