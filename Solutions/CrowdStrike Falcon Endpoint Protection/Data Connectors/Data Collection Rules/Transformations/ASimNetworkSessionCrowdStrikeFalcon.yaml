@@ -27,7 +27,8 @@ ParserQuery: |
     let EventSeverityLookup = parse_json('{"Allow": "Informational", "Deny": "Low"}');
     let EventSubTypeLookup = parse_json('{"NetworkConnectIP4": "Start", "NetworkConnectIP6": "Start","NetworkReceiveAcceptIP4": "Start", "NetworkReceiveAcceptIP6": "Start","NetworkCloseIP6": "End", "NetworkCloseIP4": "End"}');
     source
-    | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01'))
+    | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01')),
+             contextDatetime = datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01'))
     | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())
     | project-rename
         DvcIpAddr = aip,
@@ -40,39 +41,52 @@ ParserQuery: |
         SrcProcessId = ContextProcessId,
         SrcProcessName = ImageFileName 
     | extend 
-        EventStartTime = datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01')),
+        EventStartTime = iff(isnotempty(contextDatetime),contextDatetime,TimeGenerated),
         NetworkDirection = tostring(NetworkDirectionLookup[ConnectionDirection]),
         NetworkProtocol = tostring(NetworkProtocolLookup[Protocol]),
         FirewallDvcAction = tostring(DvcActionLookup[FirewallAction]),
         RuleDvcAction = tostring(DvcActionLookup[RuleAction]),
         RemotePortNumber = case(
-                        isnotempty(RemotePort), toint(RemotePort),
-                        toint(split(RemoteAddressString, ":", 1)[0])
-                    ),
-        DvcOs = case(event_platform == "Win", "Windows", 
-                        event_platform == "Mac", "Macintosh",
-                        event_platform == "Lin", "Linux", 
-                      ""),
+                          isnotempty(RemotePort),
+                          toint(RemotePort),
+                          toint(split(RemoteAddressString, ":", 1)[0])
+                      ),
+        DvcOs = case(
+                event_platform == "Win",
+                "Windows", 
+                event_platform == "Mac",
+                "Macintosh",
+                event_platform == "Lin",
+                "Linux", 
+                ""
+            ),
         LocalPortNumber = toint(LocalPort),
         LocalIpAddr = case(
-                    isnotempty(LocalAddressIP6),LocalAddressIP6,
-                    isnotempty(LocalAddressIP4),LocalAddressIP4,
-                    NegateLocalAddress
-                ),
+                      isnotempty(LocalAddressIP6),
+                      LocalAddressIP6,
+                      isnotempty(LocalAddressIP4),
+                      LocalAddressIP4,
+                      NegateLocalAddress
+                  ),
         RemoteIpAddr = case(
-                    isnotempty(RemoteAddressIP6),RemoteAddressIP6,
-                    isnotempty(RemoteAddressIP4),RemoteAddressIP4,
-                    isnotempty(RemoteAddressString),tostring(split(RemoteAddressString, ":", 0)[0]),
-                    NegateRemoteAddress
-                ),
+                      isnotempty(RemoteAddressIP6),
+                      RemoteAddressIP6,
+                      isnotempty(RemoteAddressIP4),
+                      RemoteAddressIP4,
+                      isnotempty(RemoteAddressString),
+                      tostring(split(RemoteAddressString, ":", 0)[0]),
+                      NegateRemoteAddress
+                  ),
         LocalNatIpAddr = case(
-                    isnotempty(LocalAddressMaskIP6),LocalAddressMaskIP6,
-                    LocalAddressMaskIP4
-                ),
+                        isnotempty(LocalAddressMaskIP6),
+                        LocalAddressMaskIP6,
+                        LocalAddressMaskIP4
+                    ),
         RemoteNatIpAddr = case(
-                    isnotempty(RemoteAddressMaskIP6),RemoteAddressMaskIP6,
-                    RemoteAddressMaskIP4
-                )
+                          isnotempty(RemoteAddressMaskIP6),
+                          RemoteAddressMaskIP6,
+                          RemoteAddressMaskIP4
+                      )
     | extend
         SrcPortNumber = iff(NetworkDirection == "Inbound" or NetworkDirection == "Local", RemotePortNumber, LocalPortNumber),    
         DstPortNumber = iff(NetworkDirection == "Inbound" or NetworkDirection == "Local", LocalPortNumber, RemotePortNumber),
@@ -87,8 +101,8 @@ ParserQuery: |
         EventSubType = tostring(EventSubTypeLookup[event_simpleName]),
         AdditionalFields = todynamic(AdditionalFields),
         EventEndTime = EventStartTime,
-        DvcAction = iff(isnotempty(FirewallDvcAction),FirewallDvcAction,RuleDvcAction),
-        DvcOriginalAction = iff(isnotempty(FirewallAction),FirewallAction,RuleAction),
+        DvcAction = iff(isnotempty(FirewallDvcAction), FirewallDvcAction, RuleDvcAction),
+        DvcOriginalAction = iff(isnotempty(FirewallAction), FirewallAction, RuleAction),
         EventType = "NetworkSession",
         NetworkProtocolVersion = iff(event_simpleName contains "IP4", "IPv4", "IPv6"),
         EventCount = toint(1),
@@ -96,5 +110,5 @@ ParserQuery: |
         EventVendor = "CrowdStrike",
         EventProduct = "Falcon Data Replicator"
     | extend
-        EventResult = tostring(EventResultLookup[DvcAction]),
-        EventSeverity = tostring(EventSeverityLookup[DvcAction])
+        EventResult = iff(isnotempty(EventResultLookup[DvcAction]), tostring(EventResultLookup[DvcAction]), "Success"),
+        EventSeverity = iff(isnotempty(EventSeverityLookup[DvcAction]), tostring(EventSeverityLookup[DvcAction]), "Informational")
