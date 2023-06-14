@@ -1,4 +1,4 @@
-Parser:
+  Parser:
     Title: User Management ASIM parser for CrowdStrike Falcon Data Replicator
     Version: '0.1'
     LastUpdated: Jun 9, 2023
@@ -22,7 +22,8 @@ Parser:
   ParserQuery: |
       let EventTypeLookup = parse_json('{"UserAccountDeleted": "UserCreated","UserAccountCreated": "UserDeleted","UserAccountAddedToGroup": "UserAddedToGroup"}');
       source
-      | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01'))
+      | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01')),
+               contextDatetime = datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01'))
       | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())
       | project-rename
           DvcIpAddr = aip,
@@ -39,9 +40,9 @@ Parser:
                       event_platform == "Mac", "Macintosh",
                       event_platform == "Lin", "Linux", 
                       ""),    
-          EventStartTime = datetime_add('Second', tolong(todouble(ContextTimeStamp)), todatetime('1970-01-01')),
-          TargetUserIdType = "CrowdStrikeId",
-          GroupIdType = "CrowdStrikeId"
+          EventStartTime = iff(isnotempty(contextDatetime),contextDatetime,TimeGenerated),
+          TargetUserIdType = "RID",
+          GroupIdType = "RID"
       | extend EventEndTime = EventStartTime,
               EventType = tostring(EventTypeLookup[event_simpleName]),
               EventCount = toint(1),
