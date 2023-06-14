@@ -349,9 +349,6 @@ class DCRConfigurationVerifications:
         """
         global STREAM_SCENARIO
         command_name = "verify_DCR_content_has_stream"
-        dcr_stream = STREAM_SCENARIO
-        if STREAM_SCENARIO == 'ftd':
-            dcr_stream = 'asa'
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
             self.STREAM_NAME[dcr_stream])
         result_keywords_array = [self.STREAM_NAME[dcr_stream]]
@@ -362,15 +359,12 @@ class DCRConfigurationVerifications:
             return False
         return True
 
-    def verify_dcr_has_valid_content(self):
+    def verify_dcr_has_valid_content(self, dcr_stream):
         """
         Verifying that the CEF DCR on the machine has valid content with all necessary DCR components
         """
         global STREAM_SCENARIO
         command_name = "verify_dcr_has_valid_content"
-        dcr_stream = STREAM_SCENARIO
-        if STREAM_SCENARIO == 'ftd':
-            dcr_stream = 'asa'
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
             self.STREAM_NAME[dcr_stream])
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
@@ -391,15 +385,12 @@ class DCRConfigurationVerifications:
                     return False
         command_object.run_full_verification()
 
-    def check_multi_homing(self):
+    def check_multi_homing(self, dcr_stream):
         """
         Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
         """
         global STREAM_SCENARIO
         command_name = "check_multi_homing"
-        dcr_stream = STREAM_SCENARIO
-        if STREAM_SCENARIO == 'ftd':
-            dcr_stream = 'asa'
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
             self.STREAM_NAME[dcr_stream])
         command_object = CommandVerification(command_name, command_to_run)
@@ -419,12 +410,13 @@ class DCRConfigurationVerifications:
         """
         This function is only called by main and runs all the tests in this class
         """
+        dcr_stream = 'asa' if STREAM_SCENARIO == 'ftd' else STREAM_SCENARIO
         if not self.verify_dcr_exists():
             return False
-        if not self.verify_dcr_content_has_stream():
+        if not self.verify_dcr_content_has_stream(dcr_stream):
             return False
-        self.verify_dcr_has_valid_content()
-        self.check_multi_homing()
+        self.verify_dcr_has_valid_content(dcr_stream)
+        self.check_multi_homing(dcr_stream)
 
 
 class SyslogDaemonVerifications:
@@ -833,18 +825,12 @@ def print_scenario(args):
     """
     param: args: the arguments returned from the getargs function
     """
-    scenario_provided = False
-    for arg in vars(args):
-        if getattr(args, arg):
-            if arg == 'collect':
-                continue
-            if not scenario_provided:
-                scenario_provided = True
-            else:
-                print_error("More than 1 stream provided. Please run the script again with only one scenario.\n"
-                            "For more information run 'python cef_AMA_troubleshoot.py -h'. Exiting.")
-                sys.exit(1)
-    print_notice("The scenario chosen is: {}".format(STREAM_SCENARIO.upper()))
+    if list(vars(args).values()).count(True) > 1:
+        print_error("More than 1 stream provided. Please run the script again with only one scenario.\n"
+                    "For more information run 'python cef_AMA_troubleshoot.py -h'. Exiting.")
+        sys.exit(1)
+    else:
+        print_notice("The scenario chosen is: {}".format(STREAM_SCENARIO.upper()))
 
 
 def main():
