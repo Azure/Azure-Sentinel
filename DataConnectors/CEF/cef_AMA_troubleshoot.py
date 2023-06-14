@@ -328,6 +328,7 @@ class DCRConfigurationVerifications:
                                  "be collected from this machine to any workspace. Please create a DCR using the following documentation- " \
                                  "{} and run again".format(DCR_DOC)
     MULTI_HOMING_MESSAGE = "Detected multiple collection rules sending the same stream. This scenario is called multi-homing and might have effect on the agent's performance"
+
     def verify_dcr_exists(self):
         """
         Verifying there is at least one dcr on the machine
@@ -348,17 +349,14 @@ class DCRConfigurationVerifications:
         """
         global STREAM_SCENARIO
         command_name = "verify_DCR_content_has_stream"
-        revert_to_ftd = False
+        dcr_stream = STREAM_SCENARIO
         if STREAM_SCENARIO == 'ftd':
-            STREAM_SCENARIO = 'asa'
-            revert_to_ftd = True
+            dcr_stream = 'asa'
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
-            self.STREAM_NAME[STREAM_SCENARIO])
-        result_keywords_array = [self.STREAM_NAME[STREAM_SCENARIO]]
+            self.STREAM_NAME[dcr_stream])
+        result_keywords_array = [self.STREAM_NAME[dcr_stream]]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
-        if revert_to_ftd:
-            STREAM_SCENARIO = 'ftd'
         if not command_object.is_successful:
             print_error(self.DCR_MISSING_CEF_STREAM_ERR)
             return False
@@ -370,10 +368,11 @@ class DCRConfigurationVerifications:
         """
         global STREAM_SCENARIO
         command_name = "verify_dcr_has_valid_content"
+        dcr_stream = STREAM_SCENARIO
         if STREAM_SCENARIO == 'ftd':
-            STREAM_SCENARIO = 'asa'
+            dcr_stream = 'asa'
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
-            self.STREAM_NAME[STREAM_SCENARIO])
+            self.STREAM_NAME[dcr_stream])
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "opinsights.azure", "id"]
@@ -398,10 +397,11 @@ class DCRConfigurationVerifications:
         """
         global STREAM_SCENARIO
         command_name = "check_multi_homing"
+        dcr_stream = STREAM_SCENARIO
         if STREAM_SCENARIO == 'ftd':
-            STREAM_SCENARIO = 'asa'
+            dcr_stream = 'asa'
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
-            self.STREAM_NAME[STREAM_SCENARIO])
+            self.STREAM_NAME[dcr_stream])
         command_object = CommandVerification(command_name, command_to_run)
         command_object.run_command()
         try:
@@ -602,7 +602,7 @@ class IncomingEventsVerifications:
     LOGGER_NOT_INSTALLED_ERROR_MESSAGE = "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace."
 
     @staticmethod
-    def handle_tcpdump_line(line, ident):
+    def check_stream_in_line(line, ident):
         """
         Validate there are incoming events for the relevant stream.
         :param line: a text line from the tcpdump stream
@@ -648,7 +648,7 @@ class IncomingEventsVerifications:
             poll_result = poll_obj.poll(0)
             if poll_result:
                 line = tcp_dump.stdout.readline().decode('utf-8').strip("\n")
-                if self.handle_tcpdump_line(line, STREAM_SCENARIO.upper()):
+                if self.check_stream_in_line(line, STREAM_SCENARIO.upper()):
                     command_object.command_result = line
                     command_object.run_full_verification()
                     print_ok("Found {0} in stream. Please verify {0} events arrived at your workspace".format(
@@ -829,31 +829,29 @@ def getargs():
     return args
 
 
-def print_scenario(args, should_print=True):
+def print_scenario(args):
     """
     param: args: the arguments returned from the getargs function
-    param: should_print: set to true by default. Prints the chosen scenario by the user.
     """
-    if should_print:
-        scenario_provided = False
-        for arg in vars(args):
-            if getattr(args, arg):
-                if arg == 'collect':
-                    continue
-                if not scenario_provided:
-                    scenario_provided = True
-                else:
-                    print_error("More than 1 stream provided. Please run the script again with only one scenario.\n"
-                                "For more information run 'python cef_AMA_troubleshoot.py -h'. Exiting.")
-                    sys.exit(1)
-        print_notice("The scenario chosen is: {}".format(STREAM_SCENARIO.upper()))
+    scenario_provided = False
+    for arg in vars(args):
+        if getattr(args, arg):
+            if arg == 'collect':
+                continue
+            if not scenario_provided:
+                scenario_provided = True
+            else:
+                print_error("More than 1 stream provided. Please run the script again with only one scenario.\n"
+                            "For more information run 'python cef_AMA_troubleshoot.py -h'. Exiting.")
+                sys.exit(1)
+    print_notice("The scenario chosen is: {}".format(STREAM_SCENARIO.upper()))
 
 
 def main():
+    args = getargs()
     verify_root_privileges()
     subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
-    args = getargs()
     print_scenario(args)
     if args.collect:
         print_notice("Starting to collect data. This may take a couple of seconds")
