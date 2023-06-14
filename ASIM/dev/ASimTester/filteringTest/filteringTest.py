@@ -170,7 +170,7 @@ class FilteringTest(unittest.TestCase):
         no_filter_response = self.send_query(no_filter_query)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
         with  self.subTest():
-            self.assertNotEqual(len(no_filter_response.tables[0].rows), 1 )
+            self.assertNotEqual(len(no_filter_response.tables[0].rows), 1, f"Only one value exists for parameter: {param_name}, validations for this parameter are partial" )
         # Taking the first value returned in the response
         selected_value = no_filter_response.tables[0].rows[0][0]
         value_to_filter = f"\'{selected_value}\'" if param['Type']=="string" else selected_value
@@ -181,13 +181,15 @@ class FilteringTest(unittest.TestCase):
         if selected_value=="":
             query_with_filter = no_call_query + f"query() | where isempty({column_name_in_table}) | summarize count() by {column_name_in_table}\n"
         filtered_response = self.send_query(query_with_filter)
-        self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering")
+        with self.subTest():
+            self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering")
 
         # Performing a query with a non-existing value, expecting to return no results
         no_results_query = no_call_query + create_call_with_parameter(param_name, DUMMY_VALUE, column_name_in_table)
         #no_results_query = no_call_query + f"query({param_name}={DUMMY_VALUE}) | summarize count() by {column_name_in_table}\n"
         no_results_response = self.send_query(no_results_query)
-        self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value")
+        with self.subTest():
+            self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value")
         
 
         
