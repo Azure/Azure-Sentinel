@@ -14,7 +14,6 @@ from azure.identity import DefaultAzureCredential
 from schemasParameters import all_schemas_parameters
 
 
-#REPO_PATH = f"{os.getcwd()}/../../../../"
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
 DAYS_DELTA = 730
 
@@ -30,7 +29,7 @@ days_delta = args.days_delta
 
 
 end_time = datetime.now(timezone.utc)
-start_time = end_time - timedelta(days = DAYS_DELTA)
+start_time = end_time - timedelta(days = days_delta)
 required_fields = ["ParserParams", "ParserQuery", "Normalization.Schema" ]
 no_test_list = [] # No data was found for testing
 partial_test_list = [] # Parameters with only one value in their relevant column
@@ -99,11 +98,6 @@ def create_call_with_parameter(parameter, value, column_name):
 
 
 class FilteringTest(unittest.TestCase):
-    def show_traceback(self, test, outcome):
-        # Override the show_traceback method to suppress traceback output
-        pass
-
-
     def tests_main_func(self):
         if not os.path.exists(parser_file_path):
             self.fail(f"File path does not exist: {parser_file_path}")
@@ -141,13 +135,14 @@ class FilteringTest(unittest.TestCase):
             self.scalar_test(param, no_call_query, column_name_in_table)
 
     
+    # Checking if the provided workspace has some data
     def check_data_in_workspace(self, no_call_query):
         check_data_response = self.send_query(no_call_query + "query() | take 5")
         if len(check_data_response.tables[0].rows) == 0:
             self.fail("No data in the provided workspace")
-        
-            
+          
 
+    # Checking if all fields from "required_fields" array are in the yaml file.
     def check_required_fields(self, parser_file):
         missing_fields = []
         for full_field in required_fields:
@@ -160,7 +155,6 @@ class FilteringTest(unittest.TestCase):
                 file = file[field_name]
         if len(missing_fields) != 0:
             self.fail(f"The following fields are missing in the file:\n{missing_fields}")
-        #self.assertTrue(len(missing_fields) == 0, f"The following fields are missing in the file:\n{missing_fields}")
     
 
     # Test for parameter which are not datetime,dynamic or disabled
