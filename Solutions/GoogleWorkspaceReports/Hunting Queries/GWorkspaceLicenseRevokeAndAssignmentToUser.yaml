@@ -1,0 +1,37 @@
+id: b1235ce0-06a0-446b-baad-852874f57bd4
+name: GWorkspace - License Revoke and Assignment to User
+description: |
+  This hunting query searches for license revoke and assignment in quick succession to user. License revoke and assignment in quick succession to user can be a sign of data exfiltration.
+  https://www.mitiga.io/blog/mitiga-security-advisory-lack-of-forensic-visibility-with-the-basic-license-in-google-drive
+severity: Medium
+requiredDataConnectors:
+  - connectorId: GoogleWorkspaceReportsAPI
+    dataTypes:
+      - GWorkspaceActivityReports
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1537
+query: |
+  // Adjust timeDelta (in minutes) to adjust the duration between two license revoke and assignment events   
+  let timeDelta = 15;
+  GWorkspaceActivityReports
+  | where TimeGenerated > ago(24h)
+  | where EventMessage =~ 'USER_LICENSE_REVOKE' or EventMessage =~ 'USER_LICENSE_ASSIGNMENT'
+  | sort by TimeGenerated desc 
+  | extend isWithinDelta = iff(datetime_diff('minute', TimeGenerated, next(TimeGenerated)) < timeDelta, 1, 0) 
+  | where isWithinDelta == 1
+  | summarize by ActorEmail, UserEmail, SrcIpAddr
+  | extend Name = tostring(split(UserEmail,'@',0)[0]), UPNSuffix = tostring(split(UserEmail,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0
