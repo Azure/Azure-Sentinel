@@ -1,5 +1,5 @@
 from datetime import datetime
-
+import logging
 import requests
 import config
 
@@ -39,6 +39,16 @@ def _list(cls: Model, *args, **kwargs):
                             headers={'Accept': 'application/json', 'Content-Type': 'application/json'},
                             verify=config.VERIFY_CERTIFICATE)
 
+    if (response.status_code >= 400):
+        error_message = response.json()
+        if (response.json().get('data') is not None):
+            if (response.json()['data'].get('message') is not None):
+                error_message = response.json()['data']['message']
+            else:
+                error_message = response.json()['data']
+        logging.error(error_message)
+        raise Exception(error_message)
+
     items = []
     for item in response.json()['data']:
         items.append(cls.from_json(item))
@@ -53,6 +63,16 @@ def _get(cls: Model, *args, **kwargs):
                             auth=HTTPBasicAuth(config.API_KEY, config.API_SECRET),
                             headers={'Accept': 'application/json', 'Content-Type': 'application/json'},
                             verify=config.VERIFY_CERTIFICATE)
+
+    if (response.status_code >= 400):
+        error_message = response.json()
+        if (response.json().get('data') is not None):
+            if (response.json()['data'].get('message') is not None):
+                error_message = response.json()['data']['message']
+            else:
+                error_message = response.json()['data']
+        logging.error(error_message)
+        raise Exception(error_message)
 
     return response.json()['data']
 
