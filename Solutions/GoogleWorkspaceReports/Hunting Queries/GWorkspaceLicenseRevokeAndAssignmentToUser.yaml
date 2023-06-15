@@ -15,14 +15,27 @@ relevantTechniques:
 query: |
   // Adjust timeDelta (in minutes) to adjust the duration between two license revoke and assignment events   
   let timeDelta = 15;
-  GWorkspaceActivityReports
-  | where TimeGenerated > ago(24h)
-  | where EventMessage =~ 'USER_LICENSE_REVOKE' or EventMessage =~ 'USER_LICENSE_ASSIGNMENT'
-  | sort by TimeGenerated desc 
-  | extend isWithinDelta = iff(datetime_diff('minute', TimeGenerated, next(TimeGenerated)) < timeDelta, 1, 0) 
-  | where isWithinDelta == 1
-  | summarize by ActorEmail, UserEmail, SrcIpAddr
-  | extend Name = tostring(split(UserEmail,'@',0)[0]), UPNSuffix = tostring(split(UserEmail,'@',1)[0])
+  // Adjust lookbackPeriod (in hours) to adjust the time window of search 
+  let lookbackPeriod = 24h;
+  let usersWithLicenseRevoke = GWorkspaceActivityReports
+    | where TimeGenerated > ago(lookbackPeriod)
+    | where EventMessage =~ 'USER_LICENSE_REVOKE'
+    | sort by TimeGenerated desc 
+    | summarize by TimeGenerated, UserEmail, EventMessage, SrcIpAddr;
+  let usersWithLicenseAssignment = GWorkspaceActivityReports
+    | where TimeGenerated > ago(lookbackPeriod)
+    | where EventMessage =~ 'USER_LICENSE_ASSIGNMENT'
+    | sort by TimeGenerated desc 
+    | summarize by TimeGenerated, UserEmail, EventMessage, SrcIpAddr;
+  usersWithLicenseRevoke
+    | join kind=inner usersWithLicenseAssignment on UserEmail
+    | extend isWithinDelta = iff(datetime_diff('minute', TimeGenerated1, TimeGenerated) < timeDelta, 1, 0)
+    | where isWithinDelta == 1
+    | summarize by UserEmail, SrcIpAddr
+    | extend Name = tostring(split(UserEmail,'@',0)[0]), UPNSuffix = tostring(split(UserEmail,'@',1)[0])
+    | extend Account_0_Name = Name
+    | extend Account_0_UPNSuffix = UPNSuffix
+    | extend IP_0_Address = SrcIpAddr
 entityMappings:
   - entityType: Account
     fieldMappings:
