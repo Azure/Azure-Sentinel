@@ -106,12 +106,12 @@ def get_file_raw_lines(file_url, file_in_tmp_path):
     url = f'{instance_url}{file_url}'
     try:
         with requests.get(url, stream=True, headers=headers) as r:
-            with open(file_in_tmp_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=1024*1024):
-                    if chunk:  # filter out keep-alive new chunks
-                        f.write(chunk)
             if r.status_code == 200:
                 print('File successfully downloaded from url {} '.format(url))
+                with open(file_in_tmp_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=1024*1024):
+                        if chunk:  # filter out keep-alive new chunks
+                            f.write(chunk)
             else:
                 print('File downloading failed. {r.status_code} {r.text} {file_url}')
     except Exception as err:
@@ -222,8 +222,10 @@ def main(mytimer: func.TimerRequest) -> None:
         local_filename = line["LogFile"].replace('/', '_').replace(':', '_')
         file_in_tmp_path = "{}/{}".format(temp_dir.name, local_filename)
         get_file_raw_lines(line["LogFile"],file_in_tmp_path)
-        gen_chunks(file_in_tmp_path)
-        logging.info('File processed {}'.format(line["LogFile"]))
+        if(file_in_tmp_path.st_size > 0):
+            gen_chunks(file_in_tmp_path)
+            logging.info('File processed {}'.format(line["LogFile"]))
+        logging.info('File Not Found or No Content'.format(line["LogFile"]))
     logging.info('Program finished.')
     utc_timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
     if mytimer.past_due:
