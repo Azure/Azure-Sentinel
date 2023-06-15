@@ -1,0 +1,106 @@
+Parser:
+  Title: ASIM Authentication parser for Cisco Meraki
+  Version: '0.1'
+  LastUpdated: Jun 12 2023
+Product:
+  Name: Cisco Meraki
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the Cisco Meraki logs to the ASIM authentication normalized schema.
+ParserName: ASimAuthenticationCiscoMeraki
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+
+ParserQuery: |
+  let EventResultDetailsLookup = datatable (reason:string, EventResultDetails:string)
+  [
+      "0","Other",
+      "1","Other",
+      "2","Password expired",
+      "3","Other",
+      "4","Session expired",
+      "5","Other",
+      "6","Other",
+      "7","Other",
+      "8","Other",
+      "9","Other",
+      "10","Logon violates policy",
+      "11","Logon violates policy",
+      "12","Other",
+      "13","Logon violates policy",
+      "14","Other",
+      "15","Other",
+      "16","Other",
+      "17","Other",
+      "18","Incorrect key",
+      "19","Incorrect key",
+      "20","Incorrect key",
+      "21","Other",
+      "22","Other",
+      "23","Other",
+      "24","Logon violates policy",
+  ];
+  let parser = (disabled:bool=false){
+    union isfuzzy=true
+          (
+        meraki_CL
+        | project-rename LogMessage =  Message
+          ),
+          (
+        Syslog
+        | project-rename LogMessage =  SyslogMessage
+          )
+      | where not(disabled) and LogMessage has "events" and (LogMessage has_any ("8021x_auth", "wpa_auth", "splash_auth", "8021x_deauth", "8021x_client_deauth", "wpa_deauth", "8021x_eap_failure", "8021x_eap_success") or (LogMessage has "disassociation" and LogMessage has "auth_neg_failed"))
+      | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
+      | extend Epoch = tostring(Parser[0]),
+              Device = tostring(Parser[1]),
+              Substring = tostring(Parser[3]),
+              EventCount=int(1),
+              EventProduct="Meraki",
+              EventVendor="Cisco",
+              EventSchema="Authentication",
+              EventSchemaVersion="0.1.3"
+      | extend EpochTimestamp = split(Epoch,".")
+      | extend EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0])),
+              EventEndTime=TimeGenerated
+      | extend TypeOfEvent = case(
+                                Substring has_any ("8021x_auth", "wpa_auth", "splash_auth", "8021x_eap_success"), "Authentication",
+                                Substring has_any ("8021x_deauth", "8021x_client_deauth", "wpa_deauth"), "DeAuthentication",
+                                Substring has_any ("8021x_eap_failure", "disassociation"), "AuthenticationFailure",
+                                ""
+                        )
+      | invoke _ASIM_ResolveDvcFQDN('Device')
+      | extend Dvc = DvcHostname,
+              EventResult = case(
+                            TypeOfEvent == "Authentication" or TypeOfEvent == "DeAuthentication", "Success",
+                            TypeOfEvent == "AuthenticationFailure", "Failure",
+                            ""
+                        ),
+              EventType = case(
+                              TypeOfEvent == "Authentication" or TypeOfEvent == "AuthenticationFailure", "Logon",
+                              TypeOfEvent == "DeAuthentication", "Logoff",
+                            ""
+                        ),
+              DvcIpAddr = case(
+                              Substring has "client_ip", extract(@"client_ip='([0-9\.]+)'",1,Substring),
+                              Substring has " ip=", extract(@"ip='([0-9\.]+)'",1,Substring),
+                              ""
+                          ),
+              DvcMacAddr = extract(@"client_mac='(\S+)'\s",1,Substring),
+              User = extract(@"identity='(\S+)'\s",1,Substring),
+              AdditionalFields = parse_json(extract(@"aid='(\S+)'",1,Substring)),
+              reason = extract(@"reason='(\S+)'",1,Substring)
+      | lookup EventResultDetailsLookup on reason
+      | extend EventResultDetails = iff(tolong(reason) >= 25 and tolong(reason) <=65535, "Other", EventResultDetails)
+      | project-away LogMessage, Parser, Epoch, EpochTimestamp, Device, Substring, TypeOfEvent, TenantId, SourceSystem, Computer, _ResourceId, MG, ManagementGroupName, RawData, EventTime, Facility, HostName, SeverityLevel, ProcessID, HostIP, ProcessName, reason
+      };
+      parser(disabled=disabled)
