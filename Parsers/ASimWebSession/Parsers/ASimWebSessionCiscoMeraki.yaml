@@ -1,0 +1,148 @@
+Parser:
+  Title: Web Session ASIM parser for Cisco Meraki
+  Version: '0.1'
+  LastUpdated: Jun 12 2023
+Product:
+  Name: Cisco Meraki
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Web Session normalized schema.
+ParserName: ASimWebSessionCiscoMeraki
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ActionLookup = datatable (Action: string, DvcAction: string)  [
+      'allow', 'Allow',
+      'log', 'Allow',
+      'accept', 'Allow',
+      'block', 'Deny',
+      'deny', 'Deny',
+      'qurantine', 'Deny'
+  ];
+  let parser=(disabled: bool=false) {
+      union isfuzzy=true
+          (
+          meraki_CL
+          | project-rename LogMessage =  Message
+          ),
+          (
+          Syslog
+          | project-rename LogMessage =  SyslogMessage
+          )
+      | where not(disabled) and (LogMessage has "urls" or (LogMessage has "security_event" and LogMessage has "security_filtering_file_scanned"))
+      | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
+      | extend
+          Epoch = tostring(Parser[0]),
+          Device =tostring(Parser[1]),
+          Substring = tostring(Parser[3]),
+          EventCount=int(1),
+          EventProduct="Meraki",
+          EventVendor="Cisco",
+          EventSchema="WebSession",
+          EventSchemaVersion="0.2.6"
+      | extend EpochTimestamp = split(Epoch, ".")
+      | extend
+          EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0])),
+          EventEndTime=TimeGenerated,
+          Disposition=tostring(extract(@"disposition=(\S+)\s", 1, Substring)),
+          Action=case(LogMessage has "security_event", tostring(extract(@"action=(\S+)", 1, Substring)), ""),
+          Url = case(
+            LogMessage has "urls",
+            extract(@"request: (\w+)\s(\S+)", 2, Substring),
+            LogMessage has "security_event",
+            tostring(extract(@"url=(\S+)\s", 1, Substring)),
+            ""
+        )
+      | extend
+          EventResult=case(
+                          LogMessage has "urls",
+                          "Success",
+                          LogMessage has "security_event" and Action in~("allow", "log", "accept"),
+                          "Success",
+                          LogMessage has "security_event" and Action in~("block", "deny", "qurantine"),
+                          "Failure",
+                          ""
+                      ),
+          EventSeverity=case(
+                    LogMessage has "urls",
+                    "Informational",
+                    LogMessage has "security_event" and Action in~("allow", "log", "accept"),
+                    "Informational",
+                    LogMessage has "security_event" and Action in~("block", "deny", "qurantine"),
+                    "High",
+                    ""
+                ),
+          Ip=extract("(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", 1, Url)
+      | extend
+          EventType=case(
+                        LogMessage has "urls" and Ip != "",
+                        "HTTPsession",
+                        "WebServerSession"
+                    ),
+          SrcIpAddr = extract(@"src=([0-9\.]+)\:", 1, Substring),
+          SrcPortNumber = toint(extract(@"src=([0-9\.]+)\:(\d+)\s", 2, Substring)),
+          DstIpAddr=  extract(@"dst=([0-9\.]+)\:", 1, Substring),
+          DstPortNumber = toint(extract(@"dst=([0-9\.]+)\:(\d+)\s", 2, Substring)),
+          HttpUserAgent = iff(
+                      LogMessage has "urls",
+                      extract(@"agent='([\S\.\s\S]+)'", 1, Substring),
+                      ""
+                  ),
+          HttpRequestMethod = iff(LogMessage has "urls", extract(@"request: (\w+)\s", 1, Substring), dynamic("")),
+          FileSHA256 = iff(LogMessage has "security_event", tostring(extract(@"sha256([=]*)(\S+)?", 2, Substring)), ""),
+          FileName = iff (
+                LogMessage has "security_event",
+                tostring(extract(@"name='(\S+)'\s", 1, Substring)),
+                ""
+            ),
+          EventReportUrl=case (
+                    LogMessage has "security_event",
+                    tostring(extract(@"url=(\S+)\s", 1, Substring)),
+                    LogMessage has "urls",
+                    tostring(extract(@"request: (\w+)\s(\S+)", 2, Substring)),
+                    ""
+                ),
+          DvcMacAddr=tostring(extract(@"mac=(\S+)\s", 1, Substring))
+      | invoke _ASIM_ResolveDvcFQDN('Device')
+      | extend 
+          Dst=DstIpAddr,
+          Src=SrcIpAddr,
+          Dvc=DvcHostname,
+          IpAddr=SrcIpAddr,
+          UserAgent=HttpUserAgent
+      | lookup ActionLookup on Action
+      | project-away
+          LogMessage,
+          Parser,
+          Epoch,
+          EpochTimestamp,
+          Device,
+          Disposition,
+          Action,
+          Ip,
+          Substring,
+          TenantId,
+          SourceSystem,
+          Computer,
+          _ResourceId,
+          MG,
+          ManagementGroupName,
+          RawData,
+          EventTime,
+          Facility,
+          HostName,
+          SeverityLevel,
+          ProcessID,
+          HostIP,
+          ProcessName
+  };
+  parser (disabled=disabled)
