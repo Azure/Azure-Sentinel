@@ -5,7 +5,7 @@ import re
 import argparse
 import sys
 
-SCRIPT_VERSION = 2.1
+SCRIPT_VERSION = 2.2
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
@@ -17,16 +17,9 @@ PATH_FOR_CSS_TICKET = {
     "Gov": "https://portal.azure.us/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"}
 AGENT_CONF_FILE = "/etc/opt/microsoft/azuremonitoragent/config-cache/mdsd.hr.json"
 FAILED_TESTS_COUNT = 0
+STREAM_SCENARIO = "cef"  # default value
 WARNING_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
-SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
-                      "Runs CEF validation tests on the collector machine and generates a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
-                      "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
-                      "     -h,             --help display the help and exit\n\n" \
-                      "Example:\n" \
-                      "     python cef_AMA_troubleshoot.py\n" \
-                      "     python cef_AMA_troubleshoot.py collect\n\n" \
-                      "This script verifies the installation of the CEF connector on the collector machine. It returns a status for each test and action items to fix detected issues."
 DELIMITER = "\n" + "-" * 20 + "\n"
 
 
@@ -66,6 +59,7 @@ class CommandShellExecution(object):
     """
     This class is for executing all the shell related commands in the terminal for each test.
     """
+
     def __init__(self, command_name, command_to_run, result_keywords_array=None, fault_keyword=None,
                  command_result=None,
                  command_result_err=None):
@@ -111,11 +105,13 @@ class CommandVerification(CommandShellExecution):
     """
     This class is running all the necessary verifications for the running test.
     """
+
     def __init__(self, command_name, command_to_run, result_keywords_array=None, fault_keyword=None,
                  command_result=None,
                  command_result_err=None,
                  is_successful=False):
-        super(CommandVerification, self).__init__(command_name, command_to_run, result_keywords_array, fault_keyword, command_result, command_result_err)
+        super(CommandVerification, self).__init__(command_name, command_to_run, result_keywords_array, fault_keyword,
+                                                  command_result, command_result_err)
         self.is_successful = is_successful
 
     def __repr__(self):
@@ -245,11 +241,13 @@ class AgentInstallationVerifications:
     AGENT_INSTALLATION_DOC = "https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage"
     AGENT_NOT_INSTALLED_ERROR_MESSAGE = "Could not detect an AMA service running and listening on the machine." \
                                         " Please follow this documentation in order to install it and verify your" \
-                                        " machine's operating system is in the supported list- {}".format(AGENT_INSTALLATION_DOC)
+                                        " machine's operating system is in the supported list- {}".format(
+        AGENT_INSTALLATION_DOC)
     AGENT_NOT_RUNNING_ERROR_MESSAGE = "Detected AMA is installed on the machine but not running. Please start the agent by running " \
                                       "\'service azuremonitoragent start\' \nif the agent service fails to start," \
                                       " please run the following command to review the agent error log file here- " \
-                                      "\'cat /var/opt/microsoft/azuremonitoragent/log/mdsd.err | tail -n 15\'".format(AGENT_INSTALLATION_DOC)
+                                      "\'cat /var/opt/microsoft/azuremonitoragent/log/mdsd.err | tail -n 15\'".format(
+        AGENT_INSTALLATION_DOC)
 
     OMS_RUNNING_ERROR_MESSAGE = "Detected the OMS Agent running on your machine. If not necessary please remove it to avoid duplicated data in the workspace, which can result in an increase in costs"
 
@@ -320,14 +318,16 @@ class DCRConfigurationVerifications:
     DCR_DOC = "https://docs.microsoft.com/azure/azure-monitor/agents/data-collection-rule-overview"
     DCRA_DOC = "https://docs.microsoft.com/rest/api/monitor/data-collection-rule-associations"
     CEF_STREAM_NAME = "SECURITY_CEF_BLOB"
+    CISCO_STREAM_NAME = "SECURITY_CISCO_ASA_BLOB"
+    STREAM_NAME = {"cef": CEF_STREAM_NAME, "asa": CISCO_STREAM_NAME}
     DCR_MISSING_ERR = "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace." \
                       " For explanation on how to install a Data collection rule please browse- {} \n " \
                       "In order to read about how to associate a DCR to a machine please review- {}".format(DCR_DOC,
                                                                                                             DCRA_DOC)
-    DCR_MISSING_CEF_STREAM_ERR = "Could not detect any data collection rule for CEF data. No CEF events will " \
-                                 "be collected from this machine to any workspace. Please create a CEF DCR using the following documentation- " \
+    DCR_MISSING_CEF_STREAM_ERR = "Could not detect any data collection rule for the provided datatype. No such events will " \
+                                 "be collected from this machine to any workspace. Please create a DCR using the following documentation- " \
                                  "{} and run again".format(DCR_DOC)
-    CEF_MULTI_HOMING_MESSAGE = "Detected multiple collection rules sending the CEF stream. This scenario is called multi-homing and might have effect on the agent's performance"
+    MULTI_HOMING_MESSAGE = "Detected multiple collection rules sending the same stream. This scenario is called multi-homing and might have effect on the agent's performance"
 
     def verify_dcr_exists(self):
         """
@@ -343,14 +343,15 @@ class DCRConfigurationVerifications:
             return False
         return True
 
-    def verify_dcr_content_has_cef_stream(self):
+    def verify_dcr_content_has_stream(self, dcr_stream):
         """
         Verifying there is a DCR on the machine for forwarding cef data
         """
-        command_name = "verify_DCR_content_has_CEF_stream"
+        global STREAM_SCENARIO
+        command_name = "verify_DCR_content_has_stream"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
-            self.CEF_STREAM_NAME)
-        result_keywords_array = [self.CEF_STREAM_NAME]
+            self.STREAM_NAME[dcr_stream])
+        result_keywords_array = [self.STREAM_NAME[dcr_stream]]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
@@ -358,13 +359,14 @@ class DCRConfigurationVerifications:
             return False
         return True
 
-    def verify_dcr_has_valid_content(self):
+    def verify_dcr_has_valid_content(self, dcr_stream):
         """
         Verifying that the CEF DCR on the machine has valid content with all necessary DCR components
         """
-        command_name = "verify_CEF_dcr_has_valid_content"
+        global STREAM_SCENARIO
+        command_name = "verify_dcr_has_valid_content"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
-            self.CEF_STREAM_NAME)
+            self.STREAM_NAME[dcr_stream])
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "opinsights.azure", "id"]
@@ -372,7 +374,8 @@ class DCRConfigurationVerifications:
         command_object.run_command(should_decode=False)
         command_object.command_result = command_object.command_result.decode('UTF-8').split('\n')[:-1]
         for dcr in command_object.command_result:
-            dcr_path = re.search("(/etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/.*.json)", str(dcr)).group()
+            dcr_path = re.search("(/etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/.*.json)",
+                                 str(dcr)).group()
             for key_word in command_object.result_keywords_array:
                 if str(key_word) not in str(dcr):
                     command_object.is_command_successful(should_fail=True)
@@ -382,19 +385,20 @@ class DCRConfigurationVerifications:
                     return False
         command_object.run_full_verification()
 
-    def check_cef_multi_homing(self):
+    def check_multi_homing(self, dcr_stream):
         """
         Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
         """
-        command_name = "check_cef_multi_homing"
+        global STREAM_SCENARIO
+        command_name = "check_multi_homing"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
-            self.CEF_STREAM_NAME)
+            self.STREAM_NAME[dcr_stream])
         command_object = CommandVerification(command_name, command_to_run)
         command_object.run_command()
         try:
             if int(command_object.command_result) > 1:
                 command_object.run_full_verification(should_fail=True)
-                print_warning(self.CEF_MULTI_HOMING_MESSAGE)
+                print_warning(self.MULTI_HOMING_MESSAGE)
             else:
                 command_object.is_successful = True
                 command_object.document_result()
@@ -406,18 +410,20 @@ class DCRConfigurationVerifications:
         """
         This function is only called by main and runs all the tests in this class
         """
+        dcr_stream = 'asa' if STREAM_SCENARIO == 'ftd' else STREAM_SCENARIO
         if not self.verify_dcr_exists():
             return False
-        if not self.verify_dcr_content_has_cef_stream():
+        if not self.verify_dcr_content_has_stream(dcr_stream):
             return False
-        self.verify_dcr_has_valid_content()
-        self.check_cef_multi_homing()
+        self.verify_dcr_has_valid_content(dcr_stream)
+        self.check_multi_homing(dcr_stream)
 
 
 class SyslogDaemonVerifications:
     """
     This class is for Syslog daemon related verifications
     """
+
     def __init__(self):
         self.command_name = "verify_Syslog_daemon_listening"
         self.SYSLOG_DAEMON = ""
@@ -431,8 +437,10 @@ class SyslogDaemonVerifications:
         """
         This function is in order to determine what Syslog daemon is running on the machine (Rsyslog or Syslog-ng)
         """
-        is_rsyslog_running = CommandVerification("find_Rsyslog_daemon", "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
-        is_syslog_ng_running = CommandVerification("find_Syslog-ng_daemon", "if [ `ps -ef | grep syslog-ng | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
+        is_rsyslog_running = CommandVerification("find_Rsyslog_daemon",
+                                                 "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
+        is_syslog_ng_running = CommandVerification("find_Syslog-ng_daemon",
+                                                   "if [ `ps -ef | grep syslog-ng | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
         is_rsyslog_running.run_command(), is_syslog_ng_running.run_command()
         if "True" in str(is_rsyslog_running.command_result):
             self.SYSLOG_DAEMON = "rsyslog"
@@ -507,7 +515,8 @@ class OperatingSystemVerifications:
     SELINUX_DOCUMENTATION = "https://access.redhat.com/documentation/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
     SELINUX_RUNNING_ERROR_MESSAGE = "Detected SELinux running on the machine. The CEF connector does not support any form of hardening at the moment," \
                                     "and having SELinux in Enforcing mode can harm the forwarding of data. Please disable SELinux by running the command \'setenforce 0\'." \
-                                    "This will disable SELinux temporarily. In order to disable permemently please follow this documentation- {}".format(SELINUX_DOCUMENTATION)
+                                    "This will disable SELinux temporarily. In order to disable permemently please follow this documentation- {}".format(
+        SELINUX_DOCUMENTATION)
     IPTABLES_BLOCKING_TRAFFIC_ERROR_MESSAGE = "Iptables might be blocking incoming traffic to the agent." \
                                               " Please verify there are no firewall rules blocking incoming traffic to port 514 and run again."
     FULL_DISK_ERROR_MESSAGE = "There is less than 1 GB of free disk space left on this machine." \
@@ -577,37 +586,40 @@ class IncomingEventsVerifications:
     """
     # CONSTANTS
     FIXED_CEF_MESSAGE = "0|TestCommonEventFormat|MOCK|common=event-format-test|end|TRAFFIC|1|rt=$common=event-formatted-receive_time deviceExternalId=0002D01655 src=1.1.1.1 dst=2.2.2.2 sourceTranslatedAddress=1.1.1.1 destinationTranslatedAddress=3.3.3.3 cs1Label=Rule cs1=CEF_TEST_InternetDNS"
+    FIXED_CISCO_MESSAGE = "Deny inbound TCP src inet:1.1.1.1 dst inet:2.2.2.2"
+    FIXED_FTD_MESSAGE = "Teardown dynamic UDP translation from inside:10.51.100.1/54453 to outside:10.0.2.3/54453 duration 0:00:00"
+    STREAM_MESSAGE = {"cef": FIXED_CEF_MESSAGE, "asa": FIXED_CISCO_MESSAGE, "ftd": FIXED_FTD_MESSAGE}
+    IDENT_NAME = {"cef": "CEF", "asa": "%ASA-7-106010", 'ftd': "%FTD-6-305012"}
     TCPDUMP_NOT_INSTALLED_ERROR_MESSAGE = "Notice that \'tcpdump\' is not installed in your Linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'."
     LOGGER_NOT_INSTALLED_ERROR_MESSAGE = "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace."
-    CEF_EVENTS_FOUND_MESSAGE = "Found CEF events in stream. Please verify CEF events arrived at your workspace"
-    CEF_EVENTS_NOT_FOUND_ERROR_MESSAGE = "Could not locate \"CEF\" message in tcpdump. Please verify CEF events can be sent to the machine and there is not firewall blocking incoming traffic"
 
     @staticmethod
-    def handle_tcpdump_line(line):
+    def check_stream_in_line(line, ident):
         """
-        Validate there are incoming CEF events.
+        Validate there are incoming events for the relevant stream.
         :param line: a text line from the tcpdump stream
-        :return: True if CEF exists in the line. Otherwise, false.
+        :param ident: The message tag to look for in the message line.
+        :return: True if the stream exists in the line. Otherwise, false.
         """
-        if "CEF" in line:
+        if ident in line:
             return True
         return False
 
     def incoming_logs_validations(self, mock_message=False):
         """
-        Validate that there is incoming traffic of CEF messages
+        Validate that there is incoming traffic of the stream type
         :param mock_message: Tells if to generate mock messages
-        :return: True if successfully captured CEF events.
+        :return: True if successfully captured events of the relevant stream.
         """
         tcpdump_time_restriction = 10
         start_seconds = int(round(time.time()))
         end_seconds = int(round(time.time()))
         mock_message_counter = 0
-        command_name = "listen_to_incoming_cef_events"
-        command_to_run = "sudo tcpdump -A -ni any port 514 -vv"
-        result_keywords_array = ["CEF"]
+        command_name = "listen_to_incoming_events"
+        command_to_run = "sudo tcpdump -A -l -ni any port 514 -vv"
+        result_keywords_array = [STREAM_SCENARIO.upper()]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
-        print("Attempting to capture CEF events using tcpdump. This could take up to " + str(
+        print("Attempting to capture events using tcpdump. This could take up to " + str(
             tcpdump_time_restriction) + " seconds.")
         tcp_dump = subprocess.Popen(command_object.command_to_run, shell=True, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT)
@@ -621,25 +633,27 @@ class IncomingEventsVerifications:
         poll_obj = select.poll()
         poll_obj.register(tcp_dump.stdout, select.POLLIN)
         while (end_seconds - start_seconds) < tcpdump_time_restriction:
-            if mock_message is True:
+            if mock_message and mock_message_counter < 10:
                 # Sending mock messages
                 mock_message_counter += 1
-                self.send_cef_message_local(514, 1)
+                self.send_message_local(514, 1)
             poll_result = poll_obj.poll(0)
             if poll_result:
-                line = str(tcp_dump.stdout.readline().decode('utf-8').strip("\n"))
-                if self.handle_tcpdump_line(line):
+                line = tcp_dump.stdout.readline().decode('utf-8').strip("\n")
+                if self.check_stream_in_line(line, STREAM_SCENARIO.upper()):
                     command_object.command_result = line
                     command_object.run_full_verification()
-                    print_ok(self.CEF_EVENTS_FOUND_MESSAGE)
+                    print_ok("Found {0} in stream. Please verify {0} events arrived at your workspace".format(
+                        STREAM_SCENARIO.upper()))
                     return True
             end_seconds = int(round(time.time()))
-        print_error(self.CEF_EVENTS_NOT_FOUND_ERROR_MESSAGE)
+        print_error("Could not locate {0} message in tcpdump. Please verify {0} events can be sent to the machine and"
+                    " there is not firewall blocking incoming traffic".format(STREAM_SCENARIO.upper()))
         command_object.command_result = str(line)
         command_object.run_full_verification()
         return False
 
-    def send_cef_message_local(self, port, amount):
+    def send_message_local(self, port, amount):
         """
         Generate local CEF events in a given amount to a given port
         :param port: A destination port to send the events
@@ -647,13 +661,12 @@ class IncomingEventsVerifications:
         """
         try:
             for index in range(0, amount):
-                command_tokens = ["logger", "-p", "local4.warn", "-t", "CEF:", self.FIXED_CEF_MESSAGE, "-P", str(port),
-                                  "-n",
-                                  "127.0.0.1"]
+                command_tokens = ["logger", "-p", "local4.warn", "-t", self.IDENT_NAME[STREAM_SCENARIO],
+                                  self.STREAM_MESSAGE[STREAM_SCENARIO], "--rfc3164", "-P", str(port), "-n", "127.0.0.1"]
                 logger = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
                 o, e = logger.communicate()
                 if e is not None:
-                    print("Error could not send cef mock message")
+                    print("Error could not send mock message")
         except OSError:
             print(self.LOGGER_NOT_INSTALLED_ERROR_MESSAGE)
 
@@ -662,7 +675,7 @@ class IncomingEventsVerifications:
         This function is only called by main and runs all the tests in this class
         """
         if not self.incoming_logs_validations():
-            print_notice("Generating CEF mock events and trying again")
+            print_notice("\nGenerating mock events and trying again")
             self.incoming_logs_validations(mock_message=True)
 
 
@@ -713,7 +726,8 @@ class SystemInfo:
                 command_object.command_result) + DELIMITER).replace(
             '%', '%%').replace('\\n', '\n')
 
-    def trace_activation(self):
+    @staticmethod
+    def trace_activation():
         flag = '-T 0x1002'
         file_path = '/etc/default/azuremonitoragent'
         # Check if the flag already exists
@@ -783,21 +797,40 @@ def find_dcr_cloud_environment():
         return DEFAULT_MACHINE_ENV
 
 
-def getargs(should_print=True):
+def getargs():
     """
     Get execution args using argparse lib
     """
-    parser = argparse.ArgumentParser(description=SCRIPT_HELP_MESSAGE)
-    parser.add_argument('collect', nargs='?', help='Collect syslog message samples to file')
-    # parser.add_argument('--CEF', '--cef', action='store_true', default=False, help='Validate CEF DCR and events')
-    # parser.add_argument('--ASA', '--asa', action='store_true', default=False, help='Validate Cisco ASA DCR and events')
+    global STREAM_SCENARIO
+    parser = argparse.ArgumentParser()
+    parser.add_argument('collect', nargs='?',
+                        help='runs the script in collect mode. Useful in case you want to open a ticket.')
+    parser.add_argument('--CEF', '--cef', action='store_true', default=False,
+                        help='run the troubleshooting script for the CEF scenario.')
+    parser.add_argument('--ASA', '--asa', action='store_true', default=False,
+                        help='run the troubleshooting script for the Cisco ASA scenario.')
+    parser.add_argument('--FTD', '--ftd', action='store_true', default=False,
+                        help='run the troubleshooting script for the Cisco FTD scenario.')
     args = parser.parse_args()
-    if should_print:
-        for arg in vars(args):
-            if getattr(args, arg):
-                print_notice(arg)
-        print('\n')
+    if args.ASA:
+        STREAM_SCENARIO = "asa"
+    elif args.FTD:
+        STREAM_SCENARIO = "ftd"
+    else:
+        STREAM_SCENARIO = "cef"
     return args
+
+
+def print_scenario(args):
+    """
+    param: args: the arguments returned from the getargs function
+    """
+    if list(vars(args).values()).count(True) > 1:
+        print_error("More than 1 stream provided. Please run the script again with only one scenario.\n"
+                    "For more information run 'python cef_AMA_troubleshoot.py -h'. Exiting.")
+        sys.exit(1)
+    else:
+        print_notice("The scenario chosen is: {}".format(STREAM_SCENARIO.upper()))
 
 
 def main():
@@ -805,6 +838,7 @@ def main():
     verify_root_privileges()
     subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
+    print_scenario(args)
     if args.collect:
         print_notice("Starting to collect data. This may take a couple of seconds")
         machine_env = find_dcr_cloud_environment()
@@ -812,7 +846,8 @@ def main():
         system_info = SystemInfo()
         system_info.handle_commands()
         print(
-            "Finished collecting data \nIn order to open a support case please browse: {}".format(PATH_FOR_CSS_TICKET[machine_env]))
+            "Finished collecting data \nIn order to open a support case please browse: {}".format(
+                PATH_FOR_CSS_TICKET[machine_env]))
         with open(LOG_OUTPUT_FILE, 'a') as file:
             file.write('*' * 10 + 'FINISHED COLLECTION' + '*' * 10)
         time.sleep(1)
@@ -823,7 +858,7 @@ def main():
         (SyslogDaemonVerifications(), "Starting validation tests for the Syslog daemon"),
         (OperatingSystemVerifications(), "Starting validation tests for the operating system"),
         (IncomingEventsVerifications(), "Starting validation tests for capturing incoming events")]
-    print_notice("\nStarting to run the CEF validation script")
+    print_notice("\nStarting to run the validation script for the {} scenario".format(STREAM_SCENARIO))
     time.sleep(1)
     print_notice("Please validate you are sending CEF messages to the agent machine")
     for class_test in class_tests_array:
@@ -839,11 +874,12 @@ def main():
     else:
         print_ok("All tests passed successfully")
         print_notice("This script generated an output file located here - {}"
-                     "\nPlease review it if you would like to get more information on failed tests.".format(LOG_OUTPUT_FILE))
+                     "\nPlease review it if you would like to get more information on failed tests.".format(
+            LOG_OUTPUT_FILE))
     if not args.collect:
         print_notice(
             "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
-            "\'python cef_AMA_troubleshoot.py collect\'")
+            "\'python cef_AMA_troubleshoot.py [STREAM_OPTION] collect\'")
 
 
 if __name__ == '__main__':
