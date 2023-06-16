@@ -13,6 +13,9 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -25,7 +28,9 @@ query: |
   let IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True);
   //Create a list of TLDs in our threat feed for later validation of extracted domains
   let list_tlds = ThreatIntelligenceIndicator
-  | where TimeGenerated > ago(ioc_lookBack)
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
   | where isnotempty(DomainName)
   | extend DomainName = tolower(DomainName)
   | extend parts = split(DomainName, '.')
@@ -61,7 +66,7 @@ query: |
   //Uncomment the line below to only alert on allowed connections
   //| where DeviceAction !~ "block-url"
   //Extract domain from RequestURL, if not present extarct it from AdditionalExtentions
-  | extend PA_Url = columnifexists("RequestURL", "None")
+  | extend PA_Url = column_ifexists("RequestURL", "None")
   | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith "PanOS", extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
   | extend PA_Url = iif(PA_Url !startswith "http://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), iif(PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url))
   | extend Domain = trim(@"""",tostring(parse_url(PA_Url).Host))
@@ -76,21 +81,21 @@ query: |
   ) on $left.TI_DomainEntity==$right.Domain
   | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
   | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Domain, IoC
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, 
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
     DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, IoC, TI_DomainEntity
-  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, URLCustomEntity = PA_Url
+  | extend timestamp = CommonSecurityLog_TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: DeviceName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.3.0
+        columnName: PA_Url
+version: 1.3.3
 kind: Scheduled

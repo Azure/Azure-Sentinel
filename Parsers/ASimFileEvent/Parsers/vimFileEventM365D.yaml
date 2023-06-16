@@ -25,6 +25,7 @@ ParserQuery: |
   let parser=(disabled:bool=false){
     let remote_events = 
         DeviceFileEvents
+        | where not(disabled)
         | where isnotempty(RequestAccountName)
         | project-rename    
             SrcIpAddr = RequestSourceIP,
@@ -38,6 +39,9 @@ ParserQuery: |
             ActorUserUpn = "",
             ActorUserAadId = ""
         | extend
+            ActorUserType = _ASIM_GetWindowsUserType(ActorWindowsUsername, ActorUserSid),
+            TargetUserType = _ASIM_GetWindowsUserType(TargetWindowsUsername, TargetUserSid)
+        | extend
             SrcPortNumber = toint(RequestSourcePort),
             TargetUsername = coalesce(TargetUserUpn, TargetWindowsUsername),
             TargetUsernameType = iff(isempty(TargetUserUpn), 'Windows', 'UPN'),
@@ -48,6 +52,7 @@ ParserQuery: |
     ;
     let local_events = 
        DeviceFileEvents
+        | where not(disabled)
         | where isempty(RequestAccountName)    
         | project-rename
             ActorUserSid = InitiatingProcessAccountSid,
@@ -55,6 +60,9 @@ ParserQuery: |
             ActorUserUpn = InitiatingProcessAccountUpn
         | extend 
             ActorWindowsUsername = strcat(InitiatingProcessAccountDomain,'\\', InitiatingProcessAccountName) 
+        | extend
+            ActorUserType = _ASIM_GetWindowsUserType(ActorWindowsUsername, ActorUserSid)
+        | project-away RequestAccountSid, RequestSourceIP
     ;
     union 
         remote_events

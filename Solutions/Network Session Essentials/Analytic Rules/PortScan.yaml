@@ -1,0 +1,94 @@
+id: 1da9853f-3dea-4ea9-b7e5-26730da3d537
+name: Port scan detected  (ASIM Network Session schema)
+description: |
+  'This rule identifies a possible port scan, in which a single source tries to access a large number of different ports is a short time frame. This may indicate that a [port scanner](https://en.wikipedia.org/wiki/Port_scanner) is trying to identify open ports in order to penetrate a system.<br><br>
+  This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'
+alertDetailsOverride:
+  alertDisplayNameFormat: Potential port scan from {{SrcIpAddr}}
+  alertDescriptionFormat: A port scan has been performed from address {{SrcIpAddr}} over {{AttemptedPortsCount}} ports within 5 minutes. This may indicate that a [port scanner](https://en.wikipedia.org/wiki/Port_scanner) is trying to identify open ports in order to penetrate a system. 
+
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSVPCFlow
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight_CL
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoMeraki
+    dataTypes:
+      - Syslog
+      - CiscoMerakiNativePoller
+
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1046
+tags:
+  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Analytic%20Rules/PortScanDetected.yaml
+    version: 1.0.0
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+query: |
+  let PortScanThreshold = 50;
+  _Im_NetworkSession
+  | where ipv4_is_private(SrcIpAddr) == False
+  | where SrcIpAddr !in ("127.0.0.1", "::1")
+  | summarize AttemptedPortsCount=dcount(DstPortNumber), AttemptedPorts=make_set(DstPortNumber, 100), ReportedBy=make_set(strcat(EventVendor, "/", EventProduct), 20) by SrcIpAddr, bin(TimeGenerated, 5m)
+  | where AttemptedPortsCount > PortScanThreshold
+
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+
+customDetails:
+  AttemptedPortsCount: AttemptedPortsCount
+
+version: 1.0.4
+kind: Scheduled

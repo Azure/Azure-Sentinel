@@ -1,0 +1,81 @@
+id: 3a3c6835-0086-40ca-b033-a93bf26d878f
+name: Suspicious AAD Joined Device Update
+description: |
+  'This query looks for suspicious updates to an Azure AD joined device where the device name is changed and the device falls out of compliance.
+  This could occur when a threat actor updates the details of an Autopilot provisioned device using a stolen device ticket, in order to access certificates and keys.
+  Ref: https://dirkjanm.io/assets/raw/Insomnihack%20Breaking%20and%20fixing%20Azure%20AD%20device%20identity%20security.pdf'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+query: |
+  AuditLogs
+  | where OperationName =~ "Update device"
+  | mv-apply TargetResource=TargetResources on (
+      where TargetResource.type =~ "Device"
+      | extend ModifiedProperties = TargetResource.modifiedProperties
+      | extend DeviceId = TargetResource.id)
+  | mv-apply Prop=ModifiedProperties on ( 
+      where Prop.displayName =~ "CloudDisplayName"
+      | extend OldName = Prop.oldValue 
+      | extend NewName = Prop.newValue)
+  | mv-apply Prop=ModifiedProperties on ( 
+      where Prop.displayName =~ "IsCompliant"
+      | extend OldComplianceState = Prop.oldValue  
+      | extend NewComplianceState = Prop.newValue)
+  | mv-apply Prop=ModifiedProperties on ( 
+      where Prop.displayName =~ "TargetId.DeviceTrustType"
+      | extend OldTrustType = Prop.oldValue  
+      | extend NewTrustType = Prop.newValue)
+  | mv-apply Prop=ModifiedProperties on ( 
+      where Prop.displayName =~ "Included Updated Properties" 
+      | extend UpdatedProperties = Prop.newValue)
+  | extend OldDeviceName = tostring(parse_json(tostring(OldName))[0])
+  | extend NewDeviceName = tostring(parse_json(tostring(NewName))[0])
+  | extend OldComplianceState = tostring(parse_json(tostring(OldComplianceState))[0])
+  | extend NewComplianceState = tostring(parse_json(tostring(NewComplianceState))[0])
+  | extend InitiatedByUser = tostring(iff(isnotempty(InitiatedBy.user.userPrincipalName),InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName))
+  | extend UpdatedPropertiesCount = array_length(split(UpdatedProperties, ','))
+  | where OldDeviceName != NewDeviceName
+  | where OldComplianceState =~ 'true' and NewComplianceState =~ 'false'
+  // Most common is transferring from AAD Registered to AAD Joined - we just want AAD Joined devices
+  | where NewTrustType == '"AzureAd"' and OldTrustType != '"Workplace"'
+  // We can modify this value to tune FPs - more properties changed about the device beyond its name the more suspicious it could be
+  | where UpdatedPropertiesCount > 1
+  | project-reorder TimeGenerated, DeviceId, NewDeviceName, OldDeviceName, NewComplianceState, InitiatedByUser, AADOperationType, OldTrustType, NewTrustType, UpdatedProperties, UpdatedPropertiesCount
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: NewDeviceName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: OldDeviceName
+  - entityType: Host
+    fieldMappings:
+      - identifier: AzureID
+        columnName: DeviceId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatedByUser
+alertDetailsOverride:
+  alertDisplayNameFormat: Suspicious AAD Joined Device Update {{OldDeviceName}} renamed to {{NewDeviceName}} and {{UpdatedPropertiesCount}} properties changed
+  alertDescriptionFormat: |
+    This query looks for suspicious updates to an Azure AD joined device where the device name is changed and the device falls out of compliance.
+    In this case {{OldDeviceName}} was renamed to {{NewDeviceName}} and {{UpdatedPropertiesCount}} properties were changed.
+    This could occur when a threat actor steals a Device ticket from an Autopilot provisioned device and uses it to AAD Join a new  device.
+    Ref: https://dirkjanm.io/assets/raw/Insomnihack%20Breaking%20and%20fixing%20Azure%20AD%20device%20identity%20security.pdf
+version: 1.0.1
+kind: Scheduled

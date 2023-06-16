@@ -17,8 +17,10 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         {
             var sampleFunctions = base.Load();
             Dictionary<string, List<Column>> schemaToResultColumnsMapping = GetSchemaToResultColumnsMapping(sampleFunctions);
-            var functions = GetFunctions(schemaToResultColumnsMapping);
-            return functions;
+            var parsersFunctions = GetFunctions(schemaToResultColumnsMapping);
+            var defaultFunctions = (new SentinelDefaultFunctionsLoader()).Load().Select(function => function.FunctionName);
+            parsersFunctions = parsersFunctions.Where(function => !defaultFunctions.Contains(function.FunctionName));
+            return parsersFunctions;
         }
 
         /// <summary>

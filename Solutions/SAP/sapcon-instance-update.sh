@@ -25,6 +25,8 @@ STARTPARAMS="$@"
 dockerimage="mcr.microsoft.com/azure-sentinel/solutions/sapcon"
 sdkfileloc="/sapcon-app/inst/"
 CONTAINERNAMES=()
+test_logs="NO LOGS TO DISPLAY"
+
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -134,17 +136,11 @@ while IFS= read -r contname; do
 	fi
 
 	log "Checking if upgrade is necessary for agent $contname"
-	if [[ -z $(docker inspect "$contname" --format '{{ .Config.Labels }}' | grep "Cloud") ]]; then
-		CLOUD='public'
-	else
-		CLOUD=$(docker inspect "$contname" --format '{{.Config.Labels.Cloud}}')
-		if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'mooncake' ]; then
-			CLOUD='public'
-		fi
-	fi
+	CLOUD=$(docker inspect "$contname" --format '{{index .Config.Labels "Cloud"}}')
+
 	labelstring="--label Cloud=$CLOUD"
 	if [ ! $DEVMODE ]; then
-		if [ "$CLOUD" == 'public' ]; then
+		if [ "$CLOUD" == 'public' ] || [ -z $CLOUD ]; then
 			tag=':latest'
 		elif [ "$CLOUD" == 'fairfax' ]; then
 			tag=':ffx-latest'
@@ -152,6 +148,9 @@ while IFS= read -r contname; do
 		elif [ "$CLOUD" == 'mooncake' ]; then
 			tag=':mc-latest'
 			az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
+		else
+			log "Skipping container $contname as its Cloud label is not supported: $CLOUD"
+			continue
 		fi
 		if [ $PREVIEW ]; then
 			tagver="$tag-preview"
@@ -221,6 +220,11 @@ while IFS= read -r contname; do
 				envstring+="-e $variable "
 			fi
 		done
+
+		# Check if we have an agent guid already. if we don't have - generate and add to the envstring
+		if [[ $envstring != *"SENTINEL_AGENT_GUID="* ]]; then
+			envstring+="-e SENTINEL_AGENT_GUID=$(uuidgen) "
+		fi
 			
 		ContainerNetworkSetting=$(docker inspect "$contname" --format '{{.Config.Labels.ContainerNetworkSetting}}')
 		if [ "$ContainerNetworkSetting" == "<no value>" ]; then
@@ -281,6 +285,16 @@ while IFS= read -r contname; do
 					log "Agent test run finished. Exit code $containerexitcode"
 					if [ "$containerexitcode" == 0 ]; then
 						dryrunsuccess=1
+					elif [ "$containerexitcode" == 5 ]; then
+						echo ""
+						log "Failed to connect to the SAP system"
+						dryrunsuccess=0
+						break
+					elif [ "$containerexitcode" == 6 ]; then
+						echo ""
+						log "Failed to send heartbeat data to Azure Sentinel Workspace"
+						dryrunsuccess=0
+						break
 					elif [ "$containerexitcode" == 7 ]; then
 						echo ""
 						log "Insufficient authorizations in SAP"
@@ -310,6 +324,7 @@ while IFS= read -r contname; do
 				docker stop "$testruncontainer" >/dev/null
 			fi
 			log "Test run finished, removing agent in test run mode"
+            		test_logs=$(docker logs "$testruncontainer" --tail 70 2>&1 >/dev/null)
 			docker rm "$testruncontainer" >/dev/null
 		else
 			log "Creating new agent without test mode"
@@ -323,7 +338,7 @@ while IFS= read -r contname; do
 			echo ""
 			log "Test run NOT successful, removing new agent, renaming the old agent to original name"
 			log "----Agent debug logs START----"
-			log "$(docker logs "$contname")"
+			log "$test_logs"
 			log "----Agent debug logs END----"
 		fi
 		if [ $dryrunsuccess == 1 ]; then

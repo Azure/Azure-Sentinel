@@ -23,8 +23,8 @@ Microsoft Sentinel provides Logstash output plugin to Log analytics workspace us
 Install the microsoft-sentinel-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
-- Logstash 7 Between 7.0 and 7.17.6
-- Logstash 8 Between 8.0 and 8.4.2
+- Logstash 7 Between 7.0 and 7.17.10
+- Logstash 8 Between 8.0 and 8.8.1
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
@@ -121,6 +121,7 @@ output {
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
+- **proxy** - String, Empty by default. Specify which proxy URL to use for all API calls.
 
 Security notice: We recommend not to implicitly state client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, and dcr_immutable_id in your Logstash configuration for security reasons.
                  It is best to store this sensitive information in a Logstash KeyStore as described here- ['Secrets Keystore'](<https://www.elastic.co/guide/en/logstash/current/keystore.html>)
@@ -150,6 +151,7 @@ output {
       data_collection_endpoint => "https://my-customlogsv2-test-jz2a.eastus2-1.ingest.monitor.azure.com"
       dcr_immutable_id => "dcr-xxxxxxxxxxxxxxxxac23b8978251433a"
       dcr_stream_name => "Custom-MyTableRawData"
+      proxy => "http://proxy.example.com"
     }
 }
 
