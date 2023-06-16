@@ -1,0 +1,44 @@
+id: 8f658a80-7fa9-4524-a95b-d9ab608e8850
+name: Remote Login Performed with WMI
+description: |
+   'It detects authentication attempts performed with WMI. Adversaries may abuse WMI to execute malicious commands and payloads.
+   Ref: https://www.mandiant.com/resources/bypassing-network-restrictions-through-rdp-tunneling'
+severity: Low
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1047
+query: |
+ SecurityEvent
+    | where EventID in (4624,4625) and ProcessName endswith_cs "WmiPrvSE.exe"
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, TargetUserName, TargetLogonId, LogonTypeName, IpAddress, ProcessName
+    | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+    | extend UserName = tostring(split(TargetUserName, '@', 0)[0]), UPNSuffix = tostring(split(TargetUserName, '@', 1)[0])
+    | extend Host_0_HostName = HostName
+    | extend Host_0_DnsDomain = DnsDomain
+    | extend Account_0_Name = UserName
+    | extend Account_0_UPNSuffix = UPNSuffix
+    | extend IP_0_Address = IpAddress
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+version: 2.0.0

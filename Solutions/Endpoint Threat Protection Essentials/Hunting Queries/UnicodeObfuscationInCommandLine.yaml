@@ -1,0 +1,49 @@
+id: a953f304-12e4-48ae-bedc-d58fb1b0c6a6
+name: Unicode Obfuscation in Command Line
+description: |
+  'The query looks for Command Lines that contain non ASCII characaters. Insertion of these characters could be used to evade detections.
+  Command lines should be reviewed to determine whether inclusion of non ASCII characters was deliberate or not.
+  Ref: https://www.wietzebeukema.nl/blog/windows-command-line-obfuscation'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvents
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1027
+query: |
+  let lolbins = dynamic(["cmd.exe", "powershell.exe", "find.exe", "PowerShell_ISE.exe", "wmic.exe", "winrs.exe", "winrm.cmd", "whoami.exe", "wevtutil.exe", "vssadmin.exe", "vbc.exe", "tasklist.exe", "takeown.exe", "taskkill.exe", "systeminfo.exe", "schtasks.exe", "sc.exe", "route.exe", "robocopy.cmd", "regsrv32.exe", "ping.exe", "nslookup.exe", "netstat.exe", "netsh.exe", "net.exe", "msiexec.exe", "mpcmdrun.exe", "jsc.exe", "ipconfig.exe", "icals.exe", "forfiles.exe", "fltmc.exe", "findstr.exe", "curl.exe", "csc.exe", "cmstp.exe", "cmdkey.exe", "certutils.exe", "cacls.exe", "bitsadmin.exe", "at.exe", "arp.exe"]);
+  (union isfuzzy=true
+  (SecurityEvent
+  | where Process in~ (lolbins)
+  | where isnotempty(CommandLine)
+  | extend CommandLine = translate('–”“', '-""', CommandLine)
+  | extend ASCII = isascii(CommandLine)
+  | where ASCII == false),
+  (DeviceProcessEvents
+  | where isnotempty(InitiatingProcessCommandLine)
+  | extend CommandLine = translate('–”“', '-""', InitiatingProcessCommandLine)
+  | extend ASCII = isascii(CommandLine)
+  | where ASCII == false
+  | extend Account = AccountName, Computer = DeviceName),
+  (imProcessCreate
+  | where isnotempty(ActingProcessCommandLine)
+  | extend CommandLine = translate('–”“', '-""', ActingProcessCommandLine)
+  | extend ASCII = isascii(CommandLine)
+  | where ASCII == false
+  | extend Account = ActorUsername, Computer = DvcHostname))
+  | summarize Computers=make_set(Computer, 1000), Users=make_set(Account, 1000), NumberOfTimesRun = dcount(TimeGenerated), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by Process, CommandLine
+  | extend NumberOfComputers = array_length(Computers), NumberOfUsers = array_length(Users)
+  | project-reorder FirstSeen, LastSeen, CommandLine, Process, NumberOfComputers, NumberOfTimesRun, Computers, Users
+  | extend timestamp = FirstSeen
+  | extend Process_0_CommandLine = CommandLine
+entityMappings:
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: CommandLine
+version: 1.0.1

@@ -1,5 +1,5 @@
 # Restrict-MDEDomain
-author: Nicholas DiCola
+authors: Nicholas DiCola, Kevin Caballero, Sarah van den Bovenkamp
 
 This playbook will take DNS entities and generate alert and block threat indicators for each domain in MDE for 90 days.
 
@@ -19,12 +19,23 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 **Deploy with alert trigger**
 
-After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
+After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will run when an alert is created.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEDomain%2FRestrict-MDEDomain-alert-trigger%2Fazuredeploy.json" target="_blank">
     <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.png"/>
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEDomain%2FRestrict-MDEDomain-alert-trigger%2Fazuredeploy.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>
+
+**Deploy with entity trigger**
+
+After deployment, you can run this playbook manually on any Sentinel incident with a Domain entity in it. This will also allow you to restrict only specific domains within an incident, rather than restricting all domains associated with an incident.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEDomain%2FRestrict-MDEDomain-entity-trigger%2Fazuredeploy.json" target="_blank">
+    <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.png"/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FRestrict-MDEDomain%2FRestrict-MDEDomain-entity-trigger%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
@@ -44,9 +55,16 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 ```
 
 ## Screenshots
-**Incident Trigger**
-![Incident Trigger](./Restrict-MDEDomain/Restrict-MDEDomain-incident-trigger/images/designerDark.png)
-![Incident Trigger](./Restrict-MDEDomain/Restrict-MDEDomain-incident-trigger/images/designerLight.png)
+**Incident Trigger:**  
 
-**Alert Trigger**
-![Alert Trigger](./Restrict-MDEDomain/Restrict-MDEDomain-alert-trigger/images/Restrict-MDEDomain_alert.png)
+![Incident Trigger](./Restrict-MDEDomain-incident-trigger/images/designerDark.png)
+![Incident Trigger](./Restrict-MDEDomain-incident-trigger/images/designerLight.png)
+
+**Alert Trigger:**  
+
+![Alert Trigger](./Restrict-MDEDomain-alert-trigger/images/Restrict-MDEDomain_alert.png)
+
+**Entity Trigger:**  
+
+![Entity Trigger Light](./Restrict-MDEDomain-entity-trigger/images/Restrict-MDEDomain-entityTrigger-light.png)
+![Entity Trigger Dark](./Restrict-MDEDomain-entity-trigger/images/Restrict-MDEDomain-entityTrigger-dark.png)

@@ -1,7 +1,8 @@
 id: d3980830-dd9d-40a5-911f-76b44dfdce16
 name: GitHub Signin Burst from Multiple Locations
 description: |
-  'This alerts when there Signin burst from multiple locations in GitHub (AAD SSO).'
+  'This detection triggers when there is a Signin burst from multiple locations in GitHub (AAD SSO).
+   This detection is based on configurable threshold which can be prone to false positives. To view the anomaly based equivalent of thie detection, please see here https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Active%20Directory/Analytic%20Rules/AnomalousUserAppSigninLocationIncrease-detection.yaml. '
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -20,21 +21,25 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
+  let locationThreshold = 1;
   let aadFunc = (tableName:string){
   table(tableName)
-  | where AppDisplayName == "GitHub.com"
+  | where AppDisplayName =~ "GitHub.com"
   | where ResultType == 0
-  | summarize CountOfLocations = dcount(Location), Locations = make_set(Location), BurstStartTime = min(TimeGenerated), BurstEndTime = max(TimeGenerated) by UserPrincipalName, Type
-  | where CountOfLocations > 1
-  | extend timestamp = BurstStartTime, AccountCustomEntity = UserPrincipalName
+  | summarize CountOfLocations = dcount(Location), Locations = make_set(Location,100), BurstStartTime = min(TimeGenerated), BurstEndTime = max(TimeGenerated) by UserPrincipalName, Type
+  | where CountOfLocations > locationThreshold
+  | extend timestamp = BurstStartTime
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
   union isfuzzy=true aadSignin, aadNonInt
+  | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
+    - identifier: Name
+      columnName: Name
+    - identifier: UPNSuffix
+      columnName: UPNSuffix
+version: 1.0.1
 kind: Scheduled

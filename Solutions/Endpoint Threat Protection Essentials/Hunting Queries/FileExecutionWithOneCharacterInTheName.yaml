@@ -1,0 +1,47 @@
+id: 299472c4-8382-4c5b-82d9-718cda193393
+name: Execution of File with One Character in the Name 
+description: |
+   'This query detects execution of files with one character in the name (e.g, a.exe, 7.ps1, g.vbs etc.). 
+   Normally files that are executed have more characters in the name and this can indicate a malicious file.
+   Ref: https://www.mandiant.com/resources/tactics-techniques-procedures-associated-with-maze-ransomware-incidents'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059
+query: |
+  Event
+  | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID==1
+  | parse EventData with * 'CommandLine">' CommandLine "<" *
+  | where CommandLine matches regex @'\\[a-zA-Z0-9]\.[a-zA-Z0-9]{2,5}["]{1}'
+  | parse EventData with * 'ProcessGuid">' ProcessGuid "<" * 'Image">' Image "<" * 'Description">' Description "<" * 'OriginalFileName">' OriginalFileName "<" * 'CommandLine">' CommandLine "<" * 'CurrentDirectory">' CurrentDirectory "<" * 'User">' User "<" * 'LogonGuid">' LogonGuid "<" * 'IntegrityLevel">' IntegrityLevel "<" * 'Hashes">' Hashes "<" * 'ParentProcessGuid">' ParentProcessGuid "<" * 'ParentImage">' ParentImage "<" * 'ParentCommandLine">' ParentCommandLine "<" * 'ParentUser">' ParentUser "<" *
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description, OriginalFileName, CurrentDirectory, Hashes
+  | extend NTDomain = tostring(split(User, '\\', 0)[0]), UserName = tostring(split(User, '\\', 1)[0])
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = UserName
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend File_0_Name = Image
+entityMappings:
+- entityType: Account
+  fieldMappings:
+    - identifier: Name
+      columnName: UserName
+    - identifier: NTDomain
+      columnName: NTDomain
+- entityType: Host
+  fieldMappings:
+    - identifier: HostName
+      columnName: HostName
+    - identifier: DnsDomain
+      columnName: DnsDomain
+- entityType: File
+  fieldMappings:
+    - identifier: Name
+      columnName: Image
+version: 1.0.1
+

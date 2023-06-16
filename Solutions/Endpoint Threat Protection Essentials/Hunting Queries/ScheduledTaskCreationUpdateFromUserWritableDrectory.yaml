@@ -1,0 +1,48 @@
+id: 0b827a49-427e-4721-b05e-b151a8af524e
+name: Scheduled Task Creation or Update from User Writable Directory
+description: |
+   'This query triggers when a scheduled task is created or updated and it is going to run programs from writable user paths.
+   Ref: https://blog.menasec.net/2019/03/threat-hunting-25-scheduled-tasks-for.html'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1053.005
+query: |
+  // Enter a reference list for writable user paths
+  let WritableUserPaths = dynamic (["\"C:\\Users\\","\"C:\\ProgramData\\"]);
+  SecurityEvent
+  | where EventID in (4698,4702) and EventData has_any (WritableUserPaths)
+  | parse EventData with * 'Command&gt;' Command "&lt" *
+  | parse EventData with * 'Arguments&gt;' Arguments "&lt" *
+  | where Command has_any (WritableUserPaths) or Arguments has_any (WritableUserPaths)
+  | parse EventData with * 'SubjectUserName">' SubjectUserName "<" * 'SubjectDomainName">' SubjectDomainName "<" * 'TaskName">' TaskName "<" *
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Activity, Computer, SubjectUserName, SubjectDomainName, TaskName, Command, Arguments
+  | extend CommandLine = strcat(split(Command, '\\')[-1], ' ', Arguments)
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = SubjectUserName
+  | extend Account_0_NTDomain = SubjectDomainName
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend Process_0_CommandLine = CommandLine
+entityMappings:
+- entityType: Account
+  fieldMappings:
+    - identifier: Name
+      columnName: SubjectUserName
+    - identifier: NTDomain
+      columnName: SubjectDomainName
+- entityType: Host
+  fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+- entityType: Process
+  fieldMappings:
+    - identifier: CommandLine
+      columnName: CommandLine
+version: 1.0.1

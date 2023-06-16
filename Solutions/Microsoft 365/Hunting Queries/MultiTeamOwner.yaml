@@ -1,0 +1,40 @@
+id: 558f15dd-3171-4b11-bf24-31c0610a20e0
+name: User made Owner of multiple teams
+description: |
+  'This hunting query identifies users who have been made Owner of multiple Teams.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+
+  // Adjust this value to change how many teams a user is made owner of before detecting
+  let max_owner_count = 3;
+  // Change this value to adjust how larger timeframe the query is run over.
+  let high_owner_count = (OfficeActivity
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation =~ "MemberRoleChanged"
+  | extend Member = tostring(parse_json(Members)[0].UPN) 
+  | extend NewRole = toint(parse_json(Members)[0].Role) 
+  | where NewRole == 2
+  | summarize dcount(TeamName) by Member
+  | where dcount_TeamName > max_owner_count
+  | project Member);
+  OfficeActivity
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation =~ "MemberRoleChanged"
+  | extend Member = tostring(parse_json(Members)[0].UPN) 
+  | extend NewRole = toint(parse_json(Members)[0].Role) 
+  | where NewRole == 2
+  | where Member in (high_owner_count)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Member
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 2.0.0

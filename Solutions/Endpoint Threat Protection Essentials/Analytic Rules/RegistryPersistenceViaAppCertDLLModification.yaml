@@ -1,0 +1,40 @@
+id: c61ad0ac-ad68-4ebb-b41a-74296d3e0044
+name: Registry Persistence via AppCert DLL Modification
+description: | 
+  'Adversaries may establish persistence and/or elevate privileges by executing malicious content triggered by AppCert DLLs loaded into processes. 
+  Dynamic-link libraries (DLLs) that are specified in the AppCertDLLs Registry key under HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\ are loaded into every process that calls the ubiquitously used application programming interface (API) functions CreateProcess, CreateProcessAsUser, CreateProcessWithLoginW, CreateProcessWithTokenW, or WinExec.
+  Ref: https://attack.mitre.org/techniques/T1546/009/'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1546.009
+query: |
+  Event
+  | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
+  | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" * 
+  | where TargetObject has ("\\Control\\Session Manager\\AppCertDLLs\\")
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer,  TargetObject, Details
+  | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+entityMappings:
+  - entityType: RegistryKey
+    fieldMappings:
+      - identifier: Key
+        columnName: TargetObject
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1
+kind: Scheduled

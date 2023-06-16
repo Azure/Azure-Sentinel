@@ -1,0 +1,71 @@
+id: 01f64465-b1ef-41ea-a7f5-31553a11ad43
+name: Network endpoint to host executable correlation
+description: |
+  'Correlates blocked URLs hosting [malicious] executables with host endpoint data
+  to identify potential instances of executables of the same name having been recently run.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TrendMicro
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  let endpointData = 
+  (union isfuzzy=true
+  (SecurityEvent
+    | where EventID == 4688
+    | extend shortFileName = tolower(tostring(split(NewProcessName, '\\')[-1]))
+    ),
+    (WindowsEvent
+    | where EventID == 4688
+    | extend  NewProcessName = tostring(EventData.NewProcessName)
+    | extend shortFileName = tolower(tostring(split(NewProcessName, '\\')[-1]))
+    | extend TargetUserName = tostring(EventData.TargetUserName)
+    ));
+  // Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints
+  CommonSecurityLog
+  | where DeviceVendor =~ "Trend Micro"
+  | where Activity =~ "Deny List updated" 
+  | where RequestURL endswith ".exe"
+  | project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP
+  | extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))
+  | join kind=innerunique (endpointData) on $left.suspectExeName == $right.shortFileName 
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetUserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+version: 1.1.5
+kind: Scheduled

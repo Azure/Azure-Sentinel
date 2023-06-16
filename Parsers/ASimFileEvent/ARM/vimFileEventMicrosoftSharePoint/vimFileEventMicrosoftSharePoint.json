@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimFileEventMicrosoftSharePoint",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "File Activity ASIM parser for Sharepoint and OneDrive for business",
+            "category": "ASIM",
+            "FunctionAlias": "vimFileEventMicrosoftSharePoint",
+            "query": "let _ASIM_ResolveActorUsername = (T:(*), UsernameField: string) { \n    T\n    | extend ActorUsername = column_ifexists(UsernameField,\"\")\n    | extend windows = ActorUsername has '\\\\'\n    | extend \n        ActorUsernameType = iff (windows, \"Windows\", \"UPN\"),\n        ActorUserUpn =  iff (windows, \"\", ActorUsername),\n        ActorWindowsUsername = iff (windows, ActorUsername, \"\")\n};\n  let operations = datatable (Operation:string, EventType:string, EventSubType:string) [\n    \"FileUploaded\", \"FileCreated\", \"Upload\",\n    \"FileAccessedExtended\", \"FileAccessed\", \"Extended\",\n    \"FileRecycled\", \"FileDeleted\", \"Recycle\",\n    \"FileDeleted\", \"FileDeleted\", \"\",\n    \"FileAccessed\", \"FileAccessed\", \"\",\n    \"FolderCreated\", \"FolderCreated\", \"\",\n    \"FilePreviewed\", \"FileAccessed\", \"Preview\",\n    \"FileDownloaded\", \"FileAccessed\", \"Download\",\n    \"FileSyncDownloadedFull\", \"FileAccessed\", \"Download\",\n    \"FolderModified\", \"FolderModified\", \"\",\n    \"FileModifiedExtended\", \"FolderModified\", \"Extended\",\n    \"FileModified\", \"FolderModified\", \"\",\n    \"FileVersionsAllDeleted\", \"FolderDeleted\", \"Versions\",\n    \"FileSyncUploadedFull\", \"FileCreated\", \"Upload\",\n    \"FileSensitivityLabelApplied\", \"FileAttributesUpdated\", \"\",\n    \"FileSensitivityLabelChanged\", \"FileAttributesUpdated\", \"\",\n    \"FileSensitivityLabelRemoved\", \"FileAttributesUpdated\", \"\",\n    \"SiteDeleted\", \"FolderDeleted\", \"Site\",\n    \"FileRenamed\", \"FileRenamed\", \"\",\n    \"FileMoved\", \"FileMoved\", \"\",\n    \"FileCopied\", \"FileCopied\", \"\",\n    \"FolderCopied\", \"FolderCopied\", \"\",\n    \"FolderMoved\", \"FolderMoved\", \"\",\n    \"FolderRenamed\", \"FolderRenamed\", \"\",\n    \"FolderRecycled\", \"FolderDeleted\", \"Recycle\",\n    \"FolderDeleted\", \"FolderDeleted\", \"\",\n    \"FileCheckedIn\", \"FileCreatedOrModified\", \"Checkin\",\n    \"FileCheckedOut\", \"FileAccessed\", \"Checkout\"\n  ];\n  let multiple_file_operations = dynamic([\n    \"FileRenamed\",\n    \"FileMoved\",\n    \"FileCopied\",\n    \"FolderCopied\",\n    \"FolderMoved\",\n    \"FolderRenamed\"\n  ]);\n  let parser=(disabled:bool=false){\n    let OfficeActivityProjected = \n        OfficeActivity\n        | where not(disabled)\n        | where RecordType == \"SharePointFileOperation\" and Operation != \"FileMalwareDetected\"\n        | project Operation, OrganizationId, OrganizationName, SourceRecordId, OfficeWorkload, UserId, ClientIP, UserAgent, Start_Time, TimeGenerated, Type, OfficeObjectId, SourceFileName, SourceFileExtension, DestinationFileName, DestinationFileExtension, Site_Url, DestinationRelativeUrl, UserKey, MachineDomainInfo, MachineId; // ,_ItemId \n    let SingleFileOperationEvents = \n        OfficeActivityProjected\n        | where Operation !in (multiple_file_operations)\n        | project-rename \n            TargetFilePath = OfficeObjectId,\n            TargetFileName = SourceFileName,\n            TargetFileExtension = SourceFileExtension\n        | extend \n            TargetFilePathType = \"URL\"\n        | project-away DestinationFileName, DestinationFileExtension, DestinationRelativeUrl\n    ;\n    // single in dest: SiteDeleted\n    let MultipleFileOperationsEvents = \n        OfficeActivityProjected\n        | where Operation in (multiple_file_operations)\n        | project-rename \n            SrcFilePath = OfficeObjectId,\n            TargetFileName = DestinationFileName,\n            TargetFileExtension = DestinationFileExtension,\n            SrcFileName = SourceFileName,\n            SrcFileExtension = SourceFileExtension\n        | extend \n            TargetFilePath = strcat (Site_Url, DestinationRelativeUrl, \"/\", TargetFileName),\n            TargetFilePathType = \"URL\",\n            SrcFilePathType = \"URL\"\n        | project-away DestinationRelativeUrl\n    ;\n    union SingleFileOperationEvents, MultipleFileOperationsEvents\n    | lookup operations on Operation\n    | invoke _ASIM_ResolveActorUsername('UserId')\n    | project-away UserId\n    | project-rename \n        EventOriginalType = Operation,\n        ActorScopeId = OrganizationId,\n        ActorScope = OrganizationName,\n        EventOriginalUid = SourceRecordId,\n        EventProduct = OfficeWorkload,\n        ActorUserId = UserKey,\n        HttpUserAgent = UserAgent,\n        SrcIpAddr = ClientIP,\n        EventStartTime = Start_Time,\n        // EvetUid = _ItemId,\n        TargetUrl = Site_Url,\n        SrcDvcId = MachineId,\n        SrcDvcScopeId = MachineDomainInfo\n    | extend\n        EventCount = int(1),\n        EventStartTime = TimeGenerated, \n        EventEndTime = TimeGenerated,\n        EventResult = \"Success\",\n        EventVendor = 'Microsoft',\n        EventSchemaVersion = '0.2.1',\n        EventSchema = \"FileEvent\",\n        ActorUserIdType = 'Other',\n        SrcDvcIdType = 'Other',\n        TargetAppName = EventProduct,\n        TargetAppType = 'SaaS application',\n        Dvc = strcat ('Microsoft ', EventProduct)\n    // Aliases\n    | extend \n        User = ActorUsername,\n        FilePath = TargetFilePath,\n        FileName = TargetFileName,\n        Src = SrcIpAddr,\n        IpAddr = SrcIpAddr,\n        Url = TargetUrl,\n        Dvc = EventProduct,\n        Application = EventProduct\n};\nparser (disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

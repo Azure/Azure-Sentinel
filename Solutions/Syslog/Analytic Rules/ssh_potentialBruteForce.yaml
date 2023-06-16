@@ -1,0 +1,59 @@
+id: e1ce0eab-10d1-4aae-863f-9a383345ba88
+name: SSH - Potential Brute Force
+description: |
+  'Identifies an IP address that had 15 failed attempts to sign in via SSH in a 4 hour block during a 24 hour time period.
+   Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that
+   value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,
+   if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.
+   As an example - ComputerList is an array that we check for a single value and write that into the HostName field for use in 
+   the entity mapping within Sentinel.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+
+  let threshold = 15;
+  Syslog
+  | where ProcessName =~ "sshd" 
+  | where SyslogMessage contains "Failed password for invalid user"
+  | parse kind=relaxed SyslogMessage with * "invalid user " user " from " ip " port" port " ssh2" *
+  // using distinct below as it has been seen that Syslog can duplicate entries depending on implementation
+  | distinct TimeGenerated, Computer, user, ip, port, SyslogMessage, _ResourceId
+  | summarize EventTimes = make_list(TimeGenerated), PerHourCount = count() by bin(TimeGenerated,4h), ip, Computer, user, _ResourceId
+  | where PerHourCount > threshold
+  | mvexpand EventTimes
+  | extend EventTimes = tostring(EventTimes) 
+  | summarize StartTime = min(EventTimes), EndTime = max(EventTimes), UserList = make_set(user), ComputerList = make_set(Computer), ResourceIdList = make_set(_ResourceId), sum(PerHourCount) by IPAddress = ip
+  // bringing through single computer and user if array only has 1, otherwise, referencing the column and hashing the ComputerList or UserList so we don't get accidental entity matches when reviewing alerts
+  | extend HostName = iff(array_length(ComputerList) == 1, tostring(ComputerList[0]), strcat("SeeComputerListField","_", tostring(hash(tostring(ComputerList)))))
+  | extend Account = iff(array_length(ComputerList) == 1, tostring(UserList[0]), strcat("SeeUserListField","_", tostring(hash(tostring(UserList)))))
+  | extend ResourceId = iff(array_length(ResourceIdList) == 1, tostring(ResourceIdList[0]), strcat("SeeResourceIdListField","_", tostring(hash(tostring(ResourceIdList)))))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Account
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.1.2
+kind: Scheduled

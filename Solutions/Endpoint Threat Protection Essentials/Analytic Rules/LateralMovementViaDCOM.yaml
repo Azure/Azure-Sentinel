@@ -1,0 +1,44 @@
+id: 50cbf34a-4cdd-45d7-b3f5-8b53a1d0d14f
+name: Lateral Movement via DCOM
+description: | 
+  'This query detects a fairly uncommon attack technique using the Windows Distributed Component Object Model (DCOM) to make a remote execution call to another computer system and gain lateral movement throughout the network.
+  Ref: http://thenegative.zone/incident%20response/2017/02/04/MMC20.Application-Lateral-Movement-Analysis.html'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1021.003
+query: |
+  Event
+  | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID==1
+  | parse EventData with * 'CommandLine">' CommandLine "<" * 'ParentCommandLine">' ParentCommandLine "<" *
+  | where ParentCommandLine =~ "C:\\Windows\\System32\\svchost.exe -k DcomLaunch" and CommandLine =~ "C:\\Windows\\System32\\mmc.exe -Embedding"
+  | parse EventData with * 'ProcessGuid">' ProcessGuid "<" * 'Image">' Image "<" * 'Description">' Description "<" * 'CurrentDirectory">' CurrentDirectory "<" * 'User">' User "<" * 'LogonGuid">' LogonGuid "<" * 'ParentProcessGuid">' ParentProcessGuid "<" * 'ParentImage">' ParentImage "<" * 'ParentCommandLine">' ParentCommandLine "<" * 'ParentUser">' ParentUser "<" *
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description
+  | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+entityMappings:
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: CommandLine
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+version: 1.0.1
+kind: Scheduled

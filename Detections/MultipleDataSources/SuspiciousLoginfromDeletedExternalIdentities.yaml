@@ -11,7 +11,7 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
-queryFrequency: 1d
+queryFrequency: 1h
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
@@ -22,32 +22,43 @@ relevantTechniques:
 tags:
   - GuestorExternalIdentities
 query: |
-  let lookback = 1d;
-  let DeleteExtUsers = AuditLogs
-  | where TimeGenerated > ago(lookback)
-  | where Category =~ "UserManagement"
-  | where OperationName =~ "Delete external user"
-  | where Result =~ "success"
-  | extend InviteInitiator = tostring(InitiatedBy.["user"].["userPrincipalName"])
-  | extend Target = tostring(TargetResources[0].["displayName"])
-  | extend TargetUPN = tostring(extract(@"UPN\:\s(.+)\,\sEmail",1,Target)) , DeleteUserTime = TimeGenerated;
-  DeleteExtUsers
+  let query_frequency = 1h;
+  let query_period = 1d;
+  AuditLogs
+  | where TimeGenerated > ago(query_frequency)
+  | where Category =~ "UserManagement" and OperationName =~ "Delete user"
+  | mv-expand TargetResource = TargetResources
+  | where TargetResource["type"] == "User" and TargetResource["userPrincipalName"] has "#EXT#"
+  | extend ParsedDeletedUserPrincipalName = extract(@"^[0-9a-f]{32}([^\#]+)\#EXT\#", 1, tostring(TargetResource["userPrincipalName"]))
+  | extend
+      Initiator = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["displayName"]), tostring(InitiatedBy["user"]["userPrincipalName"])),
+      InitiatorId = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["servicePrincipalId"]), tostring(InitiatedBy["user"]["id"])),
+      Delete_IPAddress = tostring(InitiatedBy[tostring(bag_keys(InitiatedBy)[0])]["ipAddress"])
+  | project Delete_TimeGenerated = TimeGenerated, Category, Identity, Initiator, Delete_IPAddress, OperationName, Result, ParsedDeletedUserPrincipalName, InitiatedBy, AdditionalDetails, TargetResources, InitiatorId, CorrelationId
   | join kind=inner (
-  SigninLogs
-  | where TimeGenerated > ago(lookback)
-  | extend LoginTime = TimeGenerated
-  ) on $left.TargetUPN == $right.UserPrincipalName
-  | where DeleteUserTime > LoginTime
+      SigninLogs
+      | where TimeGenerated > ago(query_period)
+      | summarize take_any(*) by UserPrincipalName
+      | extend ParsedUserPrincipalName = translate("@", "_", UserPrincipalName)
+      | project SigninLogs_TimeGenerated = TimeGenerated, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, IPAddress, LocationDetails, AppDisplayName, ResourceDisplayName, ClientAppUsed, UserAgent, DeviceDetail, UserId, UserType, OriginalRequestId, ParsedUserPrincipalName
+      ) on $left.ParsedDeletedUserPrincipalName == $right.ParsedUserPrincipalName
+  | where Delete_TimeGenerated > SigninLogs_TimeGenerated
+  | project-away ParsedDeletedUserPrincipalName, ParsedUserPrincipalName
+  | extend
+      AccountName = tostring(split(UserPrincipalName, "@")[0]),
+      AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: InviteInitiator
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
 metadata:
     source:

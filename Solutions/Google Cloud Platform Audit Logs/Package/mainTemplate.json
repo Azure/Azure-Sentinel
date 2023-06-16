@@ -1,0 +1,568 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+	"location": {
+      "defaultValue": "[resourceGroup().location]",
+      "minLength": 1,
+      "type": "string",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-gcpauditlogs-api",
+    "_solutionId": "[variables('solutionId')]",
+	"dataCollectionRuleImmutableId": "data collection rule immutableId",
+    "_dataCollectionRuleImmutableId": "[variables('dataCollectionRuleImmutableId')]",
+	"dataCollectionEndpointId": "[concat('/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "_dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "GCPAuditLogsDefinition",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "GCPAuditLogsDefinition",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "dataConnectorContentId2": "GCPAuditLogsConnector",
+    "_dataConnectorContentId2": "[variables('dataConnectorContentId2')]",
+    "dataConnectorId2": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+    "_dataConnectorId2": "[variables('dataConnectorId2')]",
+    "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2')))]",
+    "dataConnectorVersion2": "1.0.0",
+    "resourceGroupName": "[resourceGroup().name]",
+    "subscription": "[last(split(subscription().id, '/'))]",
+	"dataCollectionRuleId": "GCPAuditLogs",
+	"streamName": "SENTINEL_GCP_AUDIT_LOGS",
+	"logAnalyticsTableId": "Microsoft-GCPAuditLogs",
+	"dataType": "GCPAuditLogs",
+	"destinationName": "clv2ws1"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "GCPAuditLogs data connector with template",
+        "displayName": "GCPAuditLogs template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "GCPAuditLogs data connector with template version 1.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+				"connectorUiConfig": {
+					"id": "[variables('_uiConfigId1')]",
+					"title": "GCP Pub/Sub Audit Logs (Preview)",
+					"publisher": "Microsoft",
+					"descriptionMarkdown": "The Google Cloud Platform (GCP) audit logs, ingested from Sentinel's connector, enable you to capture three types of audit logs: admin activity logs, data access logs, and access transparency logs. Google cloud audit logs record a trail that practitioners can use to monitor access and detect potential threats across Google Cloud Platform (GCP) resources.",
+					"graphQueriesTableName": "GCPAuditLogs",
+					"graphQueries": [
+						{
+							"metricName": "Total events received",
+							"legend": "GCP Audit Logs",
+							"baseQuery": "{{graphQueriesTableName}}"
+						}
+					],
+					"sampleQueries": [
+						{
+							"description": "Get Sample of GCP Audit Logs",
+							"query": "{{graphQueriesTableName}}\n | take 10"
+						}
+					],
+					"dataTypes": [
+						{
+							"name": "{{graphQueriesTableName}}",
+							"lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+						}
+					],
+					"connectivityCriteria": [
+						{
+							"type": "HasDataConnectors"
+						}
+					],
+					"availability": {
+						"status": 1,
+						"isPreview": false
+					},
+					"permissions": {
+						"resourceProvider": [
+							{
+								"provider": "Microsoft.OperationalInsights/workspaces",
+								"permissionsDisplayText": "Read and Write permissions are required.",
+								"providerDisplayName": "Workspace",
+								"scope": "Workspace",
+								"requiredPermissions": {
+									"read": true,
+									"write": true,
+									"delete": true,
+									"action": false
+								}
+							}
+						]
+					},
+					"instructionSteps": [
+						{
+							"instructions": [
+								{
+									"type": "Markdown",
+									"parameters": {
+										"content":  "#### 1. Set up your GCP environment \n You must have the following GCP resources defined and configured: topic, subscription for the topic, workload identity pool, workload identity provider and service account with permissions to get and consume from subscription. \n Terraform provides API for the IAM that creates the resources. [Link to Terraform scripts](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation)."
+									}
+								},
+								{
+									"type": "CopyableLabel",
+									"parameters": {
+										"label": "Tenant ID: A unique identifier that is used as an input in the Terraform configuration within a GCP environment.",
+										"fillWith": ["TenantId"],
+										"name": "PoolId",
+										"disabled": true
+									}
+								},
+								{
+									"type": "Markdown",
+									"parameters": {
+										"content": "#### 2. Connect new collectors \n To enable GCP Audit Logs for Microsoft Sentinel, click the Add new collector button, fill the required information in the context pane and click on Connect."
+									}
+								},
+								{
+									"type": "GCPGrid",
+									"parameters":{}
+								},
+								{
+									"type": "GCPContextPane",
+									"parameters":{}
+								}
+							]
+						}
+					],
+					"isConnectivityCriteriasMatchSome": false
+				},
+                "connectionsConfig": {
+                  "templateSpecName": "[concat('/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/providers/Microsoft.Resources/templateSpecs/',variables('dataConnectorTemplateSpecName2'))]",
+                  "templateSpecVersion": "[variables('dataConnectorVersion2')]"
+                }
+              }
+            },
+			{
+              "name": "[variables('dataCollectionRuleId')]",
+              "apiVersion": "2021-09-01-preview",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('_dataCollectionEndpointId')]",
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "[variables('destinationName')]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('logAnalyticsTableId')]"
+                        ],
+                        "destinations": [
+                            "[variables('destinationName')]"
+                        ]
+                    }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Google Cloud Platform Audit Logs",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+				"dependencies": {
+					"criteria": [
+						{
+							"kind": "DataConnector",
+							"contentId": "[variables('_dataConnectorContentId2')]",
+							"version": "[variables('dataConnectorVersion2')]"
+						}
+					]
+				}
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Google Cloud Platform Audit Logs",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+		"dependencies": {
+			"criteria": [
+				{
+					"kind": "DataConnector",
+					"contentId": "[variables('_dataConnectorContentId2')]",
+					"version": "[variables('dataConnectorVersion2')]"
+				}
+			]
+		}
+      }
+    },
+	{
+	  "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+	  "apiVersion": "2022-09-01-preview",
+	  "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+	  "location": "[parameters('workspace-location')]",
+	  "kind": "Customizable",
+	  "properties": {
+		"connectorUiConfig": {
+            "id": "[variables('_uiConfigId1')]",
+			"title": "GCP Pub/Sub Audit Logs (Preview)",
+			"publisher": "Microsoft",
+			"descriptionMarkdown": "The Google Cloud Platform (GCP) audit logs, ingested from Sentinel's connector, enable you to capture three types of audit logs: admin activity logs, data access logs, and access transparency logs. Google cloud audit logs record a trail that practitioners can use to monitor access and detect potential threats across Google Cloud Platform (GCP) resources.",
+			"graphQueriesTableName": "GCPAuditLogs",
+			"graphQueries": [
+				{
+					"metricName": "Total events received",
+					"legend": "GCP Audit Logs",
+					"baseQuery": "{{graphQueriesTableName}}"
+				}
+			],
+			"sampleQueries": [
+				{
+					"description": "Get Sample of GCP Audit Logs",
+					"query": "{{graphQueriesTableName}}\n | take 10"
+				}
+			],
+			"dataTypes": [
+				{
+					"name": "{{graphQueriesTableName}}",
+					"lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+				}
+			],
+			"connectivityCriteria": [
+				{
+					"type": "HasDataConnectors"
+				}
+			],
+			"availability": {
+				"status": 1,
+				"isPreview": false
+			},
+			"permissions": {
+				"resourceProvider": [
+					{
+						"provider": "Microsoft.OperationalInsights/workspaces",
+						"permissionsDisplayText": "Read and Write permissions are required.",
+						"providerDisplayName": "Workspace",
+						"scope": "Workspace",
+						"requiredPermissions": {
+							"read": true,
+							"write": true,
+							"delete": true,
+							"action": false
+						}
+					}
+				]
+			},
+			"instructionSteps": [
+				{
+					"instructions": [
+						{
+							"type": "Markdown",
+							"parameters": {
+								"content":  "#### 1. Set up your GCP environment \n You must have the following GCP resources defined and configured: topic, subscription for the topic, workload identity pool, workload identity provider and service account with permissions to get and consume from subscription. \n Terraform provides API for the IAM that creates the resources. [Link to Terraform scripts](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation)."
+							}
+						},
+						{
+							"type": "CopyableLabel",
+							"parameters": {
+								"label": "Tenant ID: A unique identifier that is used as an input in the Terraform configuration within a GCP environment.",
+								"fillWith": ["TenantId"],
+								"name": "PoolId",
+								"disabled": true
+							}
+						},
+						{
+							"type": "Markdown",
+							"parameters": {
+								"content": "#### 2. Connect new collectors \n To enable GCP Audit Logs for Microsoft Sentinel, click the Add new collector button, fill the required information in the context pane and click on Connect."
+							}
+						},
+						{
+							"type": "GCPGrid",
+							"parameters":{}
+						},
+						{
+							"type": "GCPContextPane",
+							"parameters":{}
+						}
+					]
+				}
+			],
+			"isConnectivityCriteriasMatchSome": false
+		},
+		"connectionsConfig": {
+		  "templateSpecName": "[concat('/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/providers/Microsoft.Resources/templateSpecs/',variables('dataConnectorTemplateSpecName2'))]",
+		  "templateSpecVersion": "[variables('dataConnectorVersion2')]"
+		}
+	  }
+	},
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "LogicAppsCustomConnector"
+      },
+      "properties": {
+        "description": "GCPAuditLogs data connector with template",
+        "displayName": "GCPAuditLogs template"
+      }
+    },
+	{
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName2'),'/',variables('dataConnectorVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName2'))]"
+      ],
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "LogicAppsCustomConnector"
+      },
+      "properties": {
+        "description": "GCPAuditLogs data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion2')]",
+          "parameters": {
+			"GCPProjectId": {
+				"type": "String",
+				"minLength": 4
+			},
+			"GCPProjectNumber": {
+				"type": "String",
+				"minLength": 1
+			},
+			"GCPWorkloadIdentityProviderId": {
+				"type": "String"
+			},
+			"GCPServiceAccountEmail": {
+				"type": "String",
+				"minLength": 1
+			},
+			"GCPSubscriptionName": {
+				"type": "String",
+				"minLength": 3
+			},
+            "connectorDefinitionName": {
+              "defaultValue": "connectorDefinitionName",
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "connectorDefinitionName"
+              }
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "type": "object",
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "[variables('_dataCollectionRuleImmutableId')]"
+              }
+            },
+			"guidValue": {
+			  "type": "string",
+			  "defaultValue": "[[newGuid()]"
+			}
+          },
+          "variables": {
+			"_dataConnectorContentId2": "[variables('_dataConnectorContentId2')]",
+			"connectorName": "[[concat('GCPAuditLogs', parameters('guidValue'))]"
+          },
+          "resources": [
+            {
+              "name": "[[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('connectorName'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GCP",
+              "properties": {
+                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                "dcrConfig": {
+                  "streamName": "[variables('streamName')]",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "dataType": "[variables('dataType')]",
+                "auth": {
+                    "serviceAccountEmail": "[[parameters('GCPServiceAccountEmail')]",
+                    "projectNumber": "[[parameters('GCPProjectNumber')]",
+                    "workloadIdentityProviderId": "[[parameters('GCPWorkloadIdentityProviderId')]"
+                },
+                "request": {
+                    "projectId": "[[parameters('GCPProjectId')]",
+                    "subscriptionNames": [
+                        "[[parameters('GCPSubscriptionName')]"
+                    ]
+                }
+              }
+            },
+			{
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId2'))]",
+                "contentId": "[variables('_dataConnectorContentId2')]",
+                "kind": "LogicAppsCustomConnector",
+                "version": "[variables('dataConnectorVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Google Cloud Platform Audit Logs",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+	{
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Google Cloud Platform Audit Logs",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-06-24",
+        "providers": ["Microsoft"],
+        "categories": {
+          "domains": ["Cloud Provider"]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
