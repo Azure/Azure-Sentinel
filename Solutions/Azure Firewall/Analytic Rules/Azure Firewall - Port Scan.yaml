@@ -13,8 +13,10 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
-queryFrequency: 1h
-queryPeriod: 1h
+      - AZFWApplicationRule
+      - AZFWNetworkRule
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 1
 tactics:
@@ -22,27 +24,30 @@ tactics:
 relevantTechniques:
   - T1046
 query: |
-  let RunTime = 1h;
-  let StartRunTime = 1d;
-  let EndRunTime = StartRunTime - RunTime;
   let MinimumDifferentPortsThreshold = 100;
   let BinTime = 30s;
-  AzureDiagnostics
-  | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
+  union isfuzzy=true(
+  AZFWApplicationRule
+  | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
+  | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold),
+  (AZFWNetworkRule
+  | extend Fqdn = DestinationIp
+  | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
+  | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold),
+  (AzureDiagnostics
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
-  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport
-  | where isnotempty(dsturl) and isnotempty(srcip)
-  | summarize AlertTimedCountPortsInBinTime = dcount(dstport) by srcip, bin(TimeGenerated, BinTime), dsturl
-  | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold
-  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
+  | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)
+  | summarize AlertTimedCountPortsInBinTime = dcount(DestinationPort) by SourceIp, bin(TimeGenerated, BinTime), Fqdn
+  | where AlertTimedCountPortsInBinTime > MinimumDifferentPortsThreshold)
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.0.0
+        columnName: Fqdn
+version: 1.1.0
 kind: Scheduled
