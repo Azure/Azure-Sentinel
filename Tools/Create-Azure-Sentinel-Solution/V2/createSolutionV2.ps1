@@ -988,7 +988,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($null -ne $playbookData -and $null -ne $playbookData.parameters){
                                         foreach($param in $playbookData.parameters.PsObject.Properties)
                                         {
-                                            if($functionAppList.ContainsKey($param.Value.defaultValue))
+                                            if($param.Value -match "defaultValue" -and $functionAppList.ContainsKey($param.Value.defaultValue))
                                             {
                                                 $playbookDependencies += [PSCustomObject] @{
                                                         kind = "AzureFunction";
@@ -2648,5 +2648,5 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
     }
-    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"
+    Invoke-Expression ". '$armTtkFolder/run-arm-ttk-in-automation.ps1' '$solutionName'"
 }

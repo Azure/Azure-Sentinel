@@ -51,7 +51,6 @@ namespace Kqlvalidations.Tests
                         ValidateKql(id, queryStr);
                     }
                 }
-
             }
 
             foreach (var sampleQuery in dataConnector.SampleQueries)
@@ -86,6 +85,7 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForLatestTIData(id, queryStr);
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -104,6 +104,7 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForLatestTIData(id, queryStr);
         }
 
 
@@ -119,8 +120,8 @@ namespace Kqlvalidations.Tests
             if (ShouldSkipTemplateValidation(id) && res.ContainsKey("query"))
             {
                 var queryStr = (string)res["query"];
-                var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, string.Format(UserMessageTemplate, id));
+                bool validationRes = _queryValidator.ValidateSyntax(queryStr).IsValid && ValidateKqlForLatestTI(queryStr);
+                Assert.False(validationRes, string.Format(UserMessageTemplate, id));
             }
 
         }
@@ -137,8 +138,8 @@ namespace Kqlvalidations.Tests
             if (ShouldSkipTemplateValidation(id) && res.ContainsKey("query"))
             {
                 var queryStr = (string)res["query"];
-                var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, string.Format(UserMessageTemplate, id));
+                bool validationRes = _queryValidator.ValidateSyntax(queryStr).IsValid && ValidateKqlForLatestTI(queryStr);
+                Assert.False(validationRes, string.Format(UserMessageTemplate, id));
             }
 
         }
@@ -226,6 +227,51 @@ namespace Kqlvalidations.Tests
             var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
             var parserName = (string)yaml["EquivalentBuiltInFunction"];
             ValidateKql(parserName, queryStr, false);
+        }
+
+        /// <summary>
+        /// Validates the KQL query for the latest Threat Intelligence data.
+        /// </summary>
+        /// <param name="id">template id</param>
+        /// <param name="queryStr">query string</param>
+        private void ValidateKqlForLatestTIData(string id, string queryStr)
+        {
+            bool queryMatch = ValidateKqlForLatestTI(queryStr);
+            Assert.True(
+                queryMatch,
+                queryMatch
+                   ? string.Empty
+    : @$"Template Id: {id} is not valid 
+        Errors: Content needs to use the latest Threat Intelligence data. Sample queries to get the latest Threat Intelligence data:
+        ThreatIntelligenceIndicator
+        | where TimeGenerated >= ago(ioc_lookBack)
+        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+        | where Active == true and ExpirationDateTime > now()
+
+        or
+
+        ThreatIntelligenceIndicator
+        | where TimeGenerated >= ago(ioc_lookBack)
+        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+        | where ExpirationDateTime > now() and Active == true");
+        }
+
+        /// <summary>
+        /// Validates the KQL query for the latest Threat Intelligence data.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <returns>returns true if query is valid</returns>
+        private bool ValidateKqlForLatestTI(string queryStr)
+        {
+            //Condition to check below logic only when queryStr it contains "ThreatIntelligenceIndicator" followed by "|"
+            string tiTablepattern = @"ThreatIntelligenceIndicator\s*\|\s*";
+            bool match = Regex.IsMatch(queryStr, tiTablepattern);
+            if (match)
+            {
+                string queryPattern = @"ThreatIntelligenceIndicator\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\(\w+\)\s*\|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*(?:ExpirationDateTime\s*>\s*now\(\)\s*and\s*Active\s*==\s*true|Active\s*==\s*true\s*and\s*ExpirationDateTime\s*>\s*now\(\))";
+                return Regex.IsMatch(queryStr, queryPattern);
+            }
+            return true;
         }
 
         private void ValidateKql(string id, string queryStr, bool ignoreNoTabularExpressionError = true)
