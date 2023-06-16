@@ -1,33 +1,29 @@
 id: 05f5cccd-ee93-4293-b7ad-05820aaa54a4
-name: Kali Linux UserAgent Detected (ASIM Web Session)
+name: Detect Kali Linux UserAgent (ASIM Web Session)
 description: |
-  'This rule helps to detect usage of Kali Linux in your environment'
+  'This rule helps to detect usage of Kali Linux in your environment. Attackers might utilize Kali Linux's tools and features for unauthorized penetration testing, reconnaissance, or exploitation attempts.'
 tags:
   - Schema: WebSession
     SchemaVersion: 0.2.6
 requiredDataConnectors: []
 tactics:
-  - Exfiltration
+  - Execution
 relevantTechniques:
-  - T1048.003
+  - T1059
+  - T1203
 query: |
   let lookback = 1d;
   _Im_WebSession (starttime=ago(lookback))
   | project HttpUserAgent, SrcIpAddr, SrcUsername, SrcHostname, Url, TimeGenerated
-  //| where HttpUserAgent matches regex "(?i).*Linux.*Kali.*|.*Kali.*Linux.*"
   | where HttpUserAgent has_all ("Linux", "Kali")
   | summarize EventCount=count(), EventStartTime=min(TimeGenerated), EventEndTime = max(TimeGenerated), URLs = make_set(Url,100) by HttpUserAgent, SrcIpAddr, SrcUsername, SrcHostname
-  | extend Name = tostring(split(SrcUsername,'@',0)[0]), UPNSuffix = tostring(split(SrcUsername,'@',1)[0])
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
   | extend IP_0_Address = SrcIpAddr
   | extend Account_0_Name = Name
   | extend Account_0_UPNSuffix = UPNSuffix
   | extend Host_0_HostName = SrcHostname
-  | extend URL_0_Url = Url
+  | order by EventCount desc
 entityMappings:
-  - entityType: URL
-    fieldMappings:
-      - identifier: Url
-        columnName: Url
   - entityType: IP
     fieldMappings:
       - identifier: Address

@@ -5,7 +5,6 @@ description: |
   The query leverages various KQL functions to calculate time deltas and then compares it with total events observed in a day to find percentage of beaconing.
   This outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.
   Reference Blog:
-  http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/
   https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/detect-network-beaconing-via-intra-request-time-delta-patterns/ba-p/779586'
 tags:
   - Schema: WebSession
@@ -33,12 +32,12 @@ query: |
   | extend TimeDeltaInSeconds = datetime_diff('second', NextTimeGenerated, TimeGenerated)
   | where SrcIpAddr == NextSrcIpAddr
   | where TimeDeltaInSeconds > TimeDeltaThreshold
-  | summarize count(), sum(DstBytes), sum(SrcBytes) by TimeDeltaInSeconds, bin(TimeGenerated,1h), SrcUsername, SrcIpAddr, DstIpAddr
-  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltaInSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SrcBytes), TotalReceivedBytes = sum(sum_DstBytes) by bin(TimeGenerated,1h), SrcUsername, SrcIpAddr, DstIpAddr
+  | summarize EventCount=count(), sum(DstBytes), sum(SrcBytes) by TimeDeltaInSeconds, bin(TimeGenerated,1h), SrcUsername, SrcIpAddr, DstIpAddr
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(EventCount, TimeDeltaInSeconds), TotalEvents=sum(EventCount), TotalSentBytes = sum(sum_SrcBytes), TotalReceivedBytes = sum(sum_DstBytes) by bin(TimeGenerated,1h), SrcUsername, SrcIpAddr, DstIpAddr
   | where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold
   | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
   | where BeaconPercent > PercentBeaconThreshold
-  | extend Name = tostring(split(SrcUsername,'@',0)[0]), UPNSuffix = tostring(split(SrcUsername,'@',1)[0])
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
   | extend IP_0_Address = SrcIpAddr
   | extend IP_1_Address = DstIpAddr
   | extend Account_0_Name = Name

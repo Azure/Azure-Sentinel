@@ -1,7 +1,7 @@
 id: 75929222-fee5-4f97-a2cc-cb6f29444385
 name: Potential beaconing detected - Similar sent bytes (ASIM Web Session)
 description: |
-  'Calculate the count of SrcBytes(Sent bytes) per SrcIpAddress-DstIpAddress pair over 24 hours. Higher count of repetitive identical SrcBytes between pairs may indicate beaconing.'
+  'Calculate the number of SrcBytes (Sent bytes) for each unique combination of SrcIpAddress and DstIpAddress within a 24-hour timeframe. The presence of a high count of repetitive identical SrcBytes could potentially indicate beaconing activity.'
 tags:
   - Schema: WebSession
     SchemaVersion: 0.2.6
@@ -16,16 +16,21 @@ query: |
   let TotalEventsThreshold = 25; // Minimum events expected in 1 day. Assuming atleast 25 events.
   _Im_WebSession(starttime=ago(lookback), eventresult='Success')
   | where isnotempty(SrcIpAddr) and isnotempty(DstIpAddr) and isnotempty(SrcBytes)
-  | summarize TotalEventCount = count(), make_set(TimeGenerated,10000), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, SrcBytes, SrcUsername // Same SrcBytes between SrcIPAddress and DstIpAddress is a potential sign of beaconing activity.
-  | where TotalEventCount > TotalEventsThreshold
-  | extend Name = tostring(split(SrcUsername,'@',0)[0]), UPNSuffix = tostring(split(SrcUsername,'@',1)[0])
-  | sort by TotalEventCount desc // Higher the count, more is the possibility of beaconing activity.
-  // Analyze set_TimeGenerated to know if request being sent at specific intervals.
+  | summarize
+      EventCount = count(),
+      make_set(TimeGenerated, 10000),
+      EventStartTime=min(TimeGenerated),
+      EventEndTime=max(TimeGenerated)
+      by SrcIpAddr, DstIpAddr, DstPortNumber, SrcBytes, SrcUsername, SrcHostname // Same SrcBytes between SrcIPAddress and DstIpAddress is a potential sign of beaconing activity.
+  | where EventCount > TotalEventsThreshold
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
   | extend IP_0_Address = SrcIpAddr
   | extend IP_1_Address = DstIpAddr
   | extend Account_0_Name = Name
   | extend Account_0_UPNSuffix = UPNSuffix
   | extend Host_0_HostName = SrcHostname
+  | sort by EventCount desc // Higher the count, more is the possibility of beaconing activity.
+  // Analyze set_TimeGenerated to know if request being sent at specific intervals.
 entityMappings:
   - entityType: IP
     fieldMappings:

@@ -15,16 +15,16 @@ relevantTechniques:
   - T1133
 query: |
   let lookback= 1d;
-  _Im_WebSession(starttime=ago(1d))
-  | project EventSeverity, ThreatName, ThreatCategory, ThreatConfidence, TimeGenerated, SrcIpAddr, SrcUsername, SrcHostname
-  | where EventSeverity =~ 'High' or isnotempty(ThreatName) or isnotempty(ThreatCategory) // Check for high severity events or that has either ThreatName or ThreatCategory field populated
-  | summarize EventCount = count(), EventStartTime=min(TimeGenerated), EvenEndTime=max(TimeGenerated) by SrcIpAddr, SrcUsername, SrcHostname, ThreatCategory, ThreatConfidence, ThreatName
-  | extend Name = tostring(split(SrcUsername,'@',0)[0]), UPNSuffix = tostring(split(SrcUsername,'@',1)[0])
+  _Im_WebSession(starttime=ago(lookback))
+  | project EventSeverity, ThreatName, ThreatCategory, ThreatRiskLevel, ThreatOriginalConfidence, ThreatField, TimeGenerated, SrcIpAddr, SrcUsername, SrcHostname, Url
+  | where (ThreatName != 'None' and isnotempty(ThreatName)) or (ThreatCategory != 'None' and isnotempty(ThreatCategory)) or ThreatRiskLevel > 60 or toint(ThreatOriginalConfidence) > 0 or EventSeverity in ('Medium','High') or isnotempty(ThreatField)
+  | summarize EventCount = count(), EventStartTime=min(TimeGenerated), EvenEndTime=max(TimeGenerated) by SrcIpAddr, SrcUsername, SrcHostname, Url, ThreatName, ThreatCategory, ThreatRiskLevel, ThreatOriginalConfidence, ThreatField
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
   | extend IP_0_Address = SrcIpAddr
   | extend Account_0_Name = Name
   | extend Account_0_UPNSuffix = UPNSuffix
   | extend Host_0_HostName = SrcHostname
-  | order by EventCount desc
+  | extend URL_0_Url = Url
   | order by EventCount desc
 entityMappings:
   - entityType: Host
@@ -41,6 +41,10 @@ entityMappings:
         columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 version: 1.0.0
