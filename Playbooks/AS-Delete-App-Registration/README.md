@@ -7,7 +7,7 @@ For any technical questions, please contact info@accelerynt.com
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Delete-App-Registration%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Delete-App-Registration%2Fazuredeploy.json)       
 
-This playbook is intended to be run from a Microsoft Sentinel incident. If any app registration entities are found (i.e. any entities where kind == CloudApplication), they will be deleted. This playbook matches by name, since a unique app registration ID cannot currently be pulled into the entity list, so if there are multiple app registrations exactly matching the name(s) of the CloudApplication entities, all will be deleted.
+This playbook is intended to be run from a Microsoft Sentinel incident. If any app registration entities are found (i.e. any entities where kind == CloudApplication), they will be deleted. This playbook matches by name, since a unique app registration ID cannot currently be pulled into the entity list, so if there are multiple app registrations exactly matching the name(s) of the CloudApplication entities, all will be deleted. The deleted app registration(s) will be noted in incident comment(s).
 
 ![DeleteAppRegistration_Demo_1](Images/DeleteAppRegistration_Demo_1.png)
 
@@ -147,3 +147,27 @@ From the "**Principal**" page, paste "**AS-Delete-App-Registration**", or the al
 Click "**Next**" in the application section. Then from the "**Review + create**" page, click "**Create**".
 
 ![DeleteAppRegistration_Access_4](Images/DeleteAppRegistration_Access_4.png)
+
+
+#
+### Microsoft Sentinel Contributor Role
+
+After deployment, you will need to give the system assigned managed identity the "**Microsoft Sentinel Contributor**" role. This will enable it to add comments to incidents. Navigate to the Log Analytics Workspaces page and select the same workspace the playbook is located in:
+
+https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.OperationalInsights%2Fworkspaces
+
+Select the "**Access control (IAM)**" option from the menu blade, then click "**Add role assignment**".
+
+![DeleteAppRegistration_Add_Contributor_Role_1](Images/DeleteAppRegistration_Add_Contributor_Role_1.png)
+
+Select the "**Microsoft Sentinel Contributor**" role, then click "**Next**".
+
+![DeleteAppRegistration_Add_Contributor_Role_2](Images/DeleteAppRegistration_Add_Contributor_Role_2.png)
+
+Select the "**Managed identity**" option, then click "**Select Members**". Under the subscription the logic app is located, set the value of "**Managed identity**" to "**Logic app**". Next, enter "**AS-Delete-App-Registration**", or the alternative playbook name used during deployment, in the field labeled "**Select**". Select the playbook, then click "**Select**".
+
+![DeleteAppRegistration_Add_Contributor_Role_3](Images/DeleteAppRegistration_Add_Contributor_Role_3.png)
+
+Continue on to the "**Review + assign**" tab and click "**Review + assign**".
+
+![DeleteAppRegistration_Add_Contributor_Role_4](Images/DeleteAppRegistration_Add_Contributor_Role_4.png)
