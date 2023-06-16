@@ -10,7 +10,7 @@ For any technical questions, please contact info@accelerynt.com
 This playbook is intended to be run from a Microsoft Sentinel incident. If any app registration entities are found (i.e. any entities where kind == CloudApplication), they will be deleted. This playbook matches by name, since a unique app registration ID cannot currently be pulled into the entity list, so if there are multiple app registrations exactly matching the name(s) of the CloudApplication entities, all will be deleted. The deleted app registration(s) will be noted in incident comment(s).
 
 > **Warning**
-> If there are multiple app registrations exactly matching the name(s) of the CloudApplication entities in the Microsoft icident used to run this playbook, all of those app registrations will be deleted
+> If there are multiple app registrations exactly matching the name(s) of the CloudApplication entities in the Microsoft incident used to run this playbook, all of those app registrations will be deleted
 
 ![DeleteAppRegistration_Demo_1](Images/DeleteAppRegistration_Demo_1.png)
 
