@@ -23,7 +23,7 @@ query: |
     imProcess
     // Look for static cmd lines and dynamic one using regex
     | where CommandLine  has_any (cmd_lines) or CommandLine matches regex "save HKLM\\SYSTEM [^ ]*_System.HIV" or CommandLine matches regex 'cmd.exe /c "wmic /node:[^ ]* process call create "ntdsutil snapshot \\"activate instance ntds\\" create quit quit > c:\\windows\\temp\\nt.dat";'
-    | summarize count(), FirstSeen=min(TimeGenerated), LastSeen = max(TimeGenerated) by DvcId, Dvc, CommandLine, AccountName, FilePath
+    | summarize count(), FirstSeen=min(TimeGenerated), LastSeen = max(TimeGenerated) by DvcId, Dvc, CommandLine, User, Process
     // Base risk score on number of command lines seen for each host
     | extend RiskScore = count_
     // Increase risk score if host has recent security alerts
@@ -38,19 +38,31 @@ query: |
     // Create aggregate risk score
     | extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0 , AlertRiskScore)
     | extend RiskScore = RiskScore + AlertRiskScore
-    | project-reorder  FirstSeen, LastSeen, RiskScore, Dvc, DvcId, CommandLine, AccountName
+    | project-reorder  FirstSeen, LastSeen, RiskScore, Dvc, DvcId, CommandLine, User
     | extend File = split(Process, "\\")[-1]
-    | extend timestamp = FirstSeen, AccountCustomEntity = AccountName, HostCustomEntity = Dvc
+    | extend timestamp = FirstSeen
+    | extend NTDomain = tostring(split(User,'\\',0)[0]), Name = tostring(split(User,'\\',1)[0])
+    | extend HostName = tostring(split(Dvc, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Dvc, '.'), 1, -1), '.')), FileName = File
+    | extend Account_0_Name = Name
+    | extend Account_0_NTDomain = NTDomain
+    | extend Host_0_HostName = HostName
+    | extend Host_0_DnsDomain = DnsDomain
+    | extend File_0_Name = FileName
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: AccountCustomEntity
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: HostCustomEntity
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: File
     fieldMappings:
       - identifier: Name
-        columnName: File
+        columnName: FileName
+version: 1.0.0
