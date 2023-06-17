@@ -1,0 +1,51 @@
+id: ce38c16c-a560-46c0-88d6-7757b88f08e9
+name: Establishing internal proxies
+description: |
+   'This hunting query helps to detect attempts to create proxies on compromised systems using the 
+    built-in netsh portproxy command. VoltTyphoon has been seen creating these proxies on compromised hosts to manage command and control communications.'
+requiredDataConnectors:
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+tactics:
+  - CommandandControl
+relevantTechniques:
+  - T1090
+tags:
+  - VoltTyphoon
+query: |
+  (union isfuzzy=true 
+  (SecurityEvent
+  | where EventID == 4688
+  | where CommandLine has_all ("portproxy", "netsh", "wmic", "process call create", "v4tov4", "listenport=50100")
+  | project TimeGenerated, Computer, Account, Process, ProcessId, NewProcessName, NewProcessId, CommandLine, ParentProcessName, _ResourceId, SourceComputerId, SubjectLogonId, SubjectUserSid
+  ),
+  (WindowsEvent
+  | where EventID == 4688 
+  | extend CommandLine = tostring(EventData.CommandLine)
+  | where CommandLine has_all ("portproxy", "netsh", "wmic", "process call create", "v4tov4", "listenport=50100")
+  | extend NewProcessName = tostring(EventData.NewProcessName), NewProcessId = tostring(EventData.NewProcessId)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1]),  ProcessId = tostring(EventData.ProcessId)
+  | extend Account =  strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName) 
+  | extend SubjectUserName = tostring(EventData.SubjectUserName), SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectLogonId = tostring(EventData.SubjectLogonId)
+  | project TimeGenerated, Computer, Account, Process, ProcessId, NewProcessName, NewProcessId, CommandLine, ParentProcessName, _ResourceId, SubjectUserName, SubjectDomainName, SubjectLogonId
+  ) 
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: Process
+version: 1.0.0

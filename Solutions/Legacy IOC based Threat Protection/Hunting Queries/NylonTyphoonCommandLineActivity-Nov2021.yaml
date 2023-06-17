@@ -1,0 +1,89 @@
+id: bb30abbc-9af6-4a37-9536-e9207e023989
+name: Nylon Typhoon Command Line Activity November 2021
+description: |
+   'This hunting query looks for process command line activity related to data collection and staging observed by Nylon Typhoon.
+   It hunts for use of tools such as xcopy and renamed archiving tools for data collection and staging purposes on the hosts with signatures observed related to Nylon Typhoon actor.'
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+tactics:
+  - Collection
+relevantTechniques:
+  - T1074.001
+query: |
+    let xcopy_tokens = dynamic(["xcopy", "\\windows\\temp\\wmi", "/S/Y/C"]);
+    let archive_tokens = dynamic(["\\windows\\temp\\wmi", ".rar", ".7zip"]);
+    let SigNames = dynamic(["Backdoor:Win32/Leeson", "Trojan:Win32/Kechang", "Backdoor:Win32/Nightimp!dha", "Trojan:Win32/QuarkBandit.A!dha", "TrojanSpy:Win32/KeyLogger"]);
+    (union isfuzzy=true
+    (DeviceProcessEvents  
+    | where ProcessCommandLine has_all(xcopy_tokens) or (ProcessCommandLine has_all (archive_tokens)) 
+    | join kind=leftouter (
+    SecurityAlert
+    | where ProductName == "Microsoft Defender Advanced Threat Protection"
+    | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+    | where isnotempty(ThreatName)
+    | extend AlertRiskScore =iif(ThreatName has_any (SigNames), 1.0, 0.5))
+    | extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0 , AlertRiskScore)
+    | project-reorder  TimeGenerated, DeviceName, DeviceId, ProcessCommandLine, AccountName
+    | extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName,  ProcessCustomEntity = InitiatingProcessFileName
+    ),
+    (imProcessCreate
+    | where (CommandLine has_all (xcopy_tokens)) or (CommandLine has_all (archive_tokens))
+    | extend timestamp = TimeGenerated, HostCustomEntity = DvcHostname , AccountCustomEntity = ActorUsername, ProcessCustomEntity = TargetProcessName
+    ),
+    (SecurityEvent
+    | where EventID == '4688'
+    | where (CommandLine has_all (xcopy_tokens)) or (CommandLine has_all (archive_tokens))
+    | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, CommandLine
+    | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+    ),
+    (WindowsEvent
+    | where EventID == '4688' and (EventData has_all (xcopy_tokens) or EventData has_all (archive_tokens))
+    | extend CommandLine = tostring(EventData.CommandLine) 
+    | where (CommandLine has_all (xcopy_tokens)) or (CommandLine has_all (archive_tokens))
+    | extend NewProcessName = tostring(EventData.NewProcessName)
+    | extend ParentProcessName = tostring(EventData.ParentProcessName)
+    | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+    | extend NewProcessId = tostring(EventData.NewProcessId)
+    | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, CommandLine
+    | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+    )
+    )
+    | extend NTDomain = tostring(split(AccountCustomEntity, '\\', 0)[0]), Name = tostring(split(AccountCustomEntity, '\\', 1)[0])
+    | extend HostName = tostring(split(HostCustomEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostCustomEntity, '.'), 1, -1), '.'))
+    | extend Account_0_Name = Name
+    | extend Account_0_NTDomain = NTDomain
+    | extend Host_0_HostName = HostName
+    | extend Host_0_DnsDomain = DnsDomain
+    | extend Process_0_ProcessId = ProcessCustomEntity
+    | extend Process_0_CommandLine = CommandLineCustomEntity
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessCustomEntity
+      - identifier: CommandLine
+        columnName: CommandLineCustomEntity
+version: 1.0.1

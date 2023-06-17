@@ -1,8 +1,8 @@
 id: 0e429446-2798-49e4-924d-c37338f24e23
-name: Certutil (LOLBins and LOLScripts)
+name: Detect Certutil (LOLBins and LOLScripts) Usage
 description: |
-  'This detection uses Sysmon telemetry to hunt Certutil activities'
-
+  'This detection uses Sysmon telemetry to hunt Certutil activities. Certutil is a command-line tool that is used to perform various cryptographic operations and manage ceritificates.
+  It is a legitimate tool and is used by many legitimate applications. However, it is also used by malware to perform malicious activities.'
 requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
@@ -14,8 +14,8 @@ relevantTechniques:
 
 query: |
   Event
-  //This query uses sysmon data depending on table name used this may need updataing
-  | where Source == "Microsoft-Windows-Sysmon"
+  //This query uses sysmon data and depending on table name used, this may need to be updated
+  | where Source =~ "Microsoft-Windows-Sysmon"
   | where EventID == 1
   | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
   | extend EventData = parse_xml(EventData).DataItem.EventData.Data
@@ -29,13 +29,23 @@ query: |
   | where Image has "certutil.exe"
   // Uncomment the next line and add your commandLine Whitelisted/ignore terms.For example "urlcache"
   // | where CommandLine !contains ("urlcache") 
-  | extend HostCustomEntity = Computer, AccountCustomEntity = UserName
+  | extend NTDomain = tostring(split(UserName, '\\', 0)[0]), Name = tostring(split(UserName, '\\', 1)[0])
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1
