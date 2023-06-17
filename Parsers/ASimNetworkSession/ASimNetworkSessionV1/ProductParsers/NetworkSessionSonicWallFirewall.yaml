@@ -19,22 +19,10 @@ ParserQuery: |
   let NetworkParserSonicWallFirewall=(){
   CommonSecurityLog
   | where DeviceVendor=="SonicWall"
-  // Splits the AdditionalExtensions into a list of name/value pairs by the delimiter (semi-colon)
-  | extend KeyValuePairs = split(AdditionalExtensions, ';')
-  // On each key value pair, creates Key and Value column. Then uses bag_pack() to create a dynamic property bag object from the key value pair.
-  // Finally, make_bag() is used to create a dictionary from the bag object.
-  | mv-apply KeyValuePairs on (
-     extend KeyValue = split(KeyValuePairs, '=')
-    | where array_length(KeyValue) == 2 and KeyValue[0] matches regex "^[a-zA-Z0-9_]*$" // Look for name=value and name must be alphanumeric.
-    | extend Key = tostring(KeyValue[0]), Value = tostring(KeyValue[1])
-    | extend p = bag_pack(tostring(Key), tostring(Value))
-    | summarize b = make_bag(p)
- )
-  // Using the bag_unpack plugin with the evaluate operator, unpack the bag into columns.
-  | evaluate bag_unpack(b)
-  // Split the AdditionalExtensions again by ";fw_action" to help isolate the URL in the string, if one exists.
-  | extend KeyValuePairs = tostring(split(AdditionalExtensions, ';fw_action')[0])
-  | extend DPISSLURL = extract(@"([^;]*\.[^f][^w][^_]+)(?:;fw_[^;]+)?(;|$)", 1, KeyValuePairs) // Overall works well, but some URLs get truncated.
+  | parse-kv AdditionalExtensions as (['gcat']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string) with (pair_delimiter=";", kv_delimiter="=")
+  | extend RequestURL_ = extract(@"(?:[.*;]+?)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)(?:;fw_action)", 1, AdditionalExtensions)
+  | extend RequestURL_ = iif(RequestURL_ startswith "snpt" or RequestURL_ startswith "dnpt" or RequestURL_ startswith "appid" or RequestURL_ startswith "appName", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), RequestURL_)
+  | extend RequestURL_ = iif(RequestURL_ matches regex @"^(.{2,6}=.{1,6})", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), iif(RequestURL_ matches regex @"^\w=\d$", "", RequestURL_))
   // This adds a column for LogMsgSeverity, using case() to map the ingested LogSeverity int value to a friendly string.
   | extend LogMsgSeverity = case(LogSeverity == 10, "Emergency (0)",
                                               LogSeverity == 9, "Alert (1)",
@@ -232,12 +220,11 @@ ParserQuery: |
   // Removing the older column names that were replaced with friendly names.
   | project-away
       CEFLogMsgSeverity
-    , AdditionalExtensions
     , DeviceEventCategory
-    , KeyValuePairs
     , gcat
     , RequestMethod
     , ipspri
+    , spypri
   // Reorder the remaining columns into a meaningful order.
   | project-reorder
       TimeGenerated
@@ -257,7 +244,6 @@ ParserQuery: |
     , CFSBlockFullString
     , CFSPolicyName
     , RequestURL
-    , DPISSLURL
     , SourceIP
     , NATSourceIPAddress
     , SourceIPv6Address
