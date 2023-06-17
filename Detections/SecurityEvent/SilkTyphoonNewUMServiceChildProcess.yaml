@@ -1,0 +1,85 @@
+id: 95a15f39-d9cc-4667-8cdd-58f3113691c9
+name: Silk Typhoon New UM Service Child Process
+description: |
+  'This query looks for new processes being spawned by the Exchange UM service where that process has not previously been observed before. 
+  Reference: https://www.microsoft.com/security/blog/2021/03/02/hafnium-targeting-exchange-servers/'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let lookback = 14d;
+  let timeframe = 1d;
+  (union isfuzzy=true
+  (SecurityEvent
+  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  | where EventID == 4688
+  | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
+  | join kind=rightanti (
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
+  | where EventID == 4688) on NewProcessName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  ),
+  (WindowsEvent
+  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  | where EventID == 4688 and EventData has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | join kind=rightanti (
+  WindowsEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4688  and EventData has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend IpAddress = tostring(EventData.IpAddress)) on NewProcessName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  ))  
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.1.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Intelligence" ]

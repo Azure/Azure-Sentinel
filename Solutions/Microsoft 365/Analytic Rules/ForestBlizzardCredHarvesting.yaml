@@ -1,0 +1,35 @@
+id: 04384937-e927-4595-8f3c-89ff58ed231f
+name: Possible Forest Blizzard attempted credential harvesting - Sept 2020
+description: |
+  'Surfaces potential Forest Blizzard group Office365 credential harvesting attempts within OfficeActivity Logon events.
+  References: https://www.microsoft.com/security/blog/2020/09/10/strontium-detecting-new-patters-credential-harvesting/.'
+severity: Low
+status: Available 
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 7d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let IPs = dynamic (["199.249.230.","185.220.101.","23.129.64.","109.70.100.","185.220.102."]);
+  OfficeActivity
+  | where RecordType in ("AzureActiveDirectoryAccountLogon", "AzureActiveDirectoryStsLogon") 
+  | where Operation != 'UserLoggedIn'
+  | extend UserAgent = iff(parse_json(ExtendedProperties)[0].Name =~ "UserAgent", extractjson("$[0].Value", ExtendedProperties, typeof(string)),"")
+  | mv-expand parse_json(ExtendedProperties)
+  | where ExtendedProperties.Name =~ "RequestType"
+  | extend RequestType = ExtendedProperties.Value
+  | where ClientIP has_any (IPs)
+  | summarize authAttempts=dcount(TimeGenerated), firstAttempt=min(TimeGenerated), lastAttempt=max(TimeGenerated), uniqueIPs=dcount(ClientIP), uniqueAccounts=dcount(UserId), attemptedAccounts=make_set(UserId) by UserAgent
+  | where authAttempts > 2500
+  | extend timestamp = firstAttempt
+  | sort by uniqueAccounts
+version: 2.0.1
+kind: Scheduled
