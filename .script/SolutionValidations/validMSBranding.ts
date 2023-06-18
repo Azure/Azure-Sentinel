@@ -60,7 +60,7 @@ function traverseAttributes(jsonContent: any, attributeNames: string[], errors: 
 }
 
 function validateAttribute(attributeValue: string, attributeName: string, errors: string[]): void {
-    const sentinelRegex = /(?<!Microsoft\s)(?<!-)\bSentinel\b/g;
+    const sentinelRegex = /(?<!Microsoft\s)(?<!\S)Sentinel(?!\S)/g;
     const updatedValue = attributeValue.replace(sentinelRegex, "Microsoft Sentinel");
 
     if (attributeValue !== updatedValue) {
