@@ -1,6 +1,6 @@
 Parser:
   Title: Web Session ASIM Filtering parser for Palo Alto Networks URL Filtering
-  Version: '0.2'
+  Version: '0.2.1'
   LastUpdated: Mar 12 2023
 Product:
   Name: Palo Alto Networks
@@ -30,9 +30,6 @@ ParserParams:
   - Name: srcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
-  - Name: dstipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])    
   - Name: ipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
@@ -56,7 +53,6 @@ ParserQuery: |
     starttime:datetime=datetime(null), 
     endtime:datetime=datetime(null),
     srcipaddr_has_any_prefix:dynamic=dynamic([]),
-    dstipaddr_has_any_prefix:dynamic=dynamic([]),
     ipaddr_has_any_prefix:dynamic=dynamic([]), 
     url_has_any:dynamic=dynamic([]),
     httpuseragent_has_any:dynamic=dynamic([]),
@@ -66,8 +62,7 @@ ParserQuery: |
   )
   {
       let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-      let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
-      let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let ip_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
       let EventLookup=datatable(DeviceAction:string, DvcAction:string,EventResult:string,HttpStatusCode:string)
       [
         "alert", "Allow", "Success","200",
@@ -110,13 +105,11 @@ ParserQuery: |
         and DeviceEventClassID == "url"
       | where (array_length(url_has_any) == 0 or RequestURL has_any (remove_protocol_from_list(url_has_any)))
       | where (array_length(httpuseragent_has_any) == 0 or RequestClientApplication has_any (httpuseragent_has_any))
-      | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any),
-        temp_DstMatch = has_any_ipv4_prefix(DestinationIP,dst_or_any)
+      | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any)
       | extend ASimMatchingIpAddr = case(
-        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-",
-        temp_SrcMatch and temp_DstMatch, "Both",
+        array_length(src_or_any) == 0, "-",
+        temp_SrcMatch , "Both",
         temp_SrcMatch, "SrcIpAddr",
-        temp_DstMatch, "DstIpAddr",
         "No match")
       | where ASimMatchingIpAddr != "No match" 
       | project-away temp_*
@@ -232,4 +225,4 @@ ParserQuery: |
         Dst                       = DstFQDN
       | project ASimMatchingIpAddr, DeviceVendor, Dst, DstDomainType, DstFQDN, DstHostname, DstIpAddr, DstMacAddr, DstNatIpAddr, DstNatPortNumber, DstPortNumber, DstUsername, DstUsernameType, DstZone, Dvc, DvcAction, DvcHostname, DvcId, DvcIdType, DvcInboundInterface, DvcInterface, DvcOriginalAction, DvcOutboundInterface, EventCount, EventEndTime, EventOriginalSeverity, EventProduct, EventProductVersion, EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventSeverity, EventStartTime, EventType, EventUid, EventVendor, Hostname, HttpContentFormat, HttpRequestMethod, HttpRequestXff, HttpStatusCode, IpAddr, NetworkDirection, NetworkProtocol, NetworkProtocolVersion, NetworkRuleName, NetworkSessionId, Protocol, RequestContext, Rule, SessionId, Src, SrcHostname, SrcIpAddr, SrcMacAddr, SrcNatIpAddr, SrcNatPortNumber, SrcPortNumber, SrcUsername, SrcUsernameType, SrcZone, ThreatField, ThreatIpAddr, ThreatOriginalConfidence, TimeGenerated, Type, Url, UrlCategory, User
   };
-  parser (starttime=starttime, endtime=endtime, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)

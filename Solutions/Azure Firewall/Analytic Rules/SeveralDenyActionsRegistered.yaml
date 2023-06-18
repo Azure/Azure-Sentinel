@@ -8,6 +8,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes:
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -22,26 +24,35 @@ relevantTechniques:
   - T1210
 query: |
   let threshold = 1;
-  AzureDiagnostics
-      | where OperationName in ("AzureFirewallApplicationRuleLog","AzureFirewallNetworkRuleLog")
-      | extend msg_s_replaced0 = replace(@"\s\s",@" ",msg_s)
-      | extend msg_s_replaced1 = replace(@"\.\s",@" ",msg_s_replaced0)
-      | extend msg_a = split(msg_s_replaced1," ")
-      | extend srcAddr_a = split(msg_a[3],":") , destAddr_a = split(msg_a[5],":")
-      | extend protocol = tostring(msg_a[0]), srcIp = tostring(srcAddr_a[0]), srcPort = tostring(srcAddr_a[1]), destIp = tostring(destAddr_a[0]), destPort = tostring(destAddr_a[1]), action = tostring(msg_a[7])
-      | where action == "Deny"
-      | extend url = iff(destIp matches regex "\\d+\\.\\d+\\.\\d+\\.\\d+","",destIp)
-      | summarize StartTime = min(TimeGenerated), count() by srcIp, destIp, url, action, protocol
-      | where count_ >= ["threshold"]
-      | extend timestamp = StartTime, URLCustomEntity = url, IPCustomEntity = srcIp
+  union isfuzzy=true(
+  AZFWApplicationRule
+  | where Action == "Deny"
+  | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+  | where count_ >= ["threshold"]),
+  (AZFWNetworkRule
+  | where Action == "Deny"
+  | extend Fqdn = DestinationIp
+  | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+  | where count_ >= ["threshold"]),
+  (AzureDiagnostics
+  | where OperationName in ("AzureFirewallApplicationRuleLog","AzureFirewallNetworkRuleLog")
+  | extend msg_s_replaced0 = replace(@"\s\s",@" ",msg_s)
+  | extend msg_s_replaced1 = replace(@"\.\s",@" ",msg_s_replaced0)
+  | extend msg_a = split(msg_s_replaced1," ")
+  | extend srcAddr_a = split(msg_a[3],":") , destAddr_a = split(msg_a[5],":")
+  | extend Protocol = tostring(msg_a[0]), SourceIp = tostring(srcAddr_a[0]), srcPort = tostring(srcAddr_a[1]), DestinationIp = tostring(destAddr_a[0]), destPort = tostring(destAddr_a[1]), Action = tostring(msg_a[7])
+  | where Action == "Deny"
+  | extend Fqdn = iff(DestinationIp matches regex "\\d+\\.\\d+\\.\\d+\\.\\d+","",DestinationIp)
+  | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+  | where count_ >= ["threshold"])
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIp
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.0.2
+        columnName: Fqdn
+version: 1.1.0
 kind: Scheduled
