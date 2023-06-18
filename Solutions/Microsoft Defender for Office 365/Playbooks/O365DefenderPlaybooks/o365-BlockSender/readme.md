@@ -3,7 +3,9 @@
  When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the list of earlier blocked senders .
  2. Fetches the new senders from incidents and compare them with existing one and update the blacklist . 
-
+ 
+<img src="./images/o365-BlockSender_light.jpg" width="50%"/><br>
+<img src="./images/o365-BlockSender_incidentComment.jpg" width="50%"/><br>
 
 ### Prerequisites 
 1. Defender for office 365 function app custom connector needs to be deployed prior to the deployment of this playbook under the same subscription.
@@ -12,8 +14,8 @@
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2FThreatXPlaybooks%2FThreatX-BlockIP-URL%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2F%2FThreatXPlaybooks%2FThreatX-BlockIP-URL%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Defender%2520for%2520Office%2520365%2FPlaybooks%2FO365DefenderPlaybooks%2Fo365-BlockSender%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Defender%2520for%2520Office%2520365%2FPlaybooks%2FO365DefenderPlaybooks%2Fo365-BlockSender%2Fazuredeploy.json)
 
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
@@ -38,6 +40,7 @@ Once deployment is complete, you will need to authorize each connection.
 2. Configure the automation rules to trigger this playbook, mapping of account is necessary
 3. Refer to Screenshot below
 
+<img src="./images/o365-BlockSender_entitymapping.jpg" width="50%"/><br>
 #### c. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource
 2. Click on Identity Blade
