@@ -22,17 +22,17 @@ function Get-WigdetsKeyVaultName {
     return $keyVaultName
 }
 
-#function Get-SentinelApplicationObjectId {
-#    $sentinelAppId = "98785600-1bb7-4fb9-b9fa-19afe2c8a360" 
-#    $principal = Get-AzADServicePrincipal -ApplicationId $sentinelAppId
-#    if ($principal -eq $null)
-#    {
-#        Write-Log "Failed to find Sentinel app id. Will try to create it"
-#        $principal = New-AzADServicePrincipal -ApplicationId $sentinelAppId
-#    }
-#
-#    return $principal.Id
-#}
+function Get-SentinelApplicationObjectId-V2 {
+    $sentinelAppId = "98785600-1bb7-4fb9-b9fa-19afe2c8a360" 
+    $principal = Get-AzADServicePrincipal -ApplicationId $sentinelAppId
+    if ($principal -eq $null)
+    {
+        Write-Log "Failed to find Sentinel app id. Will try to create it"
+        $principal = New-AzADServicePrincipal -ApplicationId $sentinelAppId
+    }
+
+    return $principal.Id
+}
 
 function Get-SentinelApplicationObjectId {
     $sentinelAppId = "98785600-1bb7-4fb9-b9fa-19afe2c8a360" 
@@ -71,7 +71,7 @@ function Write-Log {
 }
 "@
     try { # Send trace to Appinsights
-        #Invoke-WebRequest -Uri https://dc.services.visualstudio.com/v2/track -Method POST -Body $appinsightsTraceBody | out-null
+        Invoke-WebRequest -Uri https://dc.services.visualstudio.com/v2/track -Method POST -Body $appinsightsTraceBody | out-null
     } catch {}
 
 	if ($isError)
