@@ -22,7 +22,7 @@ function Get-WigdetsKeyVaultName {
     return $keyVaultName
 }
 
-function Get-SentinelApplicationObjectId-V2 {
+function Get-SentinelApplicationObjectIdV2 {
     $sentinelAppId = "98785600-1bb7-4fb9-b9fa-19afe2c8a360" 
     $principal = Get-AzADServicePrincipal -ApplicationId $sentinelAppId
     if ($principal -eq $null)
@@ -146,7 +146,7 @@ else { # KeyVault Exists.
 }
 
 Write-Log "Adding Access for Sentinel on the KeyVault.."
-$sentinelAppObjectId = Get-SentinelApplicationObjectId
+$sentinelAppObjectId = Get-SentinelApplicationObjectIdV2
 Write-Log "Sentinel's App ObjectId is '$sentinelAppObjectId'"
 
 if ($sentinelAppObjectId -eq $null) {
