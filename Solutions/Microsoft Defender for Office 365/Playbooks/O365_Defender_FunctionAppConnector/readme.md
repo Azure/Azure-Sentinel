@@ -33,7 +33,7 @@ This Functions App Connector is to connect Defender for office 365 API.
 2. Fill in the required parameters:
     - Function App Name
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS%2520Systems%2520Manager%2FPlaybooks%2FCustomConnector%2FAWS_SSM_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS%2520Systems%2520Manager%2FPlaybooks%2FCustomConnector%2FAWS_SSM_FunctionAppConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Defender%2520for%2520Office%2520365%2FPlaybooks%2FCustomConnector%2FO365_Defender_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Defender%2520for%2520Office%2520365%2FPlaybooks%2FCustomConnector%2FO365_Defender_FunctionAppConnector%2Fazuredeploy.json)
 
 ### Post Deployment Instructions
 1. Register the application in Azure AD [click the link and follow the steps](https://learn.microsoft.com/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps)
@@ -50,7 +50,68 @@ This Functions App Connector is to connect Defender for office 365 API.
 2. Once you are done with work , dont forget to call "Disconnect Exchange" action
 
 ### Request body paylod of Defender for office 365 function app custom Connector actions
+1. Connect Exchange
+	- {
+	"ApplicationId" : "your application ID",
+	"OrganizationName" : "your Organization ID",
+	"CertificateThumbPrint" : "your certificate file secret thumbprint"
+	}
+2. Disconnect Exchange
+	- {
+	"ApplicationId" : "your application ID",
+	"OrganizationName" : "your Organization ID"
+	}
+3. ListSpamPolicy
+	- {   
+	"ApplicationId" : "your application ID",
+	"OrganizationName" : "your Organization ID",
+	"Identity" : "Your policy name or Leave it empty for fetching all"
+	}
+4. Create spam rule
+	- {
+	"Name": "Mention rule name",
+	"HostedContentFilterPolicy": "Mention policy name on which this rule should apply",
+	"RecipientDomainIs": "domain name on which this rule should apply"
+	}
+5. Create Spam Policy
+	- {
+	"Name": "Mention policy name", 
+	"HighConfidenceSpamAction": "Quarantine",
+	"SpamAction": "Quarantine", 
+	"BulkThreshold": 6,
+	"BlockedSenderDomains": example ["gmail.com","hotmail.com"]
+	}
+6. TenantAllowBlockList
+	- {
+	"ListType" : "Sender" 
+	}
+7. CreateAllowBlockList
+	- {
+	"ListType":"Sender",
+	"Entries" : Mention entry to be added in block list for example :"test@badattackerdomain.com"
+	}
+8. UpdateAllowBlockList
+	- {
+	"ListType": "Sender",
+	"Entries" :"abc@yahoo.com",
+	"ExpirationDate": "9/1/2024"
+	}
+9. RemoveAllowBlockListItems
+	- {
+    	"ListType": "Sender",
+    	"Entries": "Mention Entries to be removed"
+	}
+10. ListMalwarePolicy
+	- {   
+	"ApplicationId" : "your application ID",
+	"OrganizationName" : "your Organization ID",
+	"Identity" : "Your policy name or Leave it empty for fetching all"
+	}
+11. BlockMalwareFileExtension
+	- {
+    	"MalwarePolicyName": "malware policy Name",
+    	"FileExtensions": "malicious file extension to be mark as blocked" for example["dgz","mde"]
+	}
 
-
-### References
+### References below link for more details
 - [Defender for office 365 Documentation](https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/anti-spam-policies-configure?view=o365-worldwide)
