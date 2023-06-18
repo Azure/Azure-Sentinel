@@ -1,0 +1,1095 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "loganalyticsworkspace": {
+            "defaultValue": "ankilognalyticsws",
+            "type": "String"
+        },
+        "loganalyticsworkspace-location": {
+            "defaultValue": "centralus",
+            "type": "String"
+        },
+        "loganalyticsworkspace-subscription": {
+            "defaultValue": "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97",
+            "type": "String"
+        },
+        "loganalyticsworkspace-resourceGroup": {
+            "defaultValue": "ankisentinelrg",
+            "type": "String"
+        },
+        "flag-raw-copy-normdata": {
+            "defaultValue": false,
+            "allowedValues": [
+                false,
+                true
+            ],
+            "type": "Bool"
+        },
+        "table-tier-for-raw-copy": {
+            "defaultValue": "Basic",
+            "allowedValues": [
+                "Analytics",
+                "Basic"
+            ],
+            "type": "String"
+        },
+        "dce-reuse-flag": {
+            "defaultValue": false,
+            "allowedValues": [
+                false,
+                true
+            ],
+            "type": "Bool"
+        },
+        "input-dce-name": {
+            "defaultValue": "ms-sentinel-dce-centralus-csfdr01",
+            "type": "String"
+        },
+        "dcr-raw-data_refresh_flag": {
+            "defaultValue": true,
+            "type": "Bool"
+        },
+        "dcr-normalized-data_refresh_flag": {
+            "defaultValue": true,
+            "allowedValues": [
+                false,
+                true
+            ],
+            "type": "Bool"
+        },
+        "dcr-raw-data_name_input": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Default name will be ms-sentinel-rawdata-dcr-[laregion]-csfdr[instance], no need to enter if you want to use default names"
+            }
+        },
+        "dcr-normalized-data_name_input": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Default name will be ms-sentinel-normdata-dcr-[laregion]-csfdr[instance], no need to enter if you want to use default names"
+            }
+        },
+        "Expected_EPS_volume": {
+            "defaultValue": 40000,
+            "type": "Int"
+        },
+        "function-name": {
+            "defaultValue": "csfdr01",
+            "type": "String"
+        },
+        "CrowdStrike_AWS_Key": {
+            "defaultValue": "AWSKey_12345",
+            "type": "String"
+        },
+        "CrowdStrike_AWS_Secret": {
+            "defaultValue": "AWSSecret_12345",
+            "type": "String"
+        },
+        "CrowdStrike_AWS_Region_Name": {
+            "defaultValue": "AWSRegion_12345",
+            "type": "String"
+        },
+        "CrowdStrike_AWS_SQS_URL": {
+            "defaultValue": "AWSSQS_12345",
+            "type": "String"
+        },
+        "AADTenantId": {
+            "defaultValue": "72f988bf-86f1-41af-91ab-2d7cd011db47",
+            "type": "String"
+        },
+        "AADApplicationId": {
+            "defaultValue": "969f7b17-415f-4d01-8ab5-7a7db3aa39cb",
+            "type": "String"
+        },
+        "AADApplicationSecret": {
+            "defaultValue": "AADAppServicePrincipleSecret",
+            "type": "String"
+        },
+        "ImmutableId_DCR_Raw_Copy": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "ImmutableId_DCR_Normalized_Data": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "DCE_LAlogsIngestionendpoint": {
+            "defaultValue": "",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "loganalyticsworkspace": "[parameters('loganalyticsworkspace')]",
+        "loganalyticsworkspace-location": "[parameters('loganalyticsworkspace-location')]",
+        "loganalyticsworkspace-subscription": "[parameters('loganalyticsworkspace-subscription')]",
+        "loganalyticsworkspace-resourceGroup": "[parameters('loganalyticsworkspace-resourceGroup')]",
+        "dce-reuse-flag": "[parameters('dce-reuse-flag')]",
+        "flag-raw-copy-normdata": "[parameters('flag-raw-copy-normdata')]",
+        "table-tier-for-raw-copy": "[parameters('table-tier-for-raw-copy')]",
+        "default-dce-name": "[concat('ms-sentinel-dce-',variables('loganalyticsworkspace-location'),'-',parameters('function-name'))]",
+        "dce-name": "[if(not(parameters('dce-reuse-flag')), variables('default-dce-name'), parameters('input-dce-name'))]",
+        "dcr-raw-data": "[if(empty(parameters('dcr-raw-data_name_input')), concat('ms-sentinel-rawdata-dcr-',variables('loganalyticsworkspace-location'),'-',parameters('function-name')), parameters('dcr-raw-data_name_input'))]",
+        "dcr-normalized-data": "[if(empty(parameters('dcr-normalized-data_name_input')), concat('ms-sentinel-normdata-dcr-',variables('loganalyticsworkspace-location'),'-',parameters('function-name')), parameters('dcr-normalized-data_name_input'))]",
+        "dcr-raw-data_refresh_flag": "[parameters('dcr-raw-data_refresh_flag')]",
+        "dcr-normalized-data_refresh_flag": "[parameters('dcr-normalized-data_refresh_flag')]",
+        "cust-table-additionaldata": "CrowdStrike_Additional_Events_CL",
+        "cust-table-csusermgmt": "CrowdStrike_UserMgmt_Events_CL",
+        "cust-table-csnetwork": "CrowdStrike_Network_Events_CL",
+        "cust-table-csregistry": "CrowdStrike_Registry_Events_CL",
+        "cust-table-csprocess": "CrowdStrike_Process_Events_CL",
+        "cust-table-csfile": "CrowdStrike_File_Events_CL",
+        "cust-table-csdns": "CrowdStrike_DNS_Events_CL",
+        "cust-table-csauth": "CrowdStrike_Auth_Events_CL",
+        "cust-table-csaudit": "CrowdStrike_Audit_Events_CL",
+        "norm-table-csfile": "ASimFileEventLogs_CL",
+        "norm-table-csauth": "ASimAuthenticationEventLogs_CL",
+        "norm-table-csprocess": "ASimProcessEventLogs_CL",
+        "norm-table-csregistry": "ASimRegistryEventLogs_CL",
+        "norm-table-csusermgmt": "ASimUserManagementLogs_CL",
+        "FunctionName": "[concat(toLower(parameters('function-name')), uniqueString(resourceGroup().id))]",
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "Expected_EPS_volume": "[parameters('Expected_EPS_volume')]",
+        "functionapp-hosting-plan": "[if(lessOrEquals(variables('Expected_EPS_volume'),  40000), 'Consumption',if(lessOrEquals(variables('Expected_EPS_volume'),  80000), 'EP1', if(lessOrEquals(variables('Expected_EPS_volume'),  100000), 'EP2', 'EP3')))]",
+        "HostingPlanName-Premium": "[concat('ASP-',substring(variables('FunctionName'), 0, 20))]",
+        "HostingPlanName-Consumption": "[concat('CSP-',substring(variables('FunctionName'), 0, 20))]",
+        "CrowdStrike_AWS_Key": "[parameters('CrowdStrike_AWS_Key')]",
+        "CrowdStrike_AWS_Secret": "[parameters('CrowdStrike_AWS_Secret')]",
+        "CrowdStrike_AWS_Region_Name": "[parameters('CrowdStrike_AWS_Region_Name')]",
+        "CrowdStrike_AWS_SQS_URL": "[parameters('CrowdStrike_AWS_SQS_URL')]",
+        "AADTenantId": "[parameters('AADTenantId')]",
+        "AADApplicationId": "[parameters('AADApplicationId')]",
+        "AADApplicationSecret": "[parameters('AADApplicationSecret')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dce-name')]",
+            "location": "[variables('loganalyticsworkspace-location')]",
+            "dependsOn": [
+                "[resourceId(variables('loganalyticsworkspace-subscription'), variables('loganalyticsworkspace-resourceGroup'), 'Microsoft.Resources/deployments', 'CSFDRLATablesTemplate')]"
+            ],
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Disabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "name": "CSFDRLATablesTemplate",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(variables('loganalyticsworkspace') ,'/',variables('norm-table-csauth'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('norm-table-csauth')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('norm-table-csfile'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('norm-table-csfile')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('norm-table-csprocess'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('norm-table-csprocess')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('norm-table-csregistry'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('norm-table-csregistry')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('norm-table-csusermgmt'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('norm-table-csusermgmt')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-additionaldata'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('cust-table-additionaldata')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[variables('flag-raw-copy-normdata')]",
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-csaudit'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('cust-table-csaudit')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[variables('flag-raw-copy-normdata')]",
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-csauth'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('cust-table-csauth')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[variables('flag-raw-copy-normdata')]",
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-csdns'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "[variables('table-tier-for-raw-copy')]",
+                                "schema": {
+                                    "name": "[variables('cust-table-csdns')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[variables('flag-raw-copy-normdata')]",
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-csfile'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "[variables('table-tier-for-raw-copy')]",
+                                "schema": {
+                                    "name": "[variables('cust-table-csfile')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[variables('flag-raw-copy-normdata')]",
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-csnetwork'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "[variables('table-tier-for-raw-copy')]",
+                                "schema": {
+                                    "name": "[variables('cust-table-csnetwork')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[variables('flag-raw-copy-normdata')]",
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-csprocess'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "[variables('table-tier-for-raw-copy')]",
+                                "schema": {
+                                    "name": "[variables('cust-table-csprocess')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[variables('flag-raw-copy-normdata')]",
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-csregistry'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('cust-table-csregistry')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[variables('flag-raw-copy-normdata')]",
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-csusermgmt'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "[variables('table-tier-for-raw-copy')]",
+                                "schema": {
+                                    "name": "[variables('cust-table-csusermgmt')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "DateTime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventCount",
+                                            "type": "Int",
+                                            "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "String",
+                                            "description": "Message"
+                                        },
+                                        {
+                                            "name": "URL",
+                                            "type": "string",
+                                            "description": "url"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "parameters": {}
+            },
+            "subscriptionId": "[variables('loganalyticsworkspace-subscription')]",
+            "resourceGroup": "[variables('loganalyticsworkspace-resourceGroup')]"
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dcr-raw-data')]",
+            "location": "[variables('loganalyticsworkspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId(subscription().subscriptionId, resourceGroup().name, 'Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]",
+                "streamDeclarations": {
+                    "Custom-CrowdStrikeRawCopy": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "API",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Auth",
+                                "type": "string"
+                            },
+                            {
+                                "name": "HTTPS",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "Cors",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Category",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "name": "[variables('loganalyticsworkspace')]",
+                            "workspaceResourceId": "[resourceId(variables('loganalyticsworkspace-subscription'), variables('loganalyticsworkspace-resourceGroup'), 'Microsoft.OperationalInsights/Workspaces', variables('loganalyticsworkspace'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-CrowdStrikeRawCopy"
+                        ],
+                        "destinations": [
+                            "[variables('loganalyticsworkspace')]"
+                        ],
+                        "outputStream": "[concat('Custom-',variables('cust-table-csnetwork'))]",
+                        "transformKql": "source | extend TimeGenerated = now() | extend ExtendedCol1 = Link"
+                    }
+                ]
+            },
+            "condition": "[and(variables('dcr-raw-data_refresh_flag'), variables('flag-raw-copy-normdata'))]"
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dcr-normalized-data')]",
+            "location": "[variables('loganalyticsworkspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId(subscription().subscriptionId,resourceGroup().name,'Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]",
+                "streamDeclarations": {
+                    "Custom-CrowdStrikeNormalizedData": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "API",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Auth",
+                                "type": "string"
+                            },
+                            {
+                                "name": "HTTPS",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "Cors",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Category",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "name": "[variables('loganalyticsworkspace')]",
+                            "workspaceResourceId": "[resourceId(variables('loganalyticsworkspace-subscription'), variables('loganalyticsworkspace-resourceGroup'),'Microsoft.OperationalInsights/Workspaces', variables('loganalyticsworkspace'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-CrowdStrikeNormalizedData"
+                        ],
+                        "destinations": [
+                            "[variables('loganalyticsworkspace')]"
+                        ],
+                        "outputStream": "[concat('Custom-',variables('cust-table-additionaldata'))]",
+                        "transformKql": "source | extend TimeGenerated = now() | extend ExtendedCol1 = Link"
+                    }
+                ]
+            },
+            "condition": "[variables('dcr-normalized-data_refresh_flag')]"
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('dcr-raw-data'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcr-raw-data'))]"
+            ],
+            "properties": {
+                "description": "[format('Role required for {0} to ingest data into LA through {1}', variables('AADApplicationId'), variables('dcr-raw-data'))]",
+                "principalId": "[variables('AADApplicationId')]",
+                "roleDefinitionId": "[subscriptionResourceId(subscription().subscriptionId,'Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+                "principalType": "ServicePrincipal"
+            },
+            "scope": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Insights/dataCollectionRules/{2}', subscription().subscriptionId, resourceGroup().name, variables('dcr-raw-data'))]",
+            "condition": "[and(variables('dcr-raw-data_refresh_flag'), variables('flag-raw-copy-normdata'))]"
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('dcr-normalized-data'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcr-normalized-data'))]"
+            ],
+            "properties": {
+                "description": "[format('Role required for {0} to ingest data into LA through {1}', variables('AADApplicationId'), variables('dcr-normalized-data'))]",
+                "principalId": "[variables('AADApplicationId')]",
+                "roleDefinitionId": "[subscriptionResourceId(subscription().subscriptionId,'Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+                "principalType": "ServicePrincipal"
+            },
+            "scope": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Insights/dataCollectionRules/{2}', subscription().subscriptionId, resourceGroup().name, variables('dcr-normalized-data'))]",
+            "condition": "[variables('dcr-normalized-data_refresh_flag')]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "name": "CSFDRFuncationAppResourcesTemplates",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "type": "Microsoft.Insights/components",
+                            "apiVersion": "2015-05-01",
+                            "name": "[variables('FunctionName')]",
+                            "location": "[variables('loganalyticsworkspace-location')]",
+                            "kind": "web",
+                            "properties": {
+                                "Application_Type": "web",
+                                "ApplicationId": "[variables('FunctionName')]"
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Storage/storageAccounts",
+                            "apiVersion": "2019-06-01",
+                            "name": "[tolower(variables('FunctionName'))]",
+                            "location": "[variables('loganalyticsworkspace-location')]",
+                            "sku": {
+                                "name": "Standard_LRS",
+                                "tier": "Standard"
+                            },
+                            "kind": "StorageV2",
+                            "properties": {
+                                "networkAcls": {
+                                    "bypass": "AzureServices",
+                                    "virtualNetworkRules": [],
+                                    "ipRules": [],
+                                    "defaultAction": "Allow"
+                                },
+                                "supportsHttpsTrafficOnly": true,
+                                "encryption": {
+                                    "services": {
+                                        "file": {
+                                            "keyType": "Account",
+                                            "enabled": true
+                                        },
+                                        "blob": {
+                                            "keyType": "Account",
+                                            "enabled": true
+                                        }
+                                    },
+                                    "keySource": "Microsoft.Storage"
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Storage/storageAccounts/blobServices",
+                            "apiVersion": "2019-06-01",
+                            "name": "[concat(variables('FunctionName'), '/default')]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+                            ],
+                            "sku": {
+                                "name": "Standard_LRS",
+                                "tier": "Standard"
+                            },
+                            "properties": {
+                                "cors": {
+                                    "corsRules": []
+                                },
+                                "deleteRetentionPolicy": {
+                                    "enabled": false
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Storage/storageAccounts/fileServices",
+                            "apiVersion": "2019-06-01",
+                            "name": "[concat(variables('FunctionName'), '/default')]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+                            ],
+                            "sku": {
+                                "name": "Standard_LRS",
+                                "tier": "Standard"
+                            },
+                            "properties": {
+                                "cors": {
+                                    "corsRules": []
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[not(equals(variables('functionapp-hosting-plan'),'Consumption'))]",
+                            "apiVersion": "2022-03-01",
+                            "name": "[variables('HostingPlanName-Premium')]",
+                            "type": "Microsoft.Web/serverfarms",
+                            "location": "[variables('loganalyticsworkspace-location')]",
+                            "kind": "elastic",
+                            "tags": {},
+                            "dependsOn": [],
+                            "properties": {
+                                "targetWorkerCount": "1",
+                                "targetWorkerSizeId": "3",
+                                "reserved": true,
+                                "maximumElasticWorkerCount": "20"
+                            },
+                            "sku": {
+                                "tier": "ElasticPremium",
+                                "name": "[variables('functionapp-hosting-plan')]"
+                            }
+                        },
+                        {
+                            "condition": "[equals(variables('functionapp-hosting-plan'),'Consumption')]",
+                            "apiVersion": "2022-03-01",
+                            "name": "[variables('HostingPlanName-Consumption')]",
+                            "type": "Microsoft.Web/serverfarms",
+                            "location": "[variables('loganalyticsworkspace-location')]",
+                            "kind": "elastic",
+                            "tags": {},
+                            "dependsOn": [],
+                            "sku": {
+                                "name": "Y1",
+                                "tier": "Dynamic"
+                            },
+                            "properties": {
+                                "computeMode": "Dynamic",
+                                "reserved": true
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+                            "apiVersion": "2019-06-01",
+                            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-secrets')]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]"
+                            ],
+                            "properties": {
+                                "publicAccess": "None"
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+                            "apiVersion": "2019-06-01",
+                            "name": "[concat(variables('FunctionName'), '/default/', tolower(variables('FunctionName')))]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('FunctionName'), 'default')]"
+                            ],
+                            "properties": {
+                                "shareQuota": 5120
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "name": "CSFDRAppSettings",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "type": "Microsoft.Web/sites",
+                            "apiVersion": "2018-11-01",
+                            "name": "[variables('FunctionName')]",
+                            "location": "[variables('loganalyticsworkspace-location')]",
+                            "kind": "functionapp,linux",
+                            "identity": {
+                                "type": "SystemAssigned"
+                            },
+                            "properties": {
+                                "name": "[variables('FunctionName')]",
+                                "httpsOnly": true,
+                                "clientAffinityEnabled": true,
+                                "alwaysOn": true,
+                                "reserved": true,
+                                "siteConfig": {
+                                    "linuxFxVersion": "python|3.8"
+                                },
+                                "serverFarmId": "[concat('/subscriptions/', subscription().subscriptionId,'/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/serverfarms/', if(equals(variables('functionapp-hosting-plan'),'Consumption'),variables('HostingPlanName-Consumption'),variables('HostingPlanName-Premium')))]"
+                            }
+                        },
+                        {
+                            "apiVersion": "2018-11-01",
+                            "type": "Microsoft.Web/sites/config",
+                            "name": "[concat(variables('FunctionName'),'/appsettings')]",
+                            "properties": {
+                                "FUNCTIONS_EXTENSION_VERSION": "~4",
+                                "FUNCTIONS_WORKER_RUNTIME": "python",
+                                "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+                                "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
+                                "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                                "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-SnowflakeDataConnector-functionapp",
+                                "UserSelection_RawData_Required": "[variables('flag-raw-copy-normdata')]",
+                                "CrowdStrike_AWS_Key": "[variables('CrowdStrike_AWS_Key')]",
+                                "CrowdStrike_AWS_Secret": "[variables('CrowdStrike_AWS_Secret')]",
+                                "CrowdStrike_AWS_Region_Name": "[variables('CrowdStrike_AWS_Region_Name')]",
+                                "CrowdStrike_AWS_SQS_URL": "[variables('CrowdStrike_AWS_SQS_URL')]",
+                                "MAX_CONCURRENT_PROCESSING_FILES": "[if(equals(variables('functionapp-hosting-plan'),'Consumption'),80,150)]",
+                                "AADTenantId": "[variables('AADTenantId')]",
+                                "AADApplicationId": "[variables('AADApplicationId')]",
+                                "AADApplicationSecret": "[variables('AADApplicationSecret')]",
+                                "LAlogsIngestionendpoint": "[reference(variables('dce-name'), '2022-06-01').logsIngestion.endpoint]",
+                                "ImmutableId_DCR_Normalized_Data": "[if(variables('dcr-normalized-data_refresh_flag'), reference(variables('dcr-normalized-data'), '2022-06-01').immutableId, parameters('ImmutableId_DCR_Normalized_Data'))]",
+                                "ImmutableId_DCR_Raw_Copy": "[if(and(variables('dcr-raw-data_refresh_flag'), variables('flag-raw-copy-normdata')),reference(variables('dcr-raw-data'), '2022-06-01').immutableId, if(and(not(variables('dcr-raw-data_refresh_flag')), variables('flag-raw-copy-normdata')), parameters('ImmutableId_DCR_Raw_Copy'),''))]"
+                            }
+                        }
+                    ]
+                }
+            },
+            "subscriptionId": "[subscription().subscriptionId]",
+            "resourceGroup": "[resourceGroup().name]"
+        }
+    ],
+    "outputs": {}
+}
