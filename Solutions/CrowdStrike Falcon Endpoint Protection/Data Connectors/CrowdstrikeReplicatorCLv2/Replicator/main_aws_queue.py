@@ -1,7 +1,6 @@
 import os
 import json
 from aiobotocore.session import get_session
-import re
 import time
 import aiohttp
 import logging
@@ -23,8 +22,8 @@ LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85
 connection_string = os.environ['AzureWebJobsStorage']
 AZURE_STORAGE_CONNECTION_STRING = os.environ['AzureWebJobsStorage']
 HTTP_FUNCTION_APP_URL = os.environ['HTTP_FUNCTION_APP_URL']
-MAX_QUEUE_MESSAGES_MAIN_QUEUE = 150
-MAX_SCRIPT_EXEC_TIME_MINUTES = 10
+MAX_QUEUE_MESSAGES_MAIN_QUEUE = int(os.environ.get('MAX_QUEUE_MESSAGES_MAIN_QUEUE', 80))
+MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
 
 drop_files_array = []
 
