@@ -31,6 +31,16 @@ Invoke-WebRequest -Uri https://aka.ms/SentinelWidgetsDeployScript -OutFile Widge
 
 For each widget, configure the secrets and other parameters it requires using the links below, which will help you to store them in the workspace Key Vault.
 
+#### Configure Virus Total
+
+- [Start the ARM template based configuration experience]([https://aka.ms/SentinelWidgetsAnomaliARM](https://aka.ms/SentinelWidgetsVirusTotalARM)) as shown below.
+- Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
+- Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
+- Enter the API key defined in your Virus Total account. You can [sign up](https://www.virustotal.com/gui/join-us) to a free Virus Total account to get an API key.
+- Press on the “Review + create” button and deploy the template – this should add a secret named “AnomaliApiKey” to your key vault.
+
+<img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future and Virus Total ARM deployment screenshot" width="75%"/>
+
 #### Configure Anomali
 
 - [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsAnomaliARM) as shown below.
@@ -39,7 +49,7 @@ For each widget, configure the secrets and other parameters it requires using th
 - Enter the username and API key defined in your Anomali account.
 - Press on the “Review + create” button and deploy the template – this should add a secret named “AnomaliApiKey” to your key vault.
 
-<img src="Images/anomali-arm-deployment.png" alt="Anomali ARM deployment screenshot" width="75%"/>
+<img src="Images/anomali-arm-deployment.png" alt="Anomali and Virus Total ARM deployment screenshot" width="75%"/>
 
 #### Configure Recorded future
 
@@ -49,7 +59,7 @@ For each widget, configure the secrets and other parameters it requires using th
 - Enter your recorded future API key. Contact your Recorded Future represantiative to get your API key. You can also [apply for a 30 day free trial especially for Sentinel users](https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial).
 - Press on the “Review + create” button and deploy the template – this should add a secret named “RecordedFuture” to your key vault.
 
-<img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future ARM deployment screenshot" width="75%"/>
+<img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future and Virus Total ARM deployment screenshot" width="75%"/>
 
 
 ## Using enrichment widgets
