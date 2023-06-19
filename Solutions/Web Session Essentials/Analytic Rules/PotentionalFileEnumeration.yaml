@@ -14,35 +14,60 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Discovery
+  - CommandAndControl
+  - CredentialAccess
 relevantTechniques:
   - T1083
+  - T1071
+  - T1110
 query: |
   // HTTP response status codes indicate whether a specific HTTP request has been successfully completed.
   // Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
-  let ErrorCode=dynamic(["404"]);
-  let threshold = 10;
-  let FileNotFoundRequests = 
-    _Im_WebSession (starttime=ago(1h), eventresultdetails_in=(ErrorCode))
-    // Filter the logs to include only HTTP GET requests with an HTTP status code of 404 and '/' in the URL
-    | where HttpRequestMethod =~ "GET" and Url contains "/";
-  FileNotFoundRequests
-  | summarize RequestCount = count(), FileCount=dcount(Url), RequestedURLs = make_set(Url, 100), DestinationIPList=make_set(DstIpAddr,100) by SrcIpAddr, SrcUsername, bin(TimeGenerated, 1h)
+  let HTTPErrorCode=dynamic(["404"]);
+  let threshold = 10; // You can update this threshold to the value that suites your environment
+  // let FileNotFoundRequests = 
+  _Im_WebSession (starttime=ago(1h))
+  | where EventResultDetails in~ (HTTPErrorCode)
+  // Filter the logs to include only HTTP GET requests with an HTTP status code of 404 and '/' in the URL
+  | where HttpRequestMethod =~ "GET" and Url contains "/"
+  | summarize
+      RequestCount = count(),
+      FileCount=dcount(Url),
+      EventStartTime=min(TimeGenerated),
+      EventEndTime=max(TimeGenerated),
+      RequestURLs = make_set(Url, 100),
+      DestinationIPList=make_set(DstIpAddr, 100)
+      by SrcIpAddr, SrcUsername, SrcHostname, DstHostname
   | where RequestCount > threshold  // Adjust the threshold as per your requirements
-  | project SrcIpAddr, SrcUsername, TimeGenerated, RequestCount, FileCount, RequestedURLs, DestinationIPList
-  | order by RequestCount desc
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+      - identifier: HostName
+        columnName: DstHostname
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
   RequestCount: RequestCount
-  RequestedURLs: RequestedURLs
+  RequestURLs: RequestURLs
   FileCount: FileCount
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+  DestinationIPList: DestinationIPList
 alertDetailsOverride:
-  alertDisplayNameFormat: "The system has detected multiple requests from a client with the IP address '{{SrcIpAddr}}' that could indicate potential file enumeration activity"
-  alertDescriptionFormat: "The client in question has generated multiple requests '{{RequestCount}}' that have resulted in error code 404, suggesting the possibility of file enumeration activity. Further analysis is necessary to ascertain the underlying reasons behind these requests from the client."
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with IP '{{SrcIpAddr}}' has been observed with performing file enumeration activity"
+  alertDescriptionFormat: "User generated multiple requests '{{RequestCount}}' that has resulted in error code '404', suggesting the possibility of file enumeration activity. It's important to investigate the source and patterns of these extensive 404 errors to identify potential security threats. Details about this error code could be found [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)"
 version: 1.0.0
 kind: Scheduled

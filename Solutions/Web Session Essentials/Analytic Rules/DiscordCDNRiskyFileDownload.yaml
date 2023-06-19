@@ -21,22 +21,43 @@ relevantTechniques:
   - T1071.001
 query: |
   let connectionThreshold = 1;
-  let riskyExtensions = dynamic([".exe",".dll",".bin",".msi"]);
+  let riskyExtensions = dynamic([".exe", ".dll", ".bat", ".cmd", ".vbs", ".ps1", ".psm1", ".scr", ".jar", ".app"]); // Update this list as per your requirement
   let discord=dynamic(["cdn.discordapp.com", "media.discordapp.com"]);
-  _Im_WebSession(starttime=ago(1d), url_has_any=discord)
-  | project Url, SrcUsername, SrcIpAddr, TimeGenerated, EventProduct, EventResult
+  _Im_WebSession(starttime=ago(1d), url_has_any=discord, eventresult='Success')
+  | where isnotempty(Url)
+  | project Url, SrcUsername, SrcIpAddr, TimeGenerated, SrcHostname
   | where Url has "attachments"
   | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, Url)
-  | summarize dcount(Url), make_set(SrcUsername,100), make_set(SrcIpAddr,100), make_set(Url,100), min(TimeGenerated), max(TimeGenerated), make_set(EventResult,5) by DiscordServerId
-  | mv-expand set_SrcUsername to typeof(string), set_Url to typeof(string), set_EventResult to typeof(string), set_SrcIpAddr to typeof(string)
+  | summarize
+      dcount(Url),
+      make_set(SrcUsername, 100),
+      make_set(SrcHostname, 100),
+      make_set(SrcIpAddr, 100),
+      make_set(Url, 100),
+      min(TimeGenerated),
+      max(TimeGenerated)
+      by DiscordServerId
+  | mv-expand
+      set_SrcUsername to typeof(string),
+      set_Url to typeof(string),
+      set_SrcIpAddr to typeof(string),
+      set_SrcHostname to typeof(string)
   | where dcount_Url <= connectionThreshold and set_Url has_any (riskyExtensions)
-  | summarize by DiscordServerId, dcount_Url, set_SrcUsername, min_TimeGenerated, max_TimeGenerated, set_EventResult, set_SrcIpAddr, set_Url
-  | project EventStartTime=min_TimeGenerated, EventEndTime=max_TimeGenerated, Result=set_EventResult, SourceUser=set_SrcUsername, SrcIpAddr=set_SrcIpAddr, Url=set_Url
+  | project
+      EventStartTime=min_TimeGenerated,
+      EventEndTime=max_TimeGenerated,
+      SrcUsername=set_SrcUsername,
+      SrcHostname = set_SrcHostname,
+      SrcIpAddr=set_SrcIpAddr,
+      Url=set_Url
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: SourceUser
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -45,10 +66,17 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
 eventGroupingSettings:
   aggregationKind: AlertPerResult
+customDetails:
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
 alertDetailsOverride:
-  alertDisplayNameFormat: "A client with the IP address '{{SrcIpAddr}}' has been detected downloading potentially risky files from the Discord CDN"
-  alertDescriptionFormat: " Client requested for URL '{{Url}}' that contains a files hosted on a recognized Discord Content Delivery Network (CDN) which are considered to be potentially risky."
+  alertDisplayNameFormat: "User '{{SourceUser}}' with the IP address '{{SrcIpAddr}}' has been detected downloading potentially risky files from the Discord CDN"
+  alertDescriptionFormat: " Client requested for URL '{{Url}}' that contains a files hosted on a recognized Discord Content Delivery Network (CDN) which are considered to be potentially risky. It is essential to investigate further to determine the nature of the files being requested and the intent of the users involved"
 version: 1.0.0
 kind: Scheduled

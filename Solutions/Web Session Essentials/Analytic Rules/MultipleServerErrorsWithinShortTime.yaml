@@ -25,8 +25,17 @@ query: |
   let threshold = 100; // You can update threshold value as per your environment
   _Im_WebSession(starttime=ago(1h))
   | where toint(EventResultDetails) between (500 .. 599)
-  | summarize TotalErrorCount = count(), URLs=make_set(Url,100),DestinationIPList = make_set(DstIpAddr,100), EventResultDetailsSet=make_set(EventResultDetails,100) by SrcIpAddr, bin(TimeGenerated, 5m), SrcUsername, SrcHostname
+  | summarize
+      TotalErrorCount = count(),
+      URLs=make_set(Url, 100),
+      EventStartTime = min(TimeGenerated),
+      EventEndTime = max(TimeGenerated),
+      EventResultDetailsSet=make_set(EventResultDetails, 100)
+      by SrcIpAddr, bin(TimeGenerated, 5m), SrcUsername, SrcHostname
   | where TotalErrorCount > threshold
+  | extend
+      Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+      UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -35,7 +44,13 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: SrcUsername
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
@@ -44,8 +59,8 @@ customDetails:
   ErrorThreshold: threshold
   EventResultDetailsSet: EventResultDetailsSet
 alertDetailsOverride:
-  alertDisplayNameFormat: "The system has detected a high number of requests from a client with the IP address '{{SrcIpAddr}}' that have resulted in server errors"
-  alertDescriptionFormat: "The client with the IP address '{{SrcIpAddr}}' has made a total of '{{TotalErrorCount}}' requests to URLs, including '{{URLs}}', 
+  alertDisplayNameFormat: "High number of server errors '{{TotalErrorCount}}' originated by user '{{SrcUsername}}' from IP address '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "The client with the IP address '{{SrcIpAddr}}' has made a total of '{{TotalErrorCount}}' requests to URLs '{{URLs}}', 
                             which have resulted in server errors. It is recommended to thoroughly investigate this alert to determine the underlying cause behind this 
                             significant number of errors. For detailed information regarding the specific errors encountered, please refer to the following link:
                             https://developer.mozilla.org/en-US/docs/Web/HTTP/Status."

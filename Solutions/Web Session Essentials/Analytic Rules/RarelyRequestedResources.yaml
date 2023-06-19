@@ -23,24 +23,42 @@ relevantTechniques:
   - T1071
 query: |
   let lookback = 1d;
-  let scriptExtensions = dynamic([".php",".aspx", ".asp", ".cfml"]);
+  let scriptExtensions = dynamic([".php", ".aspx", ".asp", ".cfml", ".py", ".sh", ".bash", ".pl"]);
   //The number of URI's seen to be suspicious, higher = less likely to be suspicious
   let uriThreshold = 1;
   let ReqestCountThreshold = 10; // set minimum requests count to confirm repetitive connections
   // Only look at connections that were allowed through the web proxy
   _Im_WebSession (starttime=ago(lookback), eventresult='Success')
-  | project EventVendor, EventResult, SrcBytes, DstBytes, Url, TimeGenerated, DstIpAddr , SrcIpAddr, HttpRequestMethod , HttpReferrer
-  | extend DstFQDN = tostring(parse_url(Url)["Host"])
-  // Only look at connections that were allowed through the web proxy
+  | project
+      SrcBytes,
+      DstBytes,
+      Url,
+      TimeGenerated,
+      DstIpAddr,
+      SrcIpAddr,
+      HttpRequestMethod,
+      HttpReferrer
+  | where not(ipv4_is_private(DstIpAddr)) // Only take traffic going to internet
+  | extend DestHostName = tostring(parse_url(Url)["Host"])
   // Only look at connections where some data was exchanged.
   | where SrcBytes > 0 and DstBytes > 0
   // Extract Domain
-  | extend Domain = iif(countof( DstFQDN,'.') >=2, strcat(split(DstFQDN,'.')[-2],'.',split(DstFQDN,'.')[-1]), DstFQDN)
-  | extend GetData = iff(Url contains "?",1,0)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), make_set(Url,100), make_set(DstIpAddr,100), make_set(SrcIpAddr,100), numofConnections = count(), make_set(HttpRequestMethod,10), max(GetData), max(HttpReferrer) by Domain
+  | extend Domain = iif(countof(DestHostName, '.') >= 2, strcat(split(DestHostName, '.')[-2], '.', split(DestHostName, '.')[-1]), DestHostName)
+  | extend GetData = iff(Url contains "?", 1, 0)
+  | summarize
+      EventStartTime = min(TimeGenerated),
+      EventEndTime = max(TimeGenerated),
+      make_set(Url, 100),
+      make_set(DstIpAddr, 100),
+      make_set(SrcIpAddr, 100),
+      EventCount = count(),
+      make_set(HttpRequestMethod, 10),
+      max(GetData),
+      max(HttpReferrer)
+      by Domain
   // Determine the number of URIs that have been visited for the domain
-  | extend destinationURI = array_length(set_Url)
-  | where destinationURI <= uriThreshold and numofConnections > ReqestCountThreshold // check for repetitive requests for single resource only.
+  | extend destinationURICount = array_length(set_Url)
+  | where destinationURICount <= uriThreshold and EventCount > ReqestCountThreshold // check for repetitive requests for single resource only.
   | where tostring(set_Url) has_any(scriptExtensions)
   //Remove matches with referer
   | where max_HttpReferrer == ""
@@ -48,27 +66,38 @@ query: |
   | where set_HttpRequestMethod in~ ("POST") or max_GetData == 1
   //Defeat email click tracking, may increase FN's while decreasing FP's
   | where set_Url !has "click" and set_HttpRequestMethod !has "GET"
-  | mvexpand set_Url, set_DstIpAddr
-  | extend RequestURL = tostring(set_Url), DestinationIP = tostring(set_DstIpAddr), ClientIP = tostring(set_SrcIpAddr)
-  | project ClientIP, DestinationIP, numofConnections, RequestURL, set_HttpRequestMethod
+  | mv-expand set_Url, set_DstIpAddr, set_SrcIpAddr
+  | extend
+      RequestURL = tostring(set_Url),
+      DestinationIP = tostring(set_DstIpAddr),
+      SourceIP = tostring(set_SrcIpAddr)
+  | project
+      EventStartTime,
+      EventEndTime,
+      SourceIP,
+      DestinationIP,
+      EventCount,
+      RequestURL,
+      set_HttpRequestMethod
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: DestinationIP
+      - identifier: Address
+        columnName: SourceIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
         columnName: RequestURL
 eventGroupingSettings:
   aggregationKind: AlertPerResult
+customDetails:
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+  EventCount: EventCount
 alertDetailsOverride:
-  alertDisplayNameFormat: "The system has identified a client with the IP address '{{ClientIP}}' making a request for a rare resource at '{{RequestURL}}' with a destination IP of '{{DestinationIP}}'."
-  alertDescriptionFormat: "To validate that this alert is not a false positive, additional analysis is necessary. 
-                          This detection mechanism focuses on scrutinizing connections made to a domain where only 
-                          a single file is requested, which is uncommon given that most modern web applications require 
-                          additional resources. Such activity is often linked to malware beaconing or tracking URLs delivered 
-                          through emails. The query encompasses a sample set of popular web script extensions (scriptExtensions), 
-                          which should be tailored to suit the specific requirements of your environment"
+  alertDisplayNameFormat: "User with IP '{{SourceIP}}' has been observed making request for a rare resource"
+  alertDescriptionFormat: "User requested (TotalEvents='{{EventCount}}') for URL '{{RequestURL}}' which contains a known script extension. The domain associated with this URL has not been accessed by any other user. This activity could be a potential beaconing activity to maintain control over compromised systems, receive instructions, or exfiltrate data"
 version: 1.0.0
 kind: Scheduled

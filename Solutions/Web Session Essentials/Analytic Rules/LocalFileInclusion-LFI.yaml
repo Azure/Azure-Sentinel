@@ -1,5 +1,5 @@
 id: 7bb55d05-ef39-4a40-8079-0bc3c05e7881
-name: Detect Local File Inclusion in web requests (ASIM Web Session)
+name: Detect Local File Inclusion(LFI) in web requests (ASIM Web Session)
 description: |
   'LFI vulnerabilities allow an attacker to read (and sometimes execute) files on the victim machine. This can be very dangerous because if the web server is misconfigured and running with high privileges, the attacker may gain access to sensitive information'
 severity: High
@@ -14,18 +14,25 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
+  - Execution
 relevantTechniques:
   - T1190
   - T1133
+  - T1059
 query: |
   // You can add more keywords to the query as necessary, depending on the specific indicators you want to detect.
   let cmd_list = dynamic(['/etc/shadow', '/etc/passwd', '/etc/hosts', '/etc/ssh/', '..\\', '../', 'proc/self/environ']);
   _Im_WebSession (starttime=ago(1h), eventresult='Success')
   | where isnotempty(Url)
-  | project Url, SrcIpAddr, SrcUsername, DstIpAddr, TimeGenerated
+  | project Url, SrcIpAddr, SrcUsername, SrcHostname, TimeGenerated
   | extend Decoded_url = url_decode(Url)
-  | where Decoded_url  has_any (cmd_list)
-  | summarize EventCount=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr, SrcUsername, Url, Decoded_url, DstIpAddr
+  | where Decoded_url has_any (cmd_list)
+  | summarize
+      EventCount=count(),
+      EventStartTime=min(TimeGenerated),
+      EventEndTime=max(TimeGenerated)
+      by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
   | order by EventCount desc
 entityMappings:
   - entityType: IP
@@ -36,16 +43,25 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
-  EventCount: Count
+  EventCount: EventCount
   Decoded_url: Decoded_url
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
 alertDetailsOverride:
-  alertDisplayNameFormat: "The system has identified a client with the IP address '{{SrcIpAddr}}' making a request for '{{Url}}' that includes a recognizable malicious command"
-  alertDescriptionFormat: "In order to ascertain the accuracy of this alert and ensure it is not a false positive, it is crucial to 
-                          conduct further analysis of the detected URL. This entails delving deeper into the characteristics, behavior, and context 
-                          surrounding the URL to gather more information and evidence. By thoroughly investigating the URL, its associated components, and 
-                          any related activities or patterns, it becomes possible to make an informed determination regarding the validity of the alert"
+  alertDisplayNameFormat: "Potential Local File Inlcusion(LFI) performed by user '{{SrcUsername}}' from IP '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "User requested for URL '{{Url}}' which contains LFI related keywords or indicators. It suggests an attempt to traverse directories and access files outside the intended directory structure"
 version: 1.0.0
 kind: Scheduled

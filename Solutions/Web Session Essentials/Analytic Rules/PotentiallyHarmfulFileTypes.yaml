@@ -1,41 +1,66 @@
 id: c6608467-3678-45fe-b038-b590ce6d00fb
 name: Detect web requests to potentially harmful files (ASIM Web Session)
 description: |
-  'This rule detects web requests made to URLs containing file types such as .ps1, .bat, .vbs,.scr etc. which have the potential to be harmful if downloaded. This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM. To use this Analytics Rule, deploy the Advanced Security Information Model (ASIM)'
+  'This rule detects web requests made to URLs containing file types such as .ps1, .bat, .vbs,.scr etc. which have the potential to be harmful if downloaded. This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'
 severity: Medium
 status: Available 
 tags:
   - Schema: WebSession
     SchemaVersion: 0.2.6
 requiredDataConnectors: []
-queryFrequency: 1h
-queryPeriod: 1h
+queryFrequency: 5m
+queryPeriod: 5m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
   - Persistence
+  - Execution
 relevantTechniques:
   - T1133
+  - T1203
+  - T1566
 query: |
-  let mal_file_exts_list = dynamic([".exe", ".dll", ".bat", ".cmd", ".vbs", ".ps1", ".psm1", ".scr", ".jar",".app"]); // Update this list as per your requirement
-  let whitelisted_domains = dynamic ([ "windowsupdate.com","windows.net" ]); // exclude all trusted domain names
-  _Im_WebSession ( starttime=ago(1h),url_has_any=mal_file_exts_list,eventresult='Success')
-  | project Url, SrcIpAddr, TimeGenerated, SrcUsername, DstIpAddr
+  let lookback = 5min;
+  let mal_file_exts_list = dynamic([".exe", ".dll", ".bat", ".cmd", ".vbs", ".ps1", ".psm1", ".scr", ".jar", ".app", ".phishing", ".scam", ".malware", ".sh", ".bash", ".sql"]); // Update this list as per your requirement
+  let whitelisted_domains = dynamic (["windowsupdate.com", "windows.net"]); // exclude all trusted domain names
+  _Im_WebSession (starttime=ago(lookback), url_has_any=mal_file_exts_list, eventresult='Success')
+  | project
+      Url,
+      SrcIpAddr,
+      TimeGenerated,
+      SrcUsername,
+      SrcHostname,
+      DstIpAddr,
+      DstPortNumber
   | where Url has_any (mal_file_exts_list)
-  | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]),'/')[-1])
-  | extend requestedFileExt=extract(@'(\.\w+)$',1,requestedFileName, typeof(string))
+  | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]), '/')[-1])
+  | extend requestedFileExt=extract(@'(\.\w+)$', 1, requestedFileName, typeof(string))
   | where requestedFileExt in~ (mal_file_exts_list)
-  | summarize EventCount=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcUsername, SrcIpAddr, DstIpAddr, Url, requestedFileName
-  | extend FQDN = split(parse_url(Url)["Host"],'.')
-  | extend Domain = iif(array_length(FQDN)>1,strcat(FQDN[-2],'.',FQDN[-1]),FQDN)
+  | summarize
+      EventCount=count(),
+      EventStartTime=min(TimeGenerated),
+      EventEndTime=max(TimeGenerated)
+      by
+      SrcUsername,
+      SrcIpAddr,
+      SrcHostname,
+      DstIpAddr,
+      DstPortNumber,
+      Url,
+      requestedFileName
+  | extend FQDN = split(parse_url(Url)["Host"], '.')
+  | extend Domain = iif(array_length(FQDN) > 1, strcat(FQDN[-2], '.', FQDN[-1]), FQDN)
   | where Domain !in~ (whitelisted_domains)
   | project-away FQDN
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: SrcIpAddr
+      - identifier: Address
+        columnName: DstIpAddr
   - entityType: URL
     fieldMappings:
       - identifier: Url
@@ -44,12 +69,24 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: requestedFileName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
   EventCount: EventCount
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
 alertDetailsOverride:
-  alertDisplayNameFormat: "The client with the IP address {{SrcIpAddr}} accessed a URL '{{Url}}' that contains a file extension {{requestedFileExt}} which is potentially harmful"
-  alertDescriptionFormat: "To verify that this alert is not a false positive, additional analysis is needed. Downloading a file with the specified extension carries potential risks and could indicate malicious activity"
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with IP address '{{SrcIpAddr}}' accessed a potentially harmful URL"
+  alertDescriptionFormat: "User accessed URL - '{{Url}}' that contains a file - '{{requestedFileName}}' with risky extension. Downloading this file could pose a potential risk"
 version: 1.0.0
 kind: Scheduled
