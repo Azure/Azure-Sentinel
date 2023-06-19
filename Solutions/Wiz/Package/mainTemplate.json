@@ -70,7 +70,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Wiz data connector with template version 1.0.0",
+        "description": "Wiz data connector with template version 2.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -88,12 +88,22 @@
                   "id": "[variables('_uiConfigId1')]",
                   "title": "Wiz",
                   "publisher": "Wiz",
-                  "descriptionMarkdown": "This connector uses Wiz API connection to push Wiz findings into Microsoft Sentinel Log Analytics.",
+                  "descriptionMarkdown": "This connector uses Wiz API connection to push Wiz Issues, Vulnerability Findings, and Audit Logs into Microsoft Sentinel.",
                   "graphQueries": [
                     {
                       "metricName": "Total data received",
                       "legend": "WizIssues_CL",
                       "baseQuery": "WizIssues_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WizVulnerabilities_CL",
+                      "baseQuery": "WizVulnerabilities_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WizAuditLogs_CL",
+                      "baseQuery": "WizAuditLogs_CL"
                     }
                   ],
                   "sampleQueries": [
@@ -106,13 +116,23 @@
                     {
                       "name": "WizIssues_CL",
                       "lastDataReceivedQuery": "WizIssues_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "WizVulnerabilities_CL",
+                      "lastDataReceivedQuery": "WizVulnerabilities_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "WizAuditLogs_CL",
+                      "lastDataReceivedQuery": "WizAuditLogs_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriterias": [
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "WizIssues_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                        "WizIssues_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "WizVulnerabilities_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "WizAuditLogs_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
                       ]
                     }
                   ],
@@ -156,7 +176,7 @@
                   },
                   "instructionSteps": [
                     {
-                      "description": ">**NOTE:** This connector: Uses Azure Functions to connect to Wiz API to pull Wiz findings into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.\nCreates an Azure Key Vault with all the required parameters stored as secrets."
+                      "description": ">**NOTE:** This connector: Uses Azure Functions to connect to Wiz API to pull Wiz Issues, Vulnerability Findings, and Audit Logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.\nCreates an Azure Key Vault with all the required parameters stored as secrets."
                     },
                     {
                       "description": "\nFollow the instructions on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz) to get the erquired credentials.",
@@ -187,7 +207,7 @@
                       "title": "STEP 2 - Deploy the connector and the associated Azure Function"
                     },
                     {
-                      "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-wiz-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the following parameters: \n> - Choose **KeyVaultName** and **FunctionName** for the new resources \n >- Enter the following Wiz credentials from step 1: **WizAuthUrl**, **WizEndpointUrl**, **WizClientId**, and **WizClientSecret** \n>- Enter the Workspace credentials **AzureLogsAnalyticsWorkspaceId** and **AzureLogAnalyticsWorkspaceSharedKey** \n>- (optional) follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration##optional-create-a-filter-for-wiz-issues) to add **QueryFilter**.\n \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n",
+                      "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-wiz-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the following parameters: \n> - Choose **KeyVaultName** and **FunctionName** for the new resources \n >- Enter the following Wiz credentials from step 1: **WizAuthUrl**, **WizEndpointUrl**, **WizClientId**, and **WizClientSecret** \n>- Enter the Workspace credentials **AzureLogsAnalyticsWorkspaceId** and **AzureLogAnalyticsWorkspaceSharedKey**\n>- Choose the Wiz data types you want to send to Microsoft Sentinel, choose at least one from **Wiz Issues**, **Vulnerability Findings**, and **Audit Logs**.\n \n>- (optional) follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#optional-create-a-filter-for-wiz-queries) to add **IssuesQueryFilter**, **VulnerbailitiesQueryFilter**, and **AuditLogsQueryFilter**.\n \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n",
                       "title": "Option 1: Deploy using the Azure Resource Manager (ARM) Template"
                     },
                     {
@@ -276,111 +296,155 @@
       "location": "[parameters('workspace-location')]",
       "kind": "GenericUI",
       "properties": {
-        "connectorUiConfig": {
-          "title": "Wiz",
-          "publisher": "Wiz",
-          "descriptionMarkdown": "This connector uses the Wiz API endpoint to ingest Wiz findings into Microsoft Sentinel Log Analytics.",
-          "graphQueries": [
-            {
-              "metricName": "Total data received",
-              "legend": "WizIssues_CL",
-              "baseQuery": "WizIssues_CL"
-            }
-          ],
-          "sampleQueries": [
-            {
-              "description": "Summary by Issues's severity",
-              "query": "WizIssues_CL\n            | summarize Count=count() by severity_s"
-            }
-          ],
-          "dataTypes": [
-            {
-              "name": "WizIssues_CL",
-              "lastDataReceivedQuery": "WizIssues_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
-            }
-          ],
-          "availability": {
-            "status": 1,
-            "isPreview": false
-          },
-          "permissions": {
-            "resourceProvider": [
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "read and write permissions on the workspace are required.",
-                "providerDisplayName": "Workspace",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "write": true,
-                  "read": true,
-                  "delete": true
-                }
-              },
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                "providerDisplayName": "Keys",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "action": true
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Wiz",
+                  "publisher": "Wiz",
+                  "descriptionMarkdown": "This connector uses Wiz API connection to push Wiz Issues, Vulnerability Findings, and Audit Logs into Microsoft Sentinel.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WizIssues_CL",
+                      "baseQuery": "WizIssues_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WizVulnerabilities_CL",
+                      "baseQuery": "WizVulnerabilities_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WizAuditLogs_CL",
+                      "baseQuery": "WizAuditLogs_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Summary by Issues's severity",
+                      "query": "WizIssues_CL\n            | summarize Count=count() by severity_s"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "WizIssues_CL",
+                      "lastDataReceivedQuery": "WizIssues_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "WizVulnerabilities_CL",
+                      "lastDataReceivedQuery": "WizVulnerabilities_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "WizAuditLogs_CL",
+                      "lastDataReceivedQuery": "WizAuditLogs_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "WizIssues_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "WizVulnerabilities_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "WizAuditLogs_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": true
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Wiz Service Account credentials",
+                        "description": "Ensure you have your Wiz service account client ID and client secret, API endpoint URL, and auth URL. Instructions can be found on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz)."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector: Uses Azure Functions to connect to Wiz API to pull Wiz Issues, Vulnerability Findings, and Audit Logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.\nCreates an Azure Key Vault with all the required parameters stored as secrets."
+                    },
+                    {
+                      "description": "\nFollow the instructions on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz) to get the erquired credentials.",
+                      "title": "STEP 1 - Get your Wiz credentials"
+                    },
+                    {
+                      "description": "\n>**IMPORTANT:** Before deploying the Wiz Connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Wiz credentials from the previous step.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "STEP 2 - Deploy the connector and the associated Azure Function"
+                    },
+                    {
+                      "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-wiz-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the following parameters: \n> - Choose **KeyVaultName** and **FunctionName** for the new resources \n >- Enter the following Wiz credentials from step 1: **WizAuthUrl**, **WizEndpointUrl**, **WizClientId**, and **WizClientSecret** \n>- Enter the Workspace credentials **AzureLogsAnalyticsWorkspaceId** and **AzureLogAnalyticsWorkspaceSharedKey**\n>- Choose the Wiz data types you want to send to Microsoft Sentinel, choose at least one from **Wiz Issues**, **Vulnerability Findings**, and **Audit Logs**.\n \n>- (optional) follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#optional-create-a-filter-for-wiz-queries) to add **IssuesQueryFilter**, **VulnerbailitiesQueryFilter**, and **AuditLogsQueryFilter**.\n \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n",
+                      "title": "Option 1: Deploy using the Azure Resource Manager (ARM) Template"
+                    },
+                    {
+                      "description": ">Follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#manual-deployment) to deploy the connector manually.",
+                      "title": "Option 2: Manual Deployment of the Azure Function"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "152fa8d4-b84b-4370-8317-b63ed52f9fe3",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Wiz"
+                    },
+                    "support": {
+                      "name": "Wiz",
+                      "link": "https://wizio.zendesk.com/",
+                      "tier": "partner"
+                    }
+                  }
                 }
               }
-            ],
-            "customs": [
-              {
-                "name": "Microsoft.Web/sites permissions",
-                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
-              },
-              {
-                "name": "Wiz Service Account credentials",
-                "description": "Ensure you have your Wiz Client ID and Secret, Api endpoint URL and Auth URL. Instructions can be found on [Wiz Documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz)."
-              }
-            ]
-          },
-          "instructionSteps": [
-            {
-              "description": ">**NOTE:** This connector uses Azure Functions to connect to Wiz API to pull Wiz findings into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.\nIt also creates an Azure Key Vault with all the required parameters stored as secrets"
-            },
-            {
-              "description": "\nFollow the instructions on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz) to get the erquired credentials.",
-              "title": "STEP 1 - Get your Wiz credentials"
-            },
-            {
-              "description": "\n>**IMPORTANT:** Before deploying the Wiz Connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Wiz credentials from the previous step.",
-              "instructions": [
-                {
-                  "parameters": {
-                    "fillWith": [
-                      "WorkspaceId"
-                    ],
-                    "label": "Workspace ID"
-                  },
-                  "type": "CopyableLabel"
-                },
-                {
-                  "parameters": {
-                    "fillWith": [
-                      "PrimaryKey"
-                    ],
-                    "label": "Primary Key"
-                  },
-                  "type": "CopyableLabel"
-                }
-              ],
-              "title": "STEP 2 - Deploy the connector and the associated Azure Function"
-            },
-            {
-              "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-wiz-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the following parameters: \n> - Choose **KeyVaultName** and **FunctionName** for the new resources \n >- Enter the following Wiz credentials from step 1: **WizAuthUrl**, **WizEndpointUrl**, **WizClientId**, and **WizClientSecret** \n>- Enter the Workspace credentials **AzureLogsAnalyticsWorkspaceId** and **AzureLogAnalyticsWorkspaceSharedKey** \n>- (optional) follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration##optional-create-a-filter-for-wiz-issues) to add **QueryFilter**.\n \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n",
-              "title": "Option 1: Deploy using the Azure Resource Manager (ARM) Template"
-            },
-            {
-              "description": ">Follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#manual-deployment) to deploy the connector manually.",
-              "title": "Option 2: Manual Deployment of the Azure Function"
-            }
-          ],
-          "id": "[variables('_uiConfigId1')]"
-        }
-      }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
