@@ -25,7 +25,7 @@ Our Enterprise Scale deployment is fully automated and repeatable across differe
 
 ## Script
 
-The script requires one extra parameter compared to the original script: "SecretKey". This is because the kustocli.exe is prompting for authentication. <https://docs.microsoft.com/en-us/azure/data-explorer/kusto/api/connection-strings/kusto#aad-based-authentication-examples>. As we are using an SPN to connect to Azure we have to pass the ApplicationClientId and ApplicationKey.
+The script requires one extra parameter compared to the original script: "SecretKey". This is because the kustocli.exe is prompting for authentication. <https://docs.microsoft.com/azure/data-explorer/kusto/api/connection-strings/kusto#aad-based-authentication-examples>. As we are using an SPN to connect to Azure we have to pass the ApplicationClientId and ApplicationKey.
 
 `$KustoConnectionString = $KustoConnectionString + ";Authority Id=$($Context.tenant.id);AppClientId=$($Context.Account.id);AppKey=$SecretKey"`
 
