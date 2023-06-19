@@ -384,6 +384,268 @@
                         }
                     }
                 ]
+            },
+            {
+                "name": "DataIngestionConfig",
+                "label": "Data Ingestion Config",
+                "elements": [
+                    {
+                        "name": "DataIngestionInstructions",
+                        "type": "Microsoft.Common.InfoBox",
+                        "visible": false,
+                        "options": {
+                            "icon": "Info",
+                            "text": "This data connector ingests data into ASIM / Normalized tables ( transforms data during the ingestion time wherever applicable). You can opt of raw copy of data if you also need data in its original form (without transformations) \nSome events may not have mapping with ASIM schema and those will be ingested into CrowdStrike_Additional_Events_CL table without any transformations"
+                        }
+                    },
+                    {
+                        "name": "DataIngestionInstructions_exp",
+                        "type": "Microsoft.Common.InfoBox",
+                        "visible": false,
+                        "options": {
+                            "icon": "Info",
+                            "text": "This data connector ingests data into following tables ( transforms data during the ingestion time wherever applicable). You can opt of raw copy of data if you also need data in its original form (without transformations) \n\t ASimDnsActivityLogs ( + CrowdStrike_DNS_Events_CL if you opt for raw copy )\n\t ASimNetworkSessionLogs ( + CrowdStrike_Network_Events_CL if you opt for raw copy )\n\t ASimAuditEventLogs ( + CrowdStrike_Audit_Events_CL if you opt for raw copy )\n\t ASimFileEventLogs_1_CL ( + CrowdStrike_File_Events_CL if you opt for raw copy )\n\t ASimFileEventLogs_1_CL ( + CrowdStrike_File_Events_CL if you opt for raw copy )\n\t ASimAuthenticationEventLogs_1_CL ( + CrowdStrike_Auth_Events_CL if you opt for raw copy )\n\t ASimProcessEventLogs_1_CL ( + CrowdStrike_Process_Events_CL if you opt for raw copy )\n\t ASimRegistryEventLogs_1_CL ( + CrowdStrike_Registry_Events_CL if you opt for raw copy )\n\t ASimUserManagementLogs_1_CL ( + CrowdStrike_UserMgmt_Events_CL if you opt for raw copy )\n\nSome events may not have mapping with ASIM schema and those will be ingested into CrowdStrike_Additional_Events_CL table without any transformations"
+                        }
+                    },
+                    {
+                        "name": "DummySpace0",
+                        "type": "Microsoft.Common.InfoBox",
+                        "visible": "[steps('DataIngestionConfig').flag-raw-copy-normdata]",
+                        "options": {
+                            "icon": "",
+                            "text": ""
+                        }
+                    },
+                    {
+                        "name": "RAWDataConfigurationSection",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Select requiremnt for raw copy data",
+                        "elements": [
+                            {
+                                "name": "flag-raw-copy-normdata",
+                                "type": "Microsoft.Common.CheckBox",
+                                "label": "Ingest raw copy of normalized data",
+                                "constraints": {
+                                    "required": false
+                                }
+                            },
+                            {
+                                "name": "FunctionAppSelectedPlanConsumption",
+                                "type": "Microsoft.Common.InfoBox",
+                                "visible": "[steps('DataIngestionConfig').RAWDataConfigurationSection.flag-raw-copy-normdata]",
+                                "options": {
+                                    "icon": "Warning",
+                                    "text": "This will incur additional cost and select this only if necessary"
+                                }
+                            },
+                            {
+                                "name": "table-tier-for-raw-copy",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "Table data plan for raw data",
+                                "defaultValue": "Basic",
+                                "toolTip": "For more details about different plans [refer this document](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/basic-logs-configure)",
+                                "constraints": {
+                                    "required": true,
+                                    "allowedValues": [
+                                        {
+                                            "label": "Analytics",
+                                            "value": "Analytics"
+                                        },
+                                        {
+                                            "label": "Basic",
+                                            "value": "Basic"
+                                        }
+                                    ]
+                                },
+                                "visible": "[steps('DataIngestionConfig').RAWDataConfigurationSection.flag-raw-copy-normdata]"
+                            },
+                            {
+                                "name": "DummySpace1",
+                                "type": "Microsoft.Common.InfoBox",
+                                "visible": "[steps('DataIngestionConfig').flag-raw-copy-normdata]",
+                                "options": {
+                                    "icon": "",
+                                    "text": ""
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "getexistingDCEs",
+                        "type": "Microsoft.Solutions.ArmApiControl",
+                        "toolTip": "This filters for existing DCEs available in the region",
+                        "request": {
+                            "method": "GET",
+                            "path": "[concat(subscription().id, '/resourceGroups/', toLower(resourceGroup().name),'/providers/Microsoft.Insights/dataCollectionEndpoints?api-version=2021-09-01-preview')]"
+                        }
+                    },
+                    {
+                        "name": "getexistingDCRs",
+                        "type": "Microsoft.Solutions.ArmApiControl",
+                        "toolTip": "This filters for existing DCRs available in the region",
+                        "request": {
+                            "method": "GET",
+                            "path": "[concat(subscription().id, '/resourceGroups/', toLower(resourceGroup().name),'/providers/Microsoft.Insights/dataCollectionRules?api-version=2019-11-01-preview')]"
+                        }
+                    },
+                    {
+                        "name": "DCEConfigSection",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Data Collection Endpoint DCE configuration",
+                        "elements": [
+                            {
+                                "name": "DCECreationOption",
+                                "type": "Microsoft.Common.OptionsGroup",
+                                "label": "DCE Creation Option",
+                                "defaultValue": "Create New DCE",
+                                "toolTip": "You can create new DCE by default, however if you want to use existing DCE, select here",
+                                "constraints": {
+                                    "allowedValues": [
+                                        {
+                                            "label": "Use existing DCE",
+                                            "value": "UseexistingDCE"
+                                        },
+                                        {
+                                            "label": "Create New DCE",
+                                            "value": "CreateNewDCE"
+                                        }
+                                    ],
+                                    "required": true
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "SelectExistingDCE",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "Select Existing DCE",
+                                "toolTip": "Select an existing DCE to use for data ingestion",
+                                "constraints": {
+                                    "required": true,
+                                    "allowedValues": "[map(filter(steps('DataIngestionConfig').getexistingDCEs.value, (item) => contains(item.location, first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))) , (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]"
+                                },
+                                "visible": "[equals(steps('DataIngestionConfig').DCEConfigSection.DCECreationOption, 'UseexistingDCE')]"
+                            },
+                            {
+                                "name": "NoDCEExistsError",
+                                "type": "Microsoft.Common.InfoBox",
+                                "visible": "[and(empty(steps('DataIngestionConfig').DCEConfigSection.SelectExistingDCE),equals(steps('DataIngestionConfig').DCEConfigSection.DCECreationOption,'UseexistingDCE'))]",
+                                "options": {
+                                    "icon": "Error",
+                                    "text": "Select DCE. If you don't have any suitable DCEs, you can un-check above to allow you to create new DCE"
+                                }
+                            },
+                            {
+                                "name": "input-dce-name",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "Data Collection Endpoint Name",
+                                "placeholder": "",
+                                "defaultValue": "[concat('ms-sentinel-dce-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]",
+                                "toolTip": "Showing for your reference only. Do not edit this ",
+                                "constraints": {
+                                    "allowedValues": [
+                                        {
+                                            "label": "[concat('ms-sentinel-dce-',steps('basics').AzureFunctionsDetailsSection.function-name,'-', first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]",
+                                            "value": "[concat('ms-sentinel-dce-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]"
+                                        }
+                                    ],
+                                    "required": true
+                                },
+                                "visible": "[equals(steps('DataIngestionConfig').DCEConfigSection.DCECreationOption, 'CreateNewDCE')]"
+                            },
+                            {
+                                "name": "DummySpace2",
+                                "type": "Microsoft.Common.InfoBox",
+                                "visible": "[steps('DataIngestionConfig').flag-raw-copy-normdata]",
+                                "options": {
+                                    "icon": "",
+                                    "text": ""
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "DCRConfigSection",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Data Collection Rules DCRs configuration",
+                        "elements": [
+                            {
+                                "name": "dcr-raw-data_name_input",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "DCR for Raw Data Ingestion",
+                                "placeholder": "",
+                                "defaultValue": "[concat('ms-sentinel-rawdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]",
+                                "toolTip": "Showing just for your reference only and don't edit this",
+                                "constraints": {
+                                    "allowedValues": [
+                                        {
+                                            "label": "[concat('ms-sentinel-rawdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]",
+                                            "value": "[concat('ms-sentinel-rawdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]"
+                                        }
+                                    ],
+                                    "required": true
+                                },
+                                "visible": "[steps('DataIngestionConfig').RAWDataConfigurationSection.flag-raw-copy-normdata]"
+                            },
+                            {
+                                "name": "DCRAlreadyExistsforRawData",
+                                "type": "Microsoft.Common.InfoBox",
+                                "visible": "[and(steps('DataIngestionConfig').RAWDataConfigurationSection.flag-raw-copy-normdata,not(empty(filter(steps('DataIngestionConfig').getexistingDCRs.value, (item) => contains(item.name,concat('ms-sentinel-rawdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location))))))))]",
+                                "options": {
+                                    "icon": "Info",
+                                    "text": "You already have DCR  <b> ms-sentinel-rawdata-dcr-csfdr[instance]-[la region]  </b> with the above name in your environment. Select below if you want to refresh."
+                                }
+                            },
+                            {
+                                "name": "dcr-raw-data_refresh_flag",
+                                "type": "Microsoft.Common.CheckBox",
+                                "label": "Refresh existing DCR (DCR for raw data)",
+                                "toolTip": "Selecting this override existing DCR, your updates / customizations will not be retained. So have a backup of your DCR and re-apply your modifications again after the deployment.",
+                                "constraints": {
+                                    "required": false
+                                },
+                                "visible": "[and(steps('DataIngestionConfig').RAWDataConfigurationSection.flag-raw-copy-normdata,not(empty(filter(steps('DataIngestionConfig').getexistingDCRs.value, (item) => contains(item.name,concat('ms-sentinel-rawdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location))))))))]"
+                            },
+                            {
+                                "name": "dcr-normalized-data_name_input",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "DCR for Normalized Data Ingestion",
+                                "placeholder": "",
+                                "defaultValue": "[concat('ms-sentinel-normdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]",
+                                "toolTip": "Showing just for your reference only and don't edit this",
+                                "constraints": {
+                                    "allowedValues": [
+                                        {
+                                            "label": "[concat('ms-sentinel-normdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]",
+                                            "value": "[concat('ms-sentinel-normdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))]"
+                                        }
+                                    ],
+                                    "required": true
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "DCRAlreadyExistsforNormData",
+                                "type": "Microsoft.Common.InfoBox",
+                                "visible": "[not(empty(filter(steps('DataIngestionConfig').getexistingDCRs.value, (item) => contains(item.name,concat('ms-sentinel-normdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))))))]",
+                                "options": {
+                                    "icon": "Info",
+                                    "text": "You already have DCR <b> ms-sentinel-normdata-dcr-csfdr[instance]-[la region] </b> with the above name in your environment. Select below if you want to refresh."
+                                }
+                            },
+                            {
+                                "name": "dcr-normalized-data_refresh_flag",
+                                "type": "Microsoft.Common.CheckBox",
+                                "label": "Refresh existing DCR (DCR for normalized data)",
+                                "toolTip": "Selecting this override existing DCR, your updates / customizations will not be retained. So have a backup of your DCR and re-apply your modifications again after the deployment.",
+                                "constraints": {
+                                    "required": false
+                                },
+                                "visible": "[not(empty(filter(steps('DataIngestionConfig').getexistingDCRs.value, (item) => contains(item.name,concat('ms-sentinel-normdata-dcr-',steps('basics').AzureFunctionsDetailsSection.function-name,'-',first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('loganalyticsworkspace'))), (item) => item.location)))))))]"
+                            }
+                        ],
+                        "visible": true
+                    }
+                ]
             }
         ],
         "outputs": {
