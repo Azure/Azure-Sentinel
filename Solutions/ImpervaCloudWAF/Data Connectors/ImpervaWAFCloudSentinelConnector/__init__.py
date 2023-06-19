@@ -146,6 +146,11 @@ class ImpervaFilesHandler:
     def parse_cef(self,cef_raw):
         rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
         parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
+        header_array = cef_raw.split('|')
+        parsed_cef["Device Version"]=header_array[3]
+        parsed_cef["Signature"]=header_array[4]
+        parsed_cef["Attack Name"]=header_array[5]
+        parsed_cef["Attack Severity"]=header_array[6]
         for key,val in re.findall(rx, cef_raw):
             if val.startswith('"') and val.endswith('"'):
                 val = val[1:-1]
