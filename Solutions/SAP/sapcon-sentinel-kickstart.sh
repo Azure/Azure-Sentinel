@@ -567,7 +567,12 @@ echo 'Deploying Azure Sentinel SAP data connector.'
 
 echo 'Starting Docker image pull'
 
-sudo docker pull $dockerimage$tagver
+if [ -n "$HTTPPROXY" ]; then
+  sudo docker pull --proxy "$HTTPPROXY" "$dockerimage$tagver"
+else
+  sudo docker pull "$dockerimage$tagver"
+fi
+
 if [ $? -eq 1 ]; then
 	echo 'Error downloading the Azure Sentinel SAP data connector.'
 	exit 1

@@ -335,7 +335,12 @@ log 'Deploying Microsoft Sentinel SAP data connector.'
 
 log 'Starting Docker image pull'
 
-sudo docker pull $dockerimage$tagver
+if [ -n "$HTTPPROXY" ]; then
+  sudo docker pull --proxy "$HTTPPROXY" "$dockerimage$tagver"
+else
+  sudo docker pull "$dockerimage$tagver"
+fi
+
 if [ $? -eq 1 ]; then
 	log 'Error downloading the Microsoft Sentinel SAP data connector.'
 	exit 1
