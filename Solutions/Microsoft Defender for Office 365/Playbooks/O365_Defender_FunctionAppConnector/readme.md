@@ -8,7 +8,7 @@ This Functions App Connector is to connect Defender for office 365 API.
 
 ### Prerequisites For Defender for office 365 API Functions App Connector
 
-* App Registration on azure active directory is needed , Beacuse this connector uses certificate thumprints for Authentication 
+* App Registration on azure active directory is needed , Because this connector uses certificate thumbprints for Authentication 
 * Self generated certificate / 3rd party certificates in pfx format.
 
 ## Actions supported by AWS Systems Manager API Functions App Connector
@@ -48,7 +48,7 @@ This Functions App Connector is to connect Defender for office 365 API.
 
 ### How to use Defender for office 365 function app custom Connector
 1. First connect to Exchange using "Connect Exchange"
-2. Once you are done with work , dont forget to call "Disconnect Exchange" action
+2. Once you are done with work , don't forget to call "Disconnect Exchange" action
 
 ### Request body paylod of Defender for office 365 function app custom Connector actions
 1. Connect Exchange
