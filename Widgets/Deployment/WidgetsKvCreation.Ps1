@@ -22,6 +22,18 @@ function Get-WigdetsKeyVaultName {
     return $keyVaultName
 }
 
+function Get-SentinelApplicationObjectIdV2 {
+    $sentinelAppId = "98785600-1bb7-4fb9-b9fa-19afe2c8a360" 
+    $principal = Get-AzADServicePrincipal -ApplicationId $sentinelAppId
+    if ($principal -eq $null)
+    {
+        Write-Log "Failed to find Sentinel app id. Will try to create it"
+        $principal = New-AzADServicePrincipal -ApplicationId $sentinelAppId
+    }
+
+    return $principal.Id
+}
+
 function Get-SentinelApplicationObjectId {
     $sentinelAppId = "98785600-1bb7-4fb9-b9fa-19afe2c8a360" 
     # 'Connect-AzureAD' throws errors when runs in Cloud shell form Ps1 script - https://github.com/Azure/CloudShell/issues/72
@@ -134,7 +146,7 @@ else { # KeyVault Exists.
 }
 
 Write-Log "Adding Access for Sentinel on the KeyVault.."
-$sentinelAppObjectId = Get-SentinelApplicationObjectId
+$sentinelAppObjectId = Get-SentinelApplicationObjectIdV2
 Write-Log "Sentinel's App ObjectId is '$sentinelAppObjectId'"
 
 if ($sentinelAppObjectId -eq $null) {
