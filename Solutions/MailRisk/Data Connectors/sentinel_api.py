@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import base64
 import config
+import logging
 
 # Build the API signature
 def build_signature(workspace_id, workspace_key, date, content_length, method, content_type, resource):
@@ -34,9 +35,9 @@ def post_data(body) -> bool:
 
     response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
-        print('Accepted')
+        logging.info('Accepted')
         return True
     else:
-        print("Response code: {}".format(response.status_code))
-        print("Response: {}".format(response.json()))
+        logging.error("Response code: {}".format(response.status_code))
+        logging.error("Response: {}".format(response.json()))
         return False
