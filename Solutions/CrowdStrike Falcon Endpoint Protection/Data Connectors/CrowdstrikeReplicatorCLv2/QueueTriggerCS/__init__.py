@@ -14,21 +14,18 @@ import requests
 AWS_KEY = os.environ['AWS_KEY']
 AWS_SECRET = os.environ['AWS_SECRET']
 AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
-QUEUE_URL = os.environ['QUEUE_URL']
-VISIBILITY_TIMEOUT = 1800
+AZURE_TENANT_ID = os.environ['AZURE_TENANT_ID']
 LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
-connection_string = os.environ['AzureWebJobsStorage']
-AZURE_STORAGE_CONNECTION_STRING = os.environ['AzureWebJobsStorage']
-AZURE_TENANT = os.environ['AZURE_TENANT']
+AZURE_TENANT_ID = os.environ['AZURE_TENANT_ID']
 AZURE_CLIENT_ID = os.environ['AZURE_CLIENT_ID']
 AZURE_CLIENT_SECRET = os.environ['AZURE_CLIENT_SECRET']
-NORMALIZED_DCE_ENDPOINT = os.environ['NORMALIZATION_DCE_ENDPOINT']
+NORMALIZED_DCE_ENDPOINT = os.environ['DCE_INGESTION_ENDPOINT']
 NORMALIZED_DCR_ID = os.environ['NORMALIZATION_DCR_ID']
-RAW_DATA_DCE_ENDPOINT = os.environ['RAW_DATA_DCE_ENDPOINT']
+RAW_DATA_DCE_ENDPOINT = os.environ['DCE_INGESTION_ENDPOINT']
 RAW_DATA_DCR_ID = os.environ['RAW_DATA_DCR_ID']
 NORMALIZED_SCHEMA_NAMES = '{"Dns": "Custom-CrowdstrikeDns","File": "Custom-CrowdstrikeFile","Process": "Custom-CrowdstrikeProcess","Network": "Custom-CrowdstrikeNetwork","Auth": "Custom-CrowdstrikeAuth","Registry": "Custom-CrowdstrikeRegistry","Audit": "Custom-CrowdstrikeAudit","User": "Custom-CrowdstrikeUser","Additional": "Custom-CrowdstrikeAdditional"}'
 CUSTOM_SCHEMA_NAMES = '{"Dns": "Custom-CrowdstrikeDns","File": "Custom-CrowdstrikeFile","Process": "Custom-CrowdstrikeProcess","Network": "Custom-CrowdstrikeNetwork","Auth": "Custom-CrowdstrikeAuth","Registry": "Custom-CrowdstrikeRegistry","Audit": "Custom-CrowdstrikeAudit","User": "Custom-CrowdstrikeUser"}'
-REQUIRE_RAW_STRING = os.environ["REQUIRE_RAW"]
+REQUIRE_RAW_STRING = os.environ["USER_SELECTION_REQUIRE_RAW"]
 SECONDARY_DATA_SCHEMA = "Custom-CrowdStrikeSecondary"
 EVENT_TO_TABLE_MAPPING_LINK = os.environ['EVENT_TO_TABLE_MAPPING_LINK']
 REQUIRED_FIELDS_SCHEMA_LINK = os.environ['REQUIRED_FIELDS_SCHEMA_LINK']
@@ -38,6 +35,7 @@ if REQUIRE_RAW_STRING.lower() == "true":
 else:
     REQUIRE_RAW = False
 
+# Defining the S3 Client object based on AWS Credentials
 def _create_s3_client():
     s3_session = get_session()
     boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME, retries = {'max_attempts': 10, 'mode': 'standard'})
@@ -51,7 +49,6 @@ def _create_s3_client():
 
 async def main(msg: func.QueueMessage) -> None:
     logging.info('Starting script')
-    script_start_time = int(time.time())
     
     try:
         req_body = json.loads(msg.get_body().decode('ascii').replace("'",'"'))
@@ -70,7 +67,6 @@ async def main(msg: func.QueueMessage) -> None:
                          )
     eventsSchemaMapping.setDict()
     eventsSchemaMappingDict = eventsSchemaMapping.getDict()
-    logging.info(len(eventsSchemaMappingDict))
 
     requiredFieldsMapping = FileHelper(
                             REQUIRED_FIELDS_SCHEMA_LINK,
@@ -78,7 +74,6 @@ async def main(msg: func.QueueMessage) -> None:
                          )
     requiredFieldsMapping.setDict()
     requiredFieldsMappingDict = requiredFieldsMapping.getDict()
-    logging.info(len(requiredFieldsMappingDict))
     
     async with _create_s3_client() as client:
         async with aiohttp.ClientSession() as session:
@@ -95,6 +90,11 @@ async def main(msg: func.QueueMessage) -> None:
                     logging.error('Error while processing bucket. Error: {}'.format(link, str(e)))
                     raise e
 
+# This method customizes the data before ingestion. Both normalized and raw data is returned from this method.
+# line : string
+# eventsSchemaMappingDict : dictionary
+# requiredFieldsMappingDict : dictionary
+# requireRaw : bool
 def customize_event(line, eventsSchemaMappingDict, requiredFieldsMappingDict, requireRaw):
     
     element = json.loads(line)
@@ -146,6 +146,13 @@ def customize_event(line, eventsSchemaMappingDict, requiredFieldsMappingDict, re
 
     return normalized_fields, raw_data_fields
 
+# This menthod processes buckets with primary data
+# bucket : string
+# s3_path : string
+# client : s3_session client
+# session : aiohttp session
+# eventsSchemaMappingDict : Dictionary
+# requiredFieldsMappingDict : Dictionary
 async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSchemaMappingDict, requiredFieldsMappingDict):
         logging.info("Start processing bucket {}".format(s3_path))
         normalizedSentinelHelperCollection = SentinelHelperCollection(session, 
@@ -211,10 +218,15 @@ async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSche
         except Exception as e:
             logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
 
+# This menthod processes buckets with secondary data
+# bucket : string
+# s3_path : string
+# client : s3_session client
+# session : aiohttp session
 async def process_file_secondary_CLv2(bucket, s3_path, client, session):
         logging.info("Start processing bucket {}".format(s3_path))
         AzureSentinelConnector = AzureSentinelConnectorCLv2Async(session, NORMALIZED_DCE_ENDPOINT, NORMALIZED_DCR_ID, SECONDARY_DATA_SCHEMA,
-                                                         AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT)
+                                                         AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
 
         folderName = s3_path.split('/')[-2]
 
@@ -258,14 +270,18 @@ async def process_file_secondary_CLv2(bucket, s3_path, client, session):
         except Exception as e:
             logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
 
-
 class FileHelper:
+
+    # Initialize File Helper object
+    # filePath : string
+    # fileName : string
     def __init__(self,filePath, fileName):
         self.__filePath = filePath
         self.__fileName = fileName
         self.__location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
         self.__eventToDict = {}
 
+    # Set Dictionary Value based on the initialized filePath or fileName
     def setDict(self):
         try:
             response = requests.get(self.__filePath)
@@ -277,10 +293,17 @@ class FileHelper:
                 with open(os.path.join(self.__location__, self.__fileName)) as json_file:
                     self.__eventToDict = json.load(json_file)
 
+    # Get Dictionary populated with required values
     def getDict(self):
         return self.__eventToDict
 
 class SentinelHelperCollection:
+    # Initialize Sentine lHelper Collection object
+    # session : aiohttp session
+    # eventsSchemaMappingDict : dictionary
+    # DCE_ENDPOINT : string
+    # DCR_ID : string
+    # STREAM_MAPPING : string
     def __init__(self,
                  session, 
                  eventsSchemaMappingDict,
@@ -295,9 +318,11 @@ class SentinelHelperCollection:
         for schema in schemaMapping.keys():
             streamName = schemaMapping[schema]
             sentinelObject = AzureSentinelConnectorCLv2Async(session, DCE_ENDPOINT, DCR_ID, streamName,
-                                                         AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT)
+                                                         AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
             self.__sentinelHelperList[schema] = sentinelObject
 
+    # This method sends the data to respective AzureSentinelConnectorCLv2Async instance for collection
+    # event : dictionary
     async def sendData(self,event):
         if "event_simpleName" in event and event["event_simpleName"] in self.__eventsSchemaMappingDict:
             schema = self.__eventsSchemaMappingDict[event["event_simpleName"]]
@@ -306,16 +331,19 @@ class SentinelHelperCollection:
         if schema in self.__sentinelHelperList.keys():
             await self.__sentinelHelperList[schema].send(event)
 
+    # This method ensures that data is sent to the DCE endpoint
     async def flushData(self):
         for schema in self.__sentinelHelperList:
             await self.__sentinelHelperList[schema].flush()
 
+    # This method gets successful event count from all the AzureSentinelConnectorCLv2Async instances
     def getSuccessCountCombined(self):
         totalCount = 0
         for schema in self.__sentinelHelperList:
             totalCount = totalCount + self.__sentinelHelperList[schema].get_success_count()
         return totalCount
 
+    # This method gets failure event count from all the AzureSentinelConnectorCLv2Async instances
     def getFailureCountCombined(self):
         totalCount = 0
         for schema in self.__sentinelHelperList:

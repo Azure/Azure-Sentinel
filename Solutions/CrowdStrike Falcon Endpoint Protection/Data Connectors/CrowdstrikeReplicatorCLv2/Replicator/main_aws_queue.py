@@ -21,12 +21,10 @@ VISIBILITY_TIMEOUT = 1800
 LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
 connection_string = os.environ['AzureWebJobsStorage']
 AZURE_STORAGE_CONNECTION_STRING = os.environ['AzureWebJobsStorage']
-HTTP_FUNCTION_APP_URL = os.environ['HTTP_FUNCTION_APP_URL']
 MAX_QUEUE_MESSAGES_MAIN_QUEUE = int(os.environ.get('MAX_QUEUE_MESSAGES_MAIN_QUEUE', 80))
 MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
 
-drop_files_array = []
-
+# Defining the SQS Client object based on AWS Credentials
 def _create_sqs_client():
     sqs_session = get_session()
     return sqs_session.create_client(
@@ -36,16 +34,9 @@ def _create_sqs_client():
                                     aws_secret_access_key=AWS_SECRET
                                     )
 
-def sort_files_by_bucket(array_obj):
-    array_obj = sorted(array_obj, key=itemgetter('bucket'))
-    sorted_array = []
-    temp_array = []
-    for key, value in itertools.groupby(array_obj, key=itemgetter('bucket')):
-        for i in value:
-            temp_array.append({'path': i.get('path')})
-        sorted_array.append({'bucket': key, 'files': temp_array})
-    return sorted_array
-
+# This method checks if the script has ran "percentage" amount of time from starting of the script
+# percentage: double
+# script_start_time : datetime
 def check_if_script_runs_too_long(percentage, script_start_time):
     now = int(time.time())
     duration = now - script_start_time
@@ -126,6 +117,11 @@ async def main(mytimer: func.TimerRequest):
             except KeyboardInterrupt:
                 pass     
 
+# This method is used to download all bucket names mentioned in the SQS message and send to Azure Storage Queue
+# mainQueueHelper : AzureStorageQueueHelper
+# backlogQueueHelper : AzureStorageQueueHelper
+# messageId : string
+# msg : string
 async def download_message_files_queue(mainQueueHelper, backlogQueueHelper, messageId, msg):
     for s3_file in msg['files']:
         body = {}
