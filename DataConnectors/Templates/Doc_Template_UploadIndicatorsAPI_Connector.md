@@ -8,4 +8,4 @@ Please replace the following placeholders in the template:
 - PROVIDER NAME: Name of the partners. This will be used as the publisher of the data connector
 - PROVIDER SOURCE SYSTEM NAME: The source system of the indicators sent to Microsoft Sentinel.
 
-On top of the placeholders, partners can customize the instruction steps. For more information about Codeless Data Connector, please visit this page: https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector?tabs=deploy-via-arm-template%2Cconnect-via-the-azure-portal
+On top of the placeholders, partners can customize the instruction steps. For more information about Codeless Data Connector, please visit this page: https://learn.microsoft.com/azure/sentinel/create-codeless-connector?tabs=deploy-via-arm-template%2Cconnect-via-the-azure-portal
