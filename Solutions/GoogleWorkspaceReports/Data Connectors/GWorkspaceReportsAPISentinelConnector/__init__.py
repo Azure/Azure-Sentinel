@@ -52,6 +52,15 @@ activities = [
             "data_studio"
             ]
 
+
+
+# Remove excluded activities
+excluded_activities = os.environ.get('ExcludedActivities')
+if excluded_activities:
+    excluded_activities = excluded_activities.replace(" ", "").split(",")
+    activities = [activ for activ in activities if activ not in excluded_activities]
+
+
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
