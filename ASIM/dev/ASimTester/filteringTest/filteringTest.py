@@ -173,15 +173,15 @@ class FilteringTest(unittest.TestCase):
             query_with_filter = no_call_query + f"query() | where isempty({column_name_in_table}) | summarize count() by {column_name_in_table}\n"
         filtered_response = self.send_query(query_with_filter)
         with self.subTest():
-            self.assertNotEqual(0, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Got no results at all after filtering")
+            self.assertNotEqual(0, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Got no results at all after filtering. Filtered by value: {value_to_filter}")
         with self.subTest():
-            self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering")
+            self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering. Filtered by value: {value_to_filter}")
 
         # Performing a query with a non-existing value, expecting to return no results
         no_results_query = no_call_query + create_call_with_parameter(param_name, DUMMY_VALUE, column_name_in_table)
         no_results_response = self.send_query(no_results_query)
         with self.subTest():
-            self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value")
+            self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
         
 
         
