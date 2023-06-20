@@ -58,3 +58,17 @@ export class MainTemplateSupportObjectValidationError extends Error implements V
         super(message);
     }
 }
+
+export class InvalidFileContentError extends Error implements ValidationError {
+    public name = "MainTemplateSupportObjectValidationError";
+    constructor(message?: string) {
+        super(message);
+    }
+}
+
+export class InvalidSolutionIDValidationError extends Error implements ValidationError {
+    public name = "MainTemplateSupportObjectValidationError";
+    constructor(message?: string) {
+        super(message);
+    }
+}
