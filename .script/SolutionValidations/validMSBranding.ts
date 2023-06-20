@@ -2,8 +2,17 @@ import { InvalidFileContentError } from "./../utils/validationError";
 import { ExitCode } from "../utils/exitCode";
 import fs from "fs";
 
-export function IsValidBrandingContent(filePath: string): ExitCode {
+type AttributeConfig = {
+    mainTemplateAttributes: string[];
+    createUIDefinitionAttributes: string[];
+};
 
+const attributeConfig: AttributeConfig = {
+    mainTemplateAttributes: ["descriptionMarkdown", "description"],
+    createUIDefinitionAttributes: ["text", "description"],
+};
+
+export function IsValidBrandingContent(filePath: string): ExitCode {
     // Skip validation if file path contains "SentinelOne"
     if (filePath.includes("SentinelOne")) {
         return ExitCode.SUCCESS;
@@ -12,17 +21,10 @@ export function IsValidBrandingContent(filePath: string): ExitCode {
     const errors: string[] = [];
 
     // check if the file is mainTemplate.json or createUiDefinition.json
-    if (filePath.endsWith("mainTemplate.json") || filePath.endsWith("createUiDefinition.json")) {
-        
-        // check if the file content contains " Sentinel" without being preceded by "Microsoft" and not part of a hyphenated word
-        const fileContent = fs.readFileSync(filePath, "utf8");
-        const sentinelRegex = /(?<!Microsoft\s)(?<!-)\bSentinel\b/g;
-        let match;
-        while ((match = sentinelRegex.exec(fileContent))) {
-            errors.push(`Inaccurate product branding used at index ${match.index + 1}. Use "Microsoft Sentinel" instead of "Sentinel"`);
-        }
-
-        // If the file is not identified correctly, log a warning message
+    if (filePath.endsWith("mainTemplate.json")) {
+        validateFileContent(filePath, attributeConfig.mainTemplateAttributes, errors);
+    } else if (filePath.endsWith("createUiDefinition.json")) {
+        validateFileContent(filePath, attributeConfig.createUIDefinitionAttributes, errors);
     } else {
         console.warn(`Could not identify JSON file as mainTemplate.json or createUiDefinition.json. Skipping. File path: ${filePath}`);
     }
@@ -34,4 +36,35 @@ export function IsValidBrandingContent(filePath: string): ExitCode {
 
     // Return success code after completion of the check
     return ExitCode.SUCCESS;
+}
+
+function validateFileContent(filePath: string, attributeNames: string[], errors: string[]): void {
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    const jsonContent = JSON.parse(fileContent);
+
+    traverseAttributes(jsonContent, attributeNames, errors);
+}
+
+function traverseAttributes(jsonContent: any, attributeNames: string[], errors: string[]): void {
+    for (const key in jsonContent) {
+        if (jsonContent.hasOwnProperty(key)) {
+            const attributeValue = jsonContent[key];
+            if (attributeNames.includes(key) && typeof attributeValue === "string") {
+                validateAttribute(attributeValue, key, errors);
+            }
+            if (typeof attributeValue === "object" && attributeValue !== null) {
+                traverseAttributes(attributeValue, attributeNames, errors);
+            }
+        }
+    }
+}
+
+function validateAttribute(attributeValue: string, attributeName: string, errors: string[]): void {
+    const sentinelRegex = /(?<!Microsoft\s)(?<!\S)Sentinel(?!\S)/g;
+    const updatedValue = attributeValue.replace(sentinelRegex, "Microsoft Sentinel");
+
+    if (attributeValue !== updatedValue) {
+        const error = `Inaccurate product branding used in '${attributeName}' for '${attributeValue}'. Use "Microsoft Sentinel" instead of "Sentinel"`;
+        errors.push(error);
+    }
 }
