@@ -42,9 +42,10 @@ This Functions App Connector is to connect Defender for office 365 API.
 	- Create the self signed certificate : New-PnPAzureCertificate -OutPfx pnp.pfx -OutCert pnp.cer
 	- Upload your client certificate(cer file) to the AD application
 	- Upload your pfx file to Azure function : az webapp config ssl upload --certificate-file "e:\cert\pnp.pfx"  --name "<function app name>" --resource-group ""  --certificate-password "" --query thumbprint --output tsv
+ 	- Set container size of function app : az functionapp update --name "Yourfunctionappname" --resource-group "Yourresourcegroupname" --set containerSize=1536 
 	- Configure Function to allow the function to read the certificate : az functionapp config appsettings set --name <app-name> --resource-group <resource-group-name> --settings WEBSITE_LOAD_CERTIFICATES="comma-separated-certificate-thumbprints"
     - Store the thumbprint in Keyvault under secrets and have the secret name handy ,that will be required to enter under Certificate_key_name during the playbook deployment 
-	- Set container size of function app : az functionapp update --name "Yourfunctionappname" --resource-group "Yourresourcegroupname" --set containerSize=1536
+	
 
 ### How to use Defender for office 365 function app custom Connector
 1. First connect to Exchange using "Connect Exchange"
