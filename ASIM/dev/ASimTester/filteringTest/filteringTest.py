@@ -1,4 +1,4 @@
-__unittest = True #prevent stacktrace during assertions
+__unittest = True #prevents stacktrace during most assertions
 
 import unittest
 import os
@@ -15,7 +15,6 @@ from schemasParameters import all_schemas_parameters
 
 
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
-DAYS_DELTA = 730
 
 
 argparse_parser = argparse.ArgumentParser()
@@ -31,8 +30,6 @@ days_delta = args.days_delta
 end_time = datetime.now(timezone.utc)
 start_time = end_time - timedelta(days = days_delta)
 required_fields = ["ParserParams", "ParserQuery", "Normalization.Schema" ]
-no_test_list = [] # No data was found for testing
-partial_test_list = [] # Parameters with only one value in their relevant column
 
 
 def attempt_to_connect(credential):
@@ -62,7 +59,6 @@ if client is None:
         sys.exit()
 
 
-
 def get_parser(parser_path):
     try:
         with open(parser_path, 'r') as file_stream:
@@ -71,11 +67,8 @@ def get_parser(parser_path):
         raise Exception()
 
 
-
 # Creating a string of the parameters of a parser
 def create_parameters_string(parser_file):
-    if "ParserParams" not in parser_file:
-        return ""
     paramsList = []
     for param in parser_file['ParserParams']:
         paramDefault = f"\'{param['Default']}\'" if param['Type']=="string" else param['Default']
@@ -98,6 +91,7 @@ def create_call_with_parameter(parameter, value, column_name):
 
 
 class FilteringTest(unittest.TestCase):
+    # "Main" function which runs initiates the validations 
     def tests_main_func(self):
         if not os.path.exists(parser_file_path):
             self.fail(f"File path does not exist: {parser_file_path}")
@@ -111,13 +105,17 @@ class FilteringTest(unittest.TestCase):
         no_call_query = create_query_without_call(parser_file)
         self.check_data_in_workspace(no_call_query)
         columns_in_answer = self.get_columns_of_parser_answer(no_call_query)
+        if parser_file['Normalization']['Schema'] not in all_schemas_parameters:
+            self.fail(f"Schema: {parser_file['Normalization']['Schema']} - is not supported")
         param_to_column_mapping = all_schemas_parameters[parser_file['Normalization']['Schema']]
         for param in parser_file['ParserParams']:
             with self.subTest():
+                if param['Name'] not in param_to_column_mapping:
+                    self.fail(f"parameter: {param['Name']} - is not a valid parameter")
                 column_name_in_table = param_to_column_mapping[param['Name']]
                 self.handle_param(param, no_call_query, columns_in_answer, column_name_in_table)            
                       
-        
+    # Sending a parameters to the suitable test according to the parameter type    
     def handle_param(self, param, no_call_query, columns_in_answer, column_name_in_table):
         param_name = param['Name']
         param_type = param['Type']
@@ -164,23 +162,23 @@ class FilteringTest(unittest.TestCase):
         no_filter_response = self.send_query(no_filter_query)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
         with  self.subTest():
-            self.assertNotEqual(len(no_filter_response.tables[0].rows), 1, f"Only one value exists for parameter: {param_name}, validations for this parameter are partial" )
+            self.assertNotEqual(len(no_filter_response.tables[0].rows), 1, f"Only one value exists for parameter: {param_name} - validations for this parameter are partial" )
         # Taking the first value returned in the response
         selected_value = no_filter_response.tables[0].rows[0][0]
         value_to_filter = f"\'{selected_value}\'" if param['Type']=="string" else selected_value
 
         # Performing a filtering by the first value returned in the first response
         query_with_filter = no_call_query + create_call_with_parameter(param_name, value_to_filter, column_name_in_table)
-        #query_with_filter = no_call_query + f"query({param_name}={value_to_filter}) | summarize count() by {column_name_in_table}\n"
         if selected_value=="":
             query_with_filter = no_call_query + f"query() | where isempty({column_name_in_table}) | summarize count() by {column_name_in_table}\n"
         filtered_response = self.send_query(query_with_filter)
+        with self.subTest():
+            self.assertNotEqual(0, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Got no results at all after filtering")
         with self.subTest():
             self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering")
 
         # Performing a query with a non-existing value, expecting to return no results
         no_results_query = no_call_query + create_call_with_parameter(param_name, DUMMY_VALUE, column_name_in_table)
-        #no_results_query = no_call_query + f"query({param_name}={DUMMY_VALUE}) | summarize count() by {column_name_in_table}\n"
         no_results_response = self.send_query(no_results_query)
         with self.subTest():
             self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value")
@@ -188,12 +186,6 @@ class FilteringTest(unittest.TestCase):
 
         
     def disabled_test(self, param, no_call_query):
-        no_filter_query = no_call_query + f"query() | summarize count()\n"
-        no_filter_response = self.send_query(no_filter_query)
-        if no_filter_response.tables[0].rows[0][0] == 0:
-            no_test_list.append(param['Name'])
-            return
-
         disabled_true_query = no_call_query + f"query(disabled=true) | summarize count()\n"
         disabled_true_response = self.send_query(disabled_true_query)
         self.assertEqual(0, disabled_true_response.tables[0].rows[0][0], "Expected to return 0 results for disabled=true")
@@ -220,14 +212,12 @@ class FilteringTest(unittest.TestCase):
                 timespan = (start_time, end_time)
                 )
             if response.status == LogsQueryStatus.PARTIAL:
-                #print(response.partial_error)
                 self.fail("Query failed")
             elif response.status == LogsQueryStatus.FAILURE:
                 self.fail(f"The following query failed:\n{query_str}")
             else:
                 return response
         except HttpResponseError as err:
-            #print (err)
             self.fail("Query failed")
 
 
@@ -235,9 +225,3 @@ if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(FilteringTest)
     runner = unittest.TextTestRunner()
     runner.run(suite)
-    if len(no_test_list) != 0:
-        print("The following parameters weren't tested because no data was found to test them:")
-        print(no_test_list)
-    if len(partial_test_list) != 0:
-        print("The following parameters passed a partial test:")
-        print(partial_test_list)

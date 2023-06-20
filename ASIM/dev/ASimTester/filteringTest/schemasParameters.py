@@ -9,8 +9,6 @@ all_schemas_parameters = {
         "response_has_ipv4" : "DnsResponseName",
         "responsecodename" : "DnsResponseCodeName",
         "srcipaddr" : "SrcIpAddr",
-        "fictivesrc" : "SrcIpAddr",
-        "srcipaddrnotreal" : "SrcIpAddr",
         "starttime" : "EventStartTime"
     },
     "NetworkSession" :
