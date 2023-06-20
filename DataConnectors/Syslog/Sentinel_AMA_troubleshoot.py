@@ -10,7 +10,7 @@ PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
 DEFAULT_MACHINE_ENV = "Prod"
-LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
+LOG_OUTPUT_FILE = "/tmp/troubleshooter_output_file.log"
 PATH_FOR_CSS_TICKET = {
     "Prod": "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview",
     "MK": "https://portal.azure.cn/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview",
@@ -827,7 +827,7 @@ def print_scenario(args):
     """
     if list(vars(args).values()).count(True) > 1:
         print_error("More than 1 stream provided. Please run the script again with only one scenario.\n"
-                    "For more information run 'python cef_AMA_troubleshoot.py -h'. Exiting.")
+                    "For more information run 'python Sentinel_AMA_troubleshoot.py -h'. Exiting.")
         sys.exit(1)
     else:
         print_notice("The scenario chosen is: {}".format(STREAM_SCENARIO.upper()))
@@ -879,7 +879,7 @@ def main():
     if not args.collect:
         print_notice(
             "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
-            "\'python cef_AMA_troubleshoot.py [STREAM_OPTION] collect\'")
+            "\'python Sentinel_AMA_troubleshoot.py [STREAM_OPTION] collect\'")
 
 
 if __name__ == '__main__':
