@@ -36,7 +36,7 @@ For each widget, configure the secrets and other parameters it requires using th
 - [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsVirusTotalARM). You will get the form shown below.
 - Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
 - Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
-- Enter the API key defined in your Virus Total account. You can [sign up]([https://www.virustotal.com/gui/join-us](https://aka.ms/SentinelWidgetsRegisterVirusTotal) to a free Virus Total account to get an API key.
+- Enter the API key defined in your Virus Total account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterVirusTotal) to a free Virus Total account to get an API key.
 - Press on the “Review + create” button and deploy the template – this should add a secret named “AnomaliApiKey” to your key vault.
 
 <img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future and Virus Total ARM deployment screenshot" width="75%"/>
@@ -56,7 +56,7 @@ For each widget, configure the secrets and other parameters it requires using th
 - [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsRecordedFutureARM). You will get the form shown below.
 - Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
 - Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
-- Enter your recorded future API key. Contact your Recorded Future represantiative to get your API key. You can also [apply for a 30 day free trial especially for Sentinel users](h[ttps://go.recordedfuture.com/microsoft-azure-sentinel-free-trial](https://aka.ms/SentinelWidgetsRegisterRecordedFuture).
+- Enter your recorded future API key. Contact your Recorded Future represantiative to get your API key. You can also [apply for a 30 day free trial especially for Sentinel users](https://aka.ms/SentinelWidgetsRegisterRecordedFuture).
 - Press on the “Review + create” button and deploy the template – this should add a secret named “RecordedFuture” to your key vault.
 
 <img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future and Virus Total ARM deployment screenshot" width="75%"/>
