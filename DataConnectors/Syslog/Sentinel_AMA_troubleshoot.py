@@ -5,7 +5,7 @@ import re
 import argparse
 import sys
 
-SCRIPT_VERSION = 2.2
+SCRIPT_VERSION = 2.3
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
