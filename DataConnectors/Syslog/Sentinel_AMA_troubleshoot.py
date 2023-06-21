@@ -17,7 +17,7 @@ PATH_FOR_CSS_TICKET = {
     "Gov": "https://portal.azure.us/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"}
 AGENT_CONF_FILE = "/etc/opt/microsoft/azuremonitoragent/config-cache/mdsd.hr.json"
 AGENT_VERSION = "0.0"
-AGENT_MIN_HARDENING_VERSION = "1.0"
+AGENT_MIN_HARDENING_VERSION = "1.26.0"
 FAILED_TESTS_COUNT = 0
 STREAM_SCENARIO = "cef"  # default value
 WARNING_TESTS_COUNT = 0
