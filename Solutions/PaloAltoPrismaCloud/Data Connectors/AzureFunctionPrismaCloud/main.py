@@ -92,12 +92,13 @@ class PrismaCloudConnector:
 
             if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
                 policy_complianceMetadata = alert['policy']['complianceMetadata']
-                queue_list = self.sentinel1._split_big_request(policy_complianceMetadata)
-                count = 1
-                for q in queue_list:
-                    columnname = 'complianceMetadataPart' + str(count)
-                    alert['policy'][columnname] = q
-                    count+=1
+                if(len(json.dumps(policy_complianceMetadata).encode()) > 32000):
+                    queue_list = self.sentinel1._split_big_request(policy_complianceMetadata)
+                    count = 1
+                    for q in queue_list:
+                        columnname = 'complianceMetadataPart' + str(count)
+                        alert['policy'][columnname] = q
+                        count+=1
             alert = self.clear_alert(alert)
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
@@ -208,8 +209,6 @@ class PrismaCloudConnector:
             del alert['resource']['data']
         if 'policy' in alert and 'complianceMetadataPart2' in alert['policy']:
             del alert['policy']['complianceMetadata']
-        if 'policy' in alert and 'complianceMetadataPart2' not in alert['policy']:
-            del alert['policy']['complianceMetadataPart1']
         return alert
 
     async def get_audit_logs(self, start_time):
