@@ -29,7 +29,6 @@ days_delta = args.days_delta
 
 end_time = datetime.now(timezone.utc)
 start_time = end_time - timedelta(days = days_delta)
-required_fields = ["ParserParams", "ParserQuery", "Normalization.Schema" ]
 
 
 def attempt_to_connect(credential):
@@ -142,6 +141,7 @@ class FilteringTest(unittest.TestCase):
 
     # Checking if all fields from "required_fields" array are in the yaml file.
     def check_required_fields(self, parser_file):
+        required_fields = ["ParserParams", "ParserQuery", "Normalization.Schema" ]
         missing_fields = []
         for full_field in required_fields:
             file = parser_file
