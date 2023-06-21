@@ -10,24 +10,35 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
 tactics:
   - Exfiltration
   - CommandAndControl
 relevantTechniques: []
 query: |
   let LearningPeriod = 7d; 
-  let RunTime = 1h; 
+  let RunTime = 1d; 
   let StartLearningPeriod = LearningPeriod + RunTime; 
   let EndRunTime = RunTime - 1d; 
   let AllowedCommonPorts = dynamic([80, 443]); 
-  let TrafficLogs = (AzureDiagnostics 
+  let TrafficLogs = (union isfuzzy=true
+  (AzureDiagnostics
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog" 
-  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport ". Action: " action "." * 
-  | where isnotempty(srcip)); let LearningSrcIp = (TrafficLogs 
+  | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
+  | where isnotempty(SourceIp)),
+  (AZFWNetworkRule
+  | extend Fqdn = DestinationIp
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)),
+  (AZFWApplicationRule
+  | where isnotempty(Fqdn) and isnotempty(SourceIp))); 
+  let LearningSrcIp = (TrafficLogs 
   | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime)) 
-  | distinct srcip ,dstport); let AlertTimeSrcIpToPort = (TrafficLogs 
+  | distinct SourceIp ,DestinationPort); 
+  let AlertTimeSrcIpToPort = (TrafficLogs 
   | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime)) 
-  | distinct srcip ,dstport, dsturl); AlertTimeSrcIpToPort 
-  | join kind=leftantisemi (LearningSrcIp) on srcip ,dstport 
-  | where dstport !in (AllowedCommonPorts)
-  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
+  | distinct SourceIp ,DestinationPort, Fqdn); 
+  AlertTimeSrcIpToPort 
+  | join kind=leftantisemi (LearningSrcIp) on SourceIp ,DestinationPort
+  | where DestinationPort  !in (AllowedCommonPorts)
+  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn
