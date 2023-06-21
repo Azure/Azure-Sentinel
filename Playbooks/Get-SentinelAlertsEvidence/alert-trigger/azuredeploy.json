@@ -1,0 +1,1259 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments":"This playbook will collect sentinel incident evidence (aka 'Events') and send them and the alerts to EventHub. 3rd party SIEM can connect to the above EventHub and save this data to farther analysis.",
+        "author": "Yaniv Shasha"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-SentinelAlertsEvidence",
+            "type": "String"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "AzureSentinelLogAnalyticsWorkspaceName": {
+        "defaultValue": "yourAzureSentinelworkspacename",
+        "type": "string"
+        },
+        "AzureSentinelLogAnalyticsWorkspaceResourceGroupName": {
+        "defaultValue": "yourAzureSentinelworkspaceRGname",
+        "type": "string"
+        },
+        "EventsNumber": {
+            "defaultValue": 10,
+            "type": "int"
+        }
+    },
+    "variables": {
+        "azuremonitorlogs": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "eventhubs": "[concat('eventhubs-', parameters('PlaybookName'))]"
+
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                           "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogs')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                           "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('eventhubs')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+             "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/eventhubs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]",
+                "[resourceId('Microsoft.Web/connections', variables('eventhubs'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                       "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                            "Initialize_variable": {
+                            "runAfter": {
+                                "Parse_JSON_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EventsNumber",
+                                        "type": "integer",
+                                        "value": "[parameters('EventsNumber')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['ExtendedProperties']",
+                                "schema": {
+                                    "Query": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        },
+                        "Parse_JSON_2": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Parse_JSON')",
+                                "schema": {
+                                    "properties": {
+                                        "body": {
+                                            "properties": {
+                                                "Query": {
+                                                    "type": "string"
+                                                },
+                                                "Query End Time UTC": {
+                                                    "type": "string"
+                                                },
+                                                "Query Period": {
+                                                    "type": "string"
+                                                },
+                                                "Query Results Aggregation Kind": {
+                                                    "type": "string"
+                                                },
+                                                "Query Start Time UTC": {
+                                                    "type": "string"
+                                                },
+                                                "Search Query Results Overall Count": {
+                                                    "type": "string"
+                                                },
+                                                "Trigger Operator": {
+                                                    "type": "string"
+                                                },
+                                                "Trigger Threshold": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_3": {
+                            "runAfter": {
+                                "Run_query_and_list_results_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Run_query_and_list_results_2')?['value']",
+                                "schema": {
+                                    "properties": {
+                                        "body": {
+                                            "properties": {
+                                                "value": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "AccessList": {
+                                                                "type": "string"
+                                                            },
+                                                            "AccessMask": {
+                                                                "type": "string"
+                                                            },
+                                                            "AccessReason": {
+                                                                "type": "string"
+                                                            },
+                                                            "Account": {
+                                                                "type": "string"
+                                                            },
+                                                            "AccountCustomEntity": {
+                                                                "type": "string"
+                                                            },
+                                                            "AccountDomain": {
+                                                                "type": "string"
+                                                            },
+                                                            "AccountExpires": {
+                                                                "type": "string"
+                                                            },
+                                                            "AccountName": {
+                                                                "type": "string"
+                                                            },
+                                                            "AccountSessionIdentifier": {
+                                                                "type": "string"
+                                                            },
+                                                            "AccountType": {
+                                                                "type": "string"
+                                                            },
+                                                            "Activity": {
+                                                                "type": "string"
+                                                            },
+                                                            "AdditionalInfo": {
+                                                                "type": "string"
+                                                            },
+                                                            "AdditionalInfo2": {
+                                                                "type": "string"
+                                                            },
+                                                            "AllowedToDelegateTo": {
+                                                                "type": "string"
+                                                            },
+                                                            "Attributes": {
+                                                                "type": "string"
+                                                            },
+                                                            "AuditPolicyChanges": {
+                                                                "type": "string"
+                                                            },
+                                                            "AuditsDiscarded": {},
+                                                            "AuthenticationLevel": {},
+                                                            "AuthenticationPackageName": {
+                                                                "type": "string"
+                                                            },
+                                                            "AuthenticationProvider": {
+                                                                "type": "string"
+                                                            },
+                                                            "AuthenticationServer": {
+                                                                "type": "string"
+                                                            },
+                                                            "AuthenticationService": {},
+                                                            "AuthenticationType": {
+                                                                "type": "string"
+                                                            },
+                                                            "AzureDeploymentID": {
+                                                                "type": "string"
+                                                            },
+                                                            "AzureTableName": {
+                                                                "type": "string"
+                                                            },
+                                                            "CACertificateHash": {
+                                                                "type": "string"
+                                                            },
+                                                            "CAPublicKeyHash": {
+                                                                "type": "string"
+                                                            },
+                                                            "CalledStationID": {
+                                                                "type": "string"
+                                                            },
+                                                            "CallerProcessId": {
+                                                                "type": "string"
+                                                            },
+                                                            "CallerProcessName": {
+                                                                "type": "string"
+                                                            },
+                                                            "CallingStationID": {
+                                                                "type": "string"
+                                                            },
+                                                            "CategoryId": {
+                                                                "type": "string"
+                                                            },
+                                                            "CertificateDatabaseHash": {
+                                                                "type": "string"
+                                                            },
+                                                            "Channel": {
+                                                                "type": "string"
+                                                            },
+                                                            "ClassId": {
+                                                                "type": "string"
+                                                            },
+                                                            "ClassName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ClientAddress": {
+                                                                "type": "string"
+                                                            },
+                                                            "ClientIPAddress": {
+                                                                "type": "string"
+                                                            },
+                                                            "ClientName": {
+                                                                "type": "string"
+                                                            },
+                                                            "CommandLine": {
+                                                                "type": "string"
+                                                            },
+                                                            "CompatibleIds": {
+                                                                "type": "string"
+                                                            },
+                                                            "Computer": {
+                                                                "type": "string"
+                                                            },
+                                                            "DCDNSName": {
+                                                                "type": "string"
+                                                            },
+                                                            "DeviceDescription": {
+                                                                "type": "string"
+                                                            },
+                                                            "DeviceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "DisplayName": {
+                                                                "type": "string"
+                                                            },
+                                                            "Disposition": {
+                                                                "type": "string"
+                                                            },
+                                                            "DomainBehaviorVersion": {
+                                                                "type": "string"
+                                                            },
+                                                            "DomainName": {
+                                                                "type": "string"
+                                                            },
+                                                            "DomainPolicyChanged": {
+                                                                "type": "string"
+                                                            },
+                                                            "DomainSid": {
+                                                                "type": "string"
+                                                            },
+                                                            "EAPType": {
+                                                                "type": "string"
+                                                            },
+                                                            "ElevatedToken": {
+                                                                "type": "string"
+                                                            },
+                                                            "ErrorCode": {},
+                                                            "EventData": {
+                                                                "type": "string"
+                                                            },
+                                                            "EventID": {
+                                                                "type": "integer"
+                                                            },
+                                                            "EventOriginId": {
+                                                                "type": "string"
+                                                            },
+                                                            "EventSourceName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ExtendedQuarantineState": {
+                                                                "type": "string"
+                                                            },
+                                                            "FailureReason": {
+                                                                "type": "string"
+                                                            },
+                                                            "FileHash": {
+                                                                "type": "string"
+                                                            },
+                                                            "FilePath": {
+                                                                "type": "string"
+                                                            },
+                                                            "FilePathNoUser": {
+                                                                "type": "string"
+                                                            },
+                                                            "Filter": {
+                                                                "type": "string"
+                                                            },
+                                                            "ForceLogoff": {
+                                                                "type": "string"
+                                                            },
+                                                            "Fqbn": {
+                                                                "type": "string"
+                                                            },
+                                                            "FullyQualifiedSubjectMachineName": {
+                                                                "type": "string"
+                                                            },
+                                                            "FullyQualifiedSubjectUserName": {
+                                                                "type": "string"
+                                                            },
+                                                            "GroupMembership": {
+                                                                "type": "string"
+                                                            },
+                                                            "HandleId": {
+                                                                "type": "string"
+                                                            },
+                                                            "HardwareIds": {
+                                                                "type": "string"
+                                                            },
+                                                            "HomeDirectory": {
+                                                                "type": "string"
+                                                            },
+                                                            "HomePath": {
+                                                                "type": "string"
+                                                            },
+                                                            "HostCustomEntity": {
+                                                                "type": "string"
+                                                            },
+                                                            "IPCustomEntity": {
+                                                                "type": "string"
+                                                            },
+                                                            "ImpersonationLevel": {
+                                                                "type": "string"
+                                                            },
+                                                            "InterfaceUuid": {
+                                                                "type": "string"
+                                                            },
+                                                            "IpAddress": {
+                                                                "type": "string"
+                                                            },
+                                                            "IpPort": {
+                                                                "type": "string"
+                                                            },
+                                                            "KeyLength": {
+                                                                "type": "integer"
+                                                            },
+                                                            "Level": {
+                                                                "type": "string"
+                                                            },
+                                                            "LmPackageName": {
+                                                                "type": "string"
+                                                            },
+                                                            "LocationInformation": {
+                                                                "type": "string"
+                                                            },
+                                                            "LockoutDuration": {
+                                                                "type": "string"
+                                                            },
+                                                            "LockoutObservationWindow": {
+                                                                "type": "string"
+                                                            },
+                                                            "LockoutThreshold": {
+                                                                "type": "string"
+                                                            },
+                                                            "LoggingResult": {
+                                                                "type": "string"
+                                                            },
+                                                            "LogonGuid": {
+                                                                "type": "string"
+                                                            },
+                                                            "LogonHours": {
+                                                                "type": "string"
+                                                            },
+                                                            "LogonID": {
+                                                                "type": "string"
+                                                            },
+                                                            "LogonProcessName": {
+                                                                "type": "string"
+                                                            },
+                                                            "LogonType": {
+                                                                "type": "integer"
+                                                            },
+                                                            "LogonTypeName": {
+                                                                "type": "string"
+                                                            },
+                                                            "MG": {
+                                                                "type": "string"
+                                                            },
+                                                            "MachineAccountQuota": {
+                                                                "type": "string"
+                                                            },
+                                                            "MachineInventory": {
+                                                                "type": "string"
+                                                            },
+                                                            "MachineLogon": {
+                                                                "type": "string"
+                                                            },
+                                                            "ManagementGroupName": {
+                                                                "type": "string"
+                                                            },
+                                                            "MandatoryLabel": {
+                                                                "type": "string"
+                                                            },
+                                                            "MaxPasswordAge": {
+                                                                "type": "string"
+                                                            },
+                                                            "MemberName": {
+                                                                "type": "string"
+                                                            },
+                                                            "MemberSid": {
+                                                                "type": "string"
+                                                            },
+                                                            "MinPasswordAge": {
+                                                                "type": "string"
+                                                            },
+                                                            "MinPasswordLength": {
+                                                                "type": "string"
+                                                            },
+                                                            "MixedDomainMode": {
+                                                                "type": "string"
+                                                            },
+                                                            "NASIPv4Address": {
+                                                                "type": "string"
+                                                            },
+                                                            "NASIPv6Address": {
+                                                                "type": "string"
+                                                            },
+                                                            "NASIdentifier": {
+                                                                "type": "string"
+                                                            },
+                                                            "NASPort": {
+                                                                "type": "string"
+                                                            },
+                                                            "NASPortType": {
+                                                                "type": "string"
+                                                            },
+                                                            "NetworkPolicyName": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewDate": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewMaxUsers": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewProcessId": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewProcessName": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewRemark": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewShareFlags": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewUacValue": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewValue": {
+                                                                "type": "string"
+                                                            },
+                                                            "NewValueType": {
+                                                                "type": "string"
+                                                            },
+                                                            "ObjectName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ObjectServer": {
+                                                                "type": "string"
+                                                            },
+                                                            "ObjectType": {
+                                                                "type": "string"
+                                                            },
+                                                            "ObjectValueName": {
+                                                                "type": "string"
+                                                            },
+                                                            "OemInformation": {
+                                                                "type": "string"
+                                                            },
+                                                            "OldMaxUsers": {
+                                                                "type": "string"
+                                                            },
+                                                            "OldRemark": {
+                                                                "type": "string"
+                                                            },
+                                                            "OldShareFlags": {
+                                                                "type": "string"
+                                                            },
+                                                            "OldUacValue": {
+                                                                "type": "string"
+                                                            },
+                                                            "OldValue": {
+                                                                "type": "string"
+                                                            },
+                                                            "OldValueType": {
+                                                                "type": "string"
+                                                            },
+                                                            "OperationType": {
+                                                                "type": "string"
+                                                            },
+                                                            "PackageName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ParentProcessName": {
+                                                                "type": "string"
+                                                            },
+                                                            "PartitionKey": {
+                                                                "type": "string"
+                                                            },
+                                                            "PasswordHistoryLength": {
+                                                                "type": "string"
+                                                            },
+                                                            "PasswordLastSet": {
+                                                                "type": "string"
+                                                            },
+                                                            "PasswordProperties": {
+                                                                "type": "string"
+                                                            },
+                                                            "PreviousDate": {
+                                                                "type": "string"
+                                                            },
+                                                            "PreviousTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "PrimaryGroupId": {
+                                                                "type": "string"
+                                                            },
+                                                            "PrivateKeyUsageCount": {
+                                                                "type": "string"
+                                                            },
+                                                            "PrivilegeList": {
+                                                                "type": "string"
+                                                            },
+                                                            "Process": {
+                                                                "type": "string"
+                                                            },
+                                                            "ProcessId": {
+                                                                "type": "string"
+                                                            },
+                                                            "ProcessName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ProfilePath": {
+                                                                "type": "string"
+                                                            },
+                                                            "Properties": {
+                                                                "type": "string"
+                                                            },
+                                                            "ProtocolSequence": {
+                                                                "type": "string"
+                                                            },
+                                                            "ProxyPolicyName": {
+                                                                "type": "string"
+                                                            },
+                                                            "QuarantineHelpURL": {
+                                                                "type": "string"
+                                                            },
+                                                            "QuarantineSessionID": {
+                                                                "type": "string"
+                                                            },
+                                                            "QuarantineSessionIdentifier": {
+                                                                "type": "string"
+                                                            },
+                                                            "QuarantineState": {
+                                                                "type": "string"
+                                                            },
+                                                            "QuarantineSystemHealthResult": {
+                                                                "type": "string"
+                                                            },
+                                                            "RelativeTargetName": {
+                                                                "type": "string"
+                                                            },
+                                                            "RemoteIpAddress": {
+                                                                "type": "string"
+                                                            },
+                                                            "RemotePort": {
+                                                                "type": "string"
+                                                            },
+                                                            "RequestId": {
+                                                                "type": "string"
+                                                            },
+                                                            "Requester": {
+                                                                "type": "string"
+                                                            },
+                                                            "RestrictedAdminMode": {
+                                                                "type": "string"
+                                                            },
+                                                            "RowKey": {
+                                                                "type": "string"
+                                                            },
+                                                            "RowsDeleted": {
+                                                                "type": "string"
+                                                            },
+                                                            "SamAccountName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ScriptPath": {
+                                                                "type": "string"
+                                                            },
+                                                            "SecurityDescriptor": {
+                                                                "type": "string"
+                                                            },
+                                                            "ServiceAccount": {
+                                                                "type": "string"
+                                                            },
+                                                            "ServiceFileName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ServiceName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ServiceStartType": {},
+                                                            "ServiceType": {
+                                                                "type": "string"
+                                                            },
+                                                            "SessionName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ShareLocalPath": {
+                                                                "type": "string"
+                                                            },
+                                                            "ShareName": {
+                                                                "type": "string"
+                                                            },
+                                                            "SidHistory": {
+                                                                "type": "string"
+                                                            },
+                                                            "SourceComputerId": {
+                                                                "type": "string"
+                                                            },
+                                                            "SourceSystem": {
+                                                                "type": "string"
+                                                            },
+                                                            "Status": {
+                                                                "type": "string"
+                                                            },
+                                                            "StorageAccount": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubStatus": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubcategoryGuid": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubcategoryId": {
+                                                                "type": "string"
+                                                            },
+                                                            "Subject": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubjectAccount": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubjectDomainName": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubjectKeyIdentifier": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubjectLogonId": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubjectMachineName": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubjectMachineSID": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubjectUserName": {
+                                                                "type": "string"
+                                                            },
+                                                            "SubjectUserSid": {
+                                                                "type": "string"
+                                                            },
+                                                            "TableId": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetAccount": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetDomainName": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetInfo": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetLinkedLogonId": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetLogonGuid": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetLogonId": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetOutboundDomainName": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetOutboundUserName": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetServerName": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetSid": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetUser": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetUserName": {
+                                                                "type": "string"
+                                                            },
+                                                            "TargetUserSid": {
+                                                                "type": "string"
+                                                            },
+                                                            "Task": {
+                                                                "type": "integer"
+                                                            },
+                                                            "TemplateContent": {
+                                                                "type": "string"
+                                                            },
+                                                            "TemplateDSObjectFQDN": {
+                                                                "type": "string"
+                                                            },
+                                                            "TemplateInternalName": {
+                                                                "type": "string"
+                                                            },
+                                                            "TemplateOID": {
+                                                                "type": "string"
+                                                            },
+                                                            "TemplateSchemaVersion": {
+                                                                "type": "string"
+                                                            },
+                                                            "TemplateVersion": {
+                                                                "type": "string"
+                                                            },
+                                                            "TenantId": {
+                                                                "type": "string"
+                                                            },
+                                                            "TimeCollected": {
+                                                                "type": "string"
+                                                            },
+                                                            "TimeGenerated": {
+                                                                "type": "string"
+                                                            },
+                                                            "TokenElevationType": {
+                                                                "type": "string"
+                                                            },
+                                                            "TransmittedServices": {
+                                                                "type": "string"
+                                                            },
+                                                            "Type": {
+                                                                "type": "string"
+                                                            },
+                                                            "UserAccountControl": {
+                                                                "type": "string"
+                                                            },
+                                                            "UserParameters": {
+                                                                "type": "string"
+                                                            },
+                                                            "UserPrincipalName": {
+                                                                "type": "string"
+                                                            },
+                                                            "UserWorkstations": {
+                                                                "type": "string"
+                                                            },
+                                                            "VendorIds": {
+                                                                "type": "string"
+                                                            },
+                                                            "VirtualAccount": {
+                                                                "type": "string"
+                                                            },
+                                                            "Workstation": {
+                                                                "type": "string"
+                                                            },
+                                                            "WorkstationName": {
+                                                                "type": "string"
+                                                            },
+                                                            "_ResourceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "timestamp": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "TenantId",
+                                                            "TimeGenerated",
+                                                            "SourceSystem",
+                                                            "Account",
+                                                            "AccountType",
+                                                            "Computer",
+                                                            "EventSourceName",
+                                                            "Channel",
+                                                            "Task",
+                                                            "Level",
+                                                            "EventData",
+                                                            "EventID",
+                                                            "Activity",
+                                                            "PartitionKey",
+                                                            "RowKey",
+                                                            "StorageAccount",
+                                                            "AzureDeploymentID",
+                                                            "AzureTableName",
+                                                            "AccessList",
+                                                            "AccessMask",
+                                                            "AccessReason",
+                                                            "AccountDomain",
+                                                            "AccountExpires",
+                                                            "AccountName",
+                                                            "AccountSessionIdentifier",
+                                                            "AdditionalInfo",
+                                                            "AdditionalInfo2",
+                                                            "AllowedToDelegateTo",
+                                                            "Attributes",
+                                                            "AuditPolicyChanges",
+                                                            "AuditsDiscarded",
+                                                            "AuthenticationLevel",
+                                                            "AuthenticationPackageName",
+                                                            "AuthenticationProvider",
+                                                            "AuthenticationServer",
+                                                            "AuthenticationService",
+                                                            "AuthenticationType",
+                                                            "CACertificateHash",
+                                                            "CalledStationID",
+                                                            "CallerProcessId",
+                                                            "CallerProcessName",
+                                                            "CallingStationID",
+                                                            "CAPublicKeyHash",
+                                                            "CategoryId",
+                                                            "CertificateDatabaseHash",
+                                                            "ClassId",
+                                                            "ClassName",
+                                                            "ClientAddress",
+                                                            "ClientIPAddress",
+                                                            "ClientName",
+                                                            "CommandLine",
+                                                            "CompatibleIds",
+                                                            "DCDNSName",
+                                                            "DeviceDescription",
+                                                            "DeviceId",
+                                                            "DisplayName",
+                                                            "Disposition",
+                                                            "DomainBehaviorVersion",
+                                                            "DomainName",
+                                                            "DomainPolicyChanged",
+                                                            "DomainSid",
+                                                            "EAPType",
+                                                            "ElevatedToken",
+                                                            "ErrorCode",
+                                                            "ExtendedQuarantineState",
+                                                            "FailureReason",
+                                                            "FileHash",
+                                                            "FilePath",
+                                                            "FilePathNoUser",
+                                                            "Filter",
+                                                            "ForceLogoff",
+                                                            "Fqbn",
+                                                            "FullyQualifiedSubjectMachineName",
+                                                            "FullyQualifiedSubjectUserName",
+                                                            "GroupMembership",
+                                                            "HandleId",
+                                                            "HardwareIds",
+                                                            "HomeDirectory",
+                                                            "HomePath",
+                                                            "ImpersonationLevel",
+                                                            "InterfaceUuid",
+                                                            "IpAddress",
+                                                            "IpPort",
+                                                            "KeyLength",
+                                                            "LmPackageName",
+                                                            "LocationInformation",
+                                                            "LockoutDuration",
+                                                            "LockoutObservationWindow",
+                                                            "LockoutThreshold",
+                                                            "LoggingResult",
+                                                            "LogonGuid",
+                                                            "LogonHours",
+                                                            "LogonID",
+                                                            "LogonProcessName",
+                                                            "LogonType",
+                                                            "LogonTypeName",
+                                                            "MachineAccountQuota",
+                                                            "MachineInventory",
+                                                            "MachineLogon",
+                                                            "MandatoryLabel",
+                                                            "MaxPasswordAge",
+                                                            "MemberName",
+                                                            "MemberSid",
+                                                            "MinPasswordAge",
+                                                            "MinPasswordLength",
+                                                            "MixedDomainMode",
+                                                            "NASIdentifier",
+                                                            "NASIPv4Address",
+                                                            "NASIPv6Address",
+                                                            "NASPort",
+                                                            "NASPortType",
+                                                            "NetworkPolicyName",
+                                                            "NewDate",
+                                                            "NewMaxUsers",
+                                                            "NewProcessId",
+                                                            "NewProcessName",
+                                                            "NewRemark",
+                                                            "NewShareFlags",
+                                                            "NewTime",
+                                                            "NewUacValue",
+                                                            "NewValue",
+                                                            "NewValueType",
+                                                            "ObjectName",
+                                                            "ObjectServer",
+                                                            "ObjectType",
+                                                            "ObjectValueName",
+                                                            "OemInformation",
+                                                            "OldMaxUsers",
+                                                            "OldRemark",
+                                                            "OldShareFlags",
+                                                            "OldUacValue",
+                                                            "OldValue",
+                                                            "OldValueType",
+                                                            "OperationType",
+                                                            "PackageName",
+                                                            "ParentProcessName",
+                                                            "PasswordHistoryLength",
+                                                            "PasswordLastSet",
+                                                            "PasswordProperties",
+                                                            "PreviousDate",
+                                                            "PreviousTime",
+                                                            "PrimaryGroupId",
+                                                            "PrivateKeyUsageCount",
+                                                            "PrivilegeList",
+                                                            "Process",
+                                                            "ProcessId",
+                                                            "ProcessName",
+                                                            "Properties",
+                                                            "ProfilePath",
+                                                            "ProtocolSequence",
+                                                            "ProxyPolicyName",
+                                                            "QuarantineHelpURL",
+                                                            "QuarantineSessionID",
+                                                            "QuarantineSessionIdentifier",
+                                                            "QuarantineState",
+                                                            "QuarantineSystemHealthResult",
+                                                            "RelativeTargetName",
+                                                            "RemoteIpAddress",
+                                                            "RemotePort",
+                                                            "Requester",
+                                                            "RequestId",
+                                                            "RestrictedAdminMode",
+                                                            "RowsDeleted",
+                                                            "SamAccountName",
+                                                            "ScriptPath",
+                                                            "SecurityDescriptor",
+                                                            "ServiceAccount",
+                                                            "ServiceFileName",
+                                                            "ServiceName",
+                                                            "ServiceStartType",
+                                                            "ServiceType",
+                                                            "SessionName",
+                                                            "ShareLocalPath",
+                                                            "ShareName",
+                                                            "SidHistory",
+                                                            "Status",
+                                                            "SubjectAccount",
+                                                            "SubcategoryGuid",
+                                                            "SubcategoryId",
+                                                            "Subject",
+                                                            "SubjectDomainName",
+                                                            "SubjectKeyIdentifier",
+                                                            "SubjectLogonId",
+                                                            "SubjectMachineName",
+                                                            "SubjectMachineSID",
+                                                            "SubjectUserName",
+                                                            "SubjectUserSid",
+                                                            "SubStatus",
+                                                            "TableId",
+                                                            "TargetAccount",
+                                                            "TargetDomainName",
+                                                            "TargetInfo",
+                                                            "TargetLinkedLogonId",
+                                                            "TargetLogonGuid",
+                                                            "TargetLogonId",
+                                                            "TargetOutboundDomainName",
+                                                            "TargetOutboundUserName",
+                                                            "TargetServerName",
+                                                            "TargetSid",
+                                                            "TargetUser",
+                                                            "TargetUserName",
+                                                            "TargetUserSid",
+                                                            "TemplateContent",
+                                                            "TemplateDSObjectFQDN",
+                                                            "TemplateInternalName",
+                                                            "TemplateOID",
+                                                            "TemplateSchemaVersion",
+                                                            "TemplateVersion",
+                                                            "TokenElevationType",
+                                                            "TransmittedServices",
+                                                            "UserAccountControl",
+                                                            "UserParameters",
+                                                            "UserPrincipalName",
+                                                            "UserWorkstations",
+                                                            "VirtualAccount",
+                                                            "VendorIds",
+                                                            "Workstation",
+                                                            "WorkstationName",
+                                                            "SourceComputerId",
+                                                            "EventOriginId",
+                                                            "MG",
+                                                            "TimeCollected",
+                                                            "ManagementGroupName",
+                                                            "Type",
+                                                            "_ResourceId",
+                                                            "timestamp",
+                                                            "AccountCustomEntity",
+                                                            "HostCustomEntity",
+                                                            "IPCustomEntity"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "headers": {
+                                            "properties": {
+                                                "Cache-Control": {
+                                                    "type": "string"
+                                                },
+                                                "Content-Length": {
+                                                    "type": "string"
+                                                },
+                                                "Content-Type": {
+                                                    "type": "string"
+                                                },
+                                                "Date": {
+                                                    "type": "string"
+                                                },
+                                                "Expires": {
+                                                    "type": "string"
+                                                },
+                                                "Pragma": {
+                                                    "type": "string"
+                                                },
+                                                "Set-Cookie": {
+                                                    "type": "string"
+                                                },
+                                                "Strict-Transport-Security": {
+                                                    "type": "string"
+                                                },
+                                                "Timing-Allow-Origin": {
+                                                    "type": "string"
+                                                },
+                                                "Transfer-Encoding": {
+                                                    "type": "string"
+                                                },
+                                                "Vary": {
+                                                    "type": "string"
+                                                },
+                                                "X-Content-Type-Options": {
+                                                    "type": "string"
+                                                },
+                                                "X-Frame-Options": {
+                                                    "type": "string"
+                                                },
+                                                "x-ms-apihub-cached-response": {
+                                                    "type": "string"
+                                                },
+                                                "x-ms-request-id": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "statusCode": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_2": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "set query_datetimescope_column = \"TimeGenerated\";\nset query_datetimescope_from = datetime(@{body('Parse_JSON_2')?['Query Start Time UTC']});\nset query_datetimescope_to = datetime(@{body('Parse_JSON_2')?['Query End Time UTC']});\n@{body('Parse_JSON_2')?['Query']} | top @{variables('EventsNumber')} by timestamp desc ",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                            "path": "/queryData",
+                                            "queries": {
+                                               "resourcegroups": "[parameters('AzureSentinelLogAnalyticsWorkspaceResourceGroupName')]",
+                                            "resourcename": "[parameters('AzureSentinelLogAnalyticsWorkspaceName')]",
+                                                "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "[subscription().subscriptionId]",
+                                                "timerange": "@{body('Parse_JSON_2')?['Query Period']}"
+                                            }
+                            }
+                        },
+                        "Send_event": {
+                            "runAfter": {
+                                "Parse_JSON_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                 "ContentData": "@{base64(concat('\"{','\n','\"Alert Display Name\": \"',triggerBody()?['AlertDisplayName'],'\",','\n','\"Alert URI\":\"',triggerBody()?['AlertUri'],'\",','\n','\"Product Name\":\"',triggerBody()?['ProductName'],'\",','\n','\"AlertEntites\":\"',triggerBody()?['Entities'],'\",','\n','\"AlertsDescription\": \"',triggerBody()?['Description'],'\",','\n','\"Product Name\":\"',triggerBody()?['ProductName'],',','\n','\"Severity\":\"',triggerBody()?['Severity'],'\",','\n','\"System Alert Id\":\"',triggerBody()?['SystemAlertId'],'\",','\n','\"Alert Time\":\"',triggerBody()?['TimeGenerated'],',','\n','\"Resource Group\":\"',triggerBody()?['WorkspaceResourceGroup'],'\",','\n','\"Subscription Id\":\"',triggerBody()?['WorkspaceSubscriptionId'],'\",','\n','\"Alert type\":\"',triggerBody()?['AlertType'],'\",','\n','\"Extended Properties\":\"',triggerBody()?['ExtendedProperties'],'\",','\n','\"Provider Alert ID\":\"',triggerBody()?['ProviderAlertId'],'\",','\n','\"Alert Start Time\":\"',triggerBody()?['StartTimeUtc'],'\",','\n','\"Alert End time\":\"',triggerBody()?['EndTimeUtc'],'\",','\n','\"Events\":\"',json(string(body('Parse_JSON_3'))),'\",','\n','}\"','\n','\n','\n'))}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['eventhubs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "//events"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]",
+                                "connectionName": "[variables('azuremonitorlogs')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "eventhubs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('eventhubs'))]",
+                                "connectionName": "[variables('eventhubs')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/eventhubs')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
+
+
+
+
+
+
+
+
