@@ -1,7 +1,7 @@
 Parser:
   Title: SonicWall Firewall Network Sessions
   Version: '0.1'
-  LastUpdated: May 22, 2023
+  LastUpdated: June 21, 2023
 Product:
   Name: SonicWall
 Normalization:
@@ -16,13 +16,31 @@ Description: |
   This Query Parser maps SonicWall Firewall Events (CommonSecurityLogs) from SonicOS to the Advanced Security Information Model Network Session schema.
 ParserName: vimNetworkSessionSonicWallFirewall
 ParserQuery: |
+  let Actions=datatable(fw_action:string,DvcAction:string)
+  [ "reset client","Reset Source"
+  , "reset server","Reset Destination"
+  , "reset both", "Reset" 
+  , "allow","Allow"
+  , "\"forward\"","Allow"
+  , "\"mgmt\"","Management"
+  , "\"NA\"","NA"
+  , "deny","Deny"
+  , "\"drop\"", "Drop"
+  , "drop ICMP", "Drop ICMP"];
   let NetworkParserSonicWallFirewall=(){
   CommonSecurityLog
-  | where DeviceVendor=="SonicWall"
+  | where DeviceVendor == "SonicWall"
   | parse-kv AdditionalExtensions as (['gcat']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string) with (pair_delimiter=";", kv_delimiter="=")
   | extend RequestURL_ = extract(@"(?:[.*;]+?)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)(?:;fw_action)", 1, AdditionalExtensions)
   | extend RequestURL_ = iif(RequestURL_ startswith "snpt" or RequestURL_ startswith "dnpt" or RequestURL_ startswith "appid" or RequestURL_ startswith "appName", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), RequestURL_)
   | extend RequestURL_ = iif(RequestURL_ matches regex @"^(.{2,6}=.{1,6})", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), iif(RequestURL_ matches regex @"^\w=\d$", "", RequestURL_))
+  | lookup Actions on fw_action
+  // Sets the mandatory EventResult based on the DvcAction.
+  | extend EventResult = case(DvcAction == "Allow", "Success",
+                            DvcAction == "Management", "NA",
+                            DvcAction == "NA", "NA",
+                            "Failure"
+                            )
   // This adds a column for LogMsgSeverity, using case() to map the ingested LogSeverity int value to a friendly string.
   | extend LogMsgSeverity = case(LogSeverity == 10, "Emergency (0)",
                                               LogSeverity == 9, "Alert (1)",
@@ -137,7 +155,9 @@ ParserQuery: |
                                               )
   // Creating a consistent set of columns that can be used later in the query and removed from view at the end.
   | extend
-      FieldDeviceCustomNumber1Label = column_ifexists("FieldDeviceCustomNumber1Label", "") // FieldDeviceCustomNumberXLabel (cnXLabel=)
+      EventProduct = "SonicOS"
+    , EventVendor = DeviceVendor
+    , FieldDeviceCustomNumber1Label = column_ifexists("FieldDeviceCustomNumber1Label", "") // FieldDeviceCustomNumberXLabel (cnXLabel=)
     , FieldDeviceCustomNumber2Label = column_ifexists("FieldDeviceCustomNumber2Label", "") // FieldDeviceCustomNumberXLabel (cnXLabel=)
     , DeviceCustomNumber1Label = column_ifexists("DeviceCustomNumber1Label", "") // DeviceCustomNumberXLabel (cnXLabel=)
     , DeviceCustomNumber2Label = column_ifexists("DeviceCustomNumber2Label", "") // DeviceCustomNumberXLabel (cnXLabel=)
@@ -181,6 +201,10 @@ ParserQuery: |
     , newValue = column_ifexists("newValue", "") // The new value associated with the auditing event.
     , auditTime = column_ifexists("auditTime", "") // The timestamp indicates the time configuration was changed.
     , auditPath = column_ifexists("auditPath", "") // The logical location of the configuration setting.
+    , EventType = "NetworkSession"
+    , EventSchemaVersion = "0.2.6"
+    , EventSchema = "NetworkSession"
+    , EventCount = toint(1)
   // Renaming the columns above to create a consistent set of columns with friendlier names.
   | project-rename
       ReceivedPackets_Field = FieldDeviceCustomNumber1Label // FieldDeviceCustomNumberXLabel (cnXLabel=)
@@ -232,6 +256,7 @@ ParserQuery: |
     , DeviceModel
     , SerialNumber
     , FirmwareVersion
+    , EventProduct
     , LogMsgID
     , LogMsgCategory
     , LegacyMessageCategory
