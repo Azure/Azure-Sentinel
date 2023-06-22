@@ -30,6 +30,7 @@ This analytic rule will monitor the SpyCloud watchlist custom log table. This ru
 - Fill in the required parameters for deploying the playbook.
   ![deployment](images/deployment.png)
 - Click "Review + create". Once the validation is successful, click on "Create".
+- 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FRamboV%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSpyCloud%20Enterprise%2FAnalyticsRules%2FSpyCloud-Breach-Rule%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FRamboV%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSpyCloud%20Enterprise%2FAnalyticsRules%2FSpyCloud-Breach-Rule%2Fazuredeploy.json)
 
