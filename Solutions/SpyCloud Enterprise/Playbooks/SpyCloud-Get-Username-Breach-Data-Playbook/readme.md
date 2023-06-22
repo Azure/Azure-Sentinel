@@ -30,7 +30,7 @@ The SpyCloud Enterprise API is able to provide breach data for a username or set
 
 <a name="deployment">
 
-## Deployment instructions
+## Deployment Instructions
 - Deploy the playbooks by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 - Fill in the required parameters for deploying the playbook.
   ![deployment](images/deployment.png)
@@ -42,7 +42,7 @@ The SpyCloud Enterprise API is able to provide breach data for a username or set
 
 <a name="postdeployment">
 
-## Post Deployment instructions
+## Post Deployment Instructions
 ### Authorize connections
 Once deployment is complete, you will need to authorize each connection:
 - As a best practice, we have used the Sentinel connection in Logic Apps that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204) and provide permissions to the Logic App accordingly.

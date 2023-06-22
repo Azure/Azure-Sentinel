@@ -41,7 +41,7 @@ This playbook gets triggered when an incident is created from the "SpyCloud Brea
 
 <a name="postdeployment">
 
-## Post Deployment instructions
+## Post Deployment Instructions
 ### Authorize connections
 Once deployment is complete, you will need to authorize each connection:
 - As a best practice, we have used the Sentinel connection in Logic Apps that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204) and provide permissions to the Logic App accordingly.

@@ -25,7 +25,7 @@ This analytic rule will monitor the SpyCloud watchlist custom log table. This ru
 
 <a name="deployment">
 
-## Deployment instructions
+## Deployment Instructions
 - Deploy the analytic rule by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 - Fill in the required parameters for deploying the playbook.
   ![deployment](images/deployment.png)
@@ -35,7 +35,7 @@ This analytic rule will monitor the SpyCloud watchlist custom log table. This ru
 
 <a name="postdeployment">
 
-## Post-Deployment instructions
+## Post-Deployment Instructions
 ### Automate Response 
 - In the automated response of this analytic rule, please add an automation rule to trigger "SpyCloud Breach Playbook".
 

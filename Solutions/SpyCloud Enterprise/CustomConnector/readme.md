@@ -4,7 +4,7 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Actions supported by SpyCloud Enterprise custom connector](#actions)
+2. [Actions supported by SpyCloud Enterprise Custom Connector](#actions)
 3. [Deployment](#deployment)
 4. [Authentication](#Authentication)
 
@@ -16,7 +16,7 @@ SpyCloud recaptures data from the criminal underground to illuminate risk you di
 
 <a name="actions"></a>
 
-## Actions supported by SpyCloud Enterprise custom connector
+## Actions supported by SpyCloud Enterprise Custom Connector
 
 | Action | Description |
 | --------- | -------------- |
@@ -27,7 +27,7 @@ SpyCloud recaptures data from the criminal underground to illuminate risk you di
 | **Get Breach Data by IP Address** | Get Breach Data by IP Address |
 | **Get Breach Data by Password Search** | Get Breach Data by Password Search |
 | **Get Breach Data by Username Search** | Get Breach Data by Username Search  |
-| **Get Breach Data for Entire Watchlist** | Action used to get the connection statistics for an interface on the device |
+| **Get Breach Data for Entire Watchlist** | Get Breach Data for Entire Watchlist |
 | **Get Compass Devices List** | Get Compass Devices List |
 | **Get Compass Devices Data** | Get Compass Devices Data |
 | **Get Compass Applications Data** | Get Compass Applications Data |
@@ -36,7 +36,7 @@ SpyCloud recaptures data from the criminal underground to illuminate risk you di
 
 <a name="deployment"></a>
 
-## Deployment instructions 
+## Deployment Instructions 
 Prior to using this custom connector, it should be deployed in the resource group where the playbooks that will include it are located.
 <br>
 

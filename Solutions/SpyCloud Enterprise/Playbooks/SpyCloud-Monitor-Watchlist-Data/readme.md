@@ -26,7 +26,7 @@ This playbook gets triggered on a daily basis and performs the following actions
 
 <a name="deployment">
 
-## Deployment instructions
+## Deployment Instructions
 - Deploy the playbooks by clicking on the "Deploy to Azure" button. This will take you to the Deploy an ARM Template wizard.
 - Fill in the required parameters for deploying the playbook.
   ![deployment](images/deployment.png)
@@ -37,7 +37,11 @@ This playbook gets triggered on a daily basis and performs the following actions
 
 <a name="postdeployment">
 
-## Post-Deployment instructions
+## Post-Deployment Instructions
+### Provide Custom Log Table Name
+- Open the Logic App in the edit mode, click on "Parameters" and provide the name of the custom log table, for ex:SpycloudWatchlistData and click on close.
+  ![parameters](images/parameters.png)
+  
 ### Recurrence Trigger Instructions
 - The Logic App will run on an interval set to daily. Please do not change the interval, as it may result in duplication of data.
 - If you do not wish to run the playbook immediately, set the start time.

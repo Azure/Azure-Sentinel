@@ -27,7 +27,7 @@ When this playbook gets triggered, it performs the following actions:
 
 <a name="deployment">
 
-## Deployment instructions
+## Deployment Instructions
 - Deploy the playbooks by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 - Fill in the required parameters for deploying the playbook.
   ![deployment](images/deployment.png)
@@ -38,7 +38,7 @@ When this playbook gets triggered, it performs the following actions:
 
 <a name="postdeployment">
 
-## Post Deployment instructions
+## Post Deployment Instructions
 ### Authorize connections
 Once deployment is complete, you will need to authorize each connection:
 - Provide connection details for the SpyCloud Enterprise Custom Connector.
