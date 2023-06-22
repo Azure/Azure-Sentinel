@@ -1,0 +1,102 @@
+Parser:
+  Title: Network Session ASIM parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing Barracuda WAF logs to the ASIM Web Session normalized schema.
+ParserName: ASimNetworkSessionBarracudaWAF
+EquivalentBuiltInParser: _ASim_NetworkSession_BarracudaWAF
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let protocollookup = datatable(
+      Protocol_s: string,
+      NetworkProtocol: string,
+      NetworkProtocolVersion: string
+  )[
+      "TCP", "TCP", "",
+      "TCP/ip", "TCP", "",
+      "UDP", "UDP", "",
+      "UDP/ip", "UDP", "",
+      "ICMP", "ICMP", "IPV4",
+      "ICMPv6", "ICMP", "IPV6",
+  ];
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+      [
+      0, "High",
+      1, "High",
+      2, "High",
+      3, "Medium",
+      4, "Low",
+      5, "Low",
+      6, "Informational",
+      7, "Informational"
+  ];
+  let EventResultLookup = datatable (ActionID_s: string, EventResult: string)
+      [
+      "ALLOW", "Success",
+      "DENY", "Failure"
+  ];
+  let parser=(disabled: bool=false) {
+      barracuda_CL
+      | where not(disabled) and LogType_s == "NF"
+      | extend
+          severity = toint(Severity_s)
+      | lookup EventResultLookup on ActionID_s
+      | lookup SeverityLookup on severity
+      | lookup protocollookup on Protocol_s
+      | extend
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "NetworkSession",
+          EventVendor = "Barracuda"
+      | extend
+          Dvc =  column_ifexists("UnitName_s", ""),
+          EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)),
+          DvcAction = column_ifexists("ActionID_s", ""),
+          DstIpAddr = column_ifexists("DestinationIP_s", ""),
+          SrcIpAddr = column_ifexists("SourceIP", ""),
+          DvcHostname = column_ifexists("host_s", ""),
+          DvcIpAddr = column_ifexists("HostIP_s", ""),                             
+          DstPortNumber = toint(column_ifexists("DestinationPort_d", "")),
+          SrcPortNumber = toint(column_ifexists("SourcePort_d", "")),
+          EventOriginalType = "Network Firewall"
+      | extend
+          IpAddr = SrcIpAddr,
+          SrcHostname = SrcIpAddr,
+          Src=SrcIpAddr,
+          Dst=DstIpAddr,
+          EventEndTime = EventStartTime,
+          DstHostname = DstIpAddr
+      | extend Hostname = DstHostname
+      | project-away
+          *_d,
+          *_s,
+          _ResourceId,
+          severity,
+          RawData,
+          SourceIP,
+          Message,
+          Computer,
+          MG,
+          ManagementGroupName,
+          TenantId,
+          SourceSystem
+  };
+  parser(disabled=disabled)
