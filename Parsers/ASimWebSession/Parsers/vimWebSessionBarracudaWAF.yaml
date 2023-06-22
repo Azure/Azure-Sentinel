@@ -1,0 +1,194 @@
+Parser:
+  Title: Web Session ASIM filtering parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports filtering and normalizing Barracuda WAF logs to the ASIM Web Session normalized schema.
+ParserName: vimWebSessionBarracudaWAF
+EquivalentBuiltInParser: _Im_WebSession_BarracudaWAF
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+      [
+      0, "High", 
+      1, "High", 
+      2, "High", 
+      3, "Medium",
+      4, "Low",
+      5, "Low", 
+      6, "Informational",
+      7, "Informational" 
+  ];
+  let EventResultWFLookup = datatable (
+      Action_s: string,
+      EventResult_WF: string,
+      DvcAction: string
+  )
+      [
+      "LOG", "Success", "ALLOW",
+      "DENY", "Failure", "DENY",
+      "WARNING", "Success", "WARNING"
+  ];
+  let EventTypeLookup = datatable (LogType_s: string, EventType: string, EventOriginalType: string )
+      [
+      "WF", "HTTPsession", "Web Firewall",
+      "TR", "WebServerSession", "Access"
+  ];
+  let parser=(
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]), 
+      ipaddr_has_any_prefix: dynamic=dynamic([]), 
+      url_has_any: dynamic=dynamic([]),
+      httpuseragent_has_any: dynamic=dynamic([]),
+      eventresult: string='*',
+      disabled: bool=false
+      ) {
+      let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      barracuda_CL
+      | where not(disabled) and (LogType_s == "WF" or LogType_s == "TR")
+      | extend EventStartTime = unixtime_seconds_todatetime(tolong(DeviceReceiptTime_s))
+      | extend EventEndTime = EventStartTime
+      | where (isnull(starttime) or EventStartTime >= starttime)
+          and (isnull(endtime) or EventEndTime <= endtime)
+      | where (array_length(url_has_any) == 0 or URL_s has_any (url_has_any))
+      | where (array_length(httpuseragent_has_any) == 0 or UserAgent_s has_any(httpuseragent_has_any))
+      | extend
+          temp_SrcMatch=has_any_ipv4_prefix(ClientIP_s, src_or_any),
+          temp_DstMatch=has_any_ipv4_prefix(ServiceIP_s, ipaddr_has_any_prefix)
+      | extend ASimMatchingIpAddr=case(
+                                  array_length(src_or_any) == 0,
+                                  "-",
+                                  temp_SrcMatch and temp_DstMatch,
+                                  "Both",
+                                  temp_SrcMatch,
+                                  "SrcIpAddr",
+                                  temp_DstMatch,
+                                  "DstIpAddr",
+                                  "No match"
+                              )
+      | where ASimMatchingIpAddr != "No match" 
+      | lookup EventResultWFLookup on Action_s
+      | extend
+          status_code = toint(column_ifexists("HTTPStatus_s", ""))
+      | extend EventResult_TR = case(
+                                status_code between (200 .. 299),
+                                "Success", 
+                                status_code between (400 .. 599),
+                                "Failure",
+                                status_code between (300 .. 399),
+                                "Partial",
+                                "NA"
+                            )
+      | extend EventResult = iff(LogType_s == "TR", EventResult_TR, EventResult_WF)
+      | where (eventresult == '*' or EventResult =~ eventresult)
+      | lookup EventTypeLookup on LogType_s
+      | extend
+          severity = toint(Severity_s)
+      | lookup SeverityLookup on severity
+      | extend
+          Dst = column_ifexists("ServerIP_s", ""),
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.6",
+          EventVendor = "Barracuda"
+      | extend
+          Dvc = column_ifexists("UnitName_s", ""),
+          DstIpAddr = column_ifexists("ServerIP_s", ""),
+          SrcIpAddr = column_ifexists("ClientIP_s", ""),
+          DstBytes = tolong(column_ifexists("BytesReceived_d", "")),
+          DstPortNumber = toint(column_ifexists("ServerPort_d", "")),
+          HttpCookie = column_ifexists("Cookie_s", ""),
+          HttpReferrer = column_ifexists("Referer_s", ""),
+          HttpRequestBodyBytes = tolong(column_ifexists("BytesReceived_d", "")),
+          HttpRequestMethod = column_ifexists("Method_s", ""),
+          HttpResponseBodyBytes = tolong(column_ifexists("BytesSent_d", "")),
+          HttpResponseTime = toint(column_ifexists("TimeTaken_d", "")),
+          HttpUserAgent = column_ifexists("UserAgent_s", ""),
+          NetworkSessionId = column_ifexists("SessionID_s", ""),
+          Rule = column_ifexists("RuleType_s", ""),
+          SrcPortNumber = toint(column_ifexists("ClientPort_d", "")),
+          SrcUsername = column_ifexists("AuthenticatedUser_s", ""),
+          Url = column_ifexists("URL_s", ""),
+          HttpResponseCacheControl = iff(
+                                column_ifexists("CacheHit_d", "") == 0,
+                                "Response from the server",
+                                "Response from the cache"
+                            ),
+          SrcUsernameType = "Simple",
+          ProxyIP = column_ifexists("ProxyIP_s", ""),
+          ProxyPort = column_ifexists("ProxyPort_d", ""),
+          DvcHostname = column_ifexists("host_s", ""),
+          DvcIpAddr = column_ifexists("HostIP_s", "")
+      | extend
+          SessionId = NetworkSessionId,
+          UserAgent = HttpUserAgent,
+          User = SrcUsername,
+          IpAddr = SrcIpAddr,
+          Src=SrcIpAddr
+      | project-away
+          *_d,
+          *_s,
+          _ResourceId,
+          severity,
+          status_code,
+          RawData,
+          EventResult_TR,
+          EventResult_WF,
+          SourceIP,
+          Message,
+          Computer,
+          MG,
+          ManagementGroupName,
+          TenantId,
+          SourceSystem,
+          temp_SrcMatch,
+          temp_DstMatch
+  };
+  parser(
+      starttime=starttime, 
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+      url_has_any=url_has_any,
+      httpuseragent_has_any=httpuseragent_has_any,
+      eventresult=eventresult,
+      disabled=disabled
+  )
