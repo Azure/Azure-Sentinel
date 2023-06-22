@@ -1,0 +1,85 @@
+Parser:
+  Title: ASIM Authentication parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing the Barracuda WAF logs to the ASIM authentication normalized schema.
+ParserName: ASimAuthenticationBarracudaWAF
+EquivalentBuiltInParser: _ASim_Authentication_BarracudaWAF
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+      [
+      0, "High", 
+      1, "High", 
+      2, "High", 
+      3, "Medium",
+      4, "Low",
+      5, "Low", 
+      6, "Informational",
+      7, "Informational" 
+  ];
+  let EventTypeLookup = datatable (EventName_s: string, EventType: string, EventResult: string)
+      [
+      "LOGIN", "Logon", "Success",
+      "UNSUCCESSFUL_LOGIN", "Logoff", "Failure",
+      "LOGOUT", "Logoff", "Success"
+  ];
+  let parser=(disabled: bool=false) {
+      barracuda_CL
+      | where not(disabled)
+          and (LogType_s == "AUDIT")
+          and (EventName_s in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
+      | lookup EventTypeLookup on EventName_s
+      | extend 
+          severity = toint(Severity_s)
+      | lookup SeverityLookup on severity
+      | extend
+          Dvc = column_ifexists("UnitName_s", ""),
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.3",
+          EventVendor = "Barracuda",
+          ActorUsernameType = "Simple"
+      | extend
+          EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)),
+          SrcPortNumber = toint(LoginPort_d),
+          DvcIpAddr = column_ifexists("HostIP_s", ""),
+          SrcIpAddr = column_ifexists("LoginIP_s", ""),
+          DvcHostname = column_ifexists("host_s", ""),
+          ActorUsername= column_ifexists("AdminName_s", "")
+      | extend
+          IpAddr=SrcIpAddr,
+          Src = SrcIpAddr,
+          EventEndTime=EventStartTime
+      | project-away
+          *_s,
+          *_d,
+          severity,
+          TenantId,
+          Message,
+          SourceSystem,
+          _ResourceId,
+          RawData,
+          Computer,
+          MG,
+          ManagementGroupName,
+          SourceIP
+  };
+  parser(disabled=disabled)

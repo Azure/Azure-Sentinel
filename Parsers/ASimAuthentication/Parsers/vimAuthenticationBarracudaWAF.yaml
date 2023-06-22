@@ -1,0 +1,111 @@
+Parser:
+  Title: ASIM Authentication parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing the Barracuda WAF logs to the ASIM authentication normalized schema.
+ParserName: vimAuthenticationBarracudaWAF
+EquivalentBuiltInParser: _Im_Authentication_BarracudaWAF
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+ParserQuery: |
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+      [
+      0, "High", 
+      1, "High", 
+      2, "High", 
+      3, "Medium",
+      4, "Low",
+      5, "Low", 
+      6, "Informational",
+      7, "Informational" 
+  ];
+  let EventTypeLookup = datatable (
+      EventName_s: string,
+      EventType: string,
+      EventResult: string
+  )
+      [
+      "LOGIN", "Logon", "Success",
+      "UNSUCCESSFUL_LOGIN", "Logoff", "Failure",
+      "LOGOUT", "Logoff", "Success"
+  ];
+  let parser=(
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      targetusername_has: string = "*",
+      disabled: bool = false) {
+      barracuda_CL
+      | where not(disabled)
+          and (LogType_s == "AUDIT")
+          and (EventName_s in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
+      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))
+      | extend EventEndTime = EventStartTime
+      | where (isnull(starttime) or EventStartTime >= starttime)
+          and (isnull(endtime) or EventEndTime <= endtime)
+          and (targetusername_has == '*' or (AdminName_s has targetusername_has))
+      | lookup EventTypeLookup on EventName_s
+      | extend 
+          severity = toint(Severity_s)
+      | lookup SeverityLookup on severity
+      | extend
+          Dvc = column_ifexists("UnitName_s", ""),
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.3",
+          EventVendor = "Barracuda",
+          ActorUsernameType = "Simple"
+      | extend
+          EventType = iff(EventName_s == "LOGOUT", "Logoff", "Logon"),
+          SrcPortNumber = toint(LoginPort_d),
+          DvcIpAddr = column_ifexists("HostIP_s", ""),
+          SrcIpAddr = column_ifexists("LoginIP_s", ""),
+          DvcHostname = column_ifexists("host_s", ""),
+          ActorUsername= column_ifexists("AdminName_s", "")
+      | extend
+          IpAddr=SrcIpAddr,
+          Src = SrcIpAddr
+      | project-away
+          *_s,
+          *_d,
+          severity,
+          TenantId,
+          Message,
+          SourceSystem,
+          _ResourceId,
+          RawData,
+          Computer,
+          MG,
+          ManagementGroupName,
+          SourceIP
+  };
+  parser(
+      starttime = starttime,
+      endtime = endtime,
+      targetusername_has = targetusername_has,
+      disabled=disabled
+  )
