@@ -8,7 +8,7 @@ require "logstash/sentinel/logsSender"
 
 class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
 
-  config_name "microsoft-sentinel-logstash-output-plugin"
+  config_name "microsoft-sentinel-log-analytics-logstash-output-plugin"
   
   # Stating that the output plugin will run in concurrent mode
   concurrency :shared

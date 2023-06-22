@@ -20,7 +20,7 @@ This plugin is currently in development and is free to use. We welcome contribut
 ## 1. Install the plugin
 
 Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API. 
-Install the microsoft-sentinel-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
+Install the microsoft-sentinel-log-analytics-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - Logstash 7 Between 7.0 and 7.17.6
@@ -34,7 +34,7 @@ To create a sample file, follow the following steps:
 1)	Copy the output plugin configuration below to your Logstash configuration file:
 ```
 output {
-    microsoft-sentinel-logstash-output-plugin {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
         create_sample_file => true
         sample_file_path => "<enter the path to the file in which the sample data will be written>" #for example: "c:\\temp" (for windows) or "/var/log" for Linux.
     }
@@ -61,7 +61,7 @@ input {
 }
 
 output {
-    microsoft-sentinel-logstash-output-plugin {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
         create_sample_file => true
         sample_file_path => "<enter the path to the file in which the sample data will be written>" #for example: "c:\\temp" (for windows) or "/var/log" for Linux.
     }
@@ -103,7 +103,7 @@ After retrieving the required values replace the output section of the Logstash 
 Here is an example for the output plugin configuration section:
 ```
 output {
-    microsoft-sentinel-logstash-output-plugin {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
         client_app_Id => "<enter your client_app_id value here>"
         client_app_secret => "<enter your client_app_secret value here>"
         tenant_id => "<enter your tenant id here>"
@@ -121,8 +121,9 @@ output {
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
-- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service.
-- **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint.
+- **proxy** - String, Empty by default. Specify which proxy URL to use for API calls for all of the communications with Azure.
+- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service. Overrides the proxy setting.
+- **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint. Overrides the proxy setting.
 
 #### Note: When setting an empty string as a value for a proxy setting, it will unset any system wide proxy setting.
 
@@ -147,7 +148,7 @@ input {
  filter {
 }
 output {
-    microsoft-sentinel-logstash-output-plugin {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
       client_app_Id => "619c1731-15ca-4403-9c61-xxxxxxxxxxxx"
       client_app_secret => "xxxxxxxxxxxxxxxx"
       tenant_id => "72f988bf-86f1-41af-91ab-xxxxxxxxxxxx"
@@ -171,7 +172,7 @@ input {
  filter {
 }
 output {
-    microsoft-sentinel-logstash-output-plugin {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
       client_app_Id => "619c1731-15ca-4403-9c61-xxxxxxxxxxxx"
       client_app_secret => "xxxxxxxxxxxxxxxx"
       tenant_id => "72f988bf-86f1-41af-91ab-xxxxxxxxxxxx"
@@ -191,7 +192,7 @@ input {
 }
 
 output {
-    microsoft-sentinel-logstash-output-plugin {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
       client_app_Id => "${CLIENT_APP_ID}"
       client_app_secret => "${CLIENT_APP_SECRET}"
       tenant_id => "${TENANT_ID}"

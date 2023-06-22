@@ -1,7 +1,7 @@
 require File.expand_path('../lib/logstash/sentinel/version', __FILE__)
 
 Gem::Specification.new do |s|
-  s.name = 'microsoft-sentinel-logstash-output-plugin'
+  s.name = 'microsoft-sentinel-log-analytics-logstash-output-plugin'
   s.version = LogStash::Outputs::MicrosoftSentinelOutputInternal::VERSION
   s.authors = ["Microsoft Sentinel"]
   s.email   = 'AzureSentinel@microsoft.com'
