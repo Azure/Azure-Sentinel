@@ -1,8 +1,8 @@
 id: 172a321b-c46b-4508-87c6-e2691c778107
-name: Preview - TI map File entity to VMConnection Event
+name: TI Map File Entity to VMConnection Event
 description: |
-  'Identifies a match in VMConnection Event data from any FileName IOC from TI.
-  As File name matches can create noise, this is best as hunting query'
+  'This query identifies any matches in the VMConnection Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. 
+  Since file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection.'
 requiredDataConnectors:
   - connectorId: AzureMonitor(VMInsights)
     dataTypes:
@@ -13,15 +13,18 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
 tactics:
   - Impact
 query: |
-
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   | where isnotempty(FileName)
   | extend TI_ProcessEntity = tostring(split(FileName, ".")[-2])
@@ -37,19 +40,29 @@ query: |
   | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated, *) by IndicatorId, ProcessName
   | project VMConnection_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
   FileName, Computer, Direction, SourceIp, DestinationIp, RemoteIp, DestinationPort, Protocol
-  | extend timestamp = VMConnection_TimeGenerated, IPCustomEntity = RemoteIp, HostCustomEntity = Computer, URLCustomEntity = Url
+  | extend timestamp = VMConnection_TimeGenerated, HostName = split(Computer, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend IP_0_Address = RemoteIp
+  | extend IP_1_Address = SourceIp
+  | extend URL_0_Url = Url
 entityMappings:
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: RemoteIp
+  - entityType: IP
+    fieldMappings:
       - identifier: Address
         columnName: SourceIp
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
+        columnName: Url
+version: 1.0.2
