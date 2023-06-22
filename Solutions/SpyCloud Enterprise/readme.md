@@ -1,7 +1,5 @@
 # SpyCloud Enterprise Solution
 
-![SpyCloud Enterprise](images/logo.png)
-
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -25,7 +23,7 @@ This solution contains the following
 There are many ways organizations can utilize SpyCloud Intelligence; the playbooks in this solution are just a quick introduction to some of those ways. These playbooks and actions are designed to meet the following use cases
 
 <a name="feed"></a>
-## Feed Usecase
+## Feed Use case
 | Playbook | Description |
 | --------- | -------------- |
 | **SpyCloud-Monitor-Watchlist-Data** | This playbook runs on a daily basis, fetches all the watchlist data from the SpyCloud API, parses the data, and saves the data into the custom logs table. |
@@ -54,7 +52,7 @@ When a breach incident is created from the "SpyCloud Breach Rule", we can do the
 This solution provides a "SpyCloud Breach Playbook" template, that can be used to achieve the above use case. Please add this playbook to the "SpyCloud Breach Rule" automation section.
 
 <a name="enrichment"></a>
-## Enrichment Usecase   
+## Enrichment Use case   
 
 | Playbook | Description |
 | --------- | -------------- |
