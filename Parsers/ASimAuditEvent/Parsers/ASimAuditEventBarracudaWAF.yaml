@@ -1,0 +1,91 @@
+Parser:
+  Title: Audit Event ASIM parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing Barracuda WAF to the ASIM Audit Event schema.
+ParserName: ASimAuditEventBarracudaWAF
+EquivalentBuiltInParser: _ASim_AuditEvent_BarracudaWAF
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventTypeLookup = datatable (ChangeType_s: string, EventType: string)
+      [
+      "SET", "Set",
+      "ADD", "Create",
+      "DEL", "Delete",
+      "NONE", "Other",
+      "", "Other"
+  ];
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+      [
+      0, "High", 
+      1, "High", 
+      2, "High", 
+      3, "Medium",
+      4, "Low",
+      5, "Low", 
+      6, "Informational",
+      7, "Informational" 
+  ];
+  let parser=(disabled: bool=false) {
+      barracuda_CL
+      | where not(disabled) 
+          and LogType_s == "AUDIT" 
+          and EventName_s !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN")
+      | extend 
+          severity = toint(Severity_s)
+      | lookup SeverityLookup on severity
+      | lookup EventTypeLookup on ChangeType_s
+      | extend
+          EventResult = "Success", 
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "0.1.0",
+          EventVendor = "Barracuda",
+          EventProduct = "WAF"
+      | extend
+          Dvc = column_ifexists("UnitName_s", ""), 
+          EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)),
+          Operation = column_ifexists("CommandName_s", ""),
+          DvcIpAddr = column_ifexists("HostIP_s", ""),
+          NewValue = column_ifexists("NewValue_s", ""),
+          Src = column_ifexists("LoginIP_s", ""),
+          EventMessage = column_ifexists("EventMessage_s", ""),
+          OldValue = column_ifexists("OldValue_s", ""),
+          DvcHostname = column_ifexists("host_s", "")
+      | extend
+          SrcIpAddr = Src,
+          EventEndTime=EventStartTime
+      | extend
+          IpAddr = SrcIpAddr,
+          Value = NewValue          
+      | project-away
+          *_d,
+          *_s,
+          _ResourceId,
+          severity,
+          RawData,
+          SourceIP,
+          Message,
+          Computer,
+          MG,
+          ManagementGroupName,
+          TenantId,
+          SourceSystem
+  };
+  parser(disabled=disabled)
+

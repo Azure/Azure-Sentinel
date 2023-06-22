@@ -1,0 +1,135 @@
+Parser:
+  Title: Audit Event ASIM parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing Barracuda WAF to the ASIM Audit Event schema.
+ParserName: vimAuditEventBarracudaWAF
+EquivalentBuiltInParser: _Im_AuditEvent_BarracudaWAF
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+ParserQuery: |
+  let EventTypeLookup = datatable (ChangeType_s: string, EventType: string)
+      [
+      "SET", "Set",
+      "ADD", "Create",
+      "DEL", "Delete",
+      "NONE", "Other",
+      "", "Other"
+  ];
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+      [
+      0, "High", 
+      1, "High", 
+      2, "High", 
+      3, "Medium",
+      4, "Low",
+      5, "Low", 
+      6, "Informational",
+      7, "Informational" 
+  ];
+  let parser=(
+      disabled: bool=false,
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      eventtype_in: dynamic=dynamic([]),
+      eventresult: string='*',
+      newvalue_has_any: dynamic=dynamic([]),
+      operation_has_any: dynamic=dynamic([])) {
+      barracuda_CL
+      | where not(disabled) 
+          and LogType_s == "AUDIT" 
+          and EventName_s !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN")
+      | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(LoginIP_s, srcipaddr_has_any_prefix))
+      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))
+      | extend EventEndTime = EventStartTime
+      | where (isnull(starttime) or EventStartTime >= starttime) and (isnull(endtime) or EventEndTime <= endtime)
+      | extend
+          Operation = column_ifexists("CommandName_s", ""),
+          EventResult = "Success"
+      | where (eventresult == "*" or EventResult =~ eventresult)
+          and (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+          and (array_length(newvalue_has_any) == 0 or NewValue_s has_any (newvalue_has_any))
+      | lookup EventTypeLookup on ChangeType_s
+      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+      | extend 
+          severity = toint(Severity_s)
+      | lookup SeverityLookup on severity
+      | extend
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "0.1.0",
+          EventVendor = "Barracuda",
+          EventProduct = "WAF"
+      | extend
+          Dvc = column_ifexists("UnitName_s", ""),
+          DvcIpAddr = column_ifexists("HostIP_s", ""),
+          NewValue = column_ifexists("NewValue_s", ""),
+          Src = column_ifexists("LoginIP_s", ""),
+          EventMessage = column_ifexists("EventMessage_s", ""),
+          OldValue = column_ifexists("OldValue_s", ""),
+          DvcHostname = column_ifexists("host_s", "")
+      | extend
+          SrcIpAddr = Src
+      | extend
+          IpAddr = SrcIpAddr,
+          Value = NewValue          
+      | project-away
+          *_d,
+          *_s,
+          _ResourceId,
+          severity,
+          RawData,
+          SourceIP,
+          Message,
+          Computer,
+          MG,
+          ManagementGroupName,
+          TenantId,
+          SourceSystem
+  };
+  parser(
+      disabled=disabled,
+      starttime=starttime,
+      endtime= endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      eventtype_in=eventtype_in,
+      eventresult=eventresult,
+      newvalue_has_any=newvalue_has_any,
+      operation_has_any=operation_has_any
+  )
