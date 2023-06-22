@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM parser for Cisco Meraki
   Version: '0.1'
-  LastUpdated: Jun 12 2023
+  LastUpdated: Jun 20 2023
 Product:
   Name: Cisco Meraki
 Normalization:
@@ -12,15 +12,18 @@ References:
   Link: https://aka.ms/ASimWebSessionDoc
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
+- Title: Cisco Meraki Documentation
+  Link: https://documentation.meraki.com/
 Description: |
   This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Web Session normalized schema.
 ParserName: ASimWebSessionCiscoMeraki
+EquivalentBuiltInParser: _ASim_WebSession_CiscoMeraki
 ParserParams:
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let ActionLookup = datatable (Action: string, DvcAction: string)  [
+  let ActionLookup = datatable (action: string, DvcAction: string)  [
     'allow', 'Allow',
     'log', 'Allow',
     'accept', 'Allow',
@@ -29,132 +32,197 @@ ParserQuery: |
     'quarantine', 'Deny'
   ];
   let parser=(disabled: bool=false) {
-    union isfuzzy=true
-        (
-        meraki_CL
-        | project-rename LogMessage =  Message
-        ),
-        (
-        Syslog
-        | project-rename LogMessage =  SyslogMessage
-        )
-    | where not(disabled) and (LogMessage has "urls" or (LogMessage has "security_event" and LogMessage has "security_filtering_file_scanned"))
-    | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
-    | extend
-        Epoch = tostring(Parser[0]),
-        Device =tostring(Parser[1]),
-        Substring = tostring(Parser[3]),
-        EventCount=int(1),
-        EventProduct="Meraki",
-        EventVendor="Cisco",
-        EventSchema="WebSession",
-        EventSchemaVersion="0.2.6"
-    | extend EpochTimestamp = split(Epoch, ".")
-    | extend
-        EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0])),
-        EventEndTime=TimeGenerated,
-        Disposition=tostring(extract(@"disposition=(\S+)\s", 1, Substring)),
-        Action=case(LogMessage has "security_event", tostring(extract(@"action=(\S+)", 1, Substring)), ""),
-        Url = case(
-          LogMessage has "urls",
-          extract(@"request: (\w+)\s(\S+)", 2, Substring),
-          LogMessage has "security_event",
-          tostring(extract(@"url=(\S+)\s", 1, Substring)),
-          ""
+      union isfuzzy=true
+          (
+          meraki_CL
+          | project-rename LogMessage =  Message
+          ),
+          (
+          Syslog
+          | project-rename LogMessage =  SyslogMessage
+          )
+      | where not(disabled) and (LogMessage has "urls" or LogMessage has_all("security_event", "security_filtering_file_scanned"))
+      | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
+      | extend
+          LogType = tostring(Parser[2]),
+          Substring = tostring(Parser[3])
+      | extend LogSubType = iff(LogType == "security_event", tostring(extract(@"^(\S+)\s", 1, Substring)), "")
+      | where (LogType == "urls" or (LogType == "security_event" and LogSubType == "security_filtering_file_scanned"))
+      | parse-kv Substring as (src: string, dst: string, url: string, disposition: string, action: string, sha256: string, name: string, mac: string) with (pair_delimiter=" ", kv_delimiter="=")
+      | parse kind=regex Substring with * "request:[ ]{0,1}" request " "urls
+      | parse Substring with * " sha256" fsha256 " "restmessage
+      | parse Substring with * " agent=" agent " request:" restmessage
+      | extend src= iff(
+          src has '"',
+          replace_string(tostring(src), '"', ''),
+          replace_string(tostring(src), "'", "")
+      ),
+          dst= iff(
+          dst has '"',
+          replace_string(tostring(dst), '"', ''),
+          replace_string(tostring(dst), "'", "")
       )
-    | extend
-        EventResult=case(
-                LogMessage has "urls",
-                "Success",
-                LogMessage has "security_event" and Action in~("allow", "log", "accept"),
-                "Success",
-                LogMessage has "security_event" and Action in~("block", "deny", "qurantine"),
-                "Failure",
-                ""
-            ),
-        EventSeverity=case(
-                  LogMessage has "urls",
-                  "Informational",
-                  LogMessage has "security_event" and Action in~("allow", "log", "accept"),
-                  "Informational",
-                  LogMessage has "security_event" and Action in~("block", "deny", "qurantine"),
-                  "High",
+      | parse src with *  "[" temp_srcip "]:" temp_srcport
+      | parse dst with *  "[" temp_dstip "]:" temp_dstport
+      | extend
+          Epoch = tostring(Parser[0]),
+          Device = tostring(Parser[1])
+      | extend
+          EpochTimestamp = split(Epoch, ".")
+      | extend
+          EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
+      | extend
+          disposition= iff(
+                  disposition has '"',
+                  replace_string(tostring(disposition), '"', ''),
+                  replace_string(tostring(disposition), "'", "")
+              ),
+          action= iff(
+              action has '"',
+              replace_string(tostring(action), '"', ''),
+              replace_string(tostring(action), "'", "")
+          ),
+          agent= iff(
+            agent has '"',
+            replace_string(tostring(agent), '"', ''),
+            replace_string(tostring(agent), "'", "")
+        ),
+          sha256= iff(
+              sha256 has '"',
+              replace_string(tostring(sha256), '"', ''),
+              replace_string(tostring(sha256), "'", "")
+          ),
+          fsha256= iff(
+              sha256 has '"',
+              replace_string(tostring(fsha256), '"', ''),
+              replace_string(tostring(fsha256), "'", "")
+          ),
+          name= iff(
+            name has '"',
+            replace_string(tostring(name), '"', ''),
+            replace_string(tostring(name), "'", "")
+        ),
+          mac= iff(
+          mac has '"',
+          replace_string(tostring(mac), '"', ''),
+          replace_string(tostring(mac), "'", "")
+      ),
+          url= iff(
+          url has '"',
+          replace_string(tostring(url), '"', ''),
+          replace_string(tostring(url), "'", "")
+      ),
+          urls= iff(
+            urls has '"',
+            replace_string(tostring(urls), '"', ''),
+            replace_string(tostring(urls), "'", "")
+        )
+      | lookup ActionLookup on action
+      | extend Url = coalesce(url, urls)
+      | extend
+          EventResult=case(
+                  action in~("allow", "log", "accept") or LogType == "urls",
+                  "Success",
+                  action in~("block", "deny", "quarantine"),
+                  "Failure",
                   ""
               ),
-        Ip=extract("(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", 1, Url)
-    | extend SrcIpAddr = iff(Substring has 'src', extract(@"(src)[ ]{0,1}=[ ]{0,1}\'*((?:[0-9]{1,3}\.){3}[0-9]{1,3})", 2, Substring), "")
-    | extend SrcIpAddr = iff(isempty(SrcIpAddr) and Substring has 'src', extract(@'(src)[ ]{0,1}=[ ]{0,1}\"((?:[0-9]{1,3}\.){3}[0-9]{1,3})', 2, Substring), SrcIpAddr)
-    | extend SrcIpAddr = iff(isnotempty(SrcIpAddr), SrcIpAddr, extract(@"(src)[ ]{0,1}=[ ]{0,1}\'*\[{0,1}((?i)([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4})", 2, Substring))
-    | extend SrcIpAddr = iff(isempty(SrcIpAddr), extract(@'(src)[ ]{0,1}=[ ]{0,1}\"*\[{0,1}((?i)([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4})', 2, Substring), SrcIpAddr)
-    | extend SrcPortNumber = toint(extract(@"(src)[ ]{0,1}=[ ]{0,1}\'*((?:[0-9]{1,3}\.){3}[0-9]{1,3}):(\d+)+", 3, Substring))
-    | extend SrcPortNumber = iff(isempty(SrcPortNumber), toint(extract(@'(src)[ ]{0,1}=[ ]{0,1}\"((?:[0-9]{1,3}\.){3}[0-9]{1,3}):(\d+)+', 3, Substring)), SrcPortNumber)
-    | extend SrcPortNumber = iff(isempty(SrcPortNumber), toint(extract(@"(src)[ ]{0,1}=[ ]{0,1}[\']*(((\[{0,1})((((([0-9A-Fa-f]{0,4})))(:{1,1})([0-9A-Fa-f]{0,4})){1,8})(\]{0,1})(:([0-9]{0,5})){0,1}))", 14, Substring)), SrcPortNumber)
-    | extend SrcPortNumber = iff(isempty(SrcPortNumber), toint(extract(@'(src)[ ]{0,1}=[ ]{0,1}[\"]*(((\[{0,1})((((([0-9A-Fa-f]{0,4})))(:{1,1})([0-9A-Fa-f]{0,4})){1,8})(\]{0,1})(:([0-9]{0,5})){0,1}))', 14, Substring)), SrcPortNumber)
-    | extend DstIpAddr = iff(Substring has 'dst', extract(@"(dst)[ ]{0,1}=[ ]{0,1}\'*((?:[0-9]{1,3}\.){3}[0-9]{1,3})", 2, Substring), "")
-    | extend DstIpAddr = iff(isempty(DstIpAddr) and Substring has 'dst', extract(@'(dst)[ ]{0,1}=[ ]{0,1}\"((?:[0-9]{1,3}\.){3}[0-9]{1,3})', 2, Substring), DstIpAddr)
-    | extend DstIpAddr = iff(isnotempty(DstIpAddr), DstIpAddr, extract(@"(dst)[ ]{0,1}=[ ]{0,1}\'*\[{0,1}((?i)([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4})", 2, Substring))
-    | extend DstIpAddr = iff(isempty(DstIpAddr), extract(@'(dst)[ ]{0,1}=[ ]{0,1}\"*\[{0,1}((?i)([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4})', 2, Substring), DstIpAddr)
-    | extend DstPortNumber = toint(extract(@"(dst)[ ]{0,1}=[ ]{0,1}\'*((?:[0-9]{1,3}\.){3}[0-9]{1,3}):(\d+)+", 3, Substring))
-    | extend DstPortNumber = iff(isempty(DstPortNumber), toint(extract(@'(dst)[ ]{0,1}=[ ]{0,1}\"((?:[0-9]{1,3}\.){3}[0-9]{1,3}):(\d+)+', 3, Substring)), DstPortNumber)
-    | extend DstPortNumber = iff(isempty(DstPortNumber), toint(extract(@"(dst)[ ]{0,1}=[ ]{0,1}[\']*(((\[{0,1})((((([0-9A-Fa-f]{0,4})))(:{1,1})([0-9A-Fa-f]{0,4})){1,8})(\]{0,1})(:([0-9]{0,5})){0,1}))", 14, Substring)), DstPortNumber)
-    | extend DstPortNumber = iff(isempty(DstPortNumber), toint(extract(@'(dst)[ ]{0,1}=[ ]{0,1}[\"]*(((\[{0,1})((((([0-9A-Fa-f]{0,4})))(:{1,1})([0-9A-Fa-f]{0,4})){1,8})(\]{0,1})(:([0-9]{0,5})){0,1}))', 14, Substring)), DstPortNumber)
-    | extend
-        EventType=case(
-              LogMessage has "urls" and Ip != "",
-              "HTTPsession",
-              "WebServerSession"
-          ),
-        HttpUserAgent = iff(
-                    LogMessage has "urls",
-                    extract(@"agent='([\S\.\s\S]+)'", 1, Substring),
-                    ""
+          EventSeverity=case(
+                    action in~("block", "deny", "quarantine") and disposition == "malicious",
+                    "Medium",
+                    action in~("allow", "log", "accept") and disposition == "malicious",
+                    "High",
+                    action in~("block", "deny", "quarantine") and disposition != "malicious",
+                    "Low",
+                    "Informational"
                 ),
-        HttpRequestMethod = iff(LogMessage has "urls", extract(@"request: (\w+)\s", 1, Substring), dynamic("")),
-        FileSHA256 = iff(LogMessage has "security_event", tostring(extract(@"sha256([=]*)(\S+)?", 2, Substring)), ""),
-        FileName = iff (
-               LogMessage has "security_event",
-               tostring(extract(@"name='(\S+)'\s", 1, Substring)),
-               ""
-           ),
-        EventReportUrl=case (
-                   LogMessage has "security_event",
-                   tostring(extract(@"url=(\S+)\s", 1, Substring)),
-                   LogMessage has "urls",
-                   tostring(extract(@"request: (\w+)\s(\S+)", 2, Substring)),
-                   ""
-               ),
-        DvcMacAddr=tostring(extract(@"mac=(\S+)\s", 1, Substring))
-    | invoke _ASIM_ResolveDvcFQDN('Device')
-    | extend 
-        Dst=DstIpAddr,
-        Src=SrcIpAddr,
-        Dvc=DvcHostname,
-        IpAddr=SrcIpAddr,
-        UserAgent=HttpUserAgent
-    | lookup ActionLookup on Action
-    | project-away
-        LogMessage,
-        Parser,
-        Epoch,
-        EpochTimestamp,
-        Device,
-        Disposition,
-        Action,
-        Ip,
-        Substring,
-        TenantId,
-        SourceSystem,
-        Computer,
-        _ResourceId,
-        MG,
-        ManagementGroupName,
-        RawData,
-        EventTime,
-        Facility,
-        HostName,
-        SeverityLevel,
-        ProcessID,
-        HostIP,
-        ProcessName
+          Ip=extract("(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", 1, url)
+      | extend SrcIpAddr = iff(
+                          src has ".",
+                          split(src, ":")[0], 
+                          coalesce(temp_srcip, src)
+                      )
+      | extend SrcPortNumber = toint(
+                              iff (
+      src has ".",
+      split(src, ":")[1],
+      column_ifexists("temp_srcport", " ")
+  )
+                          )
+      | extend DstIpAddr = iff(
+                          dst has ".",
+                          split(dst, ":")[0], 
+                          coalesce(temp_dstip, dst)
+                      )
+      | extend DstPortNumber = toint(
+                              iff (
+      dst has ".",
+      split(dst, ":")[1],
+      column_ifexists("temp_dstport", " ")
+  )
+                          )
+      | extend
+          EventType=case(
+                LogType == "urls" and Ip != "",
+                "HTTPsession",
+                "WebServerSession"
+            ),
+          HttpUserAgent = column_ifexists("agent", ""),
+          HttpRequestMethod = column_ifexists("request", ""),
+          FileSHA256 = coalesce(sha256, fsha256),
+          FileName = column_ifexists("name", ""),
+          DvcMacAddr=column_ifexists("mac", "")
+      | invoke _ASIM_ResolveDvcFQDN('Device')
+      | extend 
+          Dst=DstIpAddr,
+          Src=SrcIpAddr,
+          Dvc=DvcHostname,
+          IpAddr=SrcIpAddr,
+          UserAgent=HttpUserAgent,
+          EventEndTime=EventStartTime
+      | extend
+          EventCount=int(1),
+          EventProduct="Meraki",
+          EventVendor="Cisco",
+          EventSchema="WebSession",
+          EventSchemaVersion="0.2.6"
+      | project-away
+          LogMessage,
+          Parser,
+          LogType,
+          LogSubType,
+          Epoch,
+          EpochTimestamp,
+          Device,
+          Ip,
+          src,
+          dst,
+          mac,
+          url,
+          urls,
+          disposition,
+          action,
+          request,
+          name,
+          sha256,
+          fsha256,
+          agent,
+          restmessage,
+          temp*,
+          Substring,
+          TenantId,
+          SourceSystem,
+          Computer,
+          _ResourceId,
+          MG,
+          ManagementGroupName,
+          RawData,
+          EventTime,
+          Facility,
+          HostName,
+          SeverityLevel,
+          ProcessID,
+          HostIP,
+          ProcessName
   };
-  parser (disabled=false)
+  parser (disabled=disabled)
