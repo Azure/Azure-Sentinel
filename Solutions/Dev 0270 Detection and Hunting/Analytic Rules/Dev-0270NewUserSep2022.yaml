@@ -1,0 +1,52 @@
+id: 7965f0be-c039-4d18-8ee8-9a6add8aecf3
+name: DEV-0270 New User Creation
+description: | 
+  'The following query tries to detect creation of a new user using a known DEV-0270 username/password schema'
+severity: High 
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+status: Available
+tactics: 
+  - Persistence
+relevantTechniques:
+  - T1098
+tags:
+  - Dev-0270
+query: |
+  (union isfuzzy=true
+  (SecurityEvent
+  | where EventID == 4688
+  | where CommandLine has_all ('net user', '/add') 
+  | parse CommandLine with * "user " username " "*
+  | extend password = extract(@"\buser\s+[^\s]+\s+([^\s]+)", 1, CommandLine) 
+  | where username in('DefaultAccount') or password in('P@ssw0rd1234', '_AS_@1394') 
+  | project TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  ),
+  (DeviceProcessEvents 
+  | where InitiatingProcessCommandLine has_all('net user', '/add') 
+  | parse InitiatingProcessCommandLine with * "user " username " "* 
+  | extend password = extract(@"\buser\s+[^\s]+\s+([^\s]+)", 1, InitiatingProcessCommandLine) 
+  | where username in('DefaultAccount') or password in('P@ssw0rd1234', '_AS_@1394') 
+  | extend timestamp = TimeGenerated, AccountCustomEntity =  InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.1
+kind: Scheduled
