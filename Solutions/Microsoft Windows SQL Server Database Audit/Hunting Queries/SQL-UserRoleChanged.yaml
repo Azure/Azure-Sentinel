@@ -16,12 +16,32 @@ relevantTechniques:
   - T1098
   - T1078
 query: |
-
         // SQLEvent is not the table name, it is the function name that should already be imported into your workspace.
         // The underlying table where the data exists is the Event table.
         // This query looking for Alter role commands and extracts username which was altered and target objectName
         SQLEvent
-        | where Statement contains "Alter role" and Statement has "add member"
+        | where Statement has_all ("Alter role", "add member")
         | parse Statement with * "ADD MEMBER [" TargetUser:string "]" *
         | project TimeGenerated, Computer, Action, ClientIP, CurrentUser, DatabaseName, TargetUser, ObjectName, Statement
-        | extend timestamp = TimeGenerated, AccountCustomEntity = CurrentUser, IPCustomEntity = ClientIP  
+        | extend Name = iff(CurrentUser contains '@', tostring(split(CurrentUser, '@', 0)[0]), CurrentUser)
+        | extend UPNSuffix = iff(CurrentUser contains '@', tostring(split(CurrentUser, '@', 1)[0]), '')
+        | extend Name = iff(CurrentUser contains '\\', tostring(split(CurrentUser, '\\', 1)[0]), Name)
+        | extend NTDomain = iff(CurrentUser contains '\\', tostring(split(CurrentUser, '\\', 0)[0]), '')
+        | extend Account_0_Name = Name
+        | extend Account_0_UPNSuffix = UPNSuffix
+        | extend Account_0_NTDomain = NTDomain
+        | extend IP_0_Address = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 2.0.0
