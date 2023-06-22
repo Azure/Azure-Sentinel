@@ -1,0 +1,5 @@
+# Lock User from Teams - Basic
+
+Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMartinPankraz%2FAzure-Sentinel%2Fadd-sap-playbooks-standard%2FSolutions%2FSAP%2FPlaybooks%2FBasic-SAPLockUser-STD%2Fazuredeploy.json)
