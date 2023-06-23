@@ -1,8 +1,8 @@
 # Lock SAP User from Teams - Basic
 
-Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service.
+Basic Sentinel playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service anticipating Azure private VNet integration.
 
-For complete deployment details beyond the "deploy to" button experience and post-deployment steps, see the **installation guide** [here](../INSTALLATION.md).
+👨🏽‍🔧[**installation guide**](../INSTALLATION.md).
 
 | Step | 🪂 |
 | --- | --- |
