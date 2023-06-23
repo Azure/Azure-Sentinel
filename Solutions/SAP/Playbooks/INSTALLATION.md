@@ -40,7 +40,7 @@ Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-
 ## Add the workflow parameters to the Logic App (Standard)
 
 14. Navigate to the Logic App and open the `Parameters` view under "Workflows".
-15. Paste the content of the `workflowparameters.json` file of your desired playbook folder. Find the file from above table. Save the parameters.
+15. Paste the content of the `workflowparameters.json` file of your desired playbook folder. Find the file from above table. Maintain your values as described on the [blog series](https://blogs.sap.com/2023/05/22/from-zero-to-hero-security-coverage-with-microsoft-sentinel-for-your-critical-sap-security-signals-youre-gonna-hear-me-soar-part-1/). Save the parameters.
 
 ## Add the workflow to the Logic App (Standard)
 

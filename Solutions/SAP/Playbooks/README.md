@@ -25,6 +25,16 @@ Find the the installation guide [here](./INSTALLATION.md).
 
 [DevOps deployment for single-tenant Azure Logic Apps](https://learn.microsoft.com/azure/logic-apps/devops-deployment-single-tenant-azure-logic-apps)
 
-## Export Logic Apps (Consumption) to Logic Apps (Standard)
+[Deploying Logic App Standard resource using Bicep templates and DevOps pipeline](https://techcommunity.microsoft.com/t5/integrations-on-azure-blog/deploying-logic-app-standard-resource-using-bicep-templates-and/ba-p/3760070)
 
-Find out more about the export process [here](https://learn.microsoft.com/azure/logic-apps/export-from-consumption-to-standard-logic-app)
+## What's next?
+
+Further simplification of the onboarding process with more templating and scripting.
+
+## Additional resources
+
+[Export Logic Apps (Consumption) to Logic Apps (Standard)](https://learn.microsoft.com/azure/logic-apps/export-from-consumption-to-standard-logic-app)
+
+## Contributing 👩🏼‍🤝‍👨🏽
+
+This project welcomes contributions and suggestions. Please use GitHub Issues to report errors or request new features.
