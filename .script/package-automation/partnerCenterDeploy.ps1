@@ -2,6 +2,10 @@ param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $defaultP
 
 $eventName = 'DeployToPartnerCenter'
 Write-Host "Deployement to Partner Center started!"
+
+. ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1
+. ./.script/package-automation/catelogAPI.ps1
+
 try {
     function GetPartnerCenterPackageUploadStatus {
         Param([Parameter(Mandatory = $true, Position = 0)]
@@ -50,9 +54,6 @@ try {
         }
         return $newDataFolderFilesWithoutExcludedFiles;
     }
-
-    . ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1
-    . ./.script/package-automation/catelogAPI.ps1
 
     $customProperties = @{ 'RunId' = "$runId"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "$eventName"; 'IsNewSolution' = '$isNewSolution'; 'SolutionOfferId' = '$offerId'; 'SolutionName' = '$solutionName'; }
     Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "$eventName" -CustomProperties $customProperties

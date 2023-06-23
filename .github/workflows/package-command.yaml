@@ -19,10 +19,18 @@ jobs:
     uses: ./.github/workflows/getSolutionName.yaml
     secrets: inherit
 
-  neworexistingsolution:
+  checkSkipPackagingDetails:
+    uses: ./.github/workflows/checkSkipPackagingInfo.yaml
+    secrets: inherit
     needs: solutionNameDetails
+    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' }}
+    with: 
+      solutionName: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+
+  neworexistingsolution:
+    needs: [solutionNameDetails, checkSkipPackagingDetails]
     uses: ./.github/workflows/neworexistingsolution.yaml
-    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' }} 
+    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && needs.checkSkipPackagingDetails.outputs.isPackagingRequired }} 
     with: 
       solutionName: "${{ needs.solutionNameDetails.outputs.solutionName }}"
     secrets: inherit
@@ -67,9 +75,9 @@ jobs:
           $isNewSolution = "${{ env.IS_NEW_SOLUTION }}"
 
           Write-Host "RunId = $runId, defaultPackageVersion = $defaultPackageVersion, solutionOfferId = $solutionOfferId, SOLUTION_NAME = $solutionName, PULL_REQUEST_NUMBER = $pullRequestNumber, isNewSolution = $isNewSolution"
+          . ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1
           try
           {
-            . ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1
             $customProperties = @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'EventName'="Create Package"; 'IsNewSolution'='$isNewSolution';'SolutionOfferId'='$solutionOfferId';'SolutionSupportedBy'='$solutionSupportedBy';'SolutionName'='$solutionName'; }
             Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "Create Package" -CustomProperties $customProperties
 

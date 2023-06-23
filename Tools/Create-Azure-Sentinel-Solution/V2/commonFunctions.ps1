@@ -23,7 +23,7 @@ $global:watchlistCounter = 1
 
 $global:DependencyCriteria = @();
 $global:customConnectorsList = @{};
-$functionAppList = @{};
+$global:functionAppList = @{};
 $ContentKindDict = [System.Collections.Generic.Dictionary[String,string]]::new()
 $ContentKindDict.Add("AnalyticsRule", "ar")
 $ContentKindDict.Add("AnalyticsRuleTemplate", "art")
@@ -321,7 +321,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             $newMetadata.Properties | Add-Member -Name 'publisherDisplayName' -Type NoteProperty -Value $(If ($support.psobject.properties["tier"].value.tolower() -eq "microsoft") {"Microsoft Sentinel, $($support.psobject.properties["name"].value)"} Else {$($support.psobject.properties["name"].value)})
             $newMetadata.Properties | Add-Member -Name 'descriptionHtml' -Type NoteProperty -Value $contentToImport.Description;
             $newMetadata.Properties | Add-Member -Name 'contentKind' -Type NoteProperty -Value "Solution";
-            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutioncontentProductId" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$($ContentKindDict.ContainsKey("Solution") ? $ContentKindDict["Solution"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+            
+            #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutioncontentProductId" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$($ContentKindDict.ContainsKey("Solution") ? $ContentKindDict["Solution"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+            
+            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutioncontentProductId" -NotePropertyValue "[concat(substring(variables('_solutionId'), 0, if(greaterOrEquals(length(variables('_solutionId')), 50), 50, length(variables('_solutionId')))),'-','$($ContentKindDict.ContainsKey("Solution") ? $ContentKindDict["Solution"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+
             $newMetadata.Properties | Add-Member -Name 'contentProductId' -Type NoteProperty -Value "[variables('_solutioncontentProductId')]"
             $newMetadata.Properties | Add-Member -Name 'id' -Type NoteProperty -Value "[variables('_solutioncontentProductId')]"
             $newMetadata.Properties | Add-Member -Name 'icon' -Type NoteProperty -Value $contentToImport.Logo;
@@ -745,7 +749,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $workbookTemplateSpecContent.properties.contentId = "[variables('_workbookContentId$global:workbookCounter')]"
                                 $workbookTemplateSpecContent.properties.contentKind = "Workbook"
                                 $workbookTemplateSpecContent.properties.displayName = "[parameters('workbook$global:workbookCounter-name')]"
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookcontentProductId$global:workbookCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId$global:workbookCounter'),'-', variables('workbookVersion$global:workbookCounter'))))]"
+                                
+                                #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookcontentProductId$global:workbookCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId$global:workbookCounter'),'-', variables('workbookVersion$global:workbookCounter'))))]"
+                                
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookcontentProductId$global:workbookCounter" -NotePropertyValue "[concat(substring(variables('_solutionId'), 0, if(greaterOrEquals(length(variables('_solutionId')), 50), 50, length(variables('_solutionId')))),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId$global:workbookCounter'),'-', variables('workbookVersion$global:workbookCounter'))))]"
+                                
                                 $workbookTemplateSpecContent.properties.contentProductId = "[variables('_workbookcontentProductId$global:workbookCounter')]"                                
                                 $workbookTemplateSpecContent.properties.id = "[variables('_workbookcontentProductId$global:workbookCounter')]"
                                 $workbookTemplateSpecContent.properties.version = "[variables('workbookVersion$global:workbookCounter')]"
@@ -807,6 +815,21 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                     if($fileName.ToLower() -match "FunctionApp"){
                         $functionAppsPlaybookId = $playbookData.parameters.FunctionAppName.defaultValue
+
+                        if ($null -eq $functionAppsPlaybookId)
+                        {
+                            $suffix = 'fa'
+                            if (!$playbookName) {
+                                $functionAppMessage = "FunctionAppname not found in FunctionApp file $fileName so setting default value to '" + $fileName + "fa'"
+                                Write-Host "$functionAppMessage"
+                                $functionAppsPlaybookId = $fileName + $suffix
+                            }
+                            else {
+                                $functionAppMessage = "FunctionAppname not found in FunctionApp file $fileName so setting default value to '" + $playbookName + "fa'"
+                                Write-Host "$functionAppMessage"
+                                $functionAppsPlaybookId = $playbookName + $suffix
+                            }
+                        }
                     }
 
                     if (!$playbookName) {
@@ -1266,12 +1289,12 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         {
                             foreach($param in $playbookData.parameters.PsObject.Properties)
                             {
-                                if($param.Value -match "defaultValue" -and $functionAppList.ContainsKey($param.Value.defaultValue))
+                                if($param.Value -match "defaultValue" -and $global:functionAppList.ContainsKey($param.Value.defaultValue))
                                 {
                                     $playbookDependencies += [PSCustomObject] @{
                                             kind = "AzureFunction";
-                                            contentId = $functionAppList[$param.Value.defaultValue].id;
-                                            version = $functionAppList[$param.Value.defaultValue].version;
+                                            contentId = $global:functionAppList[$param.Value.defaultValue].id;
+                                            version = $global:functionAppList[$param.Value.defaultValue].version;
                                     }
                                 }
                             }
@@ -1366,7 +1389,9 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $global:customConnectorsList.add($customConnectorContentId, @{ id="[variables('_$filename')]"; version="[variables('playbookVersion$global:playbookCounter')]"});
                         }
                         if ($IsFunctionAppResource) {
-                            $functionAppList.add($functionAppsPlaybookId, @{ id="[variables('_$filename')]"; version="[variables('playbookVersion$global:playbookCounter')]"});
+                            if ($null -ne $functionAppsPlaybookId) {
+                                $global:functionAppList.add($functionAppsPlaybookId, @{ id="[variables('_$filename')]"; version="[variables('playbookVersion$global:playbookCounter')]"});
+                            }
                         }
 
                         $playbookMetadata = [PSCustomObject]@{
@@ -1459,7 +1484,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $playbookTemplateSpecContent.properties.contentId = "[variables('_playbookContentId$global:playbookCounter')]"
                             $playbookTemplateSpecContent.properties.contentKind = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "AzureFunction" : "Playbook"
                             $playbookTemplateSpecContent.properties.displayName = $playbookName
-                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_playbookcontentProductId$global:playbookCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$global:contentShortName','-', uniqueString(concat(variables('_solutionId'),'-','$($IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "AzureFunction" : "Playbook")','-',variables('_playbookContentId$global:playbookCounter'),'-', variables('playbookVersion$global:playbookCounter'))))]"
+                            
+                            #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_playbookcontentProductId$global:playbookCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$global:contentShortName','-', uniqueString(concat(variables('_solutionId'),'-','$($IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "AzureFunction" : "Playbook")','-',variables('_playbookContentId$global:playbookCounter'),'-', variables('playbookVersion$global:playbookCounter'))))]"
+
+                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_playbookcontentProductId$global:playbookCounter" -NotePropertyValue "[concat(substring(variables('_solutionId'), 0, if(greaterOrEquals(length(variables('_solutionId')), 50), 50, length(variables('_solutionId')))),'-','$global:contentShortName','-', uniqueString(concat(variables('_solutionId'),'-','$($IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "AzureFunction" : "Playbook")','-',variables('_playbookContentId$global:playbookCounter'),'-', variables('playbookVersion$global:playbookCounter'))))]"
+
                             $playbookTemplateSpecContent.properties.contentProductId = "[variables('_playbookcontentProductId$global:playbookCounter')]"
                              $playbookTemplateSpecContent.properties.id = "[variables('_playbookcontentProductId$global:playbookCounter')]"
                             $playbookTemplateSpecContent.properties.version = "[variables('playbookVersion$global:playbookCounter')]"
@@ -1727,7 +1756,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $dataConnectorTemplateSpecContent = SetContentTemplateDefaultValuesToProperties -templateSpecResourceObj $dataConnectorTemplateSpecContent
                             $dataConnectorTemplateSpecContent.properties.contentId = "[variables('_dataConnectorContentId$global:connectorCounter')]"
                             $dataConnectorTemplateSpecContent.properties.contentKind = "DataConnector"
-                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorcontentProductId$global:connectorCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId$global:connectorCounter'),'-', variables('dataConnectorVersion$global:connectorCounter'))))]"
+                            
+                            #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorcontentProductId$global:connectorCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId$global:connectorCounter'),'-', variables('dataConnectorVersion$global:connectorCounter'))))]"
+                            
+                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorcontentProductId$global:connectorCounter" -NotePropertyValue "[concat(substring(variables('_solutionId'), 0, if(greaterOrEquals(length(variables('_solutionId')), 50), 50, length(variables('_solutionId')))),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId$global:connectorCounter'),'-', variables('dataConnectorVersion$global:connectorCounter'))))]"
+                            
                             $dataConnectorTemplateSpecContent.properties.contentProductId = "[variables('_dataConnectorcontentProductId$global:connectorCounter')]"
                             $dataConnectorTemplateSpecContent.properties.id = "[variables('_dataConnectorcontentProductId$global:connectorCounter')]"
                             #GenerateIdHash -packageId "$($global:baseMainTemplate.variables."solutionId")" -contentKind "DataConnector" -contentId "$($global:baseMainTemplate.variables."dataConnectorContentId$global:connectorCounter")" -contentVersion "$($global:baseMainTemplate.variables."dataConnectorVersion$global:connectorCounter")"
@@ -2148,7 +2181,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $huntingQueryTemplateSpecContent.properties.contentId = "[variables('_huntingQuerycontentId$global:huntingQueryCounter')]"
                                 $huntingQueryTemplateSpecContent.properties.contentKind = "HuntingQuery"
                                 $huntingQueryTemplateSpecContent.properties.displayName = $yaml.name
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_huntingQuerycontentProductId$global:huntingQueryCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('_huntingQuerycontentId$global:huntingQueryCounter'),'-', variables('huntingQueryVersion$global:huntingQueryCounter'))))]"
+                                
+                                #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_huntingQuerycontentProductId$global:huntingQueryCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('_huntingQuerycontentId$global:huntingQueryCounter'),'-', variables('huntingQueryVersion$global:huntingQueryCounter'))))]"
+
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_huntingQuerycontentProductId$global:huntingQueryCounter" -NotePropertyValue "[concat(substring(variables('_solutionId'), 0, if(greaterOrEquals(length(variables('_solutionId')), 50), 50, length(variables('_solutionId')))),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('_huntingQuerycontentId$global:huntingQueryCounter'),'-', variables('huntingQueryVersion$global:huntingQueryCounter'))))]"
+
                                 $huntingQueryTemplateSpecContent.properties.contentProductId = "[variables('_huntingQuerycontentProductId$global:huntingQueryCounter')]"
                                 $huntingQueryTemplateSpecContent.properties.id = "[variables('_huntingQuerycontentProductId$global:huntingQueryCounter')]"
                                 $huntingQueryTemplateSpecContent.properties.version = "[variables('huntingQueryVersion$global:huntingQueryCounter')]"
@@ -2495,7 +2532,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $analyticRuleTemplateSpecContent.properties.contentId = "[variables('_analyticRulecontentId$global:analyticRuleCounter')]"
                                 $analyticRuleTemplateSpecContent.properties.contentKind = "AnalyticsRule"
                                 $analyticRuleTemplateSpecContent.properties.displayName = $yaml.name
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_analyticRulecontentProductId$global:analyticRuleCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('_analyticRulecontentId$global:analyticRuleCounter'),'-', variables('analyticRuleVersion$global:analyticRuleCounter'))))]"
+                                
+                                #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_analyticRulecontentProductId$global:analyticRuleCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('_analyticRulecontentId$global:analyticRuleCounter'),'-', variables('analyticRuleVersion$global:analyticRuleCounter'))))]"
+
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_analyticRulecontentProductId$global:analyticRuleCounter" -NotePropertyValue "[concat(substring(variables('_solutionId'), 0, if(greaterOrEquals(length(variables('_solutionId')), 50), 50, length(variables('_solutionId')))),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('_analyticRulecontentId$global:analyticRuleCounter'),'-', variables('analyticRuleVersion$global:analyticRuleCounter'))))]"
+
                                 $analyticRuleTemplateSpecContent.properties.contentProductId = "[variables('_analyticRulecontentProductId$global:analyticRuleCounter')]"
                                 $analyticRuleTemplateSpecContent.properties.id = "[variables('_analyticRulecontentProductId$global:analyticRuleCounter')]"
                                 $analyticRuleTemplateSpecContent.properties.version = "[variables('analyticRuleVersion$global:analyticRuleCounter')]"
@@ -3054,7 +3095,11 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml)
             $parserTemplateSpecContent.properties.contentId = "[variables('_parserContentId$global:parserCounter')]"
             $parserTemplateSpecContent.properties.contentKind = "Parser"
             $parserTemplateSpecContent.properties.displayName = "$($displayDetails.displayName)"
-            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parsercontentProductId$global:parserCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$($ContentKindDict.ContainsKey("Parser") ? $ContentKindDict["Parser"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('_parserContentId$global:parserCounter'),'-', variables('parserVersion$global:parserCounter'))))]"
+            
+            #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parsercontentProductId$global:parserCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$($ContentKindDict.ContainsKey("Parser") ? $ContentKindDict["Parser"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('_parserContentId$global:parserCounter'),'-', variables('parserVersion$global:parserCounter'))))]"
+            
+            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parsercontentProductId$global:parserCounter" -NotePropertyValue "[concat(substring(variables('_solutionId'), 0, if(greaterOrEquals(length(variables('_solutionId')), 50), 50, length(variables('_solutionId')))),'-','$($ContentKindDict.ContainsKey("Parser") ? $ContentKindDict["Parser"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('_parserContentId$global:parserCounter'),'-', variables('parserVersion$global:parserCounter'))))]"
+            
             $parserTemplateSpecContent.properties.contentProductId = "[variables('_parsercontentProductId$global:parserCounter')]"
             $parserTemplateSpecContent.properties.id = "[variables('_parsercontentProductId$global:parserCounter')]"
             $parserTemplateSpecContent.properties.version = "[variables('parserVersion$global:parserCounter')]"

@@ -200,6 +200,9 @@ try {
 
     $dataFolderPath = $baseFolderPath + $solutionDataFolder
     $jsonDataFileInput = $dataFileContentObject | ConvertTo-Json
+    # CREATE SYSTEM GENERATED DATA FILE
+    $dataFilePath = $baseFolderPath + $solutionDataFolder + 'system_generated_metadata.json'
+
     Set-Content -Path "$dataFilePath" -Value $jsonDataFileInput
     Write-Output "dataFolderPath=$dataFolderPath" >> $env:GITHUB_OUTPUT
     Write-Host "dataFolderPath is $dataFolderPath"
@@ -207,7 +210,7 @@ try {
     $hasCreatePackageAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match ([regex]::Escape("createPackage")))
     $isCreatePackageSetToTrue = $dataFileContentObject.createPackage
     if ($hasCreatePackageAttribute -eq $true -and $isCreatePackageSetToTrue -eq $false) {
-        Write-Host "::warning::Skipping Package Creation for Solution '$solutionName', as Data File '$dataFolderFile' either doesn't have attribute 'createPackage' and/or not set to 'true'"
+        Write-Host "::warning::Skipping Package Creation for Solution '$solutionName', as Data File has attribute 'createPackage' set to False!"
         $setIsCreatePackage = $false
         Write-Output "isCreatePackage=$setIsCreatePackage" >> $env:GITHUB_OUTPUT
         ErrorOutput
