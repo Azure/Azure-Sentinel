@@ -1,6 +1,6 @@
 # Step-by-Step Installation Guide
 
-< 🏡[home](../README.md)
+< 🏡[home](README.md)
 
 [🪂Custom Azure Deployment Wizard](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template)
 
