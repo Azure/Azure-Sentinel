@@ -222,10 +222,15 @@ def main(mytimer: func.TimerRequest) -> None:
         local_filename = line["LogFile"].replace('/', '_').replace(':', '_')
         file_in_tmp_path = "{}/{}".format(temp_dir.name, local_filename)
         get_file_raw_lines(line["LogFile"],file_in_tmp_path)
-        if(file_in_tmp_path.st_size > 0):
-            gen_chunks(file_in_tmp_path)
-            logging.info('File processed {}'.format(line["LogFile"]))
-        logging.info('File Not Found or No Content'.format(line["LogFile"]))
+        if os.path.isfile(file_in_tmp_path):
+            file_size = os.path.getsize(file_in_tmp_path)
+            if file_size > 0:
+                gen_chunks(file_in_tmp_path)
+                logging.info('File processed {}'.format(line["LogFile"]))
+            else:
+                logging.info('Empty file: {}'.format(line["LogFile"]))
+        else:
+            logging.info('File Not Found: {}'.format(line["LogFile"]))
     logging.info('Program finished.')
     utc_timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
     if mytimer.past_due:
