@@ -216,7 +216,6 @@ foreach ($result in $results.data) {
 
             #Create the URI we need to create the alert.  Using the latest and greatest API call
             $alertUriGuid = $alertUri + $guid + '?api-version=2022-11-01-preview'
-            Write-Host "The body is: " + ($body | ConvertTo-Json -EnumsAsStrings -Depth 8)
 
             try {
                 Invoke-AzRestMethod -Path $alertUriGuid -Method PUT -Payload ($body | ConvertTo-Json -EnumsAsStrings -Depth 8)
