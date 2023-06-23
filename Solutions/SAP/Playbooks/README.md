@@ -2,7 +2,7 @@
 
 This repos contains SAP automation scenarios using Logic Apps (Standard). These playbooks allow [enterprise features](https://learn.microsoft.com/azure/logic-apps/single-tenant-overview-compare#resource-types-and-environments) such as private VNet injection, tenant isolation and more.
 
-[![Watch the video](img/sap-security-soar-youtube-thumbnail.jpg)](https://www.youtube.com/watch?v=b-AZnR-nQpg)
+[![Watch the video](img/sap-soar-youtube-thumbnail.png)](https://youtu.be/b-AZnR-nQpg)
 
 For scenarios using Logic Apps (Consumption) use the Microsoft Sentinel UI experience.
 
