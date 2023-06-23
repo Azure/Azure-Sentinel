@@ -8,20 +8,22 @@ Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-
 
 ## Playbooks
 
-| Playbook | Description | 🪂 |
-| --- | --- | --- |
-| [lock User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMartinPankraz%2FAzure-Sentinel%2Fadd-sap-playbooks-standard%2FSolutions%2FSAP%2FPlaybooks%2FBasic-SAPLockUser-STD%2Fazuredeploy.json) |
+| Playbook | Description |
+| --- | --- |
+| [lock User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service |
+
+The deployment process first creates the infrastructure and generates the IDs for the managed identity of your logic app (Standard). Due to that a two-step deployment is required to add the required Connections for your workflow. Find the managed identity properties on the `Output of your deployment process`.
+
+> **Warning**
+> Find the convenient "Deploy to Azure button" on the individual scenarios page from above table.
 
 ## Step-by-Step Installation
 
-[🪂Custom Deployment](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template)
+Find the the installation guide [here](./INSTALLATION.md).
 
-1. Choose "Custom deployment" from the Azure Portal or above link.
-2. Click "Build your own template in the editor" and paste the content of the ´template.json´ file of your desired playbook folder.
-3. Fill in the required parameters and click "Review + create".
-4. Click "Create" to deploy the ARM template.
-5. After the deployment is finished, navigate to the created Logic App and click "Edit".
-6. Click "Edit API connection" and work through the all the required connections till the Logic App can be saved.
+## CI/CD
+
+[DevOps deployment for single-tenant Azure Logic Apps](https://learn.microsoft.com/azure/logic-apps/devops-deployment-single-tenant-azure-logic-apps)
 
 ## Export Logic Apps (Consumption) to Logic Apps (Standard)
 

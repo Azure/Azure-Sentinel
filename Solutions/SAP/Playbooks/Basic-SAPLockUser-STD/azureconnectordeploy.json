@@ -1,0 +1,103 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "connections_teams_name": {
+            "defaultValue": "teams",
+            "type": "String"
+        },
+        "connections_azuresentinel_name": {
+            "defaultValue": "azuresentinel",
+            "type": "String"
+        },
+        "logicAppSystemAssignedIdentityTenantId": {
+            "type": "string",
+            "metadata": {
+                "description": "Get from prior Logic App deployment Outputs pane."
+            }
+        },
+        "logicAppSystemAssignedIdentityObjectId": {
+            "type": "string",
+            "metadata": {
+                "description": "Get from prior Logic App deployment Outputs pane."
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('connections_teams_name')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V2",
+            "properties": {
+                "displayName": "teams",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/teams')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections/accessPolicies",
+            "apiVersion": "2016-06-01",
+            "name": "[concat(parameters('connections_teams_name'),'/',parameters('logicAppSystemAssignedIdentityObjectId'))]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', parameters('connections_teams_name'))]"
+            ],
+            "properties": {
+                "principal": {
+                    "type": "ActiveDirectory",
+                    "identity": {
+                        "tenantId": "[parameters('logicAppSystemAssignedIdentityTenantId')]",
+                        "objectId": "[parameters('logicAppSystemAssignedIdentityObjectId')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('connections_azuresentinel_name')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V2",
+            "properties": {
+                "displayName": "sentinel-mi",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections/accessPolicies",
+            "apiVersion": "2016-06-01",
+            "name": "[concat(parameters('connections_azuresentinel_name'),'/',parameters('logicAppSystemAssignedIdentityObjectId'))]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', parameters('connections_azuresentinel_name'))]"
+            ],
+            "properties": {
+                "principal": {
+                    "type": "ActiveDirectory",
+                    "identity": {
+                        "tenantId": "[parameters('logicAppSystemAssignedIdentityTenantId')]",
+                        "objectId": "[parameters('logicAppSystemAssignedIdentityObjectId')]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+      "teamsendpointurl": {
+        "type": "string",
+        "value": "[reference(resourceId('Microsoft.Web/connections', parameters('connections_teams_name')),'2016-06-01', 'full').properties.connectionRuntimeUrl]"
+      },
+      "sentinelendpointurl": {
+        "type": "string",
+        "value": "[reference(resourceId('Microsoft.Web/connections', parameters('connections_azuresentinel_name')),'2016-06-01', 'full').properties.connectionRuntimeUrl]"
+      }
+    }
+  }
