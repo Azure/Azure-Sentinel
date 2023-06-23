@@ -14,7 +14,7 @@ Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-
 | --- | --- |
 | [Lock SAP User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service |
 
-> **Warning**
+> **Info**
 > Find the convenient "Deploy to Azure button" on the individual scenarios page from above table.
 
 ## Step-by-Step Installation
