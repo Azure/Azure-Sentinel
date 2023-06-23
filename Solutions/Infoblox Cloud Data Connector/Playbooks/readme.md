@@ -42,6 +42,7 @@ You may wish to import everything, or you may only need a handful of threat clas
 You can modify or create copies of these playbooks and tweak the action **Get TIDE Data** API call within the playbook to suit your needs. 
 Keep in mind due to [current limitations](https://learn.microsoft.com/en-us/azure/logic-apps/logic-apps-limits-and-config?tabs=consumption%2Cazure-portal), there is a 105MB download limit per API call and a 120 second HTTP timeout. 
 This is why you may only need to import new emails on a weekly basis, whereas hosts should be imported more frequently with an ```rlimit``` parameter because there are so many more.
+
 ![](images/tide.jpg)
 
 Use the following TIDE endpoints to see what is available for you to import. You can also view indicators in the [CSP](https://csp.infoblox.com/#/threat_intelligence/active-threat-indicators).
