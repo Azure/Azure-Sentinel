@@ -91,8 +91,6 @@ foreach ($result in $results.data) {
     #Make sure that the template's severity is one we want to include
     $severity = $result.properties.template.resources.properties.severity[0]
     Write-Host "Severity is... " $severity " of type " $severity.GetType()
-    Write-Host "Severities to include..." $SeveritiesToInclude
-    Write-Host "condition is..." $SeveritiesToInclude.Contains($severity)   
     if ($SeveritiesToInclude.Contains($severity)) {
         Write-Host "Enabling alert rule template... " $result.properties.template.resources.properties.displayName
         #Get to the actual template data
@@ -117,6 +115,7 @@ foreach ($result in $results.data) {
         $techniques = ""
         # If there is only 1 entry and the null, then if we return just the entry, it gets returned
         # as a string so we need to make sure we return an array
+        
         if ($template.techniques.Count -eq 2) {
             [String[]]$techniques = $template.techniques[0]
         }
@@ -127,7 +126,7 @@ foreach ($result in $results.data) {
 
         #For some reason there is a null as the last entry in the entities array so we need to remove it as well
         #as any entry that is just ".nan"
-        $entityMappings = $template.entityMappings  | Where-Object { $_ -ne $null } | Where-Object { $_ -ne ".nan" }
+        $entityMappings = $template.entityMappings | Where-Object { $_ -ne $null }
         #If the arrary of EntityMappings only contained one entry, it will not be returned as an arry
         # so we need to convert it into JSON while forcing it to be an array and then convert it back
         # without enumerating the output so that it remains an array
@@ -136,11 +135,15 @@ foreach ($result in $results.data) {
                 $entityMappings = $entityMappings | ConvertTo-Json -Depth 5 -AsArray | ConvertFrom-Json -NoEnumerate
             }
         }
+        
         #Some entity mappings are stored as empty strings (not sure why) so we need 
         #to check for that and set to null if it is empty so no error gets thrown
-        if ([String]::IsNullOrWhiteSpace($entityMappings)) {
-            $entityMappings = $null
-        }
+        #if ([String]::IsNullOrWhiteSpace($entityMappings)) {
+        #    $entityMappings = $null
+        #}
+        
+        $templateVersion = $template.version | Where-Object { $_ -ne $null }
+        $suppressionDuration = $template.suppressionDuration | Where-Object { $_ -ne $null }
 
         #Depending on the type of alert we are creating, the body has different parameters
         switch ($kind) {
@@ -169,10 +172,10 @@ foreach ($result in $results.data) {
                         "tactics"               = $tactics
                         "techniques"            = $techniques
                         "query"                 = $template.query[0]
-                        "suppressionDuration"   = "PT5H"
+                        "suppressionDuration"   = $suppressionDuration
                         "suppressionEnabled"    = $false
                         "eventGroupingSettings" = $template.eventGroupingSettings[0]
-                        "templateVersion"       = $template.version[0]
+                        "templateVersion"       = $templateVersion
                         "entityMappings"        = $entityMappings
                     }
                 }
@@ -183,23 +186,23 @@ foreach ($result in $results.data) {
                 $body = @{
                     "kind"       = "Scheduled"
                     "properties" = @{
-                        "enabled"               = "true"
                         "alertRuleTemplateName" = $name
-                        "displayName"           = $template.displayName[0]
                         "description"           = $template.description[0]
-                        "severity"              = $template.severity[0]
-                        "tactics"               = $tactics
-                        "techniques"            = $techniques
+                        "displayName"           = $template.displayName[0]
+                        "enabled"               = "true"
+                        "entityMappings"        = $entityMappings
+                        "eventGroupingSettings" = $template.eventGroupingSettings[0]
                         "query"                 = $template.query[0]
                         "queryFrequency"        = $template.queryFrequency[0]
                         "queryPeriod"           = $template.queryPeriod[0]
+                        "severity"              = $template.severity[0]
+                        "suppressionDuration"   = $suppressionDuration
+                        "suppressionEnabled"    = $false
+                        "tactics"               = $tactics
+                        "techniques"            = $techniques
+                        "templateVersion"       = $templateVersion
                         "triggerOperator"       = $template.triggerOperator[0]
                         "triggerThreshold"      = $template.triggerThreshold[0]
-                        "suppressionDuration"   = "PT5H"
-                        "suppressionEnabled"    = $false
-                        "eventGroupingSettings" = $template.eventGroupingSettings[0]
-                        "templateVersion"       = $template.version[0]
-                        "entityMappings"        = $entityMappings
                     }
                 }
             }
@@ -212,10 +215,11 @@ foreach ($result in $results.data) {
             $guid = New-Guid
 
             #Create the URI we need to create the alert.  Using the latest and greatest API call
-            $alertUriGuid = $alertUri + $guid + '?api-version=2022-12-01-preview'
+            $alertUriGuid = $alertUri + $guid + '?api-version=2022-11-01-preview'
+            Write-Host "The body is: " + ($body | ConvertTo-Json -EnumsAsStrings -Depth 8)
 
             try {
-                Invoke-AzRestMethod -Path $alertUriGuid -Method PUT -Payload ($body | ConvertTo-Json -EnumsAsStrings -Depth 5)
+                Invoke-AzRestMethod -Path $alertUriGuid -Method PUT -Payload ($body | ConvertTo-Json -EnumsAsStrings -Depth 8)
             }
             catch {
                 #Most likely any errors are due to the rule template having errors, typically in the query
