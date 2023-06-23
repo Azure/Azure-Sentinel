@@ -8,6 +8,8 @@
 
 Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-zero-to-hero-security-coverage-with-microsoft-sentinel-for-your-critical-sap-security-signals-blog-series/).
 
+The deployment process first creates the infrastructure and generates the IDs for the managed identity of your logic app (Standard). Due to that a two-step deployment is required to add the required Connections for your workflow.
+
 ## Create Logic App (Standard) infrastructure
 
 1. Choose "Custom deployment" from the Azure Portal or above link.

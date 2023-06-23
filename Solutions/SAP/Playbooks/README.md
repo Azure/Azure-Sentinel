@@ -8,13 +8,11 @@ For scenarios using Logic Apps (Consumption) use the Microsoft Sentinel UI exper
 
 Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-zero-to-hero-security-coverage-with-microsoft-sentinel-for-your-critical-sap-security-signals-blog-series/).
 
-## Playbooks
+## Pre-Configured SAP Playbooks
 
 | Playbook | Description |
 | --- | --- |
-| [lock User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service |
-
-The deployment process first creates the infrastructure and generates the IDs for the managed identity of your logic app (Standard). Due to that a two-step deployment is required to add the required Connections for your workflow. Find the managed identity properties on the `Output of your deployment process`.
+| [Lock SAP User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service |
 
 > **Warning**
 > Find the convenient "Deploy to Azure button" on the individual scenarios page from above table.
