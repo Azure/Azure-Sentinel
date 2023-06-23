@@ -1,6 +1,8 @@
 # Step-by-Step Installation Guide
 
-[🪂Custom Deployment Wizard](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template)
+< 🏡[home](../README.md)
+
+[🪂Custom Azure Deployment Wizard](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template)
 
 | Playbook | Description |
 | --- | --- |
@@ -20,7 +22,7 @@ The deployment process first creates the infrastructure and generates the IDs fo
 
 ## Add Connections for the workflow
 
-[🪂Custom Deployment Wizard](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template)
+[🪂Custom Azure Deployment Wizard](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template)
 
 ### Create Connections objects
 
@@ -74,3 +76,5 @@ Your Logic App can now only be triggered from Sentinel!
 > Make sure Sentinel is allowed to call your new Logic App. Navigate to the `Manage Permissions` pane from Sentinel -> Configuration -> Settings -> Settings -> Playbook Permissions -> Configure Permissions -> Choose your resource group -> Click Apply.
 
 25. Verify execution from the Logic App (Standard) run history. Find it on the workflow Overview section.
+
+[🔝](#)

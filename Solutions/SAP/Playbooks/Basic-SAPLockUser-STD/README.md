@@ -1,5 +1,7 @@
 # Lock SAP User from Teams - Basic
 
+< 🏡[home](../README.md)
+
 Basic Sentinel playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service anticipating Azure private VNet integration.
 
 👨🏽‍🔧[**installation guide**](../INSTALLATION.md).
@@ -11,3 +13,5 @@ Basic Sentinel playbook with minimum integration effort for simple SAP user bloc
 | Logic Apps Standard Connections configuration | 🔗[link](connections.json) |
 | Logic Apps Standard workflow | 🔗[link](workflow.json) |
 | Logic Apps Standard workflow parameters | 🔗[link](workflowparameters.json) |
+
+[🔝](#)
