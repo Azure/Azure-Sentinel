@@ -21,10 +21,32 @@ relevantTechniques:
   - T1203
   - T1566
 query: |
-  let lookback = 5min;
-  let mal_file_exts_list = dynamic([".exe", ".dll", ".bat", ".cmd", ".vbs", ".ps1", ".psm1", ".scr", ".jar", ".app", ".phishing", ".scam", ".malware", ".sh", ".bash", ".sql"]); // Update this list as per your requirement
-  let whitelisted_domains = dynamic (["windowsupdate.com", "windows.net"]); // exclude all trusted domain names
-  _Im_WebSession (starttime=ago(lookback), url_has_any=mal_file_exts_list, eventresult='Success')
+  let lookback = 5m;
+  let RiskyFileExtensions = materialize(externaldata(Extensions: string)
+      [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv"]
+      with(format="csv", ignoreFirstRecord=True));
+  let CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw("Web_RiskyFileExtensions") // Create new Watchlist and add your custom indicators(Optional)
+      | extend
+          Extensions = tostring(WatchlistItem["Extensions"])
+      | project Extensions
+      | where isnotempty(Extensions));
+  let CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;
+  let knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions
+      | where isnotempty(Extensions)
+      | summarize make_set(Extensions, 1000));
+  let Whitelisted_Domains = materialize(externaldata(WhiteListedDomains: string)
+      [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/WhiteListedDomainsForWebSessionUseCases.csv"]
+      with(format="csv", ignoreFirstRecord=True));
+  let CustomWhiteListedDomains = (_ASIM_GetWatchlistRaw("Web_WhiteListedDomains") // Create new Watchlist and add your white listed domains(Optional)
+      | extend
+          WhiteListedDomains = tostring(WatchlistItem["WhiteListedDomains"])
+      | project WhiteListedDomains
+      | where isnotempty(WhiteListedDomains));
+  let CombinedWhitelisted_Domains = union Whitelisted_Domains, CustomWhiteListedDomains;
+  let knownWhitelisted_Domains=toscalar(CombinedWhitelisted_Domains
+      | where isnotempty(WhiteListedDomains)
+      | summarize make_set(WhiteListedDomains, 1000));
+  _Im_WebSession (starttime=ago(lookback), url_has_any=knownRiskyFileExtensions, eventresult='Success')
   | project
       Url,
       SrcIpAddr,
@@ -33,10 +55,9 @@ query: |
       SrcHostname,
       DstIpAddr,
       DstPortNumber
-  | where Url has_any (mal_file_exts_list)
   | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]), '/')[-1])
   | extend requestedFileExt=extract(@'(\.\w+)$', 1, requestedFileName, typeof(string))
-  | where requestedFileExt in~ (mal_file_exts_list)
+  | where requestedFileExt in~ (knownRiskyFileExtensions)
   | summarize
       EventCount=count(),
       EventStartTime=min(TimeGenerated),
@@ -51,7 +72,7 @@ query: |
       requestedFileName
   | extend FQDN = split(parse_url(Url)["Host"], '.')
   | extend Domain = iif(array_length(FQDN) > 1, strcat(FQDN[-2], '.', FQDN[-1]), FQDN)
-  | where Domain !in~ (whitelisted_domains)
+  | where Domain !in~ (knownWhitelisted_Domains)
   | project-away FQDN
   | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
 entityMappings:
@@ -59,6 +80,8 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
       - identifier: Address
         columnName: DstIpAddr
   - entityType: URL

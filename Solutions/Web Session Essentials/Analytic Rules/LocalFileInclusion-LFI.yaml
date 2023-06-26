@@ -8,8 +8,8 @@ tags:
   - Schema: WebSession
     SchemaVersion: 0.2.6
 requiredDataConnectors: []
-queryFrequency: 1h
-queryPeriod: 1h
+queryFrequency: 5m
+queryPeriod: 5m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -20,19 +20,32 @@ relevantTechniques:
   - T1133
   - T1059
 query: |
-  // You can add more keywords to the query as necessary, depending on the specific indicators you want to detect.
-  let cmd_list = dynamic(['/etc/shadow', '/etc/passwd', '/etc/hosts', '/etc/ssh/', '..\\', '../', 'proc/self/environ']);
-  _Im_WebSession (starttime=ago(1h), eventresult='Success')
+  let lookback = 5m;
+  let LFI_Indicators = materialize(externaldata(Indicators: string)
+      [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/LocalFileInclusionIndicators.csv"] 
+      with(format="csv", ignoreFirstRecord=True));
+  let CustomLocalFileInclusionIndicators = (_ASIM_GetWatchlistRaw("Web_LocalFileInclusionIndicators") // Create new Watchlist and add your custom indicators(Optional)
+      | extend
+          Indicators = tostring(WatchlistItem["Indicators"])
+      | project Indicators
+      | where isnotempty(Indicators));
+  let CombinedLFIList = union LFI_Indicators, CustomLocalFileInclusionIndicators;
+  let knownLFIIndicators=toscalar(CombinedLFIList
+      | where isnotempty(Indicators)
+      | summarize make_set(Indicators, 1000));
+  _Im_WebSession(starttime=ago(lookback), url_has_any=knownLFIIndicators, eventresult='Success')
   | where isnotempty(Url)
   | project Url, SrcIpAddr, SrcUsername, SrcHostname, TimeGenerated
   | extend Decoded_url = url_decode(Url)
-  | where Decoded_url has_any (cmd_list)
+  | where Decoded_url has_any (knownLFIIndicators)
   | summarize
       EventCount=count(),
       EventStartTime=min(TimeGenerated),
       EventEndTime=max(TimeGenerated)
       by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url
-  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  | extend
+      Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+      UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
   | order by EventCount desc
 entityMappings:
   - entityType: IP

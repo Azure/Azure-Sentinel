@@ -21,7 +21,18 @@ relevantTechniques:
   - T1071.001
 query: |
   let connectionThreshold = 1;
-  let riskyExtensions = dynamic([".exe", ".dll", ".bat", ".cmd", ".vbs", ".ps1", ".psm1", ".scr", ".jar", ".app"]); // Update this list as per your requirement
+  let RiskyFileExtensions = materialize(externaldata(Extensions: string)
+      [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv"]
+      with(format="csv", ignoreFirstRecord=True));
+  let CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw("Web_RiskyFileExtensions") // Create new Watchlist and add your custom indicators(Optional)
+      | extend
+          Extensions = tostring(WatchlistItem["Extensions"])
+      | project Extensions
+      | where isnotempty(Extensions));
+  let CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;
+  let knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions
+      | where isnotempty(Extensions)
+      | summarize make_set(Extensions, 1000));
   let discord=dynamic(["cdn.discordapp.com", "media.discordapp.com"]);
   _Im_WebSession(starttime=ago(1d), url_has_any=discord, eventresult='Success')
   | where isnotempty(Url)
@@ -42,7 +53,7 @@ query: |
       set_Url to typeof(string),
       set_SrcIpAddr to typeof(string),
       set_SrcHostname to typeof(string)
-  | where dcount_Url <= connectionThreshold and set_Url has_any (riskyExtensions)
+  | where dcount_Url <= connectionThreshold and set_Url has_any (knownRiskyFileExtensions)
   | project
       EventStartTime=min_TimeGenerated,
       EventEndTime=max_TimeGenerated,
