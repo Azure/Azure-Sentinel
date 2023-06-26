@@ -16,6 +16,9 @@ The deployment process first creates the infrastructure and generates the IDs fo
 
 1. Choose "Custom deployment" from the Azure Portal or above link.
 2. Click "Build your own template in the editor" and paste the content of the ´azuredeploy.json´ file of your desired playbook folder.
+
+> **Note**: skip steps 1-2 if using the "Deploy to Azure button"
+
 3. Fill in the required parameters and click "Review + create".
 4. Click "Create" to deploy the ARM template for the Logic Apps infrastructure.
 5. After the deployment is finished, navigate to **Outputs pane** and grab the values for `logicAppSystemAssignedIdentityTenantId` and `logicAppSystemAssignedIdentityObjectId`.
@@ -26,7 +29,7 @@ The deployment process first creates the infrastructure and generates the IDs fo
 
 ### Create Connections objects
 
-6. Create a second deployment to add the required Connections. Provide the values from step 5.
+6. Create a second deployment again using the custom [deployment link](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template) or the "Deploy to Azure button" to add the required Connections. Provide the values from step 5.
 7. After the deployment is finished, navigate to **Outputs pane** and grab the values for the runtime URLs of your Connections.
 8. Navigate to the created Connections, open every one and click `Edit API connection`, authorize and save.
 
