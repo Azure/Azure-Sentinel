@@ -34,9 +34,24 @@ try
         }
         else
         {
-            Write-Host "isPackagingRequired set to True"
-            Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
-            $customProperties['isPackagingRequired'] = $true
+            # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
+            $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+            Write-Host "List of files changed in PR: $diff"
+            $filteredFiles = $diff | Where-Object {$_ -like "Solutions/$solutionName/Package/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) }
+
+            $isPackagingRequired = $false
+            if ($filteredFiles.Count -le 0)
+            {
+                # WE NEED PACKAGING
+                $isPackagingRequired = $true
+                $customProperties['isPackagingRequired'] = $true
+                Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
+            }
+
+            Write-Host "isPackagingRequired set to $isPackagingRequired"
+            $customProperties['isPackagingRequired'] = $isPackagingRequired
+            Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
+
             Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
         }
     }
