@@ -1,17 +1,17 @@
-import datetime
-import logging
-import json 
-import requests
-import hashlib
-import hmac
 import base64
 import csv
+import datetime
+import hashlib
+import hmac
+import json
+import logging
 import os
+import re
 import sys
 import tempfile
-import re
-import azure.functions as func
 
+import azure.functions as func
+import requests
 
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
@@ -106,12 +106,12 @@ def get_file_raw_lines(file_url, file_in_tmp_path):
     url = f'{instance_url}{file_url}'
     try:
         with requests.get(url, stream=True, headers=headers) as r:
-            with open(file_in_tmp_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=1024*1024):
-                    if chunk:  # filter out keep-alive new chunks
-                        f.write(chunk)
             if r.status_code == 200:
                 print('File successfully downloaded from url {} '.format(url))
+                with open(file_in_tmp_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=1024*1024):
+                        if chunk:  # filter out keep-alive new chunks
+                            f.write(chunk)
             else:
                 print('File downloading failed. {r.status_code} {r.text} {file_url}')
     except Exception as err:
@@ -205,6 +205,10 @@ def post_data(customer_id, shared_key, body, log_type, chunk_count):
 def main(mytimer: func.TimerRequest) -> None:
     logging.info(f'Script started')
     global instance_url,token,headers,customer_id,shared_key,log_type,users,temp_dir,file_in_tmp_path
+    csv.field_size_limit(sys.maxsize)
+    logging.info('Checking limit')
+    sys.setrecursionlimit(10**9)
+    logging.info('Checking recurssion')
     users = dict()
     token = _get_token()[0]
     instance_url = _get_token()[1]
@@ -218,8 +222,15 @@ def main(mytimer: func.TimerRequest) -> None:
         local_filename = line["LogFile"].replace('/', '_').replace(':', '_')
         file_in_tmp_path = "{}/{}".format(temp_dir.name, local_filename)
         get_file_raw_lines(line["LogFile"],file_in_tmp_path)
-        gen_chunks(file_in_tmp_path)
-        logging.info('File processed {}'.format(line["LogFile"]))
+        if os.path.isfile(file_in_tmp_path):
+            file_size = os.path.getsize(file_in_tmp_path)
+            if file_size > 0:
+                gen_chunks(file_in_tmp_path)
+                logging.info('File processed {}'.format(line["LogFile"]))
+            else:
+                logging.info('Empty file: {}'.format(line["LogFile"]))
+        else:
+            logging.info('File Not Found: {}'.format(line["LogFile"]))
     logging.info('Program finished.')
     utc_timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
     if mytimer.past_due:
