@@ -41,7 +41,7 @@ query: |
   // These are considered suspicious, since they might be an attacker masquerading a beacon as a legitimate browser.
   let SuspiciousClients = BrowserTraffic
   | where HttpUserAgent in (CommonUA)
-  | summarize Destination_Hosts = make_set(DestHostname), request_count=count() by HttpUserAgent, SrcIpAddr
+  | summarize Destination_Hosts = make_set(DestHostname,100), request_count=count() by HttpUserAgent, SrcIpAddr
   | where array_length(Destination_Hosts) <=Total_Visited_Sites and request_count >= min_requests
   | project HttpUserAgent, SrcIpAddr, Destination_Hosts;
   // Just reporting on suspicious browsers gives too many false positives.
@@ -55,7 +55,7 @@ query: |
   | where hour_count >=min_hours and request_count >= min_requests 
   // Remove common domains i.e. visited by atleast trusted_user_count number of users.
   | join kind=leftanti CommonDomains on DestHostname // leftanti=> Returns all the records from the left side that don't have matches from the right
-  | summarize RareHosts=make_set(DestHostname), TotalRequestCount=sum(request_count), BrowserHosts=take_any(Destination_Hosts) by HttpUserAgent, SrcIpAddr
+  | summarize RareHosts=make_set(DestHostname,100), TotalRequestCount=sum(request_count), BrowserHosts=take_any(Destination_Hosts) by HttpUserAgent, SrcIpAddr
   // Remove browsers that visit any common domains.
   | where array_length(RareHosts) == array_length(BrowserHosts);
   // Look back for X days to see if the browser was not used to visit more hosts.
@@ -66,7 +66,7 @@ query: |
   | where not(ipv4_is_private(DstIpAddr)) // Take only those requests that are going to internet
   | where HttpUserAgent has_any ("Mozilla","Gecko")
   ) on SrcIpAddr, HttpUserAgent
-  | summarize RareHosts=take_any(RareHosts),BrowserHosts1d=take_any(BrowserHosts),BrowserHostsLookback=make_set(DestHostname) by SrcIpAddr, HttpUserAgent
+  | summarize RareHosts=take_any(RareHosts),BrowserHosts1d=take_any(BrowserHosts),BrowserHostsLookback=make_set(DestHostname,100) by SrcIpAddr, HttpUserAgent
   | where array_length(RareHosts) == array_length(BrowserHostsLookback)
   | extend IP_0_Address = SrcIpAddr
 entityMappings:
