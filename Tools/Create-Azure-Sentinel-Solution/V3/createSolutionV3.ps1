@@ -159,7 +159,7 @@ try {
                         }
                     }
                     else {
-                        if ($file -match "(\.yaml)$") {
+                        if ($file -match "(\.yaml)$" -and $objectProperties.Name.ToLower() -ne "parsers") {
                             $objectKeyLowercase = $objectProperties.Name.ToLower()
                             if ($objectKeyLowercase -eq "hunting queries") {
                                 GetHuntingDataMetadata -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
