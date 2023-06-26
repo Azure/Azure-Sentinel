@@ -24,10 +24,12 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let TI = ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where TimeGenerated >= ago(ioc_lookBack)
+  //Get most recent ingested indicator in case there are copies
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()  
   | where Description == "Infoblox - HOST - Policy"
   | where Tags has_cs "Property: Policy_LookalikeDomains" 
-  | where Active == true
   | where isnotempty(DomainName)
   ;
   let Data = InfobloxCDC
@@ -39,8 +41,6 @@ query: |
   ;
   TI | join kind=innerunique Data on $left.DomainName == $right.DestinationDnsDomain
   | where HitTime >= TimeGenerated and HitTime < ExpirationDateTime
-  //Get most recent ingested indicator in case there are copies
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, HitTime, DeviceEventClassID, ThreatLevel, ThreatLevel_Score, ThreatConfidence, DestinationDnsDomain, InfobloxB1FeedName, ThreatClass, ThreatProperty, InfobloxB1PolicyAction, DeviceAction, InfobloxB1PolicyName, SourceIP, DeviceName, SourceMACAddress, SourceUserName, InfobloxB1SrcOSVersion, InfobloxB1ConnectionType, InfobloxB1Network, AdditionalExtensionsParsedNested, 
   AdditionalInformation, Description, ThreatType, TrafficLightProtocolLevel, Type, ConfidenceScore, ExpirationDateTime, SourceSystem, Action, IndicatorId, ExternalIndicatorId, Tags
 entityMappings:
