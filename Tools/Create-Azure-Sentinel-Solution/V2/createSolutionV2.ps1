@@ -1,5 +1,6 @@
 Import-Module powershell-yaml
 
+Write-Host '====It is recommended to use createSolutionV3.ps1 file for packaging V2 and V3 version===='
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
 $mainTemplateArtifact = [PSCustomObject]@{
