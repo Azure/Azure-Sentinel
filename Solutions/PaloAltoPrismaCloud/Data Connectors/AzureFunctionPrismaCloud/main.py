@@ -88,21 +88,24 @@ class PrismaCloudConnector:
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
-            last_alert_ts_ms = alert['alertTime']
+            try:
+                last_alert_ts_ms = alert['alertTime']
 
-            if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
-                policy_complianceMetadata = alert['policy']['complianceMetadata']
-                if(len(json.dumps(policy_complianceMetadata).encode()) > 32000):
-                    queue_list = self.sentinel1._split_big_request(policy_complianceMetadata)
-                    count = 1
-                    for q in queue_list:
-                        columnname = 'complianceMetadataPart' + str(count)
-                        alert['policy'][columnname] = q
-                        count+=1
-            alert = self.clear_alert(alert)
-            await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
-            self.sent_alerts += 1
-
+                if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
+                    policy_complianceMetadata = alert['policy']['complianceMetadata']
+                    if(len(json.dumps(policy_complianceMetadata).encode()) > 32000):
+                        queue_list = self.sentinel1._split_big_request(policy_complianceMetadata)
+                        count = 1
+                        for q in queue_list:
+                            columnname = 'complianceMetadataPart' + str(count)
+                            alert['policy'][columnname] = q
+                            count+=1
+                alert = self.clear_alert(alert)
+                await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
+                self.sent_alerts += 1
+            except Exception as e:
+                logging.error(f"Processing Alerts Failed. Err: {e}")
+        
         self.last_alert_ts = last_alert_ts_ms
 
         conn = self.sentinel.get_log_type_connector(ALERT_LOG_TYPE)
