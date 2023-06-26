@@ -46,7 +46,7 @@ query: |
       | summarize maxv = max(v)
       | extend sumexist = (maxv > 1)
       );
-  let TimeSeriesData = union isfuzzy=false 
+  let TimeSeriesData = union isfuzzy=true 
           (
           (datatable(exists: int, sumexist: bool)[1, false]
           | where toscalar(eps) > 1000
@@ -127,10 +127,11 @@ query: |
           TotalBytesSentinMBperHour,
           BaselineBytesSentinMBperHour,
           anomalies,
-          score);
+          score
+      | where AnomalyHour between (startofday(ago(endTime)) .. startofday(now())) // Get TimeSeriesAnomalies in previous day
+          );
   // TimeSeriesAlerts block end here
   let AnomalyHours = materialize (TimeSeriesAnomalies
-      | where AnomalyHour between (startofday(ago(endTime)) .. startofday(now())) // Get TimeSeriesAnomalies in previous day
       | project AnomalyHour);
   //Previous day aggregated per hour
   let PreviousDayLogs = 
@@ -175,7 +176,6 @@ query: |
           HourlyCount;
   // PreviousDayLogs block ends here
   TimeSeriesAnomalies
-  | where AnomalyHour between (startofday(ago(endTime)) .. startofday(now()))
   | join kind = inner (PreviousDayLogs
       | extend AnomalyHour = TimeGeneratedHour)
       on EventProduct, AnomalyHour
@@ -200,7 +200,7 @@ query: |
       EndTimeUtc = max(TimeGeneratedMax),
       SentBytesinMB = sum(SentBytesinMB),
       ReceivedBytesinMB = sum(ReceivedBytesinMB),
-      SourceIP = any(SrcIpAddr),
+      SourceIP = take_any(SrcIpAddr),
       SourceIPList = make_set(SrcIpAddr, 10),
       DestinationIPList = make_set(DestinationIPList, 100),
       DestinationPortList = make_set(DestinationPortList, 100)
@@ -244,7 +244,7 @@ customDetails:
   anomalies: anomalies
   score: score
 alertDetailsOverride:
-  alertDisplayNameFormat: "The system has identified that the client with the IP address '{{SrcIpAddr}}' is engaged in data transfers to a public network that exceeds usual levels"
+  alertDisplayNameFormat: "IP address '{{SourceIP}}' is engaged in data transfers to a public network that exceeds usual levels"
   alertDescriptionFormat: "Please conduct a thorough investigation of each IPAddresses listed in SourceIPList: '{{SourceIPList}}' to identify any suspicious activities that may require further investigation. 'SourceIPList' include the top 10 client IP addresses that transmitted the highest amount of data during the anomalous hour"
 version: 1.0.0
 kind: Scheduled
