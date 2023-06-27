@@ -66,31 +66,36 @@ def get_parser(parser_path):
         raise Exception()
 
 
-# Creating a string of the parameters of a parser
+# Creating a string of the parameters of a parser. 
+# Example: for a parser with two parameters: (Name: eventtype, Type: string, Default: 'Query'), (Name: disabled, Type: bool, Default: false)
+# The output will be: eventtype:string='Query',disabled:bool=False
 def create_parameters_string(parser_file):
     paramsList = []
     for param in parser_file['ParserParams']:
         paramDefault = f"\'{param['Default']}\'" if param['Type']=="string" else param['Default']
         paramsList.append(f"{param['Name']}:{param['Type']}={paramDefault}")
     return ','.join(paramsList)
-    
 
-def create_query_without_call(parser_file):
+
+# Taking the query string from a parser file and returning a string with a definition of a KQL function
+def create_query_definition_string(parser_file):
     params_str = create_parameters_string(parser_file) 
     query_from_yaml = parser_file['ParserQuery']
     return f"let query= ({params_str}) {{ {query_from_yaml} }};\n"
 
 
-def create_call_without_parameter(column_name):
+# Returning a string representing a call for a KQL function without parameters
+def create_call_string_without_parameters(column_name):
     return f"query() | summarize count() by {column_name}\n" 
 
 
-def create_call_with_parameter(parameter, value, column_name):
+# Returning a string representing a call for a KQL function with one parameter
+def create_call_strings_with_parameters(parameter, value, column_name):
     return f"query({parameter}={value}) | summarize count() by {column_name}\n"
 
 
 class FilteringTest(unittest.TestCase):
-    # "Main" function which runs initiates the validations 
+    # "Main" function which opens the parser file, checks if it has all the required fields, checks if there is data in the provided workspace and then initiates the tests for each parameter in the parser.
     def tests_main_func(self):
         if not os.path.exists(parser_file_path):
             self.fail(f"File path does not exist: {parser_file_path}")
@@ -101,40 +106,52 @@ class FilteringTest(unittest.TestCase):
         except:
             self.fail(f"Cannot open file: {parser_file_path}")
         self.check_required_fields(parser_file)
-        no_call_query = create_query_without_call(parser_file)
+        no_call_query = create_query_definition_string(parser_file)
         self.check_data_in_workspace(no_call_query)
         columns_in_answer = self.get_columns_of_parser_answer(no_call_query)
-        if parser_file['Normalization']['Schema'] not in all_schemas_parameters:
-            self.fail(f"Schema: {parser_file['Normalization']['Schema']} - is not supported")
-        param_to_column_mapping = all_schemas_parameters[parser_file['Normalization']['Schema']]
+        schema_of_parser = parser_file['Normalization']['Schema']
+        if schema_of_parser not in all_schemas_parameters:
+            self.fail(f"Schema: {schema_of_parser} - Not an existing schema or not supported by the validations script")
+        param_to_column_mapping = all_schemas_parameters[schema_of_parser]
         for param in parser_file['ParserParams']:
+            param_name = param['Name']
             with self.subTest():
-                if param['Name'] not in param_to_column_mapping:
-                    self.fail(f"parameter: {param['Name']} - is not a valid parameter")
-                column_name_in_table = param_to_column_mapping[param['Name']]
-                self.handle_param(param, no_call_query, columns_in_answer, column_name_in_table)            
+                if param_name not in param_to_column_mapping:
+                    self.fail(f"parameter: {param_name} - No such parameter in {schema_of_parser} schema")
+                column_name_in_table = param_to_column_mapping[param_name]
+                self.send_param_to_test(param, no_call_query, columns_in_answer, column_name_in_table)            
                       
-    # Sending a parameters to the suitable test according to the parameter type    
-    def handle_param(self, param, no_call_query, columns_in_answer, column_name_in_table):
+    def send_param_to_test(self, param, query_definition, columns_in_answer, column_name_in_table):
+        """
+        Sending parameters to the suitable test according to the parameter type  
+
+        Parameters
+        ----------
+        param : A parameter field from the parser yaml file
+        query_definition : A string with a definition of the parser's query
+        columns_in_answer : Set of column names that will be in the response from the query call
+        column_name_in_table : The name of the column in the query response on which the parameter performs filtering
+        """
         param_name = param['Name']
         param_type = param['Type']
+        # pack parameter is not checked by the validations
         if (param_name == "pack"):
             return 
         if (param_name == "disabled"):
-            self.disabled_test(param, no_call_query)
+            self.disabled_test(query_definition)
         elif  column_name_in_table not in columns_in_answer:
             return
         elif (param_type == "datetime"):
-            pass
+            pass #TODO add test for datetime
         elif (param_type == "dynamic"):
-            pass
+            pass #TODO add tests for dynamic
         else:
-            self.scalar_test(param, no_call_query, column_name_in_table)
+            self.scalar_test(param, query_definition, column_name_in_table)
 
     
     # Checking if the provided workspace has some data
-    def check_data_in_workspace(self, no_call_query):
-        check_data_response = self.send_query(no_call_query + "query() | take 5")
+    def check_data_in_workspace(self, query_definition):
+        check_data_response = self.send_query(query_definition + "query() | take 5")
         if len(check_data_response.tables[0].rows) == 0:
             self.fail("No data in the provided workspace")
           
@@ -155,10 +172,18 @@ class FilteringTest(unittest.TestCase):
             self.fail(f"The following fields are missing in the file:\n{missing_fields}")
     
 
-    # Test for parameter which are not datetime,dynamic or disabled
-    def scalar_test(self, param, no_call_query, column_name_in_table):
+    def scalar_test(self, param, query_definition, column_name_in_table):
+        """
+        Test for parameter which are not datetime,dynamic or disabled  
+
+        Parameters
+        ----------
+        param : A parameter field from the parser yaml file
+        query_definition : A string with a definition of the parser's query
+        column_name_in_table : The name of the column in the query response on which the parameter performs filtering
+        """
         param_name = param['Name']
-        no_filter_query = no_call_query + create_call_without_parameter(column_name_in_table)
+        no_filter_query = query_definition + create_call_string_without_parameters(column_name_in_table)
         no_filter_response = self.send_query(no_filter_query)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
         with  self.subTest():
@@ -166,31 +191,45 @@ class FilteringTest(unittest.TestCase):
         # Taking the first value returned in the response
         selected_value = no_filter_response.tables[0].rows[0][0]
         value_to_filter = f"\'{selected_value}\'" if param['Type']=="string" else selected_value
-
-        # Performing a filtering by the first value returned in the first response
-        query_with_filter = no_call_query + create_call_with_parameter(param_name, value_to_filter, column_name_in_table)
+        query_with_filter = query_definition + create_call_strings_with_parameters(param_name, value_to_filter, column_name_in_table)
         if selected_value=="":
-            query_with_filter = no_call_query + f"query() | where isempty({column_name_in_table}) | summarize count() by {column_name_in_table}\n"
+            query_with_filter = query_definition + f"query() | where isempty({column_name_in_table}) | summarize count() by {column_name_in_table}\n"
+        
+        # Performing a filtering by the first value returned in the first response
+        self.scalar_test_check_filtering(param_name, query_with_filter, value_to_filter)
+
+        # Performing a query with a non-existing value, expecting to return no results
+        self.scalar_test_check_fictive_value(param_name, query_definition, column_name_in_table )
+
+
+    def scalar_test_check_filtering(self, param_name, query_with_filter, value_to_filter ):
         filtered_response = self.send_query(query_with_filter)
         with self.subTest():
             self.assertNotEqual(0, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Got no results at all after filtering. Filtered by value: {value_to_filter}")
         with self.subTest():
             self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering. Filtered by value: {value_to_filter}")
+        
 
-        # Performing a query with a non-existing value, expecting to return no results
-        no_results_query = no_call_query + create_call_with_parameter(param_name, DUMMY_VALUE, column_name_in_table)
+    def scalar_test_check_fictive_value(self, param_name, query_definition, column_name_in_table):
+        no_results_query = query_definition + create_call_strings_with_parameters(param_name, DUMMY_VALUE, column_name_in_table)
         no_results_response = self.send_query(no_results_query)
         with self.subTest():
             self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
-        
 
         
-    def disabled_test(self, param, no_call_query):
-        disabled_true_query = no_call_query + f"query(disabled=true) | summarize count()\n"
+    def disabled_test(self, query_definition):
+        """
+        Test for "disabled" parameter. The two checked values for this parameter are True and False.
+
+        Parameters
+        ----------
+        query_definition : A string with a definition of the parser's query
+        """
+        disabled_true_query = query_definition + f"query(disabled=true) | summarize count()\n"
         disabled_true_response = self.send_query(disabled_true_query)
         self.assertEqual(0, disabled_true_response.tables[0].rows[0][0], "Expected to return 0 results for disabled=true")
 
-        disabled_false_query = no_call_query + f"query(disabled=false) | summarize count()\n"
+        disabled_false_query = query_definition + f"query(disabled=false) | summarize count()\n"
         disabled_false_response = self.send_query(disabled_false_query)
         self.assertNotEqual(0, disabled_false_response.tables[0].rows[0][0], "Expected to return results for disabled=false")
 
@@ -205,6 +244,14 @@ class FilteringTest(unittest.TestCase):
 
 
     def send_query(self, query_str):
+        """
+        Sending a query to the workspace with the id provided by the user.
+        If the query call was successful' the method returns the response to the query.
+
+        Parameters
+        ----------
+        query_str : A string with the KQL query that will be sent to the workspace.
+        """
         try:
             response = client.query_workspace(
                 workspace_id = ws_id,
@@ -215,6 +262,8 @@ class FilteringTest(unittest.TestCase):
                 self.fail("Query failed")
             elif response.status == LogsQueryStatus.FAILURE:
                 self.fail(f"The following query failed:\n{query_str}")
+            elif response.tables == None or len(response.tables) == 0:
+                self.fail("No data tables were returned in the response for the query")
             else:
                 return response
         except HttpResponseError as err:
