@@ -62,28 +62,42 @@ function handleEmptyInstructionProperties ($inputObj) {
     $outputObj
 }
 
-function removePropertiesRecursively ($resourceObj) {
+function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
     foreach ($prop in $resourceObj.PsObject.Properties) {
         $key = $prop.Name
         $val = $prop.Value
         if ($null -eq $val) {
-            $resourceObj.$key = "[variables('blanks')]";
-            if (!$global:baseMainTemplate.variables.blanks) {
-                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+            if ($isWorkbook)
+            {
+                $resourceObj.$key = ''
+            }
+            else
+            {
+                $resourceObj.$key = "[variables('blanks')]";
+                if (!$global:baseMainTemplate.variables.blanks) {
+                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                }
             }
         }
         elseif ($val -is [System.Object[]]) {
             if ($val.Count -eq 0) {
-                #$resourceObj.PsObject.Properties.Remove($key)
-                $resourceObj.$key = "[variables('TemplateEmptyArray')]";
-                if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
-                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                if ($isWorkbook)
+                {
+                    $resourceObj.$key = '[]'
+                }
+                else
+                {
+                    #$resourceObj.PsObject.Properties.Remove($key)
+                    $resourceObj.$key = "[variables('TemplateEmptyArray')]";
+                    if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+                        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                    }
                 }
             }
             else {
                 foreach ($item in $val) {
                     $itemIndex = $val.IndexOf($item)
-                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex])
+                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex] $isWorkbook)
                 }
             }
         }
@@ -93,7 +107,7 @@ function removePropertiesRecursively ($resourceObj) {
                     $resourceObj.PsObject.Properties.Remove($key)
                 }
                 else {
-                    $resourceObj.$key = $(removePropertiesRecursively $val)
+                    $resourceObj.$key = $(removePropertiesRecursively $val $isWorkbook)
                     if ($($resourceObj.$key.PsObject.Properties).Count -eq 0) {
                         $resourceObj.PsObject.Properties.Remove($key)
                     }
@@ -519,7 +533,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
                             # Remove empty braces
-                            $serializedData = $(removePropertiesRecursively $serializedData) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
+                            $serializedData = $(removePropertiesRecursively $serializedData $true) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
                         }
                         catch {
                             Write-Host "Failed to serialize $file" -ForegroundColor Red
@@ -1276,7 +1290,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
 
                         $playbookResource =  $playbookResource
-                        $playbookResource = $(removePropertiesRecursively $playbookResource)
+                        $playbookResource = $(removePropertiesRecursively $playbookResource $false)
                         $playbookResource =  $(addInternalSuffixRecursively $playbookResource)
                         $playbookResource =  $(removeBlanksRecursively $playbookResource)
                         $playbookResources += $playbookResource;
