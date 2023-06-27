@@ -16,17 +16,17 @@ Download the [Azure Function App](https://aka.ms/sentinel-SlackAuditAPI-function
 	
 	- Provide the following information at the prompts:
 
-	a. **Select folder**: Choose a folder from your workspace or browse to one that contains your function app.
+		a. **Select folder**: Choose a folder from your workspace or browse to one that contains your function app.
 
-	b. **Select Subscription**: Choose the subscription to use under resources.
+		b. **Select Subscription**: Choose the subscription to use under resources.
 
-	c. Right click on the functions and select **Create new Function App in Azure** (Don't choose the Advanced option)
+		c. Right click on the functions and select **Create new Function App in Azure** (Don't choose the Advanced option)
 
-	d. **Enter a globally unique name for the function app**: Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. UmbrellaXYZ).
+		d. **Enter a globally unique name for the function app**: Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. UmbrellaXYZ).
 
-	e. **Select a runtime**: Choose Python 3.8.
+		e. **Select a runtime**: Choose Python 3.8.
 
-	f. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.
+		f. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.
 
 2. Deployment will begin. A notification is displayed after your function app is created.
 
