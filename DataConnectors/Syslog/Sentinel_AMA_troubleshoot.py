@@ -566,7 +566,7 @@ class OperatingSystemVerifications:
 
     def verify_free_disk_space(self):
         """
-        Verify there is enough free disk space on the machine for the event forwarding to work as expected. The minimal is set to 1 GB
+        Verify there is enough free disk space on the machine for the event forwarding to work as expected. The minimum is set to 1 GB
         """
         minimal_free_space_kb = 1048576
         command_name = "verify_free_disk_space"
