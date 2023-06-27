@@ -4,6 +4,7 @@ import select
 import re
 import argparse
 import sys
+from distutils.version import StrictVersion
 
 SCRIPT_VERSION = 2.3
 PY3 = sys.version_info.major == 3
@@ -535,7 +536,7 @@ class OperatingSystemVerifications:
         command_to_run = "sudo getenforce 2> /dev/null; if [ $? != 0 ]; then echo 'Disabled'; fi"
         result_keywords_array = ["Enforcing"]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
-        if tuple(map(int, AGENT_VERSION.split('.'))) < tuple(map(int, AGENT_MIN_HARDENING_VERSION.split('.'))):
+        if StrictVersion(AGENT_VERSION) < StrictVersion(AGENT_MIN_HARDENING_VERSION):
             command_object.run_full_test(True)
             if not command_object.is_successful:
                 print_error(self.SELINUX_RUNNING_ERROR_MESSAGE)
