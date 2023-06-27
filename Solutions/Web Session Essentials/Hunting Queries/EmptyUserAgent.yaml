@@ -1,7 +1,7 @@
 id: 69e53015-a309-4a8f-a94d-df61a9217e2f
 name: Empty User Agent Detected (ASIM Web Session)
 description: |
-  'Rule helps to detect empty user agent indicating web browsing activity by an unusual process other than a web browser. It's important to analyze the context and patterns associated with web logs containing empty user agents.'
+  'Rule helps to detect empty user agent requests from IPs which atleast once reported one 'HttpUserAgent' during same timeperiod. It's important to analyze the context and patterns associated with web logs containing empty user agents.'
 tags:
   - Schema: WebSession
     SchemaVersion: 0.2.6
@@ -13,11 +13,26 @@ relevantTechniques:
   - T1133
 query: |
   let lookBack = 1d;
-  _Im_WebSession(starttime=ago(lookBack), eventresult='Success')
-  | where isempty(HttpUserAgent)
-  | summarize Count=count(), EventStartTime= min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr, SrcUsername, SrcHostname, Url, DstIpAddr, DstPortNumber
-  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
-  | order by Count desc
+  let WebData =
+      _Im_WebSession(starttime=ago(lookBack), eventresult='Success')
+      | where isempty(HttpUserAgent) and isnotempty( SrcIpAddr)
+      | summarize
+          EventCount=count(),
+          EventStartTime=min(TimeGenerated),
+          EventEndTime=max(TimeGenerated)
+          by SrcIpAddr, SrcUsername, SrcHostname, Url, DstIpAddr, DstPortNumber;
+  WebData
+  | join kind=inner (_Im_WebSession(starttime=ago(lookBack), eventresult='Success')
+      | project HttpUserAgent, SrcIpAddr
+      | where isnotempty(HttpUserAgent) and isnotempty( SrcIpAddr)
+      | summarize FoundUserAgents=make_set(HttpUserAgent,100) by SrcIpAddr
+      )
+      on SrcIpAddr
+  | extend
+      Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+      UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
+  | project-away SrcIpAddr1
+  | order by EventCount desc
   | extend IP_0_Address = SrcIpAddr
   | extend IP_1_Address = DstIpAddr
   | extend Account_0_Name = Name

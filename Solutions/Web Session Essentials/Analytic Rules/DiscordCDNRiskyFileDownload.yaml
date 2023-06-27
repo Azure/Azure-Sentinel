@@ -20,6 +20,7 @@ tactics:
 relevantTechniques:
   - T1071.001
 query: |
+  let lookback = 1d;
   let connectionThreshold = 1;
   let RiskyFileExtensions = materialize(externaldata(Extensions: string)
       [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv"]
@@ -34,34 +35,30 @@ query: |
       | where isnotempty(Extensions)
       | summarize make_set(Extensions, 1000));
   let discord=dynamic(["cdn.discordapp.com", "media.discordapp.com"]);
-  _Im_WebSession(starttime=ago(1d), url_has_any=discord, eventresult='Success')
-  | where isnotempty(Url)
-  | project Url, SrcUsername, SrcIpAddr, TimeGenerated, SrcHostname
-  | where Url has "attachments"
-  | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, Url)
+  let WebData = _Im_WebSession(starttime=ago(lookback), url_has_any=discord, eventresult='Success')
+      | where isnotempty(Url)
+      | project Url, SrcUsername, SrcIpAddr, TimeGenerated, SrcHostname
+      | where Url has "attachments"
+      | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, Url);
+  WebData
   | summarize
       dcount(Url),
-      make_set(SrcUsername, 100),
-      make_set(SrcHostname, 100),
-      make_set(SrcIpAddr, 100),
-      make_set(Url, 100),
       min(TimeGenerated),
       max(TimeGenerated)
       by DiscordServerId
-  | mv-expand
-      set_SrcUsername to typeof(string),
-      set_Url to typeof(string),
-      set_SrcIpAddr to typeof(string),
-      set_SrcHostname to typeof(string)
-  | where dcount_Url <= connectionThreshold and set_Url has_any (knownRiskyFileExtensions)
-  | project
+  | join kind=inner (WebData) on DiscordServerId
+  | where dcount_Url <= connectionThreshold and Url has_any (knownRiskyFileExtensions)
+  | summarize EventCount = count()
+      by
       EventStartTime=min_TimeGenerated,
       EventEndTime=max_TimeGenerated,
-      SrcUsername=set_SrcUsername,
-      SrcHostname = set_SrcHostname,
-      SrcIpAddr=set_SrcIpAddr,
-      Url=set_Url
-  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+      SrcUsername,
+      SrcHostname,
+      SrcIpAddr,
+      Url
+  | extend
+      Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+      UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
 entityMappings:
   - entityType: Account
     fieldMappings:
