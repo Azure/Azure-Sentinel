@@ -46,6 +46,10 @@ $alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
 #create rules from any rule templates that came from solutions
 #####
 
+if (($SeveritiesToInclude -eq "None") -or ($null -eq $SeveritiesToInclude)) {
+    Exit
+}
+
 $solutionURL = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
   
 #We only care about those rule templates that were created by Microsoft Sentinel solutions so
