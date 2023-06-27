@@ -535,7 +535,7 @@ class OperatingSystemVerifications:
         command_to_run = "sudo getenforce 2> /dev/null; if [ $? != 0 ]; then echo 'Disabled'; fi"
         result_keywords_array = ["Enforcing"]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
-        if tuple(AGENT_VERSION) < tuple(AGENT_MIN_HARDENING_VERSION):
+        if tuple(map(int, AGENT_VERSION.split('.'))) < tuple(map(int, AGENT_MIN_HARDENING_VERSION.split('.'))):
             command_object.run_full_test(True)
             if not command_object.is_successful:
                 print_error(self.SELINUX_RUNNING_ERROR_MESSAGE)
