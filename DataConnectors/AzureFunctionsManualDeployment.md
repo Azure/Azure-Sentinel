@@ -1,6 +1,6 @@
 # Function app manual deployment instructions 
 
-1. Deploy a Function App
+1.Deploy a Function App
 
 NOTE: You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.
 
