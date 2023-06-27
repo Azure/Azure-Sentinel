@@ -527,11 +527,11 @@ class OperatingSystemVerifications:
                               " Having a full disk can harm the agent functionality and eventually cause data loss" \
                               " Please free disk space on this machine and run again."
 
-    def verify_selinux_disabled(self):
+    def verify_selinux_state(self):
         """
         Verify SELinux is not in enforcing mode, which can harm the events' forwarding to the agent.
         """
-        command_name = "verify_selinux_disabled"
+        command_name = "verify_selinux_state"
         command_to_run = "sudo getenforce 2> /dev/null; if [ $? != 0 ]; then echo 'Disabled'; fi"
         result_keywords_array = ["Enforcing"]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
@@ -584,7 +584,7 @@ class OperatingSystemVerifications:
         """
         This function is only called by main and runs all the tests in this class
         """
-        self.verify_selinux_disabled()
+        self.verify_selinux_state()
         self.verify_iptables()
         self.verify_free_disk_space()
 
