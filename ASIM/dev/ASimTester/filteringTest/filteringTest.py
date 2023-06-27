@@ -106,9 +106,9 @@ class FilteringTest(unittest.TestCase):
         except:
             self.fail(f"Cannot open file: {parser_file_path}")
         self.check_required_fields(parser_file)
-        query_definition_query = create_query_definition_string(parser_file)
-        self.check_data_in_workspace(query_definition_query)
-        columns_in_answer = self.get_columns_of_parser_answer(query_definition_query)
+        query_definition = create_query_definition_string(parser_file)
+        self.check_data_in_workspace(query_definition)
+        columns_in_answer = self.get_columns_of_parser_answer(query_definition)
         schema_of_parser = parser_file['Normalization']['Schema']
         if schema_of_parser not in all_schemas_parameters:
             self.fail(f"Schema: {schema_of_parser} - Not an existing schema or not supported by the validations script")
@@ -119,7 +119,7 @@ class FilteringTest(unittest.TestCase):
                 if param_name not in param_to_column_mapping:
                     self.fail(f"parameter: {param_name} - No such parameter in {schema_of_parser} schema")
                 column_name_in_table = param_to_column_mapping[param_name]
-                self.send_param_to_test(param, query_definition_query, columns_in_answer, column_name_in_table)            
+                self.send_param_to_test(param, query_definition, columns_in_answer, column_name_in_table)            
 
 
     def send_param_to_test(self, param, query_definition, columns_in_answer, column_name_in_table):
@@ -236,8 +236,8 @@ class FilteringTest(unittest.TestCase):
 
 
     # Return a set of the columns that will appear in a response of a query call
-    def get_columns_of_parser_answer(self, query_definition_query):
-        response = self.send_query(query_definition_query + f"query() | getschema\n")
+    def get_columns_of_parser_answer(self, query_definition):
+        response = self.send_query(query_definition + f"query() | getschema\n")
         columns_set = set()
         for row in response.tables[0].rows:
             columns_set.add(row['ColumnName'])
