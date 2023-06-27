@@ -40,7 +40,7 @@ This Functions App Connector is to connect AWS Systems Manager API.
     - AWS Secret Access Key
     - AWS Region
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2FAWS-SystemsManager%2FSolutions%2FAWS%20Systems%20Manager%2FPlaybooks%2FCustomConnector%2FAWS_SSM_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2FAWS-SystemsManager%2FSolutions%2FAWS%20Systems%20Manager%2FPlaybooks%2FCustomConnector%2FAWS_SSM_FunctionAppConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS%2520Systems%2520Manager%2FPlaybooks%2FCustomConnector%2FAWS_SSM_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS%2520Systems%2520Manager%2FPlaybooks%2FCustomConnector%2FAWS_SSM_FunctionAppConnector%2Fazuredeploy.json)
 
 ### Function App Settings (Access Key ID, Secret Access Key and Region) Update Instruction
 1. Select the Function App.
