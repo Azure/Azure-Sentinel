@@ -543,7 +543,6 @@ class OperatingSystemVerifications:
             command_object.is_successful = True
             command_object.print_result_to_prompt()
 
-
     def verify_iptables(self):
         """
         Verify there is no firewall rule in the iptables blocking the Syslog daemon or agent incoming ports
