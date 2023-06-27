@@ -10,6 +10,7 @@ Select the top level folder from extracted files.
 Choose the Azure icon in the Activity bar, if you aren't already signed in, choose the Azure icon in the Activity bar, then in the Azure: Functions area, choose Sign in to Azure
 If you're already signed in, go to the next step.
 Provide the following information at the prompts:
+
 a. **Select folder**: Choose a folder from your workspace or browse to one that contains your function app.
 
 b. **Select Subscription**: Choose the subscription to use under resources.
