@@ -20,8 +20,7 @@ export function IsValidSupportObject(filePath: string): ExitCode {
 
         // filter resources that have type "Microsoft.OperationalInsights/workspaces/providers/metadata"
         const filteredResource = resources.filter(function (resource: { type: string }) {
-            return resource.type === "Microsoft.OperationalInsights/workspaces/providers/metadata" ||
-                resource.type === "Microsoft.OperationalInsights/workspaces/providers/contentPackages";
+            return resource.type === "Microsoft.OperationalInsights/workspaces/providers/metadata";
         });
 
         if (filteredResource.length > 0) {
