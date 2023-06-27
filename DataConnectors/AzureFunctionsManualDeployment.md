@@ -4,7 +4,7 @@
 
 	NOTE: You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.
 
-	Download the [Azure Function App](https://aka.ms/sentinel-SlackAuditAPI-functionapp) file. Extract archive to your local development computer.
+	Download the Azure Function App file. Extract archive to your local development computer.
 
 	- Start VS Code. Choose File in the main menu and select Open Folder.
 	
