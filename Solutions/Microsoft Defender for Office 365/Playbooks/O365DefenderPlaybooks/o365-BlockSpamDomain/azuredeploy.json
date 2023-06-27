@@ -1,0 +1,843 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "O365 - Block Spam Domain",
+    "description": "This Playbook Provides the automation on blocking the suspicious/malicious attacker Domains",
+    "prerequisites": [
+      "1. Prior to the deployment of this playbook, Defender for office 365 Custom Connector needs to be deployed under the same subscription.",
+      "2. Refer to [Defender for office 365 Logic App Custom Connector](../../CustomConnector/O365_Defender_FunctionAppConnector/readme.md) documentation for deployment instructions."
+    ],
+    "postDeployment": [
+      "1. Authorize each connection.",
+      "2. Configure Playbook in Microsoft Sentinel Analytic Rule.",
+      "3. Assign Microsoft Sentinel Responder Role to Playbook.",
+      "6. Check readme.md for detailed instructions."
+    ],
+    "prerequisitesDeployTemplateFile": "../../CustomConnector/O365_Defender_FunctionAppConnector/azuredeploy.json",
+    "lastUpdateTime": "2023-06-18T12:00:00.000Z",
+    "entities": [ "Account" ],
+    "tags": [ "Attcak", "o365", "domain", "suspicious", "malicious" ],
+    "support": {
+      "tier": "Microsoft"
+    },
+    "author": {
+      "name": "Microsoft"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "o365-BlockSpamDomain",
+      "type": "string"
+    },
+    "Applicationid": {
+      "type": "string",
+      "metadata": {
+        "description": "Enter value for Applicationid"
+      }
+    },
+    "OrganizationName": {
+      "type": "string",
+      "metadata": {
+        "description": "Enter value for OrganizationName"
+      }
+    },
+    "Keyvault name": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter the key vault name where certificate thumbprint is stored"
+      }
+    },
+    "Certificate_key_name": {
+      "type": "string",
+      "metadata": {
+        "description": "Your Key name for the thumbprint secret stored in keyvault under secrets"
+      }
+    },
+    "FunctionsAppName": {
+      "defaultValue": "o365def",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the FunctionsApp custom connector, if you want to change the default name, make sure to use the same in all o365 automation playbooks as well"
+      }
+    }
+  },
+  "variables": {
+    "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+    "FunctionsAppName": "[concat(parameters('FunctionsAppName'), uniqueString(resourceGroup().id))]",
+    "o365FuntionsAppId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('FunctionsAppName'))]",
+    "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "properties": {
+        "provisioningState": "Succeeded",
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "Applicationid": {
+              "type": "string",
+              "defaultValue": "[parameters('Applicationid')]"
+            },
+            "Certificate_key_name": {
+              "type": "string",
+              "defaultValue": "[parameters('Certificate_key_name')]"
+            },
+            "OrganizationName": {
+              "type": "string",
+              "defaultValue": "[parameters('OrganizationName')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Compose": {
+              "runAfter": {
+                "For_each_-_collect_existing_blocked_domains": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@variables('ExistingBlockedDomains')"
+            },
+            "Compose_-_spam_mail_-_remove_duplicates": {
+              "runAfter": {
+                "For_each_-_collect_spam_email_address_in_array": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@union(variables('spammails'),variables('spammails'))"
+            },
+            "Condition__-_check_if_there_is_any_domain_to_block_after_filtering": {
+              "actions": {
+                "Add_comment_to_incident_(V3)": {
+                  "runAfter": {
+                    "CreateSpamRule": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p>Domains mentioned below has been blocked :<br>\n@{variables('finaldomains')}</p>"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  }
+                },
+                "CreateSpamPolicy": {
+                  "runAfter": {},
+                  "type": "Function",
+                  "inputs": {
+                    "body": {
+                      "BlockedSenderDomains": "@variables('finaldomains')",
+                      "BulkThreshold": 6,
+                      "HighConfidenceSpamAction": "Quarantine",
+                      "Name": "Sentinel - @{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                      "SpamAction": "Quarantine"
+                    },
+                    "function": {
+                      "id": "[concat(variables('o365FuntionsAppId'), '/functions/CreateSpamPolicy')]"
+                    }
+                  }
+                },
+                "CreateSpamRule": {
+                  "runAfter": {
+                    "Delay": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Function",
+                  "inputs": {
+                    "body": {
+                      "HostedContentFilterPolicy": "Sentinel - @{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                      "Name": "Sentinel-@{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                      "RecipientDomainIs": "tihara.onmicrosoft.com"
+                    },
+                    "function": {
+                      "id": "[concat(variables('o365FuntionsAppId'), '/functions/CreateSpamRule')]"
+                    }
+                  }
+                },
+                "Delay": {
+                  "runAfter": {
+                    "CreateSpamPolicy": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Wait",
+                  "inputs": {
+                    "interval": {
+                      "count": 5,
+                      "unit": "Second"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "For_each_-_filtering_spam_domains": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Add_comment_to_incident_(V3)_2": {
+                    "runAfter": {},
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "<p>Provided domains are already blocked , or no domain is provided</p>"
+                      },
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "path": "/Incidents/Comment"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(variables('finaldomains'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "ConnectExchangeOnline": {
+              "runAfter": {
+                "Compose_-_spam_mail_-_remove_duplicates": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Function",
+              "inputs": {
+                "body": {
+                  "ApplicationId": "@parameters('Applicationid')",
+                  "CertificateThumbPrint": "@body('Get_secret')?['value']",
+                  "OrganizationName": "@parameters('OrganizationName')"
+                },
+                "function": {
+                  "id": "[concat(variables('o365FuntionsAppId'), '/functions/ConnectExchangeOnline')]"
+                }
+              }
+            },
+            "DisconnectExchangeOnline": {
+              "runAfter": {
+                "Condition__-_check_if_there_is_any_domain_to_block_after_filtering": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Function",
+              "inputs": {
+                "body": {
+                  "ApplicationId": "@parameters('Applicationid')",
+                  "OrganizationName": "@parameters('OrganizationName')"
+                },
+                "function": {
+                  "id": "[concat(variables('o365FuntionsAppId'), '/functions/DisconnectExchangeOnline')]"
+                }
+              }
+            },
+            "Entities_-_Get_Accounts": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/account"
+              }
+            },
+            "For_each_-_collect_existing_blocked_domains": {
+              "foreach": "@body('Parse_JSON_-_Result_ListSpamPolicy')",
+              "actions": {
+                "For_each_2": {
+                  "foreach": "@items('For_each_-_collect_existing_blocked_domains')['BlockedSenderDomains']",
+                  "actions": {
+                    "Append_to_array_variable_2": {
+                      "runAfter": {},
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "ExistingBlockedDomains",
+                        "value": "@items('For_each_2')?['Domain']"
+                      }
+                    }
+                  },
+                  "runAfter": {},
+                  "type": "Foreach"
+                }
+              },
+              "runAfter": {
+                "Parse_JSON_-_Result_ListSpamPolicy": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "For_each_-_collect_spam_email_address_in_array": {
+              "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+              "actions": {
+                "Append_to_array_variable": {
+                  "runAfter": {},
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "spammails",
+                    "value": "@items('For_each_-_collect_spam_email_address_in_array')?['UPNSuffix']"
+                  }
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_-_final_list_of_malicious_domain": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "For_each_-_filtering_spam_domains": {
+              "foreach": "@variables('spammails')",
+              "actions": {
+                "Condition": {
+                  "actions": {
+                    "Append_to_array_variable_3": {
+                      "runAfter": {},
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "finaldomains",
+                        "value": "@items('For_each_-_filtering_spam_domains')"
+                      }
+                    }
+                  },
+                  "runAfter": {},
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "contains": [
+                            "@variables('ExistingBlockedDomains')",
+                            "@items('For_each_-_filtering_spam_domains')"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Compose": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Get_secret": {
+              "runAfter": {
+                "Entities_-_Get_Accounts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['keyvault']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent(parameters('Certificate_key_name'))}/value"
+              }
+            },
+            "Initialize_variable_-_Existing_Blocked_Domains": {
+              "runAfter": {
+                "Initialize_variable_-_collect_spam_email_address": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ExistingBlockedDomains",
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "Initialize_variable_-_collect_spam_email_address": {
+              "runAfter": {
+                "Get_secret": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "spammails",
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "Initialize_variable_-_final_list_of_malicious_domain": {
+              "runAfter": {
+                "Initialize_variable_-_Existing_Blocked_Domains": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "finaldomains",
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "ListSpamPolicy": {
+              "runAfter": {
+                "ConnectExchangeOnline": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Function",
+              "inputs": {
+                "body": {
+                  "ApplicationId": "@parameters('Applicationid')",
+                  "Identity": "",
+                  "OrganizationName": "@parameters('OrganizationName')"
+                },
+                "function": {
+                  "id": "[concat(variables('o365FuntionsAppId'), '/functions/ListSpamPolicy')]"
+                }
+              }
+            },
+            "Parse_JSON_-_Result_ListSpamPolicy": {
+              "runAfter": {
+                "ListSpamPolicy": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('ListSpamPolicy')",
+                "schema": {
+                  "items": {
+                    "properties": {
+                      "AddXHeaderValue": {
+                        "type": "string"
+                      },
+                      "AdminDisplayName": {
+                        "type": "string"
+                      },
+                      "AllowedSenderDomains": {
+                        "type": "array"
+                      },
+                      "AllowedSenders": {
+                        "type": "array"
+                      },
+                      "ApplyPhishActionToIntraOrg": {
+                        "type": "boolean"
+                      },
+                      "BlockedSenderDomains": {
+                        "type": "array"
+                      },
+                      "BlockedSenders": {
+                        "type": "array"
+                      },
+                      "BulkQuarantineTag": {
+                        "type": "string"
+                      },
+                      "BulkSpamAction": {
+                        "type": "string"
+                      },
+                      "BulkThreshold": {
+                        "type": "integer"
+                      },
+                      "DistinguishedName": {
+                        "type": "string"
+                      },
+                      "DownloadLink": {
+                        "type": "boolean"
+                      },
+                      "EnableLanguageBlockList": {
+                        "type": "boolean"
+                      },
+                      "EnableRegionBlockList": {
+                        "type": "boolean"
+                      },
+                      "ExchangeObjectId": {
+                        "type": "string"
+                      },
+                      "ExchangeVersion": {
+                        "type": "string"
+                      },
+                      "FalsePositiveAdditionalRecipients": {
+                        "type": "array"
+                      },
+                      "Guid": {
+                        "type": "string"
+                      },
+                      "HighConfidencePhishAction": {
+                        "type": "string"
+                      },
+                      "HighConfidencePhishQuarantineTag": {
+                        "type": "string"
+                      },
+                      "HighConfidenceSpamAction": {
+                        "type": "string"
+                      },
+                      "HighConfidenceSpamQuarantineTag": {
+                        "type": "string"
+                      },
+                      "Id": {
+                        "type": "string"
+                      },
+                      "Identity": {
+                        "type": "string"
+                      },
+                      "IncreaseScoreWithBizOrInfoUrls": {
+                        "type": "string"
+                      },
+                      "IncreaseScoreWithImageLinks": {
+                        "type": "string"
+                      },
+                      "IncreaseScoreWithNumericIps": {
+                        "type": "string"
+                      },
+                      "IncreaseScoreWithRedirectToOtherPort": {
+                        "type": "string"
+                      },
+                      "InlineSafetyTipsEnabled": {
+                        "type": "boolean"
+                      },
+                      "IntraOrgFilterState": {
+                        "type": "string"
+                      },
+                      "IsDefault": {
+                        "type": "boolean"
+                      },
+                      "IsValid": {
+                        "type": "boolean"
+                      },
+                      "LanguageBlockList": {
+                        "type": "array"
+                      },
+                      "MarkAsSpamBulkMail": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamEmbedTagsInHtml": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamEmptyMessages": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamFormTagsInHtml": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamFramesInHtml": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamFromAddressAuthFail": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamJavaScriptInHtml": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamNdrBackscatter": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamObjectTagsInHtml": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamSensitiveWordList": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamSpfRecordHardFail": {
+                        "type": "string"
+                      },
+                      "MarkAsSpamWebBugsInHtml": {
+                        "type": "string"
+                      },
+                      "ModifySubjectValue": {
+                        "type": "string"
+                      },
+                      "Name": {
+                        "type": "string"
+                      },
+                      "ObjectCategory": {
+                        "type": "string"
+                      },
+                      "ObjectClass": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "ObjectState": {
+                        "type": "string"
+                      },
+                      "OrganizationId": {
+                        "type": "string"
+                      },
+                      "OrganizationalUnitRoot": {
+                        "type": "string"
+                      },
+                      "OriginatingServer": {
+                        "type": "string"
+                      },
+                      "PhishQuarantineTag": {
+                        "type": "string"
+                      },
+                      "PhishSpamAction": {
+                        "type": "string"
+                      },
+                      "PhishZapEnabled": {
+                        "type": "boolean"
+                      },
+                      "QuarantineRetentionPeriod": {
+                        "type": "integer"
+                      },
+                      "RecommendedPolicyType": {
+                        "type": "string"
+                      },
+                      "RedirectToRecipients": {
+                        "type": "array"
+                      },
+                      "RegionBlockList": {
+                        "type": "array"
+                      },
+                      "SpamAction": {
+                        "type": "string"
+                      },
+                      "SpamQuarantineTag": {
+                        "type": "string"
+                      },
+                      "SpamZapEnabled": {
+                        "type": "boolean"
+                      },
+                      "TestModeAction": {
+                        "type": "string"
+                      },
+                      "TestModeBccToRecipients": {
+                        "type": "array"
+                      },
+                      "WhenChanged": {
+                        "type": "string"
+                      },
+                      "WhenChangedUTC": {
+                        "type": "string"
+                      },
+                      "WhenCreated": {
+                        "type": "string"
+                      },
+                      "WhenCreatedUTC": {
+                        "type": "string"
+                      },
+                      "ZapEnabled": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "AdminDisplayName",
+                      "AddXHeaderValue",
+                      "ModifySubjectValue",
+                      "RedirectToRecipients",
+                      "TestModeBccToRecipients",
+                      "FalsePositiveAdditionalRecipients",
+                      "QuarantineRetentionPeriod",
+                      "TestModeAction",
+                      "IncreaseScoreWithImageLinks",
+                      "IncreaseScoreWithNumericIps",
+                      "IncreaseScoreWithRedirectToOtherPort",
+                      "IncreaseScoreWithBizOrInfoUrls",
+                      "MarkAsSpamEmptyMessages",
+                      "MarkAsSpamJavaScriptInHtml",
+                      "MarkAsSpamFramesInHtml",
+                      "MarkAsSpamObjectTagsInHtml",
+                      "MarkAsSpamEmbedTagsInHtml",
+                      "MarkAsSpamFormTagsInHtml",
+                      "MarkAsSpamWebBugsInHtml",
+                      "MarkAsSpamSensitiveWordList",
+                      "MarkAsSpamSpfRecordHardFail",
+                      "MarkAsSpamFromAddressAuthFail",
+                      "MarkAsSpamBulkMail",
+                      "MarkAsSpamNdrBackscatter",
+                      "IsDefault",
+                      "LanguageBlockList",
+                      "RegionBlockList",
+                      "HighConfidenceSpamAction",
+                      "SpamAction",
+                      "DownloadLink",
+                      "EnableRegionBlockList",
+                      "EnableLanguageBlockList",
+                      "BulkThreshold",
+                      "AllowedSenders",
+                      "AllowedSenderDomains",
+                      "BlockedSenders",
+                      "BlockedSenderDomains",
+                      "ZapEnabled",
+                      "InlineSafetyTipsEnabled",
+                      "BulkSpamAction",
+                      "PhishSpamAction",
+                      "SpamZapEnabled",
+                      "PhishZapEnabled",
+                      "ApplyPhishActionToIntraOrg",
+                      "IntraOrgFilterState",
+                      "HighConfidencePhishAction",
+                      "RecommendedPolicyType",
+                      "SpamQuarantineTag",
+                      "HighConfidenceSpamQuarantineTag",
+                      "PhishQuarantineTag",
+                      "HighConfidencePhishQuarantineTag",
+                      "BulkQuarantineTag",
+                      "Identity",
+                      "Id",
+                      "IsValid",
+                      "ExchangeVersion",
+                      "Name",
+                      "DistinguishedName",
+                      "ObjectCategory",
+                      "ObjectClass",
+                      "WhenChanged",
+                      "WhenCreated",
+                      "WhenChangedUTC",
+                      "WhenCreatedUTC",
+                      "ExchangeObjectId",
+                      "OrganizationalUnitRoot",
+                      "OrganizationId",
+                      "Guid",
+                      "OriginatingServer",
+                      "ObjectState"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "connectionName": "[variables('KeyvaultConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "o365-BlockSpamMail",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "apiVersion": "2017-07-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('MicrosoftSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/Connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyvaultConnectionName')]",
+      "kind": "V1",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'keyvault')]",
+          "type": "Microsoft.Web/locations/managedApis"
+        },
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('keyvault name')]"
+        },
+        "displayName": "[variables('KeyvaultConnectionName')]",
+        "nonSecretParameterValues": {
+          "vaultName": "[parameters('keyvault name')]"
+        }
+      }
+    }
+  ]
+}
