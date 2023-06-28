@@ -19,7 +19,7 @@
 		a. **Select folder**: Choose a folder from your workspace or browse to one that contains your function app.
 
 		b. **Select Subscription**: Choose the subscription to use under resources.
-		(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/azurefunction-uploadtoblob.png)
+		(https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Images/azurefunction-uploadtoblob.png)
 
 		c. Right click on the functions and select **Create new Function App in Azure** (Don't choose the Advanced option)
 
