@@ -211,10 +211,10 @@ log "Running on $os version $ver_id id $id_like"
 if [ "$os" == "ubuntu" ]; then
 	#Ubuntu
 	log 'Updating package lists'
-	sudo apt-get update >/dev/null
-	install_package "jq" "apt install -y -qq"
-	install_package "unzip" "apt install -y -qq"
-	install_package "docker.io" "apt install -y -qq"
+	#sudo apt-get update >/dev/null
+	#install_package "jq" "apt install -y -qq"
+	#install_package "unzip" "apt install -y -qq"
+	#install_package "docker.io" "apt install -y -qq"
 	if [ "$MODE" != "cfgf" ]; then
 		log "Installing Azure CLI"
 		#curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash >/dev/null 2>&1
