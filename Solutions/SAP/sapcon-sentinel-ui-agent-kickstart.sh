@@ -242,17 +242,18 @@ elif [ "$os" == '"rhel"' ]; then
 
 elif [ "$os" == '"sles"' ]; then
 	# SUSE
+ 	continue 
 	log "Updating package lists"
-	sudo zypper refresh >/dev/null
-	log "Updating installed packages"
-	sudo zypper update -y >/dev/null
-	install_package "curl" "zypper install -y"
-	install_package "jq" "zypper install -y"
-	install_package "docker" "zypper install -y"
-	sudo systemctl enable docker.service
-	sudo systemctl start docker.service
+	#sudo zypper refresh >/dev/null
+	#log "Updating installed packages"
+	#sudo zypper update -y >/dev/null
+	#install_package "curl" "zypper install -y"
+	#install_package "jq" "zypper install -y"
+	#install_package "docker" "zypper install -y"
+	#sudo systemctl enable docker.service
+	#sudo systemctl start docker.service
 
-	if [ "$MODE" != "cfgf" ]; then
+	if [ "$MODE" == "cfgf" ]; then
 		if ! rpm -qa | grep gpg-pubkey-be1229cf-5631588c >/dev/null; then
 			sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc >/dev/null
 			log "Adding Microsoft GPG key"
