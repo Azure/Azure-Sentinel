@@ -217,7 +217,7 @@ if [ "$os" == "ubuntu" ]; then
 	install_package "docker.io" "apt install -y -qq"
 	if [ "$MODE" != "cfgf" ]; then
 		log "Installing Azure CLI"
-		curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash >/dev/null 2>&1
+		#curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash >/dev/null 2>&1
 	fi
 
 elif [ "$os" == '"rhel"' ]; then
