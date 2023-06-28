@@ -172,6 +172,9 @@ class PrismaCloudConnector:
         }
 
         unix_ts_now = (int(time.time()) - 10) * 1000
+        diff = unix_ts_now - start_time
+        if diff > 600000:
+            unix_ts_now = (int(start_time) + 600000)
         data = {
             "timeRange": {
                 "type": "absolute",
