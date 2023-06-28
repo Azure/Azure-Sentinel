@@ -85,12 +85,12 @@ def create_query_definition_string(parser_file):
 
 
 # Returning a string representing a call for a KQL function without parameters
-def create_call_string_without_parameters(column_name):
+def create_execution_string_without_parameters(column_name):
     return f"query() | summarize count() by {column_name}\n" 
 
 
 # Returning a string representing a call for a KQL function with one parameter
-def create_call_strings_with_parameters(parameter, value, column_name):
+def create_execution_strings_with_one_parameter(parameter, value, column_name):
     return f"query({parameter}={value}) | summarize count() by {column_name}\n"
 
 
@@ -180,11 +180,11 @@ class FilteringTest(unittest.TestCase):
         Parameters
         ----------
         param : A parameter field from the parser yaml file
-        query_definition : A string with a definition of the parser's query
+        query_definition : A definition of the parser's query
         column_name_in_table : The name of the column in the query response on which the parameter performs filtering
         """
         param_name = param['Name']
-        no_filter_query = query_definition + create_call_string_without_parameters(column_name_in_table)
+        no_filter_query = query_definition + create_execution_string_without_parameters(column_name_in_table)
         no_filter_response = self.send_query(no_filter_query)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
         with  self.subTest():
@@ -192,7 +192,7 @@ class FilteringTest(unittest.TestCase):
         # Taking the first value returned in the response
         selected_value = no_filter_response.tables[0].rows[0][0]
         value_to_filter = f"\'{selected_value}\'" if param['Type']=="string" else selected_value
-        query_with_filter = query_definition + create_call_strings_with_parameters(param_name, value_to_filter, column_name_in_table)
+        query_with_filter = query_definition + create_execution_strings_with_one_parameter(param_name, value_to_filter, column_name_in_table)
         if selected_value=="":
             query_with_filter = query_definition + f"query() | where isempty({column_name_in_table}) | summarize count() by {column_name_in_table}\n"
         
@@ -206,13 +206,13 @@ class FilteringTest(unittest.TestCase):
     def scalar_test_check_filtering(self, param_name, query_with_filter, value_to_filter ):
         filtered_response = self.send_query(query_with_filter)
         with self.subTest():
-            self.assertNotEqual(0, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Got no results at all after filtering. Filtered by value: {value_to_filter}")
+            self.assertNotEqual(0, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Got no results at all after filtering, while results where expected. Filtered by value: {value_to_filter}")
         with self.subTest():
             self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering. Filtered by value: {value_to_filter}")
         
 
     def scalar_test_check_fictive_value(self, param_name, query_definition, column_name_in_table):
-        no_results_query = query_definition + create_call_strings_with_parameters(param_name, DUMMY_VALUE, column_name_in_table)
+        no_results_query = query_definition + create_execution_strings_with_one_parameter(param_name, DUMMY_VALUE, column_name_in_table)
         no_results_response = self.send_query(no_results_query)
         with self.subTest():
             self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
