@@ -1,0 +1,41 @@
+id: 03e04c97-8cae-48b3-9d2f-4ab262e4ffff
+name: Silk Typhoon Suspicious File Downloads.
+description: |
+  'This query looks for messages related to file downloads of suspicious file types. This query uses the Exchange HttpProxy AOBGeneratorLog, you will need to onboard this log as a custom log under the table http_proxy_oab_CL before using this query. 
+  Reference: https://www.microsoft.com/security/blog/2021/03/02/hafnium-targeting-exchange-servers/'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
+  http_proxy_oab_CL
+  | where RawData contains "Download failed and temporary file"
+  | extend File = extract("([^\\\\]*)(\\\\[^']*)",2,RawData)
+  | extend Extension = strcat(".",split(File, ".")[-1])
+  | extend InteractiveFile = iif(Extension in (scriptExtensions), "Yes", "No")
+  // Uncomment the following line to alert only on interactive file download type
+  //| where InteractiveFile =~ "Yes"
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: petebryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - 0-day Vulnerability" ]

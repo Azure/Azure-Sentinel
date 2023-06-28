@@ -41,7 +41,7 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains Netowrk Port. Since there is no entity for Ports for now, Network Ports need to be passed as key value pair in *Custom details* section. **[Important]** In the *Custom details* section of the analytics rule creation workflow, Assign **NetworkPort** as key and choose appropriate column as value.
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident that contains Netowrk Port. Since there is no entity for Ports for now, Network Ports need to be passed as key value pair in *Custom details* section. **[Important]** In the *Custom details* section of the analytics rule creation workflow, Assign **NetworkPort** as key and choose appropriate column as value.
 
     Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to know more about custom details in alerts.
     

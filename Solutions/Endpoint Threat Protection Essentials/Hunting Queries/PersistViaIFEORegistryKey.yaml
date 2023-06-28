@@ -1,7 +1,9 @@
 id: f82c89fa-c969-4d12-832f-04d55d14522c
-name: Persisting Via IFEO Registry Key 
+name: Persisting via IFEO Registry Key 
 description: |
-   'This query detects instances where IFEO registry keys were created and deleted frequently within a short period of time.'
+   'This query detects instances where IFEO registry keys were created and deleted frequently within a short period of time.
+   This technique is used by adversaries to persist on a system by creating a registry key under the Image File Execution Options registry key.
+   https://goayxh.medium.com/malware-persistence-image-file-execution-options-injection-ifeo-5aa0e81086f0'
 severity: Medium
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -13,10 +15,6 @@ requiredDataConnectors:
   - connectorId: WindowsForwardedEvents
     dataTypes:
       - WindowsEvent
-queryFrequency: 1d
-queryPeriod: 1d
-triggerOperator: gt
-triggerThreshold: 0
 tactics:
   - Persistence
 relevantTechniques:
@@ -48,12 +46,12 @@ query: |
   ),
   (
   Event
-  | where Source == "Microsoft-Windows-Sysmon"
+  | where Source =~ "Microsoft-Windows-Sysmon"
   | where EventID in (12, 13)
   | extend EventData = parse_xml(EventData).DataItem.EventData.Data
   | mv-expand bagexpansion=array EventData
   | evaluate bag_unpack(EventData)
-  | extend Key=tostring(['@Name']), Value=['#text']
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
   | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
   | where TargetObject has_all ("HKLM", "Image File Execution Options")
   | summarize Count=count() by Computer, UserName, tostring(TargetObject)
@@ -68,12 +66,23 @@ query: |
   | extend AccountCustomEntity = Username, HostCustomEntity = Dvc
   )
   )
+  | extend NTDomain = tostring(split(AccountCustomEntity, '\\', 0)[0]), Name = tostring(split(AccountCustomEntity, '\\', 1)[0])
+  | extend HostName = tostring(split(HostCustomEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostCustomEntity, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1
