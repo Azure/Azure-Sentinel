@@ -234,29 +234,6 @@ fi
 log "Creating group 'docker' and adding current user to 'docker' group"
 sudo usermod -aG docker "$USER"
 
-if [ "$MODE" == "kvmi" ]; then
-	log "Validating Azure managed identity"
-	az login --identity --allow-no-subscriptions >/dev/null 2>&1
-	if [ ! $? -eq 0 ]; then
-		log 'VM is not set with managed identity or the AZ client was not installed correctly.'
-		log 'Set and grant relevant Key Vault permissions and make sure that Azure CLI is installed by running "az login"'
-		log 'For more information check - https://docs.microsoft.com/cli/azure/install-azure-cli'
-		exit 1
-	fi
-elif [ "$MODE" == "kvsi" ]; then
-	log "Validating service principal identity"
-	az login --service-principal -u "$APPID" -p "$APPSECRET" --tenant "$TENANT" --allow-no-subscriptions >/dev/null 2>&1
-	if [ ! $? -eq 0 ]; then
-		log "Logon with $APPID failed, please check application ID, secret and tenant ID. Ensure the application has been added as an enterprise application"
-		exit 1
-	fi
-	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
-	if [ ! $? -eq 0 ]; then
-		log "Cannot connect to keyvault $kv. Make sure application $APPID has been granted privileges to the keyvault"
-		exit 1
-	fi
-fi
-
 log 'Deploying Microsoft Sentinel SAP data connector.'
 
 log 'Starting Docker image pull'
