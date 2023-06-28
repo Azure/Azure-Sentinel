@@ -4,8 +4,6 @@ Microsoft Sentinel Solutions provide an in-product experience for central discov
 
 The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Microsoft Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists.
 
-## NOTE: Please use the latest version of packaging tool. For guidance on usage, refer to the ReadMe file [here](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md)
-
 ## Setup
 
 - Install PowerShell 7.1+
@@ -32,11 +30,13 @@ The packaging tool detailed below provides an easy way to generate your solution
 
 ## Creating Solution Package
 
-Clone the repository [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) to `C:\One`.
+Clone the repository [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) to `C:\GitHub`.
 
 ### Create Input File
 
-Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Create-Sentinel-Solution\input`.
+- Make sure to have a .json input data file inside of 'data' folder for your solution. 
+- There is NO need to place your data file inside of input folder as during package creation you will be asked to enter the data folder path from Solutions:
+eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
 
 #### **Input File Format:**
 
@@ -59,11 +59,11 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * -- Array of SavedSearch resources
  * -- Raw ARM template
  *
- * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps. Please make sure if there is any CustomConnector in the solution then it's entry should be added prior to any other playbook.
+ * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps. Sequence of Playbooks should be FunctionApps, Custom Connector and then rest of the Playbooks. If FunctionApps and Custom Connector are not present then just specify Playbooks.
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
- * Version: Version to be used during package creation. We should use any version >= 2.0.0 in case solution needs to be packaged for Template Spec
+ * Version: Version to be used during package creation. Default version will be 3.0.0. This tool supports package creation for 2.x.x(Template Spec) and 3.x.x(contentPackages). Based on variable 'defaultPackageVersion' and given Version input. If the defaultPackageVersion is 3.0.0 and Data file input version is 2.0.1 then it package generated is of 3.0.0 i.e which ever is higher takes precedence. Here we are also verifying the catelogAPI to check version deployed in PartnerCenter. If 'defaultPackageVersion' is 2.0.0 and data input file version is 2.0.4 but in PartnerCenter catelogAPI version installed is 2.0.2 then package generated is of 2.0.3 i.e it will increment the package version based on catelogAPI.
  * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
- * TemplateSpec: Boolean value used to determine whether the package should be generated as a template spec
+ * TemplateSpec: Optional Boolean value used to determine whether the package should be generated as a template spec
  */
 {
   "Name": "{SolutionName}",
@@ -86,7 +86,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Watchlists": [],
   "WatchlistDescription": [],
   "BasePath": "{Path to Solution Content}",
-  "Version": "2.0.0",
+  "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": true,
   "Is1PConnector": false
@@ -154,7 +154,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
     "Playbooks/Playbooks/CiscoUmbrella-GetDomainInfo/azuredeploy.json"
   ],
   "BasePath": "C:\\GitHub\\Azure-Sentinel",
-  "Version": "2.0.0",
+  "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "SolutionMetadata.json",
   "TemplateSpec": true,
   "Is1PConnector": false
@@ -166,6 +166,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
 Create a  file and place it in the base path of solution `https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/`.
 * Refer to the [Microsoft Sentinel content and solutions categories documentation](https://aka.ms/sentinelcontentcategories) for a complete list of valid Microsoft Sentinel categories.
 * Refer to [Microsoft Sentinel content and support documentation](https://aka.ms/sentinelcontentsupportmodel) for information on valid support models.
+
 
 #### **Metadata File Format:**
 
@@ -228,10 +229,15 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 
 ### Generate Solution Package
 
-To generate the solution package from the given input file, run the `createSolutionV2.ps1` script in the automation folder, `Tools/Create-Azure-Sentinel-Solution/V2`.
-> Ex. From repository root, run: `./Tools/Create-Azure-Sentinel-Solution/V2/createSolutionV2.ps1`
+NOTE: It is now recommended to use 'createSolutionV3.ps1' file instead of 'createSolutionV2.ps1'. 'createSolutionV2.ps1' is not recommended going forward. 'createSolutionV4.ps1' file is used for GitHub pipeline and is not used for local use. `'createSolutionV3.ps1' requires 'commonFunctions.ps1' file which is placed under 'Tools\Create-Azure-Sentinel-Solution\common' path and this file 'commonFunctions.ps1' has all core logic to create package.`
 
-This will generate and compress the solution package, and name the package using the version provided in the input file.
+To generate the solution package, run the `createSolutionV3.ps1` script in the automation folder, `Tools/Create-Azure-Sentinel-Solution/V3`.
+> Ex. From repository root, run: `./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1`
+
+Executing above command with ask you to enter the data file path in the solution as 'Enter solution data file path'. Just specify the data folder path from Solutions. No need to specify data file path. This will generate and compress the solution package, and name the package using the version provided in the input file.
+eg: Enter solution data file path : C:\Github\Azure-Sentinel\Solutions\Agari\data
+
+In above example we have provided path of data folder only without file name. Also there is NO need to copy paste data input file to Tools/input folder.
 
 The package consists of the following files:
 
@@ -239,7 +245,7 @@ The package consists of the following files:
 
 * `mainTemplate.json`: Template containing Deployable Resources
 
-These files will be created in the solution's `Package` folder with respect to the resources provided in the given input file. For every new modification to the files after the initial version of package, a new zip file should be created with an updated version name (1.0.1, 1.0.2, etc.) containing modified `createUIDefinition.json` and `mainTemplate.json` files.
+These files will be created in the solution's `Package` folder with respect to the resources provided in the given input file. For every new modification to the files after the initial version of package, a new zip file should be created with an updated version name (3.0.0, 3.0.1 etc.) containing modified `createUIDefinition.json` and `mainTemplate.json` files.
 
 Upon package creation, the automation will automatically import and run validation on the generated files using the Azure Toolkit / TTK CLI tool.
 
@@ -373,3 +379,11 @@ If the YAML Toolkit for PowerShell is not installed, you may experience errors r
 To resolve this issue, it's recommended that you install the YAML Toolkit for Powershell.
 
 See [Setup](#setup) to install the YAML Toolkit for PowerShell.
+
+#### ARM-TTK failue for ContentProductId, Id Issues
+
+If you see arm-ttk error for 'contentProductId' and 'id' for 'Ids should be derived from ResourceIds' then you can ignore this error validations. 
+
+#### FILE EXTENSIONS
+
+Make sure to specify file extension in lower case and and not caps(eg: office365.JSON).
