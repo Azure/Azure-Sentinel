@@ -1,0 +1,71 @@
+id: c46eeb45-c324-4a84-9df1-248c6d1507bb
+name: Risky base64 encoded command in URL
+description: |
+  'This hunting query will detect risky base64 encoded commands are seen in web requests. Some threat actors transmit base64 commands from the target host
+  back to the C2 servers so they know which command has been executed. This query also reguarly illumniates base64 encoded webshells being injected.
+  The limitation of this query is that base64 is case sensitive, so different case versions of each command need generating for full coverage. This query
+  computes base64 permutations for each command, resulting in 3 possible permutations depending on padding.'
+requiredDataConnectors:
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071.001
+tags:
+  - POLONIUM
+query: |
+  let mapping = datatable (CommandFound:string, match_list:dynamic) [
+  "whoami", dynamic(['d2hvYW1p', 'dob2Fta', '3aG9hbW']),
+  "net share", dynamic(['bmV0IHNoYXJl', '5ldCBzaGFyZ', 'uZXQgc2hhcm']),
+  "net use", dynamic(['bmV0IHVzZ', '5ldCB1c2', 'uZXQgdXNl']),
+  "net view", dynamic(['bmV0IHZpZX', '5ldCB2aWV3', 'uZXQgdmlld']),
+  "ipconfig", dynamic(['aXBjb25maWc', 'lwY29uZmln', 'pcGNvbmZpZ']),
+  "net sh", dynamic(['bmV0c2gg', '5ldHNoI', 'uZXRzaC']),
+  "schtasks", dynamic(['2NodGFza3', 'NjaHRhc2tz', 'zY2h0YXNrc']),
+  "Invoke- ", dynamic(['SW52b2tlL', 'ludm9rZS', 'JbnZva2Ut']),
+  ];
+  let riskyCommandRegex = @"(d2hvYW1p|dob2Fta|3aG9hbW|bmV0IHNoYXJl|5ldCBzaGFyZ|uZXQgc2hhcm|bmV0IHVzZ|5ldCB1c2|uZXQgdXNl|bmV0IHZpZX|5ldCB2aWV3|uZXQgdmlld|aXBjb25maWc|lwY29uZmln|pcGNvbmZpZ|bmV0c2gg|5ldHNoI|uZXRzaC|2NodGFza3|NjaHRhc2tz|zY2h0YXNrc|SW52b2tlL|ludm9rZS|JbnZva2Ut)";
+  CommonSecurityLog
+  | where TimeGenerated > ago(3d)
+  | where RequestURL matches regex riskyCommandRegex
+  | extend B64MatchData = extract_all(riskyCommandRegex, RequestURL)
+  | where isnotempty(B64MatchData)
+  | mv-expand B64MatchData to typeof(string)
+  | join kind=leftouter ( 
+      mapping
+      | mv-expand match_list to typeof(string)
+  ) on $left.B64MatchData == $right.match_list
+  | project TimeGenerated, B64MatchData, CommandFound, RequestURL, RequestMethod, DestinationHostName, DestinationIP, SourceIP, DeviceVendor, DeviceProduct, Activity
+  | extend timestamp = TimeGenerated
+  | extend HostName = tostring(split(DestinationHostName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DestinationHostName, '.'), 1, -1), '.'))
+  | extend IP_0_Address = SourceIP
+  | extend IP_1_Address = DestinationIP
+  | extend DNS_0_HostName = HostName
+  | extend DNS_0_DnsDomain = DnsDomain  
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+  - entityType: DNS
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1

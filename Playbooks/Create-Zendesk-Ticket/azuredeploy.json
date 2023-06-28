@@ -2,17 +2,18 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Create Zendesk ticket", 
+        "title": "Create Zendesk ticket",
         "description": "This playbook will create a Zendesk ticket when a new incident is created in Microsoft Sentinel.",
-        "prerequisites": ["Create a Zendesk user (for example, call it Microsoft Sentinel) which on behalf of its requester id new tickets will be created."],
-        "lastUpdateTime": "2022-07-22T00:00:00.000Z", 
+        "version": "1.0.0",
+        "prerequisites": [ "Create a Zendesk user (for example, call it Microsoft Sentinel) which on behalf of its requester id new tickets will be created." ],
+        "lastUpdateTime": "2022-07-22T00:00:00.000Z",
         "entities": [],
-        "tags": ["Sync"], 
+        "tags": [ "Sync" ],
         "support": {
-            "tier": "community" 
+            "tier": "community"
         },
         "author": {
-            "name": "Lior Tamir"
+            "name": "Brian Delaney"
         },
         "releaseNotes": [
             {
@@ -22,39 +23,46 @@
                     "Initial version"
                 ]
             }
-        ]
-    },
-"parameters": {
-    "PlaybookName": {
-        "defaultValue": "Create-Zendesk-Ticket",
-        "type": "string"
-    },
-    "requester_id":{
-        "defaultValue": "00000000001",
-        "type": "string",
-        "metadata": {
-            "description": "Zendesk id of the user which tickets will be created on behalf. Recommendation: create an Microsoft Sentinel user."
+        ],
+        "providers": [ "Zendesk" ],
+        "categories": {
+            "domains": ["IT Operations", "Security - Automation (SOAR)"]
+        },
+        "source": {
+            "kind": "Community"
         }
-    }
-},
-"variables": {
-    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-    "ZendeskConnectionName": "[concat('zendesk-', parameters('PlaybookName'))]"
-},
-"resources": [
-        {
-        "type": "Microsoft.Web/connections",
-        "apiVersion": "2016-06-01",
-        "name": "[variables('AzureSentinelConnectionName')]",
-        "location": "[resourceGroup().location]",
-        "properties": {
-            "displayName": "[variables('AzureSentinelConnectionName')]",
-            "customParameterValues": {},
-            "api": {
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Create-Zendesk-Ticket",
+            "type": "string"
+        },
+        "requester_id": {
+            "defaultValue": "00000000001",
+            "type": "string",
+            "metadata": {
+                "description": "Zendesk id of the user which tickets will be created on behalf. Recommendation: create an Microsoft Sentinel user."
             }
         }
     },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "ZendeskConnectionName": "[concat('zendesk-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
@@ -67,46 +75,46 @@
                 }
             }
         },
-    {
-        "type": "Microsoft.Logic/workflows",
-        "apiVersion": "2017-07-01",
-        "name": "[parameters('PlaybookName')]",
-        "location": "[resourceGroup().location]",
-        "tags": {
-            "hidden-SentinelTemplateName": "CreateZendeskTicket-Incident",
-            "hidden-SentinelTemplateVersion": "1.0"
-        },
-        "dependsOn": [
-            "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-            "[resourceId('Microsoft.Web/connections', variables('ZendeskConnectionName'))]"
-        ],
-        "properties": {
-            "state": "Enabled",
-            "definition": {
-                "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                "contentVersion": "1.0.0.0",
-                "parameters": {
-                    "$connections": {
-                        "defaultValue": {},
-                        "type": "Object"
-                    }
-                },
-                "triggers": {
-                    "Microsoft_Sentinel_incident": {
-                        "inputs": {
-                            "body": {
-                                "callback_url": "@{listCallbackUrl()}"
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "CreateZendeskTicket-Incident",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('ZendeskConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
                             },
-                            "host": {
-                                "connection": {
-                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                }
-                            },
-                            "path": "/incident-creation"
-                        },
-                        "type": "ApiConnectionWebhook"
-                    }
-                },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    },
                     "actions": {
                         "Create_CSV_table": {
                             "inputs": {

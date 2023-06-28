@@ -1,0 +1,42 @@
+id: 0ee2aafb-4500-4e36-bcb1-e90eec2f0b9b
+name: NRT Login to AWS Management Console without MFA
+description: |
+  'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA.
+  You can limit this detection to trigger for administrative accounts if you do not have MFA enabled on all accounts.
+  This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used
+  and the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - DefenseEvasion
+  - PrivilegeEscalation
+  - Persistence
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  AWSCloudTrail
+  | where EventName =~ "ConsoleLogin"
+  | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)
+  | where MFAUsed !~ "Yes" and LoginResult !~ "Failure"
+  | where SessionIssuerUserName !contains "AWSReservedSSO"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,
+  UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserIdentityUserName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIpAddress
+version: 1.0.1
+kind: NRT

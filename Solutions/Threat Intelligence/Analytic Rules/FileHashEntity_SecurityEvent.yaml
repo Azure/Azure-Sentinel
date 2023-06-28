@@ -1,0 +1,85 @@
+id: a7427ed7-04b4-4e3b-b323-08b981b9b4bf
+name: TI map File Hash to Security Event
+description: |
+  'Identifies a match in Security Event data from any File Hash IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  | where isnotempty(FileHashValue)
+  | extend FileHashValue = toupper(FileHashValue)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique ( union isfuzzy=true
+    (SecurityEvent | where TimeGenerated >= ago(dt_lookBack)
+        | where EventID in ("8003","8002","8005")
+        | where isnotempty(FileHash)
+        | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID, FileHash = toupper(FileHash)
+    ),
+    (WindowsEvent | where TimeGenerated >= ago(dt_lookBack)
+        | where EventID in ("8003","8002","8005")
+        | where isnotempty(EventData.FileHash)
+        | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID, FileHash = toupper(EventData.FileHash)
+    )
+  )
+  on $left.FileHashValue == $right.FileHash
+  | where SecurityEvent_TimeGenerated < ExpirationDateTime
+  | summarize SecurityEvent_TimeGenerated = arg_max(SecurityEvent_TimeGenerated, *) by IndicatorId, FileHash
+  | project SecurityEvent_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  Process, FileHash, Computer, Account, Event, FileHashValue, FileHashType
+  | extend NTDomain = tostring(split(Account, '\\', 0)[0]), Name = tostring(split(Account, '\\', 1)[0])
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')) 
+  | extend timestamp = SecurityEvent_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: FileHashType
+version: 1.4.3
+kind: Scheduled

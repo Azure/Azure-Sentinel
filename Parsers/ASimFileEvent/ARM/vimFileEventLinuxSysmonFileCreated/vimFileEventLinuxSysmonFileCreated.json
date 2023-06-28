@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimFileEventLinuxSysmonFileCreated",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "File create Activity ASIM parser for Sysmon for Linux",
+            "category": "ASIM",
+            "FunctionAlias": "vimFileEventLinuxSysmonFileCreated",
+            "query": "Syslog\n| where SyslogMessage has_all ('<Provider Name=\"Linux-Sysmon\"', '<EventID>11</EventID>')\n| parse SyslogMessage with  *\n  '<EventRecordID>'msgEventRecordID:string'</EventRecordID>'\n  *\n  //'<Computer>'msgComputer:string'</Computer>'\n  '<Security UserId=\"'msgUserId:string '\"/>'\n  * \n  '<Data Name=\"ProcessGuid\">'msgProcessGuid:string'</Data>'\n  '<Data Name=\"ProcessId\">'msgProcessId:string'</Data>'\n  '<Data Name=\"Image\">'msgImage:string'</Data>'\n  '<Data Name=\"TargetFilename\">'msgTargetFileName:string'</Data>'\n  '<Data Name=\"CreationUtcTime\">'msgCreationUtcTime:datetime'</Data>'*\n| parse SyslogMessage with *'<Data Name=\"User\">'ActorUsername '</Data>'*\n| extend\n    EventCount=int(1)\n  , EventStartTime =TimeGenerated \n  , EventEndTime=TimeGenerated\n  , EventType = 'FileCreated'\n  , EventResult ='Success'\n  , EventOriginalType ='11' \n  , EventProduct='Sysmon for Linux'\n  , EventProductVersion='v13.22'\n  , EventVendor ='Microsoft'\n  , EventSchemaVersion ='0.1.0'\n  , DvcOs = 'Linux'\n  , TargetFilePathType='Unix'\n  , ActorUserType = iff(isnotempty(ActorUsername),'Simple', '') // make sure user type is okay\n| project-rename\n    DvcHostname=Computer\n  , EventOriginalUid=msgEventRecordID\n  , ActingProcessName =msgImage\n  , ActingProcessId=msgProcessId\n  , ActingProcessGuid=msgProcessGuid\n  , TargetFilePath =msgTargetFileName\n  , TargetFileCreationTime =msgCreationUtcTime\n  // ------  Alias\n| extend\n    Process=ActingProcessName\n    , FilePath=TargetFilePath\n    , Dvc = DvcHostname\n    , User = ActorUsername\n| project-away SyslogMessage",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

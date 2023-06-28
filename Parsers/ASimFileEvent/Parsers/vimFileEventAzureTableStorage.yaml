@@ -1,0 +1,60 @@
+Parser:
+  Title: File Activity ASIM parser for Azure Table Storage
+  Version: '0.1'
+  LastUpdated: July 15, 2021
+Product:
+  Name: Microsoft Azure Table Storage
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Schema
+  Link: https://aka.ms/ASimFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Storage Analytics log format
+  Link: https://docs.microsoft.comrest/api/storageservices/storage-analytics-log-format
+Description: This ASIM parser supports normalizing Azure Table Storage events, stored in the StorageTableLogs table, to the ASIM file activity schema.
+ParserName: vimFileEventAzureTableStorage
+ParserQuery: |
+  // https://docs.microsoft.comrest/api/storageservices/storage-analytics-logged-operations-and-status-messages
+  let tableoperations=datatable(OperationName:string, EventType:string)[
+  , "CreateTable", "FileCreated"
+  , "DeleteTable", "FileDeleted"
+  , "DeleteEntity", "FileModified"
+  , "InsertEntity", "FileModified"
+  , "InsertOrMergeEntity", "FileModified"
+  , "InsertOrReplaceEntity", "FileModified"
+  , "QueryEntity", "FileAccessed"
+  , "QueryEntities", "FileAccessed"
+  , "QueryTable", "FileAccessed"
+  , "QueryTables", "FileAccessed"
+  , "UpdateEntity", "FileModified"
+  , "MergeEntity", "FileModified"
+      ];
+      StorageTableLogs
+      // **** relevant data filtering;
+      | where OperationName in (tableoperations)
+      //
+      | extend 
+            EventCount=int(1)
+          , EventStartTime=TimeGenerated
+          , EventEndTime=TimeGenerated
+      //	, EventType :string  ---> see lookup below
+          , EventResult=iff(StatusText == 'Success', 'Success', 'Failure') 
+          , EventOriginalUid = CorrelationId
+          , EventOriginalType=OperationName
+          , EventProduct='Azure File Storage' 
+          , EventVendor='Microsoft'
+          , EventSchemaVersion='0.1.0'
+        , TargetFilePath=tostring(split(Uri,'?')[0]) 
+        , TargetFilePathType='URL'
+          , TargetUrl=Uri
+          ,  SrcIpAddr=tostring(split(CallerIpAddress,':')[0])
+          ,  SrcPortNumber=tostring(split(CallerIpAddress,':')[0])
+          , HttpUserAgent=UserAgentHeader
+      | extend TargetFileName=tostring(split(TargetFilePath,'/')['-1'])
+      | lookup tableoperations on OperationName
+      // Aliases
+      | extend 
+         FilePath=TargetFilePath

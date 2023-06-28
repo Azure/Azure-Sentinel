@@ -1,0 +1,89 @@
+id: 2fc5d810-c9cc-491a-b564-841427ae0e50
+name: TI map Email entity to SecurityEvent
+description: |
+  'Identifies a match in SecurityEvent table from any Email IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  //Filtering the table for Email related IOCs
+  | where isnotempty(EmailSenderAddress)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+  (union isfuzzy=true
+  (SecurityEvent
+  | where TimeGenerated >= ago(dt_lookBack) and isnotempty(TargetUserName)
+  //Normalizing the column to lower case for exact match with EmailSenderAddress column
+  | extend TargetUserName = tolower(TargetUserName)
+  // renaming timestamp column so it is clear the log this came from SecurityEvent table
+  | extend SecurityEvent_TimeGenerated = TimeGenerated
+  ),
+  (WindowsEvent
+  | where TimeGenerated >= ago(dt_lookBack)
+  | extend TargetUserName = tostring(EventData.TargetUserName)
+  | where isnotempty(TargetUserName)
+  //Normalizing the column to lower case for exact match with EmailSenderAddress column
+  | extend TargetUserName = tolower(TargetUserName)
+  // renaming timestamp column so it is clear the log this came from SecurityEvent table
+  | extend SecurityEvent_TimeGenerated = TimeGenerated
+  ))
+  )
+  on $left.EmailSenderAddress == $right.TargetUserName
+  | where SecurityEvent_TimeGenerated < ExpirationDateTime
+  | summarize SecurityEvent_TimeGenerated = arg_max(SecurityEvent_TimeGenerated, *) by IndicatorId, TargetUserName
+  | project SecurityEvent_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Computer, EventID, TargetUserName, Activity, IpAddress, AccountType,
+  LogonTypeName, LogonProcessName, Status, SubStatus
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend timestamp = SecurityEvent_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetUserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain   
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.3.4
+kind: Scheduled

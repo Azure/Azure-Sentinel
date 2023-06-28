@@ -1,6 +1,6 @@
 # ThreatX-BlockIP-URL Info Playbook
  ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the list of earlier blocked or allowed URLs and IPs .
  2. Fetches the new IP's and URL's from incidents and compare them with existing one and update the blacklist . 
 
@@ -8,6 +8,7 @@
 ### Prerequisites 
 1. ThreatX-WAFCustomConnector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. API key. To get API Key, login into your ThreatX cloud instance dashboard and navigate to Settings --> API Key --> Add Api Key.
+3. [Important step]Store the API secret key in Key vault and provide the key name of the stored secret during deployment.
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
@@ -18,21 +19,20 @@
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (Ex: ThreatX-BlockIP-URL)
     * Custom Connector Name: Enter the ThreatX custom connector name here (Ex: ThreatX-WAFCustomConnector)
-    * Key vault name : Your key vault name where you want the secrets to be stored (api_key).
-    * Threatx Key name : Name of your secret key 
-    * Threatx Key : Your threatx secret api key 
+    * Keyvault name : Enter the key vault name where secret key is stored .
+    * Threatx Key name : Your Key name for the stored api secret .
 
 ### Post-Deployment instructions 
-#### a. Authorize connections
+#### a. Authorize connections (Perform this action if needed)
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for ThreatX Api  Connection (For authorizing the ThreatX API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky URL or IP Address. 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky URL or IP Address. 
 2. Configure the automation rules to trigger this playbook , mapping of IP and URL entities is necessary
 #### c. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource
@@ -45,6 +45,15 @@ Once deployment is complete, you will need to authorize each connection.
 8. Select Resource group - where Playbook has been created
 9. Select Role - Microsoft Sentinel Responder
 10. Click Save (It takes 3-5 minutes to show the added role.)
+#### d. Assign access policy on key vault for Playbook to fetch the secret key
+1. Select the Keyvault resource where you have stored the secret
+2. Click on Access policies Blade
+3. Click on Create
+4. Under Secret permissions columun , Select Get , List from "Secret Management Operations"
+5. Click next to go to Principal tab and choose your deployed playbook name
+6. Click Next leave application tab as it is .
+7. Click Review and create
+8. Click Create
 
 #  References
  - [Threatx support documentation](https://support.threatx.com/hc)

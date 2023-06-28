@@ -1,0 +1,187 @@
+id: 95543d6d-f00d-4193-a63f-4edeefb7ec36
+name: Zinc Actor IOCs domains hashes IPs and useragent - October 2022
+description: | 
+  'Identifies a match across domainname, IP, hash and useragent IOCs related to an actor tracked by Microsoft as Zinc.
+  Reference: https://www.microsoft.com/security/blog/2022/09/29/zinc-weaponizing-open-source-software/'
+severity: High 
+status: Available
+requiredDataConnectors: 
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: F5
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoASA
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: CEF
+    dataTypes: 
+      - CommonSecurityLog               
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+      - DeviceFileEvents
+      - DeviceEvents
+      - DeviceProcessEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+  - connectorId: WindowsFirewall
+    dataTypes:
+      - WindowsFirewall
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent             
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - Persistence
+relevantTechniques:
+  - T1546
+tags:
+  - Zinc
+query:  |
+  let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ZincOctober2022IOCs.csv"] with (format="csv", ignoreFirstRecord=True);
+  let domains = (iocs | where Type =~ "domainname"| project IoC);
+  let IPList = (iocs | where Type =~ "ip"| project IoC);
+  let sha256Hashes = (iocs | where Type =~ "sha256" | project IoC);
+  let useragents = (iocs | where Type =~ "useragent" | project IoC);
+  (union isfuzzy=true
+  (CommonSecurityLog
+  | where DestinationHostName has_any (domains) or RequestURL has_any (domains) or Message has_any (domains) or  SourceIP has_any (IPList) or DestinationIP  has_any (IPList)
+  | parse Message with * '(' DNSName ')' *
+  | project TimeGenerated, Message, SourceUserID, RequestURL, DestinationHostName, Type, SourceIP, DestinationIP, DNSName
+  | extend timestamp = TimeGenerated, AccountEntity = SourceUserID, UrlEntity = RequestURL , IPEntity = DestinationIP, DNSCustomEntity = DNSName
+  ),
+  (DnsEvents
+  | where Name in~ (domains) or IPAddresses has_any (IPList)
+  | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
+  | extend DNSName = Name, Host = Computer
+  | extend timestamp = TimeGenerated, HostEntity = Host, DNSCustomEntity = DNSName, IPEntity = IPAddresses
+  ),
+  (VMConnection
+  | where  RemoteDnsCanonicalNames has_any (domains)  or  SourceIp has_any (IPList) or DestinationIp has_any (IPList)
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | project TimeGenerated, Computer, Direction, RemoteDnsCanonicalNames, ProcessName, SourceIp, DestinationIp, DestinationPort, DNSName,BytesSent, BytesReceived, RemoteCountry, Type
+  | extend timestamp = TimeGenerated, IPEntity = DestinationIp, HostEntity = Computer, ProcessEntity = ProcessName, DNSCustomEntity = DNSName
+  ),
+  (Event
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  | where EventID == 3
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = tostring(EventDetail.[9].["#text"]), DestinationIP = tostring(EventDetail.[14].["#text"]), Image = EventDetail.[4].["#text"]
+  | where  SourceIP has_any (IPList) or DestinationIP has_any (IPList)
+  | project TimeGenerated, SourceIP, DestinationIP, Image, UserName, Computer, EventDetail, Type
+  | extend timestamp = TimeGenerated, AccountEntity = UserName, ProcessEntity = tostring(split(Image, '\\', -1)[-1]), HostEntity = Computer , IPEntity = DestinationIP
+  ),  
+  (DeviceNetworkEvents
+  | where RemoteUrl has_any (domains) or RemoteIP has_any (IPList) or InitiatingProcessSHA256 in (sha256Hashes) 
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, LocalIP, Type
+  | extend timestamp = TimeGenerated, IPEntity = RemoteIP, HostEntity = DeviceName, UrlEntity =RemoteUrl
+  ),
+  (AzureDiagnostics
+  | where ResourceType =~ "AZUREFIREWALLS"
+  | where Category =~ "AzureFirewallDnsProxy"
+  | project TimeGenerated,Resource, msg_s, Type
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (domains) or ClientIP has_any (IPList)
+  | extend timestamp = TimeGenerated, DNSName = Request_Name, IPEntity = ClientIP
+  ),
+  (AzureDiagnostics
+  | where ResourceType =~ "AZUREFIREWALLS"
+  | where Category =~ "AzureFirewallApplicationRule"
+  | project TimeGenerated,Resource, msg_s
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where DestinationHost has_any (domains) or SourceHost has_any (IPList)
+  | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPEntity = SourceHost
+  ),
+  (Event
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | parse EventDetail with * 'SHA256=' SHA256 '",' *
+  | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"]
+  | where SHA256 has_any (sha256Hashes)
+  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256, CommandLine, Image
+  | extend Type = strcat(Type, ": ", Source)
+  | extend timestamp = TimeGenerated, HostEntity = Computer , AccountEntity = UserName, ProcessEntity = tostring(split(Image, '\\', -1)[-1]), AlgorithmEntity = "SHA256", FileHashEntity = SHA256
+  ),  
+  (DeviceProcessEvents
+  | where  InitiatingProcessSHA256 has_any (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, FolderPath, Type
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = InitiatingProcessAccountName, ProcessEntity = InitiatingProcessFileName, AlgorithmEntity = "SHA256", FileHashEntity = InitiatingProcessSHA256
+  ),
+  (DeviceFileEvents
+  | where  InitiatingProcessSHA256 has_any (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RequestAccountName, RequestSourceIP, InitiatingProcessSHA256, FolderPath, Type
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = RequestAccountName, ProcessEntity = InitiatingProcessFileName, AlgorithmEntity = "SHA256", FileHashEntity = InitiatingProcessSHA256
+  ),
+  (DeviceEvents
+  | where  InitiatingProcessSHA256 has_any (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, FolderPath, Type
+  | extend CommandLine = InitiatingProcessCommandLine
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = InitiatingProcessAccountName, ProcessEntity = InitiatingProcessFileName, AlgorithmEntity = "SHA256", FileHashEntity = InitiatingProcessSHA256
+  ),
+  (OfficeActivity
+  | where ClientIP has_any (IPList) or UserAgent has_any (useragents)
+  | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
+  | extend timestamp = TimeGenerated, IPEntity = ClientIP, AccountEntity = UserId
+  )
+  )
+  | extend HostName = tostring(split(HostEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostEntity, '.'), 1, -1), '.'))
+  | extend Name = tostring(split(AccountEntity, '@', 0)[0]), UPNSuffix = tostring(split(AccountEntity, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPEntity 
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: AlgorithmEntity
+      - identifier: Value
+        columnName: FileHashEntity        
+version: 1.0.2
+kind: Scheduled

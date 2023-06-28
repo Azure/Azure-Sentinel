@@ -247,6 +247,10 @@ while [[ $# -gt 0 ]]; do
 		PREVIEW=1
 		shift 1
 		;;
+	--multi-clients)
+		MULTICLIENTS=1
+		shift 1
+		;;
 	--script-debug)
 		set -x
 		shift 1
@@ -257,7 +261,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--keymode [kvmi|kvsi|cfgf]"
 		echo "--connectionmode [abap|mserv]"
 		echo "--configpath <path>"
-		echo "--apabserver <servername>"
+		echo "--abapserver <servername>"
 		echo "--systemnr <system number>"
 		echo "--sid <SID>"
 		echo "--clientnumber <client number>"
@@ -285,6 +289,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--http-proxy <proxy url>"
 		echo "--confirm-all-prompts"
 		echo "--preview"
+		echo "--multi-clients"
 		exit 1
 		;;
 	*)
@@ -414,11 +419,6 @@ Configure the following SAP Log change requests to enable support for ingesting 
 
 Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
 This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
-
-SAP notes required for versions earlier than SAP Basis 7.5 SP13:
-- SAP Note 2641084, named *Standardized read access for the Security Audit log data*
-- SAP Note 2173545, named *CHANGEDOCUMENT_READ_ALL*
-- SAP Note 2502336, named *RSSCD100 - read only from archive, not from database*
 
 Note: The required SAP log change requests expose custom RFC FMs that are required for the connector, and do not change any standard or custom objects.
 
@@ -625,7 +625,13 @@ else
 	echo 'SAP system is reachable'
 fi
 
-sysfileloc=$CONFIGPATH/$containername/$SID/
+if [ $MULTICLIENTS ]; then
+	intprefix="$SID-$CLIENTNUMBER"
+else
+	intprefix="$SID"
+fi
+
+sysfileloc=$CONFIGPATH/$containername/$intprefix/
 sudo mkdir -p "$sysfileloc"
 sudo chown "$USER" "$sysfileloc"
 if [ ! $? -eq 0 ]; then
@@ -758,11 +764,11 @@ if [ ! $sdkok -eq 0 ]; then
 fi
 
 #Building the container
-containername="$containername-$SID"
+containername="$containername-$intprefix"
 
 sudo docker inspect "$containername" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-	echo 'Azure Sentinel SAP connector is already installed. The previous connector will be removed and replaced by the new version.'
+	echo "Azure Sentinel SAP connector is already installed for instance $intprefix. The previous connector will be removed and replaced by the new version."
 	pause 'Press any key to update'
 	sudo docker stop "$containername" >/dev/null
 	sudo docker container rm "$containername" >/dev/null
@@ -775,17 +781,21 @@ fi
 if [ -n "$HTTPPROXY" ]; then
 	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
 fi
+cmdparams=" --label Cloud=$CLOUD"
+# Generating SENTINEL_AGENT_GUID
+cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
+
 if [ "$MODE" == "kvmi" ]; then
 	echo "Creating docker container for use with Azure Key vault and managed VM identity"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
 elif [ "$MODE" == "kvsi" ]; then
 	echo "Creating docker container for use with Azure Key vault and application authentication"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
 elif [ "$MODE" == "cfgf" ]; then
 	echo "Creating docker container for use with secrets in config file"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
 fi
-echo 'Azure Sentinel SAP connector was updated for instance '"$SID"
+echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
 
 sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.ini "$sysfileloc$sysconf"
 if [ ! $? -eq 0 ]; then
@@ -811,19 +821,19 @@ sed -i '/\[ABAP Central Instance]/a'"sysid = $SID"'' "$sysfileloc"$sysconf
 if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 
 	sed -i '/\[Secrets Source]/a'"secrets = AZURE_KEY_VAULT"'' "$sysfileloc"$sysconf
-	sed -i '/\[Secrets Source]/a'"intprefix = $SID"'' "$sysfileloc"$sysconf
+	sed -i '/\[Secrets Source]/a'"intprefix = $intprefix"'' "$sysfileloc"$sysconf
 	sed -i '/\[Secrets Source]/a'"keyvault = $kv"'' "$sysfileloc"$sysconf
 
 	if [ ! $USESNC ]; then
-		az keyvault secret set --name "$SID"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
-		az keyvault secret set --name "$SID"-ABAPUSER --value "$uservar" --description SECRET_ABAP_USER --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-ABAPUSER --value "$uservar" --description SECRET_ABAP_USER --vault-name "$kv" >/dev/null
 	fi
-	az keyvault secret set --name "$SID"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
+	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
 	if [ ! $? -eq 0 ]; then
 		echo 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
 		exit 1
 	fi
-	az keyvault secret set --name "$SID"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
+	az keyvault secret set --name "$intprefix"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
 elif [ "$MODE" == 'cfgf' ]; then
 	sed -i '/\[Secrets Source]/a'"secrets = DOCKER_FIXED"'' "$sysfileloc"$sysconf
 	sed -i '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf

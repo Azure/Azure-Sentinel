@@ -33,7 +33,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Azure Sentinel connection resource
+1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
@@ -42,6 +42,6 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident.
+1. In Microsoft Sentinel, analytical rules should be configured to trigger an incident.
 In the *Entity maping* section of the analytics rule creation workflow, suspicious IP and hostnames should be mapped to **Address** identitfier of the **IP** for IPs entity type and **HostName** for the **Host**. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook.

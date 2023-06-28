@@ -25,7 +25,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Playbook Name
     * Custom Connector Name
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-GetAssets-ByOpenPort%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-GetAssets-ByOpenPort%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVMPlaybooks%2FQualysVM-GetAssets-ByOpenPort%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVMPlaybooks%2FQualysVM-GetAssets-ByOpenPort%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
@@ -41,7 +41,7 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains Netowrk Port. Since there is no entity for Ports for now, Network Ports need to be passed as key value pair in *Custom details* section. **[Important]** In the *Custom details* section of the analytics rule creation workflow, Assign **NetworkPort** as key and choose appropriate column as value.
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident that contains Netowrk Port. Since there is no entity for Ports for now, Network Ports need to be passed as key value pair in *Custom details* section. **[Important]** In the *Custom details* section of the analytics rule creation workflow, Assign **NetworkPort** as key and choose appropriate column as value.
 
     Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to know more about custom details in alerts.
     

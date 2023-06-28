@@ -1,0 +1,54 @@
+id: 4d173248-439b-4741-8b37-f63ad0c896ae
+name: Chia_Crypto_Mining IOC - June 2021
+description: | 
+  'Identifies a match across IOC's related to Chia cryptocurrency farming/plotting activity'
+severity: Low
+status: Available 
+requiredDataConnectors: 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - Impact
+relevantTechniques:
+  - T1496
+tags:
+  - Chia 
+  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/MultipleDataSources/ChiaCryptoMining.yaml
+    version: 1.1.0
+query:  |  
+  let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ChiaCryptoIOC.csv"] with (format="csv", ignoreFirstRecord=True);
+  let process = (iocs | where Type =~ "process" | project IoC);
+  //This query uses sysmon data, sections that have - | where Source == "Microsoft-Windows-Sysmon" - may need to be updated with latest
+  WindowsEvent
+  | where EventID == '4688' and EventData has_any (process)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | where NewProcessName  has_any (process)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+    , Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+    , NewProcessId = tostring(EventData.NewProcessId)
+  | extend timestamp = TimeGenerated, Computer, Account, File = tostring(split(NewProcessName, '\\', -1)[-1]), AlertDetail = 'Chia crypto IOC detected'
+  | extend FilePath = replace_string(NewProcessName, File, '')
+  | project TimeGenerated, timestamp, File, AlertDetail, FilePath,Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type
+  | extend AccountCustomEntity = Account, HostCustomEntity = Computer, FileCustomEntity = File, FilePathCustomEntity = FilePath
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileCustomEntity
+      - identifier: Directory
+        columnName: FilePathCustomEntity
+version: 1.0.3
+kind: Scheduled

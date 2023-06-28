@@ -1,7 +1,7 @@
 # Create-Jira-Issue
 author: Yaniv Shasha, Benjamin Kovacevic
 
-This playbook will open a Jira Issue when a new incident is opened in Azure Sentinel.<br>
+This playbook will open a Jira Issue when a new incident is opened in Microsoft Sentinel.<br>
 <br>
 ## Prerequisites
 
@@ -31,15 +31,15 @@ After deployment, you can run this playbook manually on an alert or attach it to
 ## Post-deployment
 Go to Playbook edit mode and fix Jira connection with data from Prerequisite. <br>
 When connection is fixed, choose your:
-1. Jira Project (where you want to sync Azure Sentinel incidents to) and
-2. Issue Type Id (Azure Sentinel incident issue type in Jira - Task, Story, Bug,...).<br>
+1. Jira Project (where you want to sync Microsoft Sentinel incidents to) and
+2. Issue Type Id (Microsoft Sentinel incident issue type in Jira - Task, Story, Bug,...).<br>
 <br>
 
 <strong>Note: This step is necessary only if you are deploying the Playbook using Alert trigger method from above</strong><br>
-We will need to assign Azure Sentinel Reader role to the Playbooks Managed Identity:<br>
+We will need to assign Microsoft Sentinel Reader role to the Playbooks Managed Identity:<br>
 1. Open Playbook and go to Settings > Identity
 2. Click on Azure Role Assignments and then on Add Role Assignment
-3. For Scope choose Resource group and make sure that subscription and resource group are where Azure Sentinel and Playbook are deployed. For Role choose Azure Sentinel Reader and click on Save.<br>
+3. For Scope choose Resource group and make sure that subscription and resource group are where Microsoft Sentinel and Playbook are deployed. For Role choose Microsoft Sentinel Reader and click on Save.<br>
 <br>
 ## Screenshots
 

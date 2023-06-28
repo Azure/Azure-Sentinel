@@ -1,0 +1,31 @@
+id: b5b172b1-d976-4113-af1f-02f7bf7d2092
+name: ECR image scan findings low
+description: |
+  'AWS ECR Image scan detected low severity vulnerabilities in your container image.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+    AWSCloudTrail
+    | where EventName == "DescribeImageScanFindings" and isempty(ErrorCode) and isempty(ErrorMessage)
+    | extend repoName = tostring(parse_json(ResponseElements).repositoryName)
+    | extend imageId = tostring(parse_json(ResponseElements).imageId.imageDigest)
+    | extend Low = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.LOW)
+    | where Low > 0
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

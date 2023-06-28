@@ -1,0 +1,34 @@
+id: 9da99021-d318-4711-a78a-6dea76129b3a
+name: GuardDuty detector disabled or suspended
+description: |
+  'GuardDuty Detector was disabled or suspended, possibly by an attacker trying to avoid detection of its malicious activities. Verify with the user identity that this activity is legitimate.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+    AWSCloudTrail
+    | where (EventName == "DeleteDetector" and isempty(ErrorCode) and isempty( ErrorMessage)) or (EventName == "UpdateDetector" and tostring(parse_json(RequestParameters).enable) == "false" and isempty(ErrorCode) and isempty( ErrorMessage))
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

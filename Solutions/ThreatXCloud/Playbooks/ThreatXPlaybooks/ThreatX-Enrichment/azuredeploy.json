@@ -6,10 +6,11 @@
         "description": "This playbook provides/updates the threat intel and essential details in comments section of triggered incident so that SOC analysts can directly take corrective measure to stop the attack",
         "prerequisites": [
             "1. ThreatX-WAF Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
-            "2. API Key . To get API Key, login into your ThreatX cloud instance dashboard and navigate to Settings --> API Key --> Add Api key"
+            "2. API Key . To get API Key, login into your ThreatX cloud instance dashboard and navigate to Settings --> API Key --> Add Api key",
+	    "3. [Important step]Store the API secret key in Key vault and provide the key name of the stored secret during deployment"
         ],
         "postDeployment": [
-            "1. During deployment you need to provide your api key with key vault name and tenant name."
+            "1. During deployment you need to provide your tenant name ,Key vault name and key name of stored secret key."
         ],
         "prerequisitesDeployTemplateFile": "../../CustomConnector/ThreatXCustomConnector/azuredeploy.json",
         "lastUpdateTime": "2022-09-15T00:00:00.000Z",
@@ -28,34 +29,27 @@
             "defaultValue": "ThreatX-Enrichment",
             "type": "string"
         },
-        "customer_name": {
+        "customer name": {
             "type": "string",
             "metadata": {
-                "description": "Enter value for Tenant name"
+                "description": "Enter value for Tenant Name"
             }
         },
-        "Keyvault name": {
+		"Keyvault name": {
             "defaultValue": "",
             "type": "String",
             "metadata": {
-                "description": "Enter unique name else deployment will fail: postfix with some random number"
+                "description": "Enter the key vault name where secret key is stored"
             }
         },
-        "Threatx Key name": {
+		"Threatx Key name": {
             "defaultValue": "",
             "type": "string",
             "metadata": {
-                "description": "Your Key name"
+                "description": "Your Key name for the api secret stored in keyvault under secrets"
             }
         },
-        "Threatx Key": {
-            "defaultValue": "",
-            "type": "securestring",
-            "metadata": {
-                "description": "Your secure threat-x key."
-            }
-        },
-        "CustomConnectorName": {
+		"CustomConnectorName": {
             "defaultValue": "ThreatX-WAFCustomConnector",
             "type": "string",
             "metadata": {
@@ -64,62 +58,11 @@
         }
     },
     "variables": {
-        "keyvault_name": "[toLower(parameters('Keyvault name'))]",
-        "Threatx-WAFConnectionName": "[concat('Threatx-WAF-', parameters('PlaybookName'))]",
+        "Threatx-WafcustomconnectorConnectionName": "[concat('Threatx-Wafcustomconnector-', parameters('PlaybookName'))]",
         "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
         "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
     },
     "resources": [
-        {
-            "type": "Microsoft.KeyVault/vaults",
-            "apiVersion": "2022-07-01",
-            "name": "[variables('keyvault_name')]",
-            "location": "[resourceGroup().location]",
-			"dependsOn": [
-                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
-            ],
-            "properties": {
-                "sku": {
-                    "family": "A",
-                    "name": "Standard"
-                },
-                "tenantId": "[subscription().tenantId]",
-                "accessPolicies": [
-                    {
-                        "tenantId": "[subscription().tenantId]",
-                        "objectId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId]",
-                        "permissions": {
-                            "certificates": [],
-                            "keys": [],
-                            "secrets": [
-                                "Get",
-                                "List"
-                            ]
-                        }
-                    }
-                ],
-                "enabledForDeployment": false,
-                "enabledForDiskEncryption": false,
-                "enabledForTemplateDeployment": true,
-                "enableSoftDelete": true
-            }
-        },
-        {
-            "type": "Microsoft.KeyVault/vaults/secrets",
-            "apiVersion": "2022-07-01",
-            "name": "[concat(variables('keyvault_name'), '/', parameters('Threatx Key name'))]",
-            "location": "[resourceGroup().location]",
-            "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', variables('keyvault_name'))]"
-            ],
-            "properties": {
-                "value": "[parameters('Threatx Key')]",
-                "contentType": "string",
-                "attributes": {
-                    "enabled": true
-                }
-            }
-        },
         {
             "properties": {
                 "provisioningState": "Succeeded",
@@ -134,12 +77,12 @@
                         },
                         "customer_name": {
                             "type": "string",
-                            "defaultValue": "[parameters('customer_name')]"
+                            "defaultValue": "[parameters('customer name')]"
                         },
-                        "Threatx_Key_name": {
+						"Threatx_Key_name": {
                             "type": "string",
                             "defaultValue": "[parameters('Threatx Key name')]"
-                        }
+                        }						
                     },
                     "triggers": {
                         "Microsoft_Sentinel_incident": {
@@ -607,8 +550,8 @@
                     "$connections": {
                         "value": {
                             "ThreatX-WAFCustomConnector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Threatx-WAFConnectionName'))]",
-                                "connectionName": "[variables('Threatx-WAFConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Threatx-WafcustomconnectorConnectionName'))]",
+                                "connectionName": "[variables('Threatx-WafcustomconnectorConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
                             },
                             "azuresentinel": {
@@ -624,12 +567,12 @@
                             "keyvault": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
                                 "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
                                 "connectionProperties": {
                                     "authentication": {
                                         "type": "ManagedServiceIdentity"
                                     }
-                                },
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                                }
                             }
                         }
                     }
@@ -647,7 +590,7 @@
             },
             "apiVersion": "2017-07-01",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('Threatx-WAFConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Threatx-WafcustomconnectorConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
             ]
@@ -655,11 +598,11 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('Threatx-WAFConnectionName')]",
+            "name": "[variables('Threatx-WafcustomconnectorConnectionName')]",
             "location": "[resourceGroup().location]",
             "kind": "V1",
             "properties": {
-                "displayName": "[variables('Threatx-WAFConnectionName')]",
+                "displayName": "[variables('Threatx-WafcustomconnectorConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
@@ -681,7 +624,7 @@
                 }
             }
         },
-        {
+         {
             "type": "Microsoft.Web/Connections",
             "apiVersion": "2016-06-01",
             "name": "[variables('KeyvaultConnectionName')]",
@@ -694,11 +637,11 @@
                 },
                 "parameterValueType": "Alternative",
                 "alternativeParameterValues": {
-                    "vaultName": "[variables('keyvault_name')]"
+                    "vaultName": "[parameters('keyvault name')]"
                 },
                 "displayName": "[variables('KeyvaultConnectionName')]",
                 "nonSecretParameterValues": {
-                    "vaultName": "[variables('keyvault_name')]"
+                    "vaultName": "[parameters('keyvault name')]"
                 }
 
             }

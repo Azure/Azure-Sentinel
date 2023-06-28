@@ -1,6 +1,32 @@
 {
 	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
 	"contentVersion": "1.0.0.0",
+	"metadata": {
+		"title": "SlashNext Web Access Log Assessment",
+		"description": "Designed to analyze Web Access logs from Web Gateways and Firewalls. Scan your logs for continuous detection of phishing and malicious threat URLs clicked by end users. Identify threats missed by current security layers.The playbook shall extract all the URLs from the logs to perform analysis using SlashNext Connector and create an incident for each unique malicious URL found in the web logs.",
+		"prerequisites": [
+			"1.Prior to the deployment of this playbook, SlashNext Function App needs to be deployed under the same subscription. \n Use https://aka.ms/sentinel-slashnext-functionapp to deploy",
+			"2.**SlashNext Logic Apps Connector** supports **Basic** authentication, while creating connection you will be asked to provide API key.",
+            "To acquire SlashNext API key, please contact us at [support@slashnext.com](mailto:support@slashnext.com) or visit [SlashNext.com](www.slashnext.com)"
+		],
+		"postDeployment": [ "**a. Authorize Connection**", "Once deployment is complete, authorize SlashNext Logic Apps Connector connection", "1. Click on the SlashNext connection resource", "2. Click **Edit** API connection", "3. Enter API key acquired from SlashNext", "4. Click **Save**","**b. Configure Logic App Permissions**","1. Click on **Identity**","2. Select **Azure role assignment** from system assigned tab","3. Click on **Add role assignment**","4. Select relevant permission and save","5. Repeat above steps for the following permissions"," 1. Log Analytics Reader"," 2. Microsoft Sentinel Contributor","**c. Set following Variables in Logic App as per the Environment**","1. Subscription Id","2. Workspace Id","3. Resource Group","4. Workspace Name"],
+		"lastUpdateTime": "2022-09-27T00:00:00.000Z",
+		"entities": [],
+		"tags": [],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "SlashNext"
+		},
+		"releaseNotes": [
+			{
+				"version": "1.0.0",
+				"title": "SlashNext Web Access Log Assessment Playbook",
+				"notes": [ "Initial version" ]
+			}
+		]
+	},
 	"parameters": {
 		"PlaybookName": {
       		"defaultValue": "SlashNextWebAccessLogAssessment",
@@ -21,125 +47,28 @@
 		"Workspace Name": {
 			"defaultValue": "",
 			"type": "string"
+		},
+		"customApis_slashnext_name": {
+			"defaultValue": "SlashNext",
+			"type": "string",
+			"metadata": {
+				"description": "Name of the SlashNext Connector"
+			}
+		},
+		"FunctionAppName": {
+			"defaultValue": "SlashnextFunctionApp",
+			"type": "string"
 		}
 
 	},
 	"variables": {
 		"slashnext_connection_name": "[concat('slashnext-connection-', parameters('PlaybookName'))]",
-		"customApis_slashnext_name": "SlashNext",
-		"parent_suffix": "[substring(toLower(uniqueString(resourceGroup().id, resourceGroup().location)),0,5)]",
-		"azureFunction": "[concat('slashnext-azure-function-',variables('parent_suffix'))]"
+		"parent_suffix": "[substring(toLower(uniqueString(resourceGroup().id, concat('[resourceGroup().locatio', 'n]'))),0,5)]",
+		"azureFunction": "[concat(parameters('FunctionAppName'), variables('parent_suffix')) ]",
+		"azure": "[concat('https://api','.loganalytics','.io')]",
+		"domain": "[concat('https://management','.azure','.com')]"
 	},
-	"resources": [{
-			"name": "SlashNext_azure_LinkedTemplate",
-			"type": "Microsoft.Resources/deployments",
-			"apiVersion": "2018-05-01",
-			"properties": {
-				"mode": "Incremental",
-				"expressionEvaluationOptions": {
-					"scope": "inner"
-				},
-				"template": {
-					"$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
-					"contentVersion": "1.0.0.0",
-					"parameters": {},
-					"variables": {
-						"suffix": "[substring(toLower(uniqueString(resourceGroup().id, resourceGroup().location)),0,5)]",
-						"funcAppName": "[concat('slashnext-azure-function-',variables('suffix'))]",
-						"funcStorageName": "[concat('slashnextstorage', variables('suffix'))]",
-						"serverFarmName": "[concat('slashnextfarm', variables('suffix'))]",
-						"repoURL": "https://github.com/slashnext/processlogs",
-						"srcControlsName": "web",
-						"GitHubBranch": "master"
-					},
-					"resources": [{
-							"type": "Microsoft.Web/sites",
-							"apiVersion": "2018-11-01",
-							"name": "[variables('funcAppName')]",
-							"location": "[resourceGroup().location]",
-							"dependsOn": [
-								"[resourceId('Microsoft.Web/serverfarms',variables('serverFarmName'))]",
-								"[resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName'))]"
-							],
-							"kind": "functionapp,linux",
-							"properties": {
-								"serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
-								"siteConfig": {
-									"alwaysOn": true,
-									"appSettings": [{
-											"name": "AzureWebJobsDashboard",
-											"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(variables('funcStorageName'),'2019-06-01').keys[0].value,';EndpointSuffix=core.windows.net')]"
-										},
-										{
-											"name": "AzureWebJobsStorage",
-											"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(variables('funcStorageName'),'2019-06-01').keys[0].value,';EndpointSuffix=core.windows.net')]"
-										},
-										{
-											"name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-											"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(variables('funcStorageName'),'2019-06-01').keys[0].value,';EndpointSuffix=core.windows.net')]"
-										},
-										{
-											"name": "FUNCTIONS_EXTENSION_VERSION",
-											"value": "~2"
-										},
-										{
-											"name": "FUNCTIONS_WORKER_RUNTIME",
-											"value": "python"
-										}
-									],
-									"linuxFxVersion": "python|3.6"
-								}
-							},
-							"resources": [{
-								"type": "sourcecontrols",
-								"apiVersion": "2018-11-01",
-								"name": "[variables('srcControlsName')]",
-								"dependsOn": [
-									"[resourceId('Microsoft.Web/sites/', variables('funcAppName'))]"
-								],
-								"properties": {
-									"RepoUrl": "[variables('repoURL')]",
-									"branch": "[variables('GitHubBranch')]",
-									"IsManualIntegration": true
-								}
-							}]
-						},
-						{
-							"type": "Microsoft.Storage/storageAccounts",
-							"apiVersion": "2018-07-01",
-							"name": "[variables('funcStorageName')]",
-							"location": "[resourceGroup().location]",
-							"tags": {
-								"displayName": "funStorageName"
-							},
-							"sku": {
-								"name": "Standard_LRS"
-							},
-							"kind": "StorageV2"
-						},
-						{
-							"type": "Microsoft.Web/serverfarms",
-							"apiVersion": "2018-02-01",
-							"name": "[variables('serverFarmName')]",
-							"location": "[resourceGroup().location]",
-							"sku": {
-								"name": "S1",
-								"tier": "Standard"
-							},
-							"kind": "elastic",
-							"properties": {
-								"kind": "functionapp",
-								"name": "[variables('serverFarmName')]",
-								"computeMode": "Dynamic",
-								"reserved": true
-							}
-						}
-					],
-					"outputs": {}
-				},
-				"parameters": {}
-			}
-		},
+	"resources": [
 		{
 			"name": "[variables('slashnext_connection_name')]",
 			"type": "Microsoft.Web/connections",
@@ -150,7 +79,7 @@
 				"displayName": "[variables('slashnext_connection_name')]",
 				"customParameterValues": {},
 				"api": {
-					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', variables('customApis_slashnext_name'))]"
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_slashnext_name'))]"
 				}
 			}
 		},
@@ -225,7 +154,7 @@
 								"variables": [{
 									"name": "Query API",
 									"type": "string",
-									"value": "https://api.loganalytics.io/v1/workspaces/@{variables('workspace_id')}/query"
+									"value": "[uri(variables('azure'),'/v1/workspaces/@{variables(''workspace_id'')}/query')]"
 								}]
 							}
 						},
@@ -312,7 +241,7 @@
 							"type": "Http",
 							"inputs": {
 								"authentication": {
-									"audience": "https://api.loganalytics.io",
+									"audience": "[variables('azure')]",
 									"type": "ManagedServiceIdentity"
 								},
 								"body": {
@@ -400,7 +329,7 @@
 															"type": "Http",
 															"inputs": {
 																"authentication": {
-																	"audience": "https://api.loganalytics.io",
+																	"audience": "[variables('azure')]",
 																	"type": "ManagedServiceIdentity"
 																},
 																"body": {
@@ -470,7 +399,7 @@
 																							"type": "Http",
 																							"inputs": {
 																								"authentication": {
-																									"audience": "https://management.azure.com",
+																									"audience": "[variables('domain')]",
 																									"type": "ManagedServiceIdentity"
 																								},
 																								"body": {
@@ -479,7 +408,7 @@
 																									}
 																								},
 																								"method": "PUT",
-																								"uri": "https://management.azure.com/subscriptions/@{variables('subscription_id')}/resourceGroups/@{variables('resource_group')}/providers/Microsoft.OperationalInsights/workspaces/@{variables('workspace_name')}/providers/Microsoft.SecurityInsights/incidents/@{items('Incident_Creating_Loop')['hash']}/comments/@{guid()}?api-version=2021-10-01\n"
+																								"uri": "[uriComponentToString(uri(variables('domain'),'subscriptions/@{variables(''subscription_id'')}/resourceGroups/@{variables(''resource_group'')}/providers/Microsoft.OperationalInsights/workspaces/@{variables(''workspace_name'')}/providers/Microsoft.SecurityInsights/incidents/@{items(''Incident_Creating_Loop'')[''hash'']}/comments/@{guid()}?api-version=2021-10-01'))]"
 																							}
 																						}
 																					},
@@ -508,7 +437,7 @@
 																					"type": "Http",
 																					"inputs": {
 																						"authentication": {
-																							"audience": "https://management.azure.com",
+																							"audience": "[variables('domain')]",
 																							"type": "ManagedServiceIdentity"
 																						},
 																						"body": {
@@ -521,7 +450,7 @@
 																							}
 																						},
 																						"method": "PUT",
-																						"uri": "https://management.azure.com/subscriptions/@{variables('subscription_id')}/resourceGroups/@{variables('resource_group')}/providers/Microsoft.OperationalInsights/workspaces/@{variables('workspace_name')}/providers/Microsoft.SecurityInsights/incidents/@{body('Parse_URL_Mapping')?['hash']}?api-version=2021-10-01-preview"
+																						"uri": "[uriComponentToString(uri(variables('domain'),'subscriptions/@{variables(''subscription_id'')}/resourceGroups/@{variables(''resource_group'')}/providers/Microsoft.OperationalInsights/workspaces/@{variables(''workspace_name'')}/providers/Microsoft.SecurityInsights/incidents/@{body(''Parse_URL_Mapping'')?[''hash'']}?api-version=2021-10-01-preview'))]"
 																					}
 																				},
 																				"Parse_URL_Mapping": {
@@ -772,7 +701,7 @@
 							"SlashNext": {
 								"connectionId": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/',variables('slashnext_connection_name'))]",
 								"connectionName": "[variables('slashnext_connection_name')]",
-								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', 'SlashNext')]"
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_slashnext_name'))]"
 							}
 						}
 					}
@@ -790,8 +719,7 @@
 			},
 			"apiVersion": "2017-07-01",
 			"dependsOn": [
-				"[resourceId('Microsoft.Web/connections', variables('slashnext_connection_name'))]",
-				"[resourceId('Microsoft.Resources/deployments', 'SlashNext_azure_LinkedTemplate')]"
+				"[resourceId('Microsoft.Web/connections', variables('slashnext_connection_name'))]"
 			]
 		}
 	]

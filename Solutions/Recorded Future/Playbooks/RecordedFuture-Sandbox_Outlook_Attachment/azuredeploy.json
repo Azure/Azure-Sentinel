@@ -1,0 +1,422 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+   "metadata": {
+        "title": "RecordedFuture-Sandbox_Outlook_Attachment",
+        "description": "This playbook will trigger on emails with attachmets and send them to Recorded Future Sandbox. The result will be written as a reply and a Sentinel Incident will be created if the file attachment has a sandbox risk score grater then the configured threshold value.",
+        "prerequisites": "To use the Recorded Future Sandbox connector, you will need a valid API token from Recorded Future as described in the documentation https://learn.microsoft.com/en-us/connectors/recordedfuturesandbo/#how-to-get-credentials",
+        "postDeployment": [
+            "After deployment you have to open the playbook and configure and authorize all connections and press save."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2023-04-28T00:00:00.000Z",
+        "entities": [
+            "url"
+        ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Recorded Future"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-Sandbox_Outlook_Attachment",
+            "type": "string"
+        },
+        "sandbox_api_key": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for sandbox_api_key"
+            }
+        },
+        "score_threshold": {
+            "type": "Int",
+            "metadata": {
+                "description": "Enter value for score_threshold"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "OutlookConnectionName": "[concat('Outlook-', parameters('PlaybookName'))]",
+        "RecordedfuturesandboConnectionName": "[concat('Recordedfuturesandbo-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "sandbox_api_key": {
+                            "defaultValue": "[parameters('sandbox_api_key')]",
+                            "type": "string"
+                        },
+                        "score_threshold": {
+                            "defaultValue": "[parameters('score_threshold')]",
+                            "type": "Int"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_new_email_arrives_(V2)": {
+                            "splitOn": "@triggerBody()?['value']",
+                            "type": "ApiConnectionNotification",
+                            "inputs": {
+                                "fetch": {
+                                    "method": "get",
+                                    "pathTemplate": {
+                                        "template": "/v2/Mail/OnNewEmail"
+                                    },
+                                    "queries": {
+                                        "fetchOnlyWithAttachment": true,
+                                        "folderPath": "Inbox",
+                                        "importance": "Any",
+                                        "includeAttachments": true
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['outlook_1']['connectionId']"
+                                    }
+                                },
+                                "subscribe": {
+                                    "body": {
+                                        "NotificationUrl": "@{listCallbackUrl()}"
+                                    },
+                                    "method": "post",
+                                    "pathTemplate": {
+                                        "template": "/MailSubscriptionPoke/$subscriptions"
+                                    },
+                                    "queries": {
+                                        "fetchOnlyWithAttachment": true,
+                                        "folderPath": "Inbox",
+                                        "importance": "Any"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@triggerBody()?['Attachments']",
+                            "actions": {
+                                "Get_the_full_report": {
+                                    "runAfter": {
+                                        "Wait_for_sandbox_report": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "headers": {
+                                            "SandboxToken": "@parameters('sandbox_api_key')"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['recordedfuturesandbo_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/samples/@{encodeURIComponent(body('Get_the_full_summary')?['id'])}/overview.json"
+                                    }
+                                },
+                                "Return_report_if_score_is_above_threshold": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Create_incident": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Create_incident')?['id']",
+                                                    "message": "<p>@{body('Get_the_full_report')?['html_report']}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Create_incident": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "description": "Recorded Future Sandbox Email Attachment Scan. From: @{triggerBody()?['From']}. To: @{triggerBody()?['To']}",
+                                                    "severity": "Medium",
+                                                    "status": "New",
+                                                    "title": "Recorded Future Sandbox Email Attachent Scan - File: @{body('Get_the_full_report')?['sample']?['target']}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents/subscriptions/@{encodeURIComponent('5129b3ff-c0c6-4e86-bd1c-70e5fcd579cf')}/resourceGroups/@{encodeURIComponent('RF')}/workspaces/@{encodeURIComponent('RF-log-analyitics')}"
+                                            }
+                                        },
+                                        "Send_an_email_(V2)": {
+                                            "runAfter": {
+                                                "Add_comment_to_incident_(V3)": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Body": "<p>@{body('Get_the_full_report')?['html_report']}</p>",
+                                                    "Importance": "Normal",
+                                                    "Subject": "Recorded Future Sandbox Report Overview - File: @{body('Get_the_full_report')?['sample']?['target']}",
+                                                    "To": "@triggerBody()?['To']"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['outlook_1']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/v2/Mail"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_the_full_report": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@body('Get_the_full_report')?['analysis']?['score']",
+                                                    "@parameters('score_threshold')"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Submit_file_samples": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "$content-type": "multipart/form-data",
+                                            "$multipart": [
+                                                {
+                                                    "body": "@base64ToBinary(items('For_each')?['ContentBytes'])",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"file\"; filename=\"@{items('For_each')?['Name']}\""
+                                                    }
+                                                },
+                                                {
+                                                    "body": "source: outlook_attachment",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"user_tags\""
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "headers": {
+                                            "SandboxToken": "@parameters('sandbox_api_key')"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['recordedfuturesandbo_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/samples/file"
+                                    }
+                                },
+                                "Wait_for_sandbox_report": {
+                                    "actions": {
+                                        "Delay": {
+                                            "runAfter": {
+                                                "Set_sandbox_status_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Wait",
+                                            "inputs": {
+                                                "interval": {
+                                                    "count": 2,
+                                                    "unit": "Minute"
+                                                }
+                                            }
+                                        },
+                                        "Get_the_full_summary": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "headers": {
+                                                    "SandboxToken": "@parameters('sandbox_api_key')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['recordedfuturesandbo_1']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/samples/@{encodeURIComponent(body('Submit_file_samples')?['id'])}"
+                                            }
+                                        },
+                                        "Set_sandbox_status_variable": {
+                                            "runAfter": {
+                                                "Get_the_full_summary": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "sandbox_status",
+                                                "value": "@body('Get_the_full_summary')?['status']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Submit_file_samples": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": "@equals(variables('sandbox_status'), 'reported')",
+                                    "limit": {
+                                        "count": 60,
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_sandbox_status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Initialize_sandbox_status": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sandbox_status",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "outlook_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]",
+                                "connectionName": "[variables('OutlookConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
+                            },
+                            "recordedfuturesandbo_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedfuturesandboConnectionName'))]",
+                                "connectionName": "[variables('RecordedfuturesandboConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturesandbo')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RecordedFuture-Sandbox_Outlook_Attachment",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('RecordedfuturesandboConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('OutlookConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('OutlookConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('RecordedfuturesandboConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('RecordedfuturesandboConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturesandbo')]"
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,811 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for AWSAthena"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-awsathena",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "AWSAthena_FunctionAppConnector": "AWSAthena_FunctionAppConnector",
+    "_AWSAthena_FunctionAppConnector": "[variables('AWSAthena_FunctionAppConnector')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "AWSAthena_FunctionAppConnector",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'-fa-',uniquestring(variables('_playbookContentId1')))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "AWSAthena-GetQueryResults": "AWSAthena-GetQueryResults",
+    "_AWSAthena-GetQueryResults": "[variables('AWSAthena-GetQueryResults')]",
+    "playbookVersion2": "1.0",
+    "playbookContentId2": "AWSAthena-GetQueryResults",
+    "_playbookContentId2": "[variables('playbookContentId2')]",
+    "playbookId2": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId2'))]",
+    "playbookTemplateSpecName2": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId2')))]",
+    "blanks": "[replace('b', 'b', '')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AzureFunction"
+      },
+      "properties": {
+        "description": "AWSAthena_FunctionAppConnector",
+        "displayName": "AWSAthena_FunctionAppConnector"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('playbookTemplateSpecName1'),'/',variables('playbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AzureFunction"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "AWSAthena_FunctionAppConnector Playbook with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "AWSAccessKeyID": {
+              "type": "string"
+            },
+            "AWSSecretAccessKey": {
+              "type": "securestring"
+            },
+            "AWSRegionName": {
+              "defaultValue": "us-east-1",
+              "type": "string"
+            },
+            "FunctionAppName": {
+              "defaultValue": "awsathena",
+              "type": "string"
+            }
+          },
+          "variables": {
+            "functionAppName": "[[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]",
+            "hostingPlanName": "[[variables('functionAppName')]",
+            "applicationInsightsName": "[[variables('functionAppName')]",
+            "storageAccountName": "[[variables('functionAppName')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "playbookContentId1": "AWSAthena_FunctionAppConnector",
+            "playbookId1": "[[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2021-02-01",
+              "name": "[[variables('storageAccountName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "networkAcls": {
+                  "bypass": "AzureServices",
+                  "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                  "services": {
+                    "file": {
+                      "keyType": "Account",
+                      "enabled": true
+                    },
+                    "blob": {
+                      "keyType": "Account",
+                      "enabled": true
+                    }
+                  },
+                  "keySource": "Microsoft.Storage"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2021-02-01",
+              "name": "[[variables('hostingPlanName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "sku": {
+                "name": "Y1",
+                "tier": "Dynamic",
+                "size": "Y1",
+                "family": "Y"
+              },
+              "properties": {
+                "computeMode": "Dynamic",
+                "reserved": true
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[[variables('applicationInsightsName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "tags": {
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites', 'AWSAthenaFunctionApp'))]": "Resource"
+              },
+              "properties": {
+                "Application_Type": "web"
+              },
+              "kind": "web"
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2021-02-01",
+              "name": "[[variables('functionAppName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "functionapp,linux",
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]"
+              ],
+              "properties": {
+                "reserved": true,
+                "httpsOnly": true,
+                "serverFarmId": "[[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                  "linuxFxVersion": "python|3.9",
+                  "appSettings": [
+                    {
+                      "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                      "value": "[[reference(resourceId('Microsoft.Insights/components', variables('functionAppName')), '2020-02-02').InstrumentationKey]"
+                    },
+                    {
+                      "name": "AzureWebJobsStorage",
+                      "value": "[[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-05-01').keys[0].value)]"
+                    },
+                    {
+                      "name": "FUNCTIONS_EXTENSION_VERSION",
+                      "value": "~4"
+                    },
+                    {
+                      "name": "FUNCTIONS_WORKER_RUNTIME",
+                      "value": "python"
+                    },
+                    {
+                      "name": "WEBSITE_RUN_FROM_PACKAGE",
+                      "value": "https://github.com/Azure/Azure-Sentinel/blob/origin/users/rahul/aws-athena/Solutions/AWSAthena/Playbooks/CustomConnector/AWSAthena_FunctionAppConnector/AWSAthenaFunctionApp.zip?raw=true"
+                    },
+                    {
+                      "name": "AWSAccessKeyID",
+                      "value": "[[parameters('AWSAccessKeyID')]"
+                    },
+                    {
+                      "name": "AWSSecretAccessKey",
+                      "value": "[[parameters('AWSSecretAccessKey')]"
+                    },
+                    {
+                      "name": "AWSRegionName",
+                      "value": "[[parameters('AWSRegionName')]"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('AzureFunction-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "AzureFunction",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "AWSAthena",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('playbookTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "properties": {
+        "description": "AWSAthena-GetQueryResults playbook",
+        "displayName": "AWSAthena-GetQueryResults playbook"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('playbookTemplateSpecName2'),'/',variables('playbookVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName2'))]"
+      ],
+      "properties": {
+        "description": "AWSAthena-GetQueryResults Playbook with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion2')]",
+          "parameters": {
+            "PlaybookName": {
+              "defaultValue": "AWSAthena-GetQueryResults",
+              "type": "string"
+            },
+            "DataCatalog": {
+              "defaultValue": "",
+              "type": "string",
+              "metadata": {
+                "description": "Enter DataCatalog Name"
+              }
+            },
+            "Database": {
+              "defaultValue": "",
+              "type": "string",
+              "metadata": {
+                "description": "Enter Database Name"
+              }
+            },
+            "OutputLocation": {
+              "defaultValue": "",
+              "type": "string",
+              "metadata": {
+                "description": "Enter Output bucket location"
+              }
+            },
+            "QueryString": {
+              "defaultValue": "",
+              "type": "string",
+              "metadata": {
+                "description": "Enter Query String to execute"
+              }
+            },
+            "FunctionAppName": {
+              "defaultValue": "awsathena",
+              "type": "string"
+            }
+          },
+          "variables": {
+            "MicrosoftSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "functionAppName": "[[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]",
+            "AWSAthenaFuntionAppId": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionAppName'))]",
+            "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+            "_connection-2": "[[variables('connection-2')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    },
+                    "DataCatalog": {
+                      "defaultValue": "[[parameters('DataCatalog')]",
+                      "type": "string"
+                    },
+                    "Database": {
+                      "defaultValue": "[[parameters('Database')]",
+                      "type": "string"
+                    },
+                    "OutputLocation": {
+                      "defaultValue": "[[parameters('OutputLocation')]",
+                      "type": "string"
+                    },
+                    "QueryString": {
+                      "defaultValue": "[[parameters('QueryString')]",
+                      "type": "string"
+                    }
+                  },
+                  "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "path": "/incident-creation"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Add_comment_to_incident_(V3)": {
+                      "runAfter": {
+                        "Check_Condition_if_Query_execution_failed": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('Create_HTML_table')}@{variables('OutputMessage')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    },
+                    "Check_Condition_if_Query_execution_failed": {
+                      "actions": {
+                        "Create_HTML_table": {
+                          "runAfter": {
+                            "GetQueryResults": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Table",
+                          "inputs": {
+                            "format": "HTML",
+                            "from": "@array(body('GetQueryResults'))"
+                          }
+                        },
+                        "GetQueryResults": {
+                          "type": "Function",
+                          "inputs": {
+                            "body": {
+                              "QueryExecutionId": "@body('StartQueryExecution')"
+                            },
+                            "function": {
+                              "id": "[[concat(variables('AWSAthenaFuntionAppId'), '/functions/GetQueryResults')]"
+                            },
+                            "method": "POST"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Wait_Until_query_execution_is_succeeded": [
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Set_variable_-_OutputMessage": {
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "OutputMessage",
+                              "value": "<strong> Query (QueryExecutionId: ) failed or cancelled or timedout. </strong>"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@variables('IsQueryExecutionFailed')",
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "GetQueryExecution": {
+                      "runAfter": {
+                        "StartQueryExecution": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Function",
+                      "inputs": {
+                        "body": {
+                          "QueryExecutionId": "@body('StartQueryExecution')"
+                        },
+                        "function": {
+                          "id": "[[concat(variables('AWSAthenaFuntionAppId'), '/functions/GetQueryExecution')]"
+                        },
+                        "method": "POST"
+                      }
+                    },
+                    "Initialize_variable_-_IsQueryExecutionFailed": {
+                      "runAfter": {
+                        "Initialize_variable_-_QueryStatus": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "IsQueryExecutionFailed",
+                            "type": "integer",
+                            "value": 0
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_OutputMessage": {
+                      "runAfter": {
+                        "Initialize_variable_-_IsQueryExecutionFailed": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "OutputMessage",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_QueryStatus": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "QueryStatus",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "Set_variable_-_QueryStatus": {
+                      "runAfter": {
+                        "GetQueryExecution": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "QueryStatus",
+                        "value": "@{body('GetQueryExecution')}"
+                      }
+                    },
+                    "StartQueryExecution": {
+                      "runAfter": {
+                        "Initialize_variable_-_OutputMessage": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Function",
+                      "inputs": {
+                        "body": {
+                          "Catalog": "@parameters('DataCatalog')",
+                          "Database": "@parameters('Database')",
+                          "OutputLocation": "@parameters('OutputLocation')",
+                          "QueryString": "@parameters('QueryString')"
+                        },
+                        "function": {
+                          "id": "[[concat(variables('AWSAthenaFuntionAppId'), '/functions/StartQueryExecution')]"
+                        },
+                        "method": "POST"
+                      }
+                    },
+                    "Wait_Until_query_execution_is_succeeded": {
+                      "actions": {
+                        "Check_if_Query_failed_or_cancelled": {
+                          "actions": {
+                            "Set_variable_-_IsQueryExecutionFailed_to_1": {
+                              "runAfter": {
+                                "Set_variable_QueryStaus_to_SUCCEEDED_to_break_until_loop_": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "IsQueryExecutionFailed",
+                                "value": 1
+                              }
+                            },
+                            "Set_variable_QueryStaus_to_SUCCEEDED_to_break_until_loop_": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "QueryStatus",
+                                "value": "SUCCEEDED"
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Update_variable_-_QueryStatus_": [
+                              "Succeeded"
+                            ]
+                          },
+                          "expression": {
+                            "or": [
+                              {
+                                "equals": [
+                                  "@variables('QueryStatus')",
+                                  "FAILED"
+                                ]
+                              },
+                              {
+                                "equals": [
+                                  "@variables('QueryStatus')",
+                                  "CANCELLED"
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        },
+                        "Delay_for_10_seconds": {
+                          "type": "Wait",
+                          "inputs": {
+                            "interval": {
+                              "count": 10,
+                              "unit": "Second"
+                            }
+                          }
+                        },
+                        "GetQueryExecution_again": {
+                          "runAfter": {
+                            "Delay_for_10_seconds": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Function",
+                          "inputs": {
+                            "body": {
+                              "QueryExecutionId": "@body('StartQueryExecution')"
+                            },
+                            "function": {
+                              "id": "[[concat(variables('AWSAthenaFuntionAppId'), '/functions/GetQueryExecution')]"
+                            },
+                            "method": "POST"
+                          }
+                        },
+                        "Update_variable_-_QueryStatus_": {
+                          "runAfter": {
+                            "GetQueryExecution_again": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "QueryStatus",
+                            "value": "@{body('GetQueryExecution_again')}"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Set_variable_-_QueryStatus": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": "@equals(variables('QueryStatus'), 'SUCCEEDED')",
+                      "limit": {
+                        "count": 50,
+                        "timeout": "PT1H"
+                      },
+                      "type": "Until"
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                        "connectionName": "[[variables('MicrosoftSentinelConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "name": "[[parameters('PlaybookName')]",
+              "type": "Microsoft.Logic/workflows",
+              "location": "[[variables('workspace-location-inline')]",
+              "tags": {
+                "hidden-SentinelTemplateName": "AWSAthena-GetQueryResults",
+                "hidden-SentinelTemplateVersion": "1.0",
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "apiVersion": "2017-07-01",
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('MicrosoftSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
+              "properties": {
+                "displayName": "[[variables('MicrosoftSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                  "id": "[[variables('_connection-2')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId2'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId2')]",
+                "contentId": "[variables('_playbookContentId2')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "AWSAthena",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "kind": "AzureFunction",
+                      "contentId": "[variables('_AWSAthena_FunctionAppConnector')]",
+                      "version": "[variables('playbookVersion1')]"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "AWS Athena - Execute Query and Get Results",
+            "description": "When a new sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. It executes the query specified during playbook setup on given database.\n 2. Downloads the query result and adds as a comment to the incident.",
+            "prerequisites": ["Obtain AWS Access Key ID, Secret Access Key and Region."],
+            "postDeployment": [
+              "Follow Post deployment steps from playbook readme file."
+            ],
+            "lastUpdateTime": "2022-11-14T12:00:00Z",
+            "tags": [
+              "Enrichment",
+              "AWS"
+            ],
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "AWSAthena",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "AzureFunction",
+              "contentId": "[variables('_AWSAthena_FunctionAppConnector')]",
+              "version": "[variables('playbookVersion1')]"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_AWSAthena-GetQueryResults')]",
+              "version": "[variables('playbookVersion2')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-11-18",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Automation (SOAR)"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

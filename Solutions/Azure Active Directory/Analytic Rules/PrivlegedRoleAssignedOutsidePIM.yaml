@@ -23,16 +23,23 @@ query: |
   AuditLogs
   | where Category =~ "RoleManagement"
   | where OperationName has "Add member to role outside of PIM"
-          or (LoggedByService == "Core Directory" and OperationName == "Add member to role" and Identity != "MS-PIM")
-  | extend AccountCustomEntity = tostring(TargetResources[0].userPrincipalName), IPCustomEntity = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+          or (LoggedByService =~ "Core Directory" and OperationName =~ "Add member to role" and Identity != "MS-PIM")
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend UserPrincipalName = tostring(TargetResource.userPrincipalName)
+    )
+  | extend IpAddress = tostring(InitiatedBy.user.ipAddress), Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name      
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.3
+        columnName: IpAddress
+version: 1.0.4
 kind: Scheduled

@@ -1,0 +1,42 @@
+id: d564ff12-8f53-41b8-8649-44f76b37b99f
+name: Azure DevOps Service Connection Abuse
+description: |
+  'Flags builds/releases that use a large number of service connections if they aren't manually in the allow list.
+  This is to determine if someone is hijacking a build/release and adding many service connections in order to abuse
+  or dump credentials from service connections.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Impact
+relevantTechniques:
+  - T1098
+  - T1496
+query: |
+  // How many greater than Service Connections you want to view per build/release
+  let ServiceConnectionThreshold = 4;
+  let BypassDefIds = datatable(DefId:string, Type:string, ProjectName:string)
+  [
+  //"103", "Release", "ProjectA",
+  //"42", "Release", "ProjectB",
+  //"122", "Build", "ProjectB"
+  ];
+  AzureDevOpsAuditing
+  | where OperationName == "Library.ServiceConnectionExecuted"
+  | extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)
+  | parse ScopeDisplayName with OrganizationName ' (Organization)'
+  | summarize CurrentCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
+    by OrganizationName, tostring(DefId), tostring(Type), ProjectId, ProjectName
+  | where CurrentCount > ServiceConnectionThreshold
+  | join kind=anti BypassDefIds on $left.DefId==$right.DefId and $left.Type == $right.Type and $left.ProjectName == $right.ProjectName
+  | extend link = iif(
+    Type == "Build", strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_build?definitionId=', DefId),
+    strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_release?_a=releases&view=mine&definitionId=', DefId))
+  | extend timestamp = StartTime
+version: 1.0.2
+kind: Scheduled

@@ -1,0 +1,62 @@
+id: 5efb0cfd-063d-417a-803b-562eae5b0301
+name: Azure DevOps Service Connection Addition/Abuse - Historic allow list
+description: |
+  'This detection builds an allow list of historic service connection use by Builds and Releases and compares to recent history, flagging growth of service connection use which are not manually included in the allow list and
+  not historically included in the allow list Build/Release runs.  This is to determine if someone is hijacking a build/release and adding many service connections in order to abuse or dump credentials from service connections.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 6h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Impact
+relevantTechniques:
+  - T1098
+  - T1496
+query: |
+  let starttime = 14d;
+  let endtime = 6h;
+  // Ignore Build/Releases with less/equal this number
+  let ServiceConnectionThreshold = 3;
+  // New Connections need to exhibit execution of more "new" connections than this number.
+  let NewConnectionThreshold = 1;
+  // List of Builds/Releases to ignore in your space
+  let BypassDefIds = datatable(DefId:string, Type:string, ProjectName:string)
+  [
+  //"103", "Release", "ProjectA",
+  //"42", "Release", "ProjectB",
+  //"122", "Build", "ProjectB"
+  ];
+  let HistoricDefs = AzureDevOpsAuditing
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | where OperationName == "Library.ServiceConnectionExecuted"
+  | extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)
+  | summarize HistoricCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName))
+    by DefId = tostring(DefId), Type = tostring(Type), ProjectId, ProjectName, ActorUPN;
+  AzureDevOpsAuditing
+  | where TimeGenerated >= ago(endtime)
+  | where OperationName == "Library.ServiceConnectionExecuted"
+  | extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)
+  | parse ScopeDisplayName with OrganizationName ' (Organization)'
+  | summarize CurrentCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
+    by OrganizationName, DefId = tostring(DefId), Type = tostring(Type), ProjectId, ProjectName, ActorUPN
+  | where CurrentCount > ServiceConnectionThreshold
+  | join (HistoricDefs) on ProjectId, DefId, Type, ActorUPN
+  | join kind=anti BypassDefIds on $left.DefId==$right.DefId and $left.Type == $right.Type and $left.ProjectName == $right.ProjectName
+  | extend link = iff(
+  Type == "Build", strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_build?definitionId=', DefId),
+  strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_release?_a=releases&view=mine&definitionId=', DefId))
+  | where CurrentCount >= HistoricCount + NewConnectionThreshold
+  | project StartTime, OrganizationName, ProjectName, DefId, link, RecentDistinctServiceConnections = CurrentCount, HistoricDistinctServiceConnections = HistoricCount,
+    RecentConnections = ConnectionNames, HistoricConnections = ConnectionNames1, ActorUPN
+  | extend timestamp = StartTime, AccountCustomEntity = ActorUPN
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.2
+kind: Scheduled

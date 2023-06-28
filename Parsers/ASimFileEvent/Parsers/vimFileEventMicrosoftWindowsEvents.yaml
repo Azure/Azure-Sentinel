@@ -1,0 +1,99 @@
+Parser:
+  Title: File Event ASIM filtering parser for Microsoft Windows Events
+  Version: '0.1.2'
+  LastUpdated: October 27, 2022
+Product:
+  Name: Microsoft Windows Events
+Normalization:
+  Schema: FileEvent
+  Version: '0.1'
+References:
+- Title: ASIM File Event Schema
+  Link: https://aka.ms/ASimFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
+ParserName: vimFileEventMicrosoftWindowsEvents
+ParserQuery: |
+  let Parser=()
+  {
+  let EventTypeLookup = datatable (AccessMask:string,EventType:string)
+  [
+      "0x1", "ObjectAccessed"
+      , "0x10", "MetadataModified"
+      , "0x100", "MetadataModified"
+      , "0x10000", "ObjectDeleted"
+      , "0x2", "ObjectModified"
+      , "0x20000", "MetadataAccessed"
+      , "0x4", "ObjectModified"
+      , "0x40", "ObjectDeleted"
+      , "0x40000", "MetadataModified"
+      , "0x6", "ObjectModified"
+      , "0x8", "MetadataAccessed"
+      , "0x80", "MetadataAccessed"
+      , "0x80000", "MetadataModified"
+  ];
+  let UserTypeLookup = datatable (AccountType:string, ActorUserType:string)
+  [
+    'User', 'Regular',
+    'Machine', 'Machine'
+  ];    
+  let KnownSIDs = datatable (sid:string, username:string, type:string)
+  [
+    'S-1-5-18', 'Local System', 'Simple',
+    'S-1-0-0', 'Nobody', 'Simple'
+  ];
+  union isfuzzy=false (WindowsEvent
+  | where EventID == 4663 
+    and EventData.ObjectType == "File"
+    and EventData.ObjectName !startswith @"\Device\"
+  | project TimeGenerated
+    , EventID, AccessMask = tostring(EventData.AccessMask)
+    , ProcessName = tostring(EventData.ProcessName)
+    , SubjectUserSid = tostring(EventData.SubjectUserSid)
+    , AccountType = tostring(EventData.AccountType)
+    , Computer = tostring(EventData.Computer)
+    , ObjectName = tostring(EventData.ObjectName)
+    , ProcessId = tostring(EventData.ProcessId)
+    , SubjectUserName = tostring(EventData.SubjectUserName)
+    , SubjectAccount = tostring(EventData.SubjectAccount)
+    , SubjectLogonId = tostring(EventData.SubjectLogonId)
+    , HandleId = tostring(EventData.HandleId)
+  )
+  , (SecurityEvent
+  | where EventID == 4663 
+    and ObjectType == "File"
+    and ObjectName !startswith @"\Device\"
+  | project TimeGenerated, EventID, AccessMask, ProcessName, SubjectUserSid, AccountType, Computer, ObjectName, ProcessId, SubjectUserName, SubjectAccount, SubjectLogonId, HandleId)
+  | lookup EventTypeLookup on AccessMask
+  | lookup UserTypeLookup on AccountType
+  | lookup KnownSIDs on $left.SubjectUserSid == $right.sid
+  | extend ActingProcessName = ProcessName
+    , ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount)
+    , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
+    , EventStartTime = TimeGenerated
+    , EventEndTime = TimeGenerated
+    , TargetFilePath = ObjectName
+    , TargetFilePathFormat = "Windows Local"
+    , ActingProcessId = tostring(toint(ProcessId))
+    , EventOriginalType = tostring(EventID)
+  | project-away EventID, ProcessId, AccountType, type, username
+  | project-rename ActorUserId = SubjectUserSid
+    , DvcHostname = Computer
+    , Process = ProcessName
+    , FilePath = ObjectName
+    , ActorSessionId = SubjectLogonId
+    , FileSessionId = HandleId
+  | extend EventSchema = "FileEvent"
+    , EventSchemaVersion = "0.1.1"
+    , EventResult = "Success"
+    , EventCount = int(1)
+    , EventVendor = 'Microsoft'
+    , EventProduct = 'Security Events'
+    , Dvc = DvcHostname
+    , ActorWindowsUsername = ActorUsername
+    , User = ActorUsername
+    , ActorUserSid = ActorUserId
+  };
+  Parser

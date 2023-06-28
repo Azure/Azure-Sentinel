@@ -1,0 +1,31 @@
+id: "8f471e21-3bb2-466f-9bc2-0a0326a60788"
+name: Semperis DSP Operations Critical Notifications 
+description: |
+  'Alerts when there are critical notifications fired in the DSP system.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SemperisDSP
+    dataTypes:
+      - dsp_parser
+query: |-
+  Event
+  | where Source == 'Semperis-DSP-Notifications' and EventID == 30001
+  | extend p1Xml = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array p1Xml
+  | evaluate bag_unpack(p1Xml)
+  | extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')
+  | evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)
+  | parse column_ifexists('objectDN', '') with * "CN=" cnName "," *
+  | where "Critical" == column_ifexists('severity', "")
+  | count
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertDisplayNameFormat: Critical Notification -- Alert from Semperis Directory Services Protector
+  alertDescriptionFormat: A critical notification was created in the DSP system.
+kind: Scheduled
