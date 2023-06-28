@@ -1,4 +1,4 @@
-# DNS Essentials Summarization capability
+# Web Session Essentials Summarization capability
 
 This logic app helps to ingest summarized web session data into custom tables. Please note - enabling this playbook would incur additional cost.
 
