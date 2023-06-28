@@ -4,7 +4,7 @@
 
 	NOTE: You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.
 
-	Download the Azure Function App file. Extract archive to your local development computer.
+	Download the Azure Function App file . Extract archive to your local development computer.
 
 	- Start VS Code. Choose File in the main menu and select Open Folder.
 	
@@ -19,6 +19,7 @@
 		a. **Select folder**: Choose a folder from your workspace or browse to one that contains your function app.
 
 		b. **Select Subscription**: Choose the subscription to use under resources.
+		(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/subscription.png)
 
 		c. Right click on the functions and select **Create new Function App in Azure** (Don't choose the Advanced option)
 
