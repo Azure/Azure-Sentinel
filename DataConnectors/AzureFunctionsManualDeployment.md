@@ -28,9 +28,11 @@
 		(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/globallyuniquename.png)
 
 		e. **Select a runtime**: Choose Python 3.8.
+		
 		(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Selectaruntime.png)
 
 		f. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.
+		
 		(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Selectalocation.png)
 
 2. Deployment will begin. A notification is displayed after your function app is created.
