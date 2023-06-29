@@ -6,13 +6,26 @@ This is a short introduction to the MISP to Sentinel project. Keep in mind, this
 
 The design is pretty straightforward, we filter on malware was prevented (highly likely that it's a known bad entity)
 
+### M365 Defender to Sentinel flow
+
 ```mermaid
 flowchart LR
     A[Microsoft 365 Defender] -->|Malware alert| B[Microsoft Sentinel]
     B --> INC[Incident]
+```
+
+### Automation trigger flow'
+```mermaid
+flowchart LR
     INC --> |If alert contains 'Malware was prevented'| AR[Automation Rule]
     AR --> PB[MISP-Forwarder]
-    PB --> |Send entities, incident URI and id|PB2[MISP-Orchestrator]
+    PB --> |Send entities|PB2[MISP-Orchestrator]
+
+### Push to MISP flow
+
+```mermaid
+flowchart LR
+    PB2[MISP-Orchestrator]
     PB2 --> MISP[MISP Server]
 ```
 
@@ -20,7 +33,7 @@ flowchart LR
 
 ### Deploy MISP Orchestrator
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2Fquickstarts%2Fmicrosoft.storage%2Fstorage-account-create%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2F2S-Sentinel2MISP%2FMISP-Orchestrator%2Fazuredeploy.json)
 
 1. Deploy the `MISP-Orchestrator` and make a note of the `HTTP POST URL` from the 'When a HTTP request is received' step
     * Update all the `HTTP` steps to use your MISP URI instead of `misp.local`
@@ -31,7 +44,7 @@ flowchart LR
 
 ### Deploy MISP Forwarder
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2Fquickstarts%2Fmicrosoft.storage%2Fstorage-account-create%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2F2S-Sentinel2MISP%2FMISP-Forwarder%2Fazuredeploy.json)
 
 1. Deploy the `MISP-Forwarder`
     * Give the Managed Identity for this playbook the `Microsoft Sentinel Reader` role
