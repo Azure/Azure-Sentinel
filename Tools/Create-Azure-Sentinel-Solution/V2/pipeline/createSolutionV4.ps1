@@ -1,6 +1,6 @@
 # this is only for build pipeline not for local use
 param ($pipelineBasePath, $pipelineSolutionName, $pipelineDataFileRawContent, $dataFileName, $dataConnectorFolderName, $dataFolderActualName, $instrumentationKey, $pullRequestNumber, $runId, $calculatedPackageVersion, $defaultPackageVersion, $isWatchListInsideOfWorkbooksFolder = $false)
-. ./Tools/Create-Azure-Sentinel-Solution/V2/commonFunctions.ps1 # load common functions
+. ./Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1 # load common functions
 . ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1 # load common functions
 
 try 
@@ -169,7 +169,7 @@ try
 								GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails
 							}
 							elseif ($objectKeyLowercase -eq "savedsearches") {
-								GenerateSavedSearches -json $json
+								GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails
 							}
 							elseif ($objectKeyLowercase -eq "watchlists") {
 								GenerateWatchList -json $json -isPipelineRun $isPipelineRun
