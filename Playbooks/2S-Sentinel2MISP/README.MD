@@ -20,6 +20,7 @@ flowchart LR
     INC --> |If alert contains 'Malware was prevented'| AR[Automation Rule]
     AR --> PB[MISP-Forwarder]
     PB --> |Send entities|PB2[MISP-Orchestrator]
+```
 
 ### Push to MISP flow
 
