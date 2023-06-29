@@ -92,7 +92,7 @@ If you want to contribute - feel free to do so. Adding new entity types, or supp
 
 ## Creators
 
-This 'solution' was originally created by Sopra Steria Nordics Security Operation Center. 
+Author: Sopra Steria Nordics Security Operation Center. 
 
 ![](https://www.soprasteria.no/images/librariesprovider2/sopra-steria-no-images/now-sine-bilder/soc-visuell-profil.jpg?sfvrsn=ce3122dc_1)
 
