@@ -82,6 +82,10 @@ We did this by exposing it behind a Application Gateway and configuring a WAF wi
 
 For some tests the internal tags were numbered differently, but this is as easy as changing out the numbers in the HTTP steps for the number of the tag in your MISP instance. You can also add more, both global and local tags. 
 
+### Playbook giving errors
+
+If an indicator like filename already exists in that event, then the playbook will throw an error for duplicates. If you want to avoid this you can add a new step after adding IOCs that run after the add IOC steps no matter what.
+
 # Contributing
 
 If you want to contribute - feel free to do so. Adding new entity types, or support for private IPs in Azure are both things that would be nice.
