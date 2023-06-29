@@ -66,7 +66,6 @@ def main(mytimer: func.TimerRequest):
     with sentinel:
         for entry in gcp_cli.list_entries(resource_names=get_recource_names(), filter_=filt, order_by='timestamp', page_size=1000):
             event = parse_entry(entry)
-            logging.info('Parsing the event completed')
             sentinel.send(event)
 
             last_ts = event['timestamp']
