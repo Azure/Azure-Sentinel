@@ -16,7 +16,8 @@ flowchart LR
 
 ### Automation trigger flow'
 ```mermaid
-flowchart LR
+flowchart TD
+    INC[Incident]    
     INC --> |If alert contains 'Malware was prevented'| AR[Automation Rule]
     AR --> PB[MISP-Forwarder]
     PB --> |Send entities|PB2[MISP-Orchestrator]
