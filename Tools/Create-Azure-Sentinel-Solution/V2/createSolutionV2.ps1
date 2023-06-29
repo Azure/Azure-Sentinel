@@ -1,5 +1,6 @@
 Import-Module powershell-yaml
 
+Write-Host 'It is recommended to use createSolutionV3.ps1 file for solution packaging'
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
 $mainTemplateArtifact = [PSCustomObject]@{
@@ -22,28 +23,42 @@ function handleEmptyInstructionProperties ($inputObj) {
     } { $obj }
     $outputObj
 }
-function removePropertiesRecursively ($resourceObj) {
+function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
     foreach ($prop in $resourceObj.PsObject.Properties) {
         $key = $prop.Name
         $val = $prop.Value
         if ($null -eq $val) {
-            $resourceObj.$key = "[variables('blanks')]";
-                                            if (!$baseMainTemplate.variables.blanks) {
-                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
-                                }   
+            if ($isWorkbook)
+            {
+                $resourceObj.$key = ''
+            }
+            else
+            {
+                $resourceObj.$key = "[variables('blanks')]";
+                if (!$baseMainTemplate.variables.blanks) {
+                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                }
+            }
         }
         elseif ($val -is [System.Object[]]) {
             if ($val.Count -eq 0) {
-                 #$resourceObj.PsObject.Properties.Remove($key)
-                 $resourceObj.$key = "[variables('TemplateEmptyArray')]";
-                                            if (!$baseMainTemplate.variables.TemplateEmptyArray) {
-                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
-                                            }
-        }
+                if ($isWorkbook)
+                {
+                    $resourceObj.$key = '[]'
+                }
+                else
+                {
+                    #$resourceObj.PsObject.Properties.Remove($key)
+                    $resourceObj.$key = "[variables('TemplateEmptyArray')]";
+                    if (!$baseMainTemplate.variables.TemplateEmptyArray) {
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                    }
+                }
+            }
             else {
                 foreach ($item in $val) {
                     $itemIndex = $val.IndexOf($item)
-                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex])
+                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex] $isWorkbook)
                 }
             }
         }
@@ -53,7 +68,7 @@ function removePropertiesRecursively ($resourceObj) {
                     $resourceObj.PsObject.Properties.Remove($key)
                 }
                 else {
-                    $resourceObj.$key = $(removePropertiesRecursively $val)
+                    $resourceObj.$key = $(removePropertiesRecursively $val $isWorkbook)
                     if ($($resourceObj.$key.PsObject.Properties).Count -eq 0) {
                         $resourceObj.PsObject.Properties.Remove($key)
                     }
@@ -306,7 +321,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
                             # Remove empty braces
-                            $serializedData = $(removePropertiesRecursively $serializedData) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
+                            $serializedData = $(removePropertiesRecursively $serializedData $true) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
                         }
                         catch {
                             Write-Host "Failed to serialize $file" -ForegroundColor Red
@@ -973,15 +988,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 Write-Host $logicAppsPlaybookId;
                             }
 
-                            
-
                             $playbookResource =  $playbookResource
-                            $playbookResource = $(removePropertiesRecursively $playbookResource)
+                            $playbookResource = $(removePropertiesRecursively $playbookResource $false)
                             $playbookResource =  $(addInternalSuffixRecursively $playbookResource)
                             $playbookResource =  $(removeBlanksRecursively $playbookResource)
                             $playbookResources += $playbookResource;
                             $connectionCounter += 1
-
                         }
                         if(!$IsFunctionAppResource -and $rawData -like '*Microsoft.Web/sites*' )
                             {
