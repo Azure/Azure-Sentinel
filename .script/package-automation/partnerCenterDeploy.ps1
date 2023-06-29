@@ -3,7 +3,7 @@ param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $defaultP
 $eventName = 'DeployToPartnerCenter'
 Write-Host "Deployement to Partner Center started!"
 
-. ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 . ./.script/package-automation/catelogAPI.ps1
 
 try {

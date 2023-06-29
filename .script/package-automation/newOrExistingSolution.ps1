@@ -1,6 +1,6 @@
 param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath, $instrumentationKey)
 
-. ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 $customProperties = @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; }
 Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "New Or Existing Solution" -CustomProperties $customProperties
 Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for newOrExistingSolution started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties

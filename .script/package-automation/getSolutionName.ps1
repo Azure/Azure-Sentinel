@@ -1,6 +1,6 @@
 param($instrumentationKey, $runId, $pullRequestNumber)
 
-. ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 
 $solutionName = ''
 

@@ -1,5 +1,5 @@
 param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey)
-. ./Tools/Create-Azure-Sentinel-Solution/V2/LogAppInsights.ps1
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 
 try {
     $customProperties = @{ 'RunId' = "$runId"; 'PullRequestNumber' = "$pullRequestNumber"; "EventName" = "CheckContentPR"; }
