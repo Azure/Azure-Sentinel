@@ -134,7 +134,13 @@ class ImpervaFilesHandler:
         file_encryption_flag = file_header.find("key:")
         events_arr = []
         if file_encryption_flag == -1:
-            events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
+            try:
+                events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
+            except Exception as err:
+                if 'while decompressing data: incorrect header check' in err.args[0]:
+                    events_data = file_data.decode("utf-8")
+                else:
+                    logging.error("Error during decompressing and decoding the file with error message {}.".format(err))                   
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
@@ -146,6 +152,11 @@ class ImpervaFilesHandler:
     def parse_cef(self,cef_raw):
         rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
         parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
+        header_array = cef_raw.split('|')
+        parsed_cef["Device Version"]=header_array[3]
+        parsed_cef["Signature"]=header_array[4]
+        parsed_cef["Attack Name"]=header_array[5]
+        parsed_cef["Attack Severity"]=header_array[6]
         for key,val in re.findall(rx, cef_raw):
             if val.startswith('"') and val.endswith('"'):
                 val = val[1:-1]
