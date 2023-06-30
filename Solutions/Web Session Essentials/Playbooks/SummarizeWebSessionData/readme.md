@@ -3,7 +3,7 @@
 This logic app helps to ingest summarized web session data into custom tables. Please note - enabling this playbook would incur additional cost.
 
  ## Summary
- To ensure good performance of Web Session solution, summarization capability can be used. This would create two custom tables containing analytics based on different parameters of ASIM DNS Schema. This playbook will create the following two tables in your Log Analytics Workspace:
+ To ensure good performance of Web Session solution, summarization capability can be used. This would create four custom tables containing analytics based on different parameters of ASIM Web Session Schema. This playbook will create the following four tables in your Log Analytics Workspace:
  * WebSession_Summarized_SrcInfo_CL
  * WebSession_Summarized_SrcIP_CL
  * WebSession_Summarized_DstIP_CL
