@@ -11,7 +11,7 @@ namespace Kqlvalidations.Tests
 
         protected abstract List<string> GetDirectoryPaths();
 
-        public List<string> GetFilesNames()
+        public virtual List<string> GetFilesNames()
         {
             int prNumber = int.Parse(System.Environment.GetEnvironmentVariable("PRNUM"));
             var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
