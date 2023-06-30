@@ -24,6 +24,7 @@ time_delay_minutes = 60
 time_delay_days = os.environ['time_delay_days']
 event_types = ["maillog","message"]
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
+time_delay_days = int(time_delay_days)
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
