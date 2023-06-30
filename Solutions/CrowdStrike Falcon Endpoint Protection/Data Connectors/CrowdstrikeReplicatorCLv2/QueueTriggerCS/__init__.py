@@ -5,7 +5,6 @@ from aiobotocore.session import get_session
 from gzip_stream import AsyncGZIPDecompressedStream
 import re
 from .sentinel_connector_clv2_async import AzureSentinelConnectorCLv2Async
-import time
 import aiohttp
 import logging
 import azure.functions as func

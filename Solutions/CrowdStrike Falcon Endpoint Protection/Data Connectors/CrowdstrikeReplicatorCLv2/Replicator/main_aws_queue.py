@@ -2,12 +2,8 @@ import os
 import json
 from aiobotocore.session import get_session
 import time
-import aiohttp
 import logging
 import azure.functions as func
-import itertools
-from operator import itemgetter
-import time
 from azure.storage.queue import QueueServiceClient
 from azure.core.exceptions import ResourceExistsError
 import base64
@@ -48,7 +44,6 @@ async def main(mytimer: func.TimerRequest):
    
     logging.info("Creating SQS connection")
     async with _create_sqs_client() as client:
-        async with aiohttp.ClientSession() as session:
             mainQueueHelper = AzureStorageQueueHelper(connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items")
             backlogQueueHelper = AzureStorageQueueHelper(connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items-backlog")    
 
