@@ -915,7 +915,7 @@ try {
     Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Package-generator : Data Input File Prepared dynamic, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
     Write-Host "Now going to execute createSolutionV4 file"
 
-    ./Tools/Create-Azure-Sentinel-Solution/V2/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
+    ./Tools/Create-Azure-Sentinel-Solution/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
     $allFilesInCreatedPackage = Get-ChildItem $packageCreationPath 
