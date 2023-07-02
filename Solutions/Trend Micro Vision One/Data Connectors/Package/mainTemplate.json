@@ -1,0 +1,804 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Trend Micro",
+    "comments": "Solution template for Trend Vision One"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Trend Vision One Alert Overview",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "trendmicro.trend_micro_vision_one_xdr_mss",
+    "_solutionId": "[variables('solutionId')]",
+	 "WorkbenchID": "workbenchId_s",
+    "_WorkbenchID": "[variables('WorkbenchID')]",
+    "XDRCustomerID": "xdrCustomerID_g",
+    "_XDRCustomerID": "[variables('XDRCustomerID')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "TrendMicroXDR",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "TrendMicroXDR",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.1.0",
+    "workbookVersion1": "1.3.0",
+    "workbookContentId1": "TrendMicroXDR",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "analyticRuleVersion1": "1.0.3",
+    "analyticRulecontentId1": "0febd8cc-1b8d-45ed-87b3-e1e8a57d14cd",
+    "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
+    "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
+    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Trend Vision One data connector with template",
+        "displayName": "Trend Vision One template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Trend Vision One data connector with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Trend Vision One (using Azure Functions)",
+                  "publisher": "Trend Micro",
+                  "descriptionMarkdown": "The [Trend Vision One](https://www.trendmicro.com/en_us/business/products/detection-response/xdr.html) connector allows you to easily connect your Workbench alert data with Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities. This gives you more insight into your organization's networks/systems and improves your security operation capabilities.\n\nThe Trend Vision One connector is supported in Microsoft Sentinel in the following regions: Australia East, Australia Southeast, Brazil South, Canada Central, Canada East, Central India, Central US, East Asia, East US, East US 2, France Central, Japan East, Korea Central, North Central US, North Europe, Norway East, South Africa North, South Central US, Southeast Asia, Sweden Central, Switzerland North, UAE North, UK South, UK West, West Europe, West US, West US 2, West US 3.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Workbench data",
+                      "legend": "TrendMicro_XDR_WORKBENCH_CL",
+                      "baseQuery": "TrendMicro_XDR_WORKBENCH_CL\n    | project-reorder alertTriggerTimestamp_t*, workbenchId_s, priorityScore_d, model_s, severity_s\n  | project-away alertProvider_s, SourceSystem, TenantId"
+                    },
+                    {
+                      "metricName": "RCA task",
+                      "legend": "TrendMicro_XDR_RCA_Task_CL",
+                      "baseQuery": "TrendMicro_XDR_RCA_Task_CL\n    | project-reorder workbenchId_s, id_g, name_s, xdrCustomerID_g, targets_s\n  | project-away SourceSystem, TenantId"
+                    },
+                    {
+                      "metricName": "RCA result",
+                      "legend": "TrendMicro_XDR_RCA_Result_CL",
+                      "baseQuery": "TrendMicro_XDR_RCA_Result_CL\n    | project-reorder workbenchId_s, taskId_g, taskName_s, xdrCustomerID_g\n  | project-away SourceSystem, TenantId"
+                    },
+                    {
+                      "metricName": "OAT data",
+                      "legend": "TrendMicro_XDR_OAT_CL",
+                      "baseQuery": "TrendMicro_XDR_OAT_CL\n    | project-reorder detectionTime_t*, xdrCustomerId_g, filterRiskLevel_s\n  | project-away SourceSystem, TenantId"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Critical & High Severity Workbench Alerts",
+                      "query": "TrendMicro_XDR_WORKBENCH_CL\n           | where severity_s  == 'critical' or severity_s == 'high'"
+                    },
+                    {
+                      "description": "Medium & Low Severity Workbench Alerts",
+                      "query": "TrendMicro_XDR_WORKBENCH_CL\n           | where severity_s  == 'medium' or severity_s == 'low'"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "TrendMicro_XDR_WORKBENCH_CL",
+                      "lastDataReceivedQuery": "TrendMicro_XDR_WORKBENCH_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "TrendMicro_XDR_RCA_Task_CL",
+                      "lastDataReceivedQuery": "TrendMicro_XDR_RCA_Task_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "TrendMicro_XDR_RCA_Result_CL",
+                      "lastDataReceivedQuery": "TrendMicro_XDR_RCA_Result_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "TrendMicro_XDR_OAT_CL",
+                      "lastDataReceivedQuery": "TrendMicro_XDR_OAT_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "TrendMicro_XDR_Health_Check_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Trend Vision One API Token",
+                        "description": "A Trend Vision One API Token is required. See the documentation to learn more about the [Trend Vision One API](https://automation.trendmicro.com/xdr/home)."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to the Trend Vision One API to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": "**STEP 1 - Configuration steps for the Trend Vision One API**\n\n [Follow these instructions](https://docs.trendmicro.com/en-us/enterprise/trend-micro-xdr-help/ObtainingAPIKeys) to create an account and an API authentication token."
+                    },
+                    {
+                      "description": "**STEP 2 - Use the below deployment option to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Trend Vision One connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Trend Vision One API Authorization Token, readily available.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "This method provides an automated deployment of the Trend Vision One connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-trendmicroxdr-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter a unique **Function Name**, **Workspace ID**, **Workspace Key**, **API Token** and **Region Code**. \n - Note: Provide the appropriate region code based on where your Trend Vision One instance is deployed: us, eu, au, in, sg, jp  \n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+                      "title": "Azure Resource Manager (ARM) Template Deployment"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "61d3a450-20c0-4f0e-9209-b8cf41d9a774",
+                    "version": "1.1.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Trend Micro"
+                    },
+                    "support": {
+                      "name": "Trend Micro",
+                      "link": "https://success.trendmicro.com/technical-support",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Trend Vision One",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Trend Micro"
+                },
+                "support": {
+                  "name": "Trend Micro",
+                  "tier": "Partner",
+                  "link": "https://success.trendmicro.com/dcx/s/?language=en_US"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Trend Vision One",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Trend Micro"
+        },
+        "support": {
+          "name": "Trend Micro",
+          "tier": "Partner",
+          "link": "https://success.trendmicro.com/dcx/s/?language=en_US"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Trend Vision One (using Azure Functions)",
+          "publisher": "Trend Micro",
+          "descriptionMarkdown": "The [Trend Vision One](https://www.trendmicro.com/en_us/business/products/detection-response/xdr.html) connector allows you to easily connect your Workbench alert data with Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities. This gives you more insight into your organization's networks/systems and improves your security operation capabilities.\n\nThe Trend Vision One connector is supported in Microsoft Sentinel in the following regions: Australia East, Australia Southeast, Brazil South, Canada Central, Canada East, Central India, Central US, East Asia, East US, East US 2, France Central, Japan East, Korea Central, North Central US, North Europe, Norway East, South Africa North, South Central US, Southeast Asia, Sweden Central, Switzerland North, UAE North, UK South, UK West, West Europe, West US, West US 2, West US 3.",
+          "graphQueries": [
+            {
+              "metricName": "Workbench data",
+              "legend": "TrendMicro_XDR_WORKBENCH_CL",
+              "baseQuery": "TrendMicro_XDR_WORKBENCH_CL\n    | project-reorder alertTriggerTimestamp_t*, workbenchId_s, priorityScore_d, model_s, severity_s\n  | project-away alertProvider_s, SourceSystem, TenantId"
+            },
+            {
+              "metricName": "RCA task",
+              "legend": "TrendMicro_XDR_RCA_Task_CL",
+              "baseQuery": "TrendMicro_XDR_RCA_Task_CL\n    | project-reorder workbenchId_s, id_g, name_s, xdrCustomerID_g, targets_s\n  | project-away SourceSystem, TenantId"
+            },
+            {
+              "metricName": "RCA result",
+              "legend": "TrendMicro_XDR_RCA_Result_CL",
+              "baseQuery": "TrendMicro_XDR_RCA_Result_CL\n    | project-reorder workbenchId_s, taskId_g, taskName_s, xdrCustomerID_g\n  | project-away SourceSystem, TenantId"
+            },
+            {
+              "metricName": "OAT data",
+              "legend": "TrendMicro_XDR_OAT_CL",
+              "baseQuery": "TrendMicro_XDR_OAT_CL\n    | project-reorder detectionTime_t*, xdrCustomerId_g, filterRiskLevel_s\n  | project-away SourceSystem, TenantId"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "TrendMicro_XDR_WORKBENCH_CL",
+              "lastDataReceivedQuery": "TrendMicro_XDR_WORKBENCH_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "TrendMicro_XDR_RCA_Task_CL",
+              "lastDataReceivedQuery": "TrendMicro_XDR_RCA_Task_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "TrendMicro_XDR_RCA_Result_CL",
+              "lastDataReceivedQuery": "TrendMicro_XDR_RCA_Result_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "TrendMicro_XDR_OAT_CL",
+              "lastDataReceivedQuery": "TrendMicro_XDR_OAT_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "TrendMicro_XDR_Health_Check_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Critical & High Severity Workbench Alerts",
+              "query": "TrendMicro_XDR_WORKBENCH_CL\n           | where severity_s  == 'critical' or severity_s == 'high'"
+            },
+            {
+              "description": "Medium & Low Severity Workbench Alerts",
+              "query": "TrendMicro_XDR_WORKBENCH_CL\n           | where severity_s  == 'medium' or severity_s == 'low'"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Trend Vision One API Token",
+                "description": "A Trend Vision One API Token is required. See the documentation to learn more about the [Trend Vision One API](https://automation.trendmicro.com/xdr/home)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to the Trend Vision One API to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": "**STEP 1 - Configuration steps for the Trend Vision One API**\n\n [Follow these instructions](https://docs.trendmicro.com/en-us/enterprise/trend-micro-xdr-help/ObtainingAPIKeys) to create an account and an API authentication token."
+            },
+            {
+              "description": "**STEP 2 - Use the below deployment option to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Trend Vision One connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Trend Vision One API Authorization Token, readily available.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            },
+            {
+              "description": "This method provides an automated deployment of the Trend Vision One connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-trendmicroxdr-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter a unique **Function Name**, **Workspace ID**, **Workspace Key**, **API Token** and **Region Code**. \n - Note: Provide the appropriate region code based on where your Trend Vision One instance is deployed: us, eu, au, in, sg, jp  \n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+              "title": "Azure Resource Manager (ARM) Template Deployment"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Trend Vision One Workbook with template",
+        "displayName": "Trend Vision One workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "TrendMicroXDROverviewWorkbook with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain insights from Trend Vision One with this overview of the Alerts triggered."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Trend Vision One\\n---\\n[Trend Micro Success Portal](https://success.trendmicro.com)\\n\\nIf you have any feedback, please send to <mailto:xdrfeedback@trendmicro.com>\"},\"name\":\"text - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicro_XDR_WORKBENCH_CL\\n| summarize Alerts = count() by bin(TimeGenerated,1d), severity_s\\n| where TimeGenerated >= ago(7d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"WorkBench Alerts Last 7 days\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"medium\",\"label\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"high\",\"label\":\"High\",\"color\":\"redBright\"},{\"seriesName\":\"low\",\"label\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"critical\",\"label\":\"Critical\",\"color\":\"redDark\"}]}},\"name\":\"query - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicro_XDR_WORKBENCH_CL\\n| summarize Alerts = count() by bin(TimeGenerated,1d), severity_s\\n| where TimeGenerated >= ago(30d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"WorkBench Alerts Last 30 days\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"medium\",\"label\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"high\",\"label\":\"High\",\"color\":\"redBright\"},{\"seriesName\":\"low\",\"label\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"critical\",\"label\":\"Critical\",\"color\":\"redDark\"}]}},\"name\":\"query - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicro_XDR_WORKBENCH_CL\\n| summarize Alerts = count() by bin(TimeGenerated,1d), model_s\\n| where TimeGenerated >= ago(30d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Detection Models in Last 30 Days\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicro_XDR_WORKBENCH_CL\\n| summarize Alerts = count() by bin(TimeGenerated,1d), HostHostName_s\\n| where TimeGenerated >= ago(30d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Impacted Hosts per Day\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 4\"}],\"fromTemplateId\":\"sentinel-TrendMicroVisionOne\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=TrendMicroXDR; logoFileName=trendmicro_logo.svg; description=Gain insights from Trend Vision One with this overview of the Alerts triggered.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.3.0; title=Trend Vision One Alert Overview; templateRelativePath=TrendMicroXDROverview.json; subtitle=; provider=Trend Micro}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Trend Vision One",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Trend Micro"
+                },
+                "support": {
+                  "name": "Trend Micro",
+                  "tier": "Partner",
+                  "link": "https://success.trendmicro.com/dcx/s/?language=en_US"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "TrendMicro_XDR_WORKBENCH_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "TrendMicroXDR",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('analyticRuleTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AnalyticsRule"
+      },
+      "properties": {
+        "description": "Trend Vision One Analytics Rule 1 with template",
+        "displayName": "Trend Vision One Analytics Rule template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('analyticRuleTemplateSpecName1'),'/',variables('analyticRuleVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AnalyticsRule"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Create Incident for XDR Alerts_AnalyticalRules Analytics Rule with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('AnalyticRulecontentId1')]",
+              "apiVersion": "2022-04-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "This Query creates an incident based on Trend Vision One Workbench Alerts and maps the impacted entities for Microsoft Sentinel usage.",
+                "displayName": "Create Incident for XDR Alerts",
+                "enabled": false,
+                "query": "TrendMicro_XDR_WORKBENCH_CL\n| extend Severity = case(severity_s == \"low\", \"Informational\",\n                        severity_s == \"medium\", \"Low\",\n                        severity_s == \"high\", \"Medium\",\n                        \"High\"\n                        )\n| extend \n    UserAccountName_s = todynamic(UserAccountName_s)[0],\n    UserAccountNTDomain_s = todynamic(UserAccountNTDomain_s)[0],\n    FileName_s = todynamic(FileName_s)[0],\n    FileDirectory_s = todynamic(FileDirectory_s)[0],\n    ProcessCommandLine_s = todynamic(ProcessCommandLine_s)[0],\n    RegistryKey_s = todynamic(RegistryKey_s)[0],\n    RegistryValue_s = todynamic(RegistryValue_s)[0],\n    RegistryValueName_s = todynamic(RegistryValueName_s)[0]\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "TrendMicro_XDR_WORKBENCH_CL"
+                    ],
+                    "connectorId": "TrendMicroXDR"
+                  }
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "columnName": "UserAccountName_s",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "UserAccountNTDomain_s",
+                        "identifier": "NTDomain"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "File",
+                    "fieldMappings": [
+                      {
+                        "columnName": "FileName_s",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "FileDirectory_s",
+                        "identifier": "Directory"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Process",
+                    "fieldMappings": [
+                      {
+                        "columnName": "ProcessCommandLine_s",
+                        "identifier": "CommandLine"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "RegistryKey",
+                    "fieldMappings": [
+                      {
+                        "columnName": "RegistryKey_s",
+                        "identifier": "Key"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "RegistryValue",
+                    "fieldMappings": [
+                      {
+                        "columnName": "ProcessCommandLine_s",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "RegistryValue_s",
+                        "identifier": "Value"
+                      }
+                    ]
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "customDetails": {
+                  "CreatedAt": "createdTime_t",
+                  "PriorityScore": "priorityScore_d",
+                  "Severity": "severity_s",
+                  "Provider": "alertProvider_s",
+                  "ImpactScopeSummary": "impactScope_Summary_s",
+                  "XDRCustomerID": "[variables('_XDRCustomerID')]",
+                  "WorkbenchID": "[variables('_WorkbenchID')]",
+                  "WorkbenchName": "workbenchName_s",
+                  "WorkbenchLink": "workbenchLink_s"
+                },
+                "alertDetailsOverride": {
+                  "alertDescriptionFormat": "{{description_s}}",
+                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "{{workbenchName_s}}"
+                },
+                "incidentConfiguration": {
+                  "groupingConfiguration": {
+                    "enabled": true,
+                    "groupByCustomDetails": [
+                      "WorkbenchID"
+                    ],
+                    "lookbackDuration": "5m",
+                    "reopenClosedIncident": false,
+                    "matchingMethod": "Selected"
+                  },
+                  "createIncident": true
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
+              "properties": {
+                "description": "Trend Vision One Analytics Rule 1",
+                "parentId": "[variables('analyticRuleId1')]",
+                "contentId": "[variables('_analyticRulecontentId1')]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Trend Vision One",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Trend Micro"
+                },
+                "support": {
+                  "name": "Trend Micro",
+                  "tier": "Partner",
+                  "link": "https://success.trendmicro.com/dcx/s/?language=en_US"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Trend Vision One",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Trend Micro"
+        },
+        "support": {
+          "name": "Trend Micro",
+          "tier": "Partner",
+          "link": "https://success.trendmicro.com/dcx/s/?language=en_US"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRulecontentId1')]",
+              "version": "[variables('analyticRuleVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-11",
+        "providers": [
+          "Trend Micro"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

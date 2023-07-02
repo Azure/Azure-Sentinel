@@ -4,7 +4,7 @@ from aiobotocore.session import get_session
 import time
 import logging
 import azure.functions as func
-from azure.storage.queue import QueueServiceClient
+from azure.storage.queue import QueueClient
 from azure.core.exceptions import ResourceExistsError
 import base64
 from dateutil import parser
@@ -19,6 +19,12 @@ connection_string = os.environ['AzureWebJobsStorage']
 AZURE_STORAGE_CONNECTION_STRING = os.environ['AzureWebJobsStorage']
 MAX_QUEUE_MESSAGES_MAIN_QUEUE = int(os.environ.get('MAX_QUEUE_MESSAGES_MAIN_QUEUE', 80))
 MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
+REQUIRE_SECONDARY_STRING = os.environ["USER_SELECTION_REQUIRE_SECONDARY"]
+
+if REQUIRE_SECONDARY_STRING.lower() == "true":
+    REQUIRE_SECONDARY = True
+else:
+    REQUIRE_SECONDARY = False
 
 # Defining the SQS Client object based on AWS Credentials
 def _create_sqs_client():
@@ -119,9 +125,14 @@ async def main(mytimer: func.TimerRequest):
 # msg : string
 async def download_message_files_queue(mainQueueHelper, backlogQueueHelper, messageId, msg):
     for s3_file in msg['files']:
+        link = s3_file['path']
+        if not(REQUIRE_SECONDARY) and link.startswith("fdrv2"):
+            logging.info('Skip processing a secondary data bucket {}.'.format(link))
+            continue
+                        
         body = {}
         body["messageId"] = messageId
-        body["link"] = s3_file['path']
+        body["link"] = link
         body["bucket"] = msg["bucket"]
         if mainQueueHelper.get_queue_current_count() >= MAX_QUEUE_MESSAGES_MAIN_QUEUE:
             backlogQueueHelper.send_to_queue(body,True)
@@ -130,10 +141,8 @@ async def download_message_files_queue(mainQueueHelper, backlogQueueHelper, mess
 
 class AzureStorageQueueHelper:
     def __init__(self,connectionString,queueName):
-        self.__service_client = QueueServiceClient.from_connection_string(conn_str=connectionString)
-        self.__queue = self.__service_client.get_queue_client(queueName)
         try:
-            self.__queue.create_queue()
+            self.__queue = QueueClient.from_connection_string(conn_str=connectionString, queue_name=queueName)
         except ResourceExistsError:
             # Resource exists
             pass
