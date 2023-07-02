@@ -20,8 +20,8 @@ AZURE_CLIENT_ID = os.environ['AZURE_CLIENT_ID']
 AZURE_CLIENT_SECRET = os.environ['AZURE_CLIENT_SECRET']
 NORMALIZED_DCE_ENDPOINT = os.environ['DCE_INGESTION_ENDPOINT']
 NORMALIZED_DCR_ID = os.environ['NORMALIZATION_DCR_ID']
-RAW_DATA_DCE_ENDPOINT = os.environ['DCE_INGESTION_ENDPOINT']
-RAW_DATA_DCR_ID = os.environ['RAW_DATA_DCR_ID']
+RAW_DATA_DCE_ENDPOINT = os.environ.get('DCE_INGESTION_ENDPOINT',  'NA')
+RAW_DATA_DCR_ID = os.environ.get('RAW_DATA_DCR_ID',  'NA')
 NORMALIZED_SCHEMA_NAMES = '{"Dns": "Custom-CrowdstrikeDns","File": "Custom-CrowdstrikeFile","Process": "Custom-CrowdstrikeProcess","Network": "Custom-CrowdstrikeNetwork","Auth": "Custom-CrowdstrikeAuth","Registry": "Custom-CrowdstrikeRegistry","Audit": "Custom-CrowdstrikeAudit","User": "Custom-CrowdstrikeUser","Additional": "Custom-CrowdstrikeAdditional"}'
 CUSTOM_SCHEMA_NAMES = '{"Dns": "Custom-CrowdstrikeDns","File": "Custom-CrowdstrikeFile","Process": "Custom-CrowdstrikeProcess","Network": "Custom-CrowdstrikeNetwork","Auth": "Custom-CrowdstrikeAuth","Registry": "Custom-CrowdstrikeRegistry","Audit": "Custom-CrowdstrikeAudit","User": "Custom-CrowdstrikeUser"}'
 REQUIRE_RAW_STRING = os.environ["USER_SELECTION_REQUIRE_RAW"]
@@ -48,7 +48,7 @@ def _create_s3_client():
 
 async def main(msg: func.QueueMessage) -> None:
     logging.info('Starting script')
-    
+    logging.info("Required Raw String - {}".format(REQUIRE_RAW))
     try:
         req_body = json.loads(msg.get_body().decode('ascii').replace("'",'"'))
     except ValueError:
