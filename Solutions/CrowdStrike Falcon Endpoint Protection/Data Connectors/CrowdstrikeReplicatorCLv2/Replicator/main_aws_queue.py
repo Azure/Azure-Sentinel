@@ -4,7 +4,7 @@ from aiobotocore.session import get_session
 import time
 import logging
 import azure.functions as func
-from azure.storage.queue import QueueClient
+from azure.storage.queue import QueueServiceClient
 from azure.core.exceptions import ResourceExistsError
 import base64
 from dateutil import parser
@@ -141,8 +141,10 @@ async def download_message_files_queue(mainQueueHelper, backlogQueueHelper, mess
 
 class AzureStorageQueueHelper:
     def __init__(self,connectionString,queueName):
+        self.__service_client = QueueServiceClient.from_connection_string(conn_str=connectionString)
+        self.__queue = self.__service_client.get_queue_client(queueName)
         try:
-            self.__queue = QueueClient.from_connection_string(conn_str=connectionString, queue_name=queueName)
+            self.__queue.create_queue()
         except ResourceExistsError:
             # Resource exists
             pass
