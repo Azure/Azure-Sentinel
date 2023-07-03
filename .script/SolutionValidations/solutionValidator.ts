@@ -3,7 +3,8 @@ import * as logger from "./../utils/logger";
 import { ExitCode } from "./../utils/exitCode";
 import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals";
 import { IsValidSupportObject } from "./validSupportObject";
-import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError } from "../utils/validationError";
+import { IsValidBrandingContent } from "./validMSBranding";
+import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError } from "../utils/validationError";
 
 
 
@@ -11,6 +12,7 @@ import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectVal
 export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     IsValidSolutionDomainsVerticals(filePath);
     IsValidSupportObject(filePath);
+    IsValidBrandingContent(filePath);
     return ExitCode.SUCCESS;
 }
 
@@ -32,11 +34,14 @@ let CheckOptions = {
     },
     // Callback function to handle errors during execution
     onExecError: async (e: any, filePath: string) => {
-        console.log(`Solution Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
+        console.log(`Solution Validation Failed. File path: ${filePath} \nError message: ${e.message}`);
         if (e instanceof MainTemplateDomainVerticalValidationError) {
             logger.logError("Please refer link https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/sentinel/sentinel-solutions.md?msclkid=9a240b52b11411ec99ae6736bd089c4a#categories-for-microsoft-sentinel-out-of-the-box-content-and-solutions for valid Domains and Verticals.");
         } else if (e instanceof MainTemplateSupportObjectValidationError) {
             logger.logError("Validation for Support object failed in Main Template.");
+        }
+        else if (e instanceof InvalidFileContentError) {
+            logger.logError("Validation for Microsoft Sentinel Branding Failed.");
         }
     },
     // Callback function to handle final failure
