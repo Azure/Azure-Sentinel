@@ -13,6 +13,7 @@
 	a. **Select folder**: Choose a folder from your workspace or browse to one that contains your function app.
 
 	b. **Select Subscription**: Choose the subscription to use under resources.
+	
 	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/subscription.png)
 
 	c. Right click on the functions and select **Create new Function App in Azure** (Don't choose the Advanced option)
@@ -20,6 +21,7 @@
 	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/CreatenewFunctionApp.png)
 
 	d. **Enter a globally unique name for the function app**: Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. UmbrellaXYZ).
+	
 	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/globallyuniquename.png)
 
 	e. **Select a runtime**: Choose Python 3.8.
