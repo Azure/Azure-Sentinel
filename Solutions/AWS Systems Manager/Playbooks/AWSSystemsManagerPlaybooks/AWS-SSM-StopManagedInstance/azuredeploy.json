@@ -1,0 +1,1069 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AWS Systems Manager - Stop Managed EC2 Instances",
+        "description": "This playbook can be used by SOC Analysts to stop malicious or compromised EC2 instances in AWS. This playbook uses AWS Systems Manager API to stop the EC2 instances. The playbook can be triggered from an incident in Microsoft Sentinel. The playbook takes the Hostnames and Private IP addresses from the incident entities and stops the EC2 instances using the Instance IDs. The playbook also adds a comment to the incident with the list of instances that were stopped.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, AWS Systems Manager Custom Connector needs to be deployed under the same subscription.",
+            "2. Refer to [AWS Systems Manager Logic App Custom Connector](../../CustomConnector/AWS_SSM_FunctionAppConnector/readme.md) documentation for deployment instructions."
+        ],
+        "postDeployment": [
+            "1. Authorize each connection.",
+            "2. Configure Playbook in Microsoft Sentinel Analytic Rule.",
+            "3. Assign Microsoft Sentinel Responder Role to Playbook.",
+            "4. Update Function App Settings with AWS Credentials.",
+            "5. Check readme.md for detailed instructions."
+
+        ],
+        "prerequisitesDeployTemplateFile": "../../CustomConnector/AWS_SSM_FunctionAppConnector/azuredeploy.json",
+        "lastUpdateTime": "2023-05-30T12:00:00.000Z",
+        "entities": [
+            "IP",
+            "Host"
+        ],
+        "tags": [
+            "AWS",
+            "Systems Manager"
+        ],
+        "support": {
+            "tier": "Microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AWS-SSM-StopManagedInstance",
+            "type": "string"
+        },
+        "FunctionsAppName": {
+            "defaultValue": "awsssm",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "FunctionsAppName": "[concat(parameters('FunctionsAppName'), uniqueString(resourceGroup().id))]",
+        "AWSSSMFuntionsAppId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('FunctionsAppName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "Append_to_IncidentComment_on_error": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "Condition_to_check_if_any_instanceid": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "\u003cp\u003e@{variables('IncidentComment')}\u003c/p\u003e"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Append_to_IncidentComment_on_error": {
+                            "runAfter": {
+                                "GetInventory": [
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "IncidentComment",
+                                "value": "Issue with Playbook exeution. Check the playbook for detailed error info. "
+                            }
+                        },
+                        "Condition_to_check_if_any_instanceid": {
+                            "actions": {
+                                "Append_to_IncidentComment_on_success": {
+                                    "runAfter": {
+                                        "DeleteDocument": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "IncidentComment",
+                                        "value": "\u003cstrong\u003e@{variables('InstanceIdList')}\u003c/strong\u003e These ec2 instances have been stopped.\n"
+                                    }
+                                },
+                                "Create_Automation_Shutdown_Document": {
+                                    "runAfter": {
+                                    },
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "Content": "{\r\n  \"description\": \"Stop EC2 instances(s)\",\r\n  \"schemaVersion\": \"0.3\",\r\n  \"assumeRole\": \"{{ AutomationAssumeRole }}\",\r\n  \"parameters\": {\r\n    \"InstanceId\": {\r\n      \"type\": \"StringList\",\r\n      \"description\": \"(Required) EC2 Instance(s) to stop\"\r\n    },\r\n    \"AutomationAssumeRole\": {\r\n      \"type\": \"String\",\r\n      \"description\": \"(Optional) The ARN of the role that allows Automation to perform the actions on your behalf.\",\r\n      \"default\": \"\"\r\n    }\r\n  },\r\n  \"mainSteps\": [\r\n    {\r\n      \"name\": \"stopInstances\",\r\n      \"action\": \"aws:changeInstanceState\",\r\n      \"onFailure\": \"Continue\",\r\n      \"inputs\": {\r\n        \"InstanceIds\": \"{{ InstanceId }}\",\r\n        \"DesiredState\": \"stopped\"\r\n      }\r\n    },\r\n    {\r\n      \"name\": \"forceStopInstances\",\r\n      \"action\": \"aws:changeInstanceState\",\r\n      \"inputs\": {\r\n        \"InstanceIds\": \"{{ InstanceId }}\",\r\n        \"CheckStateOnly\": false,\r\n        \"DesiredState\": \"stopped\",\r\n        \"Force\": true\r\n      }\r\n    }\r\n  ]\r\n}",
+                                            "DocumentFormat": "JSON",
+                                            "DocumentType": "Automation",
+                                            "Name": "@{concat('Sentinel-EC2-Shutdown-', string(rand(10000,99999)))}",
+                                            "VersionName": "1.0.0"
+                                        },
+                                        "function": {
+                                            "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/CreateDocument')]"
+                                        }
+                                    }
+                                },
+                                "DeleteDocument": {
+                                    "runAfter": {
+                                        "Wait_Until_Automation_Execution_is_complete": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "Force": "True",
+                                            "Name": "@{body('Parse_JSON_CreateDocument')?['DocumentDescription']?['Name']}"
+                                        },
+                                        "function": {
+                                            "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/DeleteDocument')]"
+                                        }
+                                    }
+                                },
+                                "GetAutomationExecution": {
+                                    "runAfter": {
+                                        "Sleep_for_10_seconds": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "AutomationExecutionId": "@{body('Parse_JSON_-_StartAutomationExecution')?['AutomationExecutionId']}"
+                                        },
+                                        "function": {
+                                            "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/GetAutomationExecution')]"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_-_GetAutomationExecution": {
+                                    "runAfter": {
+                                        "GetAutomationExecution": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('GetAutomationExecution')",
+                                        "schema": {
+                                            "properties": {
+                                                "AutomationExecution": {
+                                                    "properties": {
+                                                        "AutomationExecutionId": {
+                                                            "type": "string"
+                                                        },
+                                                        "AutomationExecutionStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "DocumentName": {
+                                                            "type": "string"
+                                                        },
+                                                        "DocumentVersion": {
+                                                            "type": "string"
+                                                        },
+                                                        "ExecutedBy": {
+                                                            "type": "string"
+                                                        },
+                                                        "ExecutionEndTime": {
+                                                            "type": "string"
+                                                        },
+                                                        "ExecutionStartTime": {
+                                                            "type": "string"
+                                                        },
+                                                        "Mode": {
+                                                            "type": "string"
+                                                        },
+                                                        "Outputs": {
+                                                            "properties": {
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Parameters": {
+                                                            "properties": {
+                                                                "InstanceId": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ResolvedTargets": {
+                                                            "properties": {
+                                                                "ParameterValues": {
+                                                                    "type": "array"
+                                                                },
+                                                                "Truncated": {
+                                                                    "type": "boolean"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "StepExecutionsTruncated": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "Targets": {
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_-_StartAutomationExecution": {
+                                    "runAfter": {
+                                        "StartAutomationExecution": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('StartAutomationExecution')",
+                                        "schema": {
+                                            "properties": {
+                                                "AutomationExecutionId": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_CreateDocument": {
+                                    "runAfter": {
+                                        "Create_Automation_Shutdown_Document": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Create_Automation_Shutdown_Document')",
+                                        "schema": {
+                                            "properties": {
+                                                "DocumentDescription": {
+                                                    "properties": {
+                                                        "CreatedDate": {
+                                                            "type": "string"
+                                                        },
+                                                        "DefaultVersion": {
+                                                            "type": "string"
+                                                        },
+                                                        "Description": {
+                                                            "type": "string"
+                                                        },
+                                                        "DocumentFormat": {
+                                                            "type": "string"
+                                                        },
+                                                        "DocumentType": {
+                                                            "type": "string"
+                                                        },
+                                                        "DocumentVersion": {
+                                                            "type": "string"
+                                                        },
+                                                        "Hash": {
+                                                            "type": "string"
+                                                        },
+                                                        "HashType": {
+                                                            "type": "string"
+                                                        },
+                                                        "LatestVersion": {
+                                                            "type": "string"
+                                                        },
+                                                        "Name": {
+                                                            "type": "string"
+                                                        },
+                                                        "Owner": {
+                                                            "type": "string"
+                                                        },
+                                                        "Parameters": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "DefaultValue": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Description": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "Name",
+                                                                    "Type",
+                                                                    "Description"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "PlatformTypes": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "SchemaVersion": {
+                                                            "type": "string"
+                                                        },
+                                                        "Status": {
+                                                            "type": "string"
+                                                        },
+                                                        "Tags": {
+                                                            "type": "array"
+                                                        },
+                                                        "VersionName": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Set_variable_-_TempStatus": {
+                                    "runAfter": {
+                                        "Parse_JSON_-_GetAutomationExecution": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "TempStatus",
+                                        "value": "@body('Parse_JSON_-_GetAutomationExecution')?['AutomationExecution']?['AutomationExecutionStatus']"
+                                    }
+                                },
+                                "Sleep_for_10_seconds": {
+                                    "runAfter": {
+                                        "Parse_JSON_-_StartAutomationExecution": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Wait",
+                                    "inputs": {
+                                        "interval": {
+                                            "count": 10,
+                                            "unit": "Second"
+                                        }
+                                    }
+                                },
+                                "StartAutomationExecution": {
+                                    "runAfter": {
+                                        "Parse_JSON_CreateDocument": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "DocumentName": "@{body('Parse_JSON_CreateDocument')?['DocumentDescription']?['Name']}",
+                                            "Parameters": {
+                                                "InstanceId": "@variables('InstanceIdList')"
+                                            }
+                                        },
+                                        "function": {
+                                            "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/StartAutomationExecution')]"
+                                        }
+                                    }
+                                },
+                                "Wait_Until_Automation_Execution_is_complete": {
+                                    "actions": {
+                                        "GetAutomationExecution_again": {
+                                            "runAfter": {
+                                            },
+                                            "type": "Function",
+                                            "inputs": {
+                                                "body": {
+                                                    "AutomationExecutionId": "@{body('Parse_JSON_-_StartAutomationExecution')?['AutomationExecutionId']}"
+                                                },
+                                                "function": {
+                                                    "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/GetAutomationExecution')]"
+                                                }
+                                            }
+                                        },
+                                        "Parse_JSON_-_GetAutomationExecution_again": {
+                                            "runAfter": {
+                                                "GetAutomationExecution_again": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('GetAutomationExecution_again')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "AutomationExecution": {
+                                                            "properties": {
+                                                                "AutomationExecutionId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "AutomationExecutionStatus": {
+                                                                    "type": "string"
+                                                                },
+                                                                "DocumentName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "DocumentVersion": {
+                                                                    "type": "string"
+                                                                },
+                                                                "ExecutedBy": {
+                                                                    "type": "string"
+                                                                },
+                                                                "ExecutionEndTime": {
+                                                                    "type": "string"
+                                                                },
+                                                                "ExecutionStartTime": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Mode": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Outputs": {
+                                                                    "properties": {
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "Parameters": {
+                                                                    "properties": {
+                                                                        "InstanceId": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "ResolvedTargets": {
+                                                                    "properties": {
+                                                                        "ParameterValues": {
+                                                                            "type": "array"
+                                                                        },
+                                                                        "Truncated": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "StepExecutionsTruncated": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "Targets": {
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Reset_variable_-_TempStatus": {
+                                            "runAfter": {
+                                                "Sleep_again_for_10_seconds": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "TempStatus",
+                                                "value": "@body('Parse_JSON_-_GetAutomationExecution_again')?['AutomationExecution']?['AutomationExecutionStatus']"
+                                            }
+                                        },
+                                        "Sleep_again_for_10_seconds": {
+                                            "runAfter": {
+                                                "Parse_JSON_-_GetAutomationExecution_again": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Wait",
+                                            "inputs": {
+                                                "interval": {
+                                                    "count": 10,
+                                                    "unit": "Second"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_TempStatus": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": "@equals(variables('TempStatus'), 'Success')",
+                                    "limit": {
+                                        "count": 60,
+                                        "timeout": "PT10M"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_Incident_Hostname": [
+                                    "Succeeded"
+                                ],
+                                "For_each_private_ip": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Append_to_IncidentComment": {
+                                        "runAfter": {
+                                        },
+                                        "type": "AppendToStringVariable",
+                                        "inputs": {
+                                            "name": "IncidentComment",
+                                            "value": "No matching EC2 instance found in AWS Systems Manager.\n"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('InstanceIdList'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_AWS_Instance_get_hostname_and_private_ip": {
+                            "foreach": "@body('Parse_JSON_-_GetInventory')?['Entities']",
+                            "actions": {
+                                "For_each_Instance_Entity": {
+                                    "foreach": "@items('For_each_AWS_Instance_get_hostname_and_private_ip')['Data']['AWS:InstanceInformation']['Content']",
+                                    "actions": {
+                                        "Condition_to_skip_Terminated_Instances": {
+                                            "actions": {
+                                                "Append_to_array_HostnameList": {
+                                                    "runAfter": {
+                                                        "Compose_InstanceId_Hostname_Pair": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "HostnameList",
+                                                        "value": "@outputs('Compose_InstanceId_Hostname_Pair')"
+                                                    }
+                                                },
+                                                "Append_to_array_PrivateIPList": {
+                                                    "runAfter": {
+                                                        "Compose_InstanceId_PrivateIP_Pair": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "PrivateIPList",
+                                                        "value": "@outputs('Compose_InstanceId_PrivateIP_Pair')"
+                                                    }
+                                                },
+                                                "Compose_InstanceId_Hostname_Pair": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Hostname": "@items('For_each_Instance_Entity')?['ComputerName']",
+                                                        "InstanceId": "@items('For_each_Instance_Entity')?['InstanceId']"
+                                                    }
+                                                },
+                                                "Compose_InstanceId_PrivateIP_Pair": {
+                                                    "runAfter": {
+                                                        "Append_to_array_HostnameList": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "InstanceId": "@items('For_each_Instance_Entity')?['InstanceId']",
+                                                        "PrivateIP": "@items('For_each_Instance_Entity')?['IpAddress']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each_Instance_Entity')?['InstanceStatus']",
+                                                                "Terminated"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_GetInventory": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_Incident_Hostname": {
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions": {
+                                "For_each_AWS_EC2_Hostname": {
+                                    "foreach": "@variables('HostnameList')",
+                                    "actions": {
+                                        "Condition_if_incident_Hostname_matches_AWS_EC2_hostname": {
+                                            "actions": {
+                                                "Append_to_array_-_InstanceIdList": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "InstanceIdList",
+                                                        "value": "@string(items('For_each_AWS_EC2_Hostname')?['InstanceId'])"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@{items('For_each_Incident_Hostname')?['hostName']}",
+                                                            "@{items('For_each_AWS_EC2_Hostname')?['Hostname']}"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_AWS_Instance_get_hostname_and_private_ip": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_private_ip": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "For_each_AWS_EC2_PrivateIP": {
+                                    "foreach": "@variables('PrivateIPList')",
+                                    "actions": {
+                                        "Condition_If_IP_matches_with_PrivateIP": {
+                                            "actions": {
+                                                "Append_to_array_variable_InstanceIdList": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "InstanceIdList",
+                                                        "value": "@string(items('For_each_AWS_EC2_PrivateIP')?['InstanceId'])"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@string(items('For_each_AWS_EC2_PrivateIP')?['PrivateIP'])",
+                                                            "@items('For_each_private_ip')?['address']"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_AWS_Instance_get_hostname_and_private_ip": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "GetInventory": {
+                            "runAfter": {
+                                "Initialize_variable_-_IncidentComment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "function": {
+                                    "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/GetInventory')]"
+                                }
+                            }
+                        },
+                        "Initialize_Array_-_HostnameList": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "HostnameList",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Array_-_InstanceIdList": {
+                            "runAfter": {
+                                "Initialize_Array_-_PrivateIPList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "InstanceIdList",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Array_-_PrivateIPList": {
+                            "runAfter": {
+                                "Initialize_Array_-_HostnameList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "PrivateIPList",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_IncidentComment": {
+                            "runAfter": {
+                                "Initialize_variable_-_TempStatus": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IncidentComment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TempStatus": {
+                            "runAfter": {
+                                "Initialize_Array_-_InstanceIdList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TempStatus",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_GetInventory": {
+                            "runAfter": {
+                                "GetInventory": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('GetInventory')",
+                                "schema": {
+                                    "properties": {
+                                        "Entities": {
+                                            "items": {
+                                                "properties": {
+                                                    "Data": {
+                                                        "properties": {
+                                                            "AWS:InstanceInformation": {
+                                                                "properties": {
+                                                                    "CaptureTime": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Content": {
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "AgentType": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "AgentVersion": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "ComputerName": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "InstanceId": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "InstanceStatus": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "IpAddress": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "PlatformName": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "PlatformType": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "PlatformVersion": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "ResourceType": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "SchemaVersion": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "TypeName": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "Id": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "ResponseMetadata": {
+                                            "properties": {
+                                                "HTTPHeaders": {
+                                                    "properties": {
+                                                        "connection": {
+                                                            "type": "string"
+                                                        },
+                                                        "content-length": {
+                                                            "type": "string"
+                                                        },
+                                                        "content-type": {
+                                                            "type": "string"
+                                                        },
+                                                        "date": {
+                                                            "type": "string"
+                                                        },
+                                                        "server": {
+                                                            "type": "string"
+                                                        },
+                                                        "x-amzn-requestid": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "HTTPStatusCode": {
+                                                    "type": "integer"
+                                                },
+                                                "RequestId": {
+                                                    "type": "string"
+                                                },
+                                                "RetryAttempts": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "AWS-SSM-StopManagedInstance",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}
