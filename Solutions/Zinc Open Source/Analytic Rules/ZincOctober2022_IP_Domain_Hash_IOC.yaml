@@ -72,57 +72,56 @@ query:  |
   let useragents = (iocs | where Type =~ "useragent" | project IoC);
   (union isfuzzy=true
   (CommonSecurityLog
-  | where DestinationHostName has_any (domains) or RequestURL has_any (domains) or Message has_any (domains)
-  or  SourceIP has_any (IPList) or DestinationIP  has_any (IPList)
+  | where DestinationHostName has_any (domains) or RequestURL has_any (domains) or Message has_any (domains) or  SourceIP has_any (IPList) or DestinationIP  has_any (IPList)
   | parse Message with * '(' DNSName ')' *
   | project TimeGenerated, Message, SourceUserID, RequestURL, DestinationHostName, Type, SourceIP, DestinationIP, DNSName
-  | extend timestamp = TimeGenerated, AccountCustomEntity = SourceUserID, UrlCustomEntity = RequestURL , IPCustomEntity = DestinationIP, DNSCustomEntity = DNSName
+  | extend timestamp = TimeGenerated, AccountEntity = SourceUserID, UrlEntity = RequestURL , IPEntity = DestinationIP, DNSCustomEntity = DNSName
   ),
   (DnsEvents
   | where Name in~ (domains) or IPAddresses has_any (IPList)
   | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
   | extend DNSName = Name, Host = Computer
-  | extend timestamp = TimeGenerated, HostCustomEntity = Host, DNSCustomEntity = DNSName, IPCustomEntity = IPAddresses
+  | extend timestamp = TimeGenerated, HostEntity = Host, DNSCustomEntity = DNSName, IPEntity = IPAddresses
   ),
   (VMConnection
   | where  RemoteDnsCanonicalNames has_any (domains)  or  SourceIp has_any (IPList) or DestinationIp has_any (IPList)
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
   | project TimeGenerated, Computer, Direction, RemoteDnsCanonicalNames, ProcessName, SourceIp, DestinationIp, DestinationPort, DNSName,BytesSent, BytesReceived, RemoteCountry, Type
-  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIp, HostCustomEntity = Computer, ProcessCustomEntity = ProcessName, DNSCustomEntity = DNSName
+  | extend timestamp = TimeGenerated, IPEntity = DestinationIp, HostEntity = Computer, ProcessEntity = ProcessName, DNSCustomEntity = DNSName
   ),
   (Event
-  | where Source == "Microsoft-Windows-Sysmon"
+  | where Source =~ "Microsoft-Windows-Sysmon"
   | where EventID == 3
   | extend EvData = parse_xml(EventData)
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend SourceIP = tostring(EventDetail.[9].["#text"]), DestinationIP = tostring(EventDetail.[14].["#text"]), Image = EventDetail.[4].["#text"]
   | where  SourceIP has_any (IPList) or DestinationIP has_any (IPList)
   | project TimeGenerated, SourceIP, DestinationIP, Image, UserName, Computer, EventDetail, Type
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), HostCustomEntity = Computer , IPCustomEntity = DestinationIP
+  | extend timestamp = TimeGenerated, AccountEntity = UserName, ProcessEntity = tostring(split(Image, '\\', -1)[-1]), HostEntity = Computer , IPEntity = DestinationIP
   ),  
   (DeviceNetworkEvents
   | where RemoteUrl has_any (domains) or RemoteIP has_any (IPList) or InitiatingProcessSHA256 in (sha256Hashes) 
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, LocalIP, Type
-  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName, UrlCustomEntity =RemoteUrl
+  | extend timestamp = TimeGenerated, IPEntity = RemoteIP, HostEntity = DeviceName, UrlEntity =RemoteUrl
   ),
   (AzureDiagnostics
-  | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallDnsProxy"
+  | where ResourceType =~ "AZUREFIREWALLS"
+  | where Category =~ "AzureFirewallDnsProxy"
   | project TimeGenerated,Resource, msg_s, Type
   | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
   | where Request_Name has_any (domains) or ClientIP has_any (IPList)
-  | extend timestamp = TimeGenerated, DNSName = Request_Name, IPCustomEntity = ClientIP
+  | extend timestamp = TimeGenerated, DNSName = Request_Name, IPEntity = ClientIP
   ),
   (AzureDiagnostics
-  | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallApplicationRule"
+  | where ResourceType =~ "AZUREFIREWALLS"
+  | where Category =~ "AzureFirewallApplicationRule"
   | project TimeGenerated,Resource, msg_s
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where DestinationHost has_any (domains) or SourceHost has_any (IPList)
-  | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost
+  | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPEntity = SourceHost
   ),
   (Event
-  | where Source == "Microsoft-Windows-Sysmon"
+  | where Source =~ "Microsoft-Windows-Sysmon"
   | where EventID == 1
   | extend EvData = parse_xml(EventData)
   | extend EventDetail = EvData.DataItem.EventData.Data
@@ -131,52 +130,58 @@ query:  |
   | where SHA256 has_any (sha256Hashes)
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = SHA256
+  | extend timestamp = TimeGenerated, HostEntity = Computer , AccountEntity = UserName, ProcessEntity = tostring(split(Image, '\\', -1)[-1]), AlgorithmEntity = "SHA256", FileHashEntity = SHA256
   ),  
   (DeviceProcessEvents
   | where  InitiatingProcessSHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, FolderPath, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = InitiatingProcessSHA256
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = InitiatingProcessAccountName, ProcessEntity = InitiatingProcessFileName, AlgorithmEntity = "SHA256", FileHashEntity = InitiatingProcessSHA256
   ),
   (DeviceFileEvents
   | where  InitiatingProcessSHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RequestAccountName, RequestSourceIP, InitiatingProcessSHA256, FolderPath, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = RequestAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = InitiatingProcessSHA256
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = RequestAccountName, ProcessEntity = InitiatingProcessFileName, AlgorithmEntity = "SHA256", FileHashEntity = InitiatingProcessSHA256
   ),
   (DeviceEvents
   | where  InitiatingProcessSHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, FolderPath, Type
   | extend CommandLine = InitiatingProcessCommandLine
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = InitiatingProcessSHA256
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = InitiatingProcessAccountName, ProcessEntity = InitiatingProcessFileName, AlgorithmEntity = "SHA256", FileHashEntity = InitiatingProcessSHA256
   ),
   (OfficeActivity
   | where ClientIP has_any (IPList) or UserAgent has_any (useragents)
   | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
-  | extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, AccountCustomEntity = UserId
+  | extend timestamp = TimeGenerated, IPEntity = ClientIP, AccountEntity = UserId
   )
   )
+  | extend HostName = tostring(split(HostEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostEntity, '.'), 1, -1), '.'))
+  | extend Name = tostring(split(AccountEntity, '@', 0)[0]), UPNSuffix = tostring(split(AccountEntity, '@', 1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity 
+        columnName: IPEntity 
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
-        columnName: ProcessCustomEntity
+        columnName: ProcessEntity
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: AlgorithmCustomEntity
+        columnName: AlgorithmEntity
       - identifier: Value
-        columnName: FileHashCustomEntity
-version: 1.0.0
+        columnName: FileHashEntity        
+version: 1.0.2
 kind: Scheduled

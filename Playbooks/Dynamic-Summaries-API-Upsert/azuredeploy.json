@@ -26,10 +26,6 @@
             "defaultValue": "<PlaybookName>",
             "type": "string"
         },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
-            "type": "string"
-        },
         "IntegrationAccountName": {
             "defaultValue": "<Integration Account Name>",
             "type": "string"
@@ -55,16 +51,12 @@
             "type": "string"
         },
         "RunFrequency": {
-            "defaultValue": "<Day, Week, Month>",
+            "defaultValue": "<Hour, Day, Week, Month>",
             "type": "string"
         },
         "RunInterval": {
             "defaultValue": 1,
             "type": "int"
-        },
-        "DynamicSummaryGUID": {
-            "defaultValue": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-            "type": "string"
         },
         "DynamicSummaryName": {
             "defaultValue": "My dynamic summary",
@@ -76,13 +68,14 @@
         }
     },
   "variables": {
-    "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
-    "connections_azuremonitorlogs_externalid": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', 'nbauto', '/providers/Microsoft.Web/connections/azuremonitorlogs')]",
+    "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+    "connections_azuremonitorlogs_externalid": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', variables('AzuremonitorlogsConnectionName'))]",
     "SubscriptionId": "[concat(subscription().subscriptionId)]",
     "TenantId": "[concat(subscription().tenantId)]",
+    "bootstrapRoleAssignmentId": "[guid(concat(subscription().subscriptionId, 'contributor', parameters('PlaybookName')))]",
+    "contributorRoleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
     "IntegrationAccount_Id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/integrationAccounts/', parameters('IntegrationAccountName'))]",
-    "DynamicSummariesAPIUri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('ResourceGroupNameforDynamicSummaries'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceNameforDynamicSummaries'), '/providers/Microsoft.SecurityInsights/dynamicSummaries/', parameters('DynamicSummaryGUID'), '?api-version=2023-03-01-preview')]",
-    "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]"
+    "DynamicSummariesAPIUri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('ResourceGroupNameforDynamicSummaries'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceNameforDynamicSummaries'), '/providers/Microsoft.SecurityInsights/dynamicSummaries/', guid(subscription().subscriptionId), '?api-version=2023-03-01-preview')]"
   },
     "resources":  [
         {
@@ -125,9 +118,9 @@
                                 ]
                             },
                             "type": "JavaScriptCode",
-                            "inputs": {
-                                "code": "var result = workflowContext.actions.Run_query_and_list_results.outputs.body.value\r\n\r\nvar summary = {};\r\nsummary.azureTenantId = workflowContext.actions.Compose_tenant_ID.outputs\r\nsummary.summaryName = workflowContext.actions.Compose_summary_name.outputs;\r\nsummary.summaryDescription = workflowContext.actions.Compose_summary_description.outputs;\r\n\r\nsummary.sourceInfo = {\"source\": \"playbook\"};\r\n\r\nitems = [];\r\nraw = \"\";\r\npacked = \"\";\r\nfor (var i = 0; i < result.length; i++)\r\n{\r\n    packed = {};\r\n    raw = {\"ObservableType\":result[i].observableType, \"ObservableValue\": result[i].observableValue, \"SearchKey\":result[i].searchKey, \"EventTimeUTC\":result[i].eventTimeUTC, \"PackedContent\": packed};\r\n    items.push(raw);\r\n}\r\n\r\nsummary.rawContent = JSON.stringify(items);\r\n\r\nreturn \"{ \\\"properties\\\": \" +  JSON.stringify(summary) + \"}\";\r\n"
-                            }
+                          "inputs": {
+                            "code": "var result = workflowContext.actions.Run_query_and_list_results.outputs.body.value\r\n\r\nvar summary = {};\r\nsummary.azureTenantId = workflowContext.actions.Compose_tenant_ID.outputs\r\nsummary.summaryName = workflowContext.actions.Compose_summary_name.outputs;\r\nsummary.summaryDescription = workflowContext.actions.Compose_summary_description.outputs;\r\n\r\nsummary.sourceInfo = {\"source\": \"playbook\"};\r\n\r\nitems = [];\r\nraw = \"\";\r\npacked = \"\";\r\nfor (var i = 0; i < result.length; i++)\r\n{\r\n    packed = {};\r\n  if (result[i].packed !== undefined) {\r\n        packed = JSON.parse(result[i].packed);\r\n    }\r\n  raw = {\"ObservableType\":result[i].observableType, \"ObservableValue\": result[i].observableValue, \"SearchKey\":result[i].searchKey, \"EventTimeUTC\":result[i].eventTimeUTC, \"PackedContent\": packed};\r\n    items.push(raw);\r\n}\r\n\r\nsummary.rawContent = JSON.stringify(items);\r\n\r\nreturn \"{ \\\"properties\\\": \" +  JSON.stringify(summary) + \"}\";\r\n"
+                          }
                         },
                         "Compose_summary_description": {
                             "runAfter": {
@@ -203,11 +196,11 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "azuremonitorlogs": {
-                                "connectionId": "[variables('connections_azuremonitorlogs_externalid')]",
-                                "connectionName": "azuremonitorlogs",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
-                            }
+                          "azuremonitorlogs": {
+                            "connectionId": "[variables('connections_azuremonitorlogs_externalid')]",
+                            "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                          }
                         }
                     }
                 },
@@ -229,20 +222,34 @@
                 "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
             ]
         },
-        {
-            "type":  "Microsoft.Web/connections",
-            "apiVersion":  "2016-06-01",
-            "name":  "[variables('AzuremonitorlogsConnectionName')]",
-            "location":  "[resourceGroup().location]",
-            "kind":  "V1",
-            "properties":  {
-                "displayName":  "[variables('AzuremonitorlogsConnectionName')]",
-                "customParameterValues":  {
-                },
-                "api":  {
-                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
-                }
-            }
+      {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('AzuremonitorlogsConnectionName')]",
+        "location": "[resourceGroup().location]",
+
+        "kind": "V1",
+        "properties": {
+          "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+          "customParameterValues": {
+          },
+          "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+          }
         }
+      },
+      {
+        "type": "Microsoft.Authorization/roleAssignments",
+        "apiVersion": "2022-04-01",
+        "name": "[variables('bootstrapRoleAssignmentId')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+        ],
+        "properties": {
+          "roleDefinitionId": "[variables('contributorRoleDefinitionId')]",
+          "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'full').identity.principalId]",
+          "principalType": "ServicePrincipal"
+        }
+      }
     ]
 }

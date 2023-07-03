@@ -1,0 +1,129 @@
+id: 6c3a1258-bcdd-4fcd-b753-1a9bc826ce12
+name: Possible Phishing with CSL and Network Sessions
+description: |
+    'This query looks for malicious URL clicks in phishing email recognized by MDO in correlation with CommonSecurityLogs(CSL) & NetworkSession events. 
+    If your workspace doesnt have one of the many data sources required for ASIM it may give informational error which can be safely ignored.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - AlertEvidence
+  - EmailEvents
+  - IdentityInfo
+  - DeviceEvents
+  - DeviceNetworkEvents
+- connectorId: Zscaler
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: Fortinet
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: CheckPoint
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: PaloAltoNetworks
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: AWSS3
+  datatypes:
+  - AWSVPCFlow
+- connectorId: WindowsForwardedEvents
+  dataTypes:
+  - WindowsEvent
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: MicrosoftSysmonForLinux
+  dataTypes:
+  - Syslog
+- connectorId: AzureNSG
+  dataTypes:
+  - AzureDiagnostics
+- connectorId: AzureMonitor(VMInsights)
+  dataTypes:
+  - VMConnection
+- connectorId: AIVectraStream
+  dataTypes:
+  - VectraStream_CL
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- InitialAccess
+- CommandAndControl
+relevantTechniques:
+  - T1566
+  - T1102
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.5
+query: |
+    //SuspiciousUrlClicked
+    AlertEvidence
+    | where ServiceSource =~ "Microsoft Defender for Office 365"
+    | where EntityType =~ "Url"
+    | project AlertId, RemoteUrl
+    | join (
+    AlertEvidence
+    | where ServiceSource =~ "Microsoft Defender for Office 365"
+    | where EntityType =~ "MailMessage"
+    | project AlertId, NetworkMessageId
+    )
+    on AlertId
+    | distinct RemoteUrl, NetworkMessageId
+    | join EmailEvents on NetworkMessageId
+    | distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId
+    | join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId
+    | distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, AccountSID
+    | join kind = inner  
+    (DeviceEvents
+    | where ActionType =~ "BrowserLaunchedToOpenUrl"| where isnotempty(RemoteUrl)
+    | project  UrlClickedByUserSid = RemoteUrl,
+    InitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName
+    )
+    on $left.AccountSID == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid
+    | distinct  RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId,
+     AccountSID, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName
+    |  join kind=inner
+    (
+    //Suspicious url clicked found in common security logs
+    CommonSecurityLog
+    | project TimeGenerated, DeviceVendor, DeviceProduct, DeviceAction, DestinationDnsDomain, DestinationIP, RequestURL, SourceIP, SourceHostName, RequestClientApplication
+    ) on $left.RemoteUrl== $right.RequestURL
+    |  join kind=inner
+    (
+    //Find the relevant network sessions
+    _Im_NetworkSession
+    | where isnotempty(DstIpAddr)
+    | where not(ipv4_is_private(DstIpAddr))
+    | project TimeGenerated, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes
+    ) on  $left.DestinationIP == $right.DstIpAddr //The relevant network session being projected 
+    | summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountName, DeviceName, InitiatingProcessFileName,DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication
+    | extend HostName = iff(DeviceName has '.', substring(DeviceName,0,indexof(DeviceName,'.')),DeviceName)
+    | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName,indexof(DeviceName,'.')+1),"")
+    | extend Name = tostring(split(InitiatingProcessAccountName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+version: 1.0.1
+kind: Scheduled

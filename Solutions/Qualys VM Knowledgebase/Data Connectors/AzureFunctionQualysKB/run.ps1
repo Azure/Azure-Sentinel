@@ -9,7 +9,7 @@
     DESCRIPTION
     This Function App calls the Qualys Vulnerability Management (VM) - KnowledgeBase (KB) API (https://www.qualys.com/docs/qualys-api-vmpc-user-guide.pdf) to pull vulnerability data from the Qualys KB.
     The response from the Qualys API is recieved in XML format. This function will build the signature and authorization header
-    needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. This Function App will the vulnerability records to the QualysKB_CL table in Azure Sentinel/Log Analytics
+    needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. This Function App will the vulnerability records to the QualysKB_CL table in Microsoft Sentinel/Log Analytics
 #>
 
 # Input bindings are passed in via param block.

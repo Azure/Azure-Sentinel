@@ -1,0 +1,737 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Microsoft Exchange Security Review Online"
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "9ae328d6-99c8-4c44-8d59-42ca4d999098",
+            "version": "KqlParameterItem/1.0",
+            "name": "EnvironmentList",
+            "label": "Environment",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "ESI_ExchConfigAvailableEnvironments(Target=\"Online\") | where ESIEnvironment != \"\"",
+            "typeSettings": {
+              "limitSelectTo": 1,
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "ITSY"
+            ]
+          },
+          {
+            "id": "a88b4e41-eb2f-41bf-92d8-27c83650a4b8",
+            "version": "KqlParameterItem/1.0",
+            "name": "DateOfConfiguration",
+            "label": "Collection time",
+            "type": 2,
+            "isRequired": true,
+            "query": "let _configurationEnv = split(iff(isnull({EnvironmentList}) or isempty({EnvironmentList}) or tolower({EnvironmentList}) == \"all\",\"All\",tostring({EnvironmentList})),',');\r\nESIExchangeOnlineConfig_CL\r\n| extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize Collection = max(Collection)\r\n| project Collection = \"lastdate\", Selected = true\r\n| join kind= fullouter  ( ESIExchangeOnlineConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| where TimeGenerated > ago(90d)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize by Collection\r\n) on Collection\r\n| project Value = iif(Selected,Collection,Collection1), Label = iif(Selected,\"Last Known date\",Collection1), Selected\r\n| sort by Selected, Value desc",
+            "typeSettings": {
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "8ac96eb3-918b-4a36-bcc4-df50d8f46175",
+            "version": "KqlParameterItem/1.0",
+            "name": "Help",
+            "label": "Show Help",
+            "type": 10,
+            "isRequired": true,
+            "query": "{\"version\":\"1.0.0\",\"content\":\"[\\r\\n { \\\"value\\\": \\\"Yes\\\", \\\"label\\\": \\\"Yes\\\"},\\r\\n {\\\"value\\\": \\\"No\\\", \\\"label\\\": \\\"No\\\", \\\"selected\\\":true }\\r\\n]\\r\\n\"}",
+            "timeContext": {
+              "durationMs": 2592000000
+            },
+            "queryType": 8
+          }
+        ],
+        "style": "above",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "TimeRange"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "This workbook helps review your Exchange Security configuration.\r\nAdjust the time range, and when needed select an item in the dropdownlist",
+        "style": "info"
+      },
+      "name": "text - 9"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "34188faf-7a02-4697-9b36-2afa986afc0f",
+            "cellValue": "selected",
+            "linkTarget": "parameter",
+            "linkLabel": "Mailbox Access",
+            "subTarget": "Delegation",
+            "postText": "t",
+            "style": "link",
+            "icon": "3",
+            "linkIsContextBlade": true
+          },
+          {
+            "id": "be02c735-6150-4b6e-a386-b2b023e754e5",
+            "cellValue": "selected",
+            "linkTarget": "parameter",
+            "linkLabel": "EXO & Azure AD Groups",
+            "subTarget": "ExchAD",
+            "style": "link"
+          },
+          {
+            "id": "26c68d90-925b-4c3c-a837-e3cecd489b2d",
+            "cellValue": "selected",
+            "linkTarget": "parameter",
+            "linkLabel": "Transport Configuration",
+            "subTarget": "Transport",
+            "style": "link"
+          },
+          {
+            "id": "eb2888ca-7fa6-4e82-88db-1bb3663a801e",
+            "cellValue": "selected",
+            "linkTarget": "parameter",
+            "linkLabel": "Workbook Help",
+            "subTarget": "Start",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "TopMenuTabs"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "# Workbook goals\r\n\r\nThe goal of this workbook is to outline key security configurations of your Exchange on-premises environment.\r\n\r\nMost of Exchange organizations have were installed years ago (sometimes more than 10 years). Many configurations have been done and might not have been documented. For most environments, the core commitment was maintaining a high availability of the users’ mailboxes putting aside other consideration (even security considerations). Recommended security practices have also evolved since the first released and a regular review is necessary.\r\n\r\nThis workbook is designed to show your Exchange organization is configured with a security point of view. Indeed, some configurations easy to display as there are no UI available.\r\n\r\nFor each configuration, you will find explanations and recommendations when applicable.\r\n\r\n- This workbook does not pretend to show you every weak Security configurations, but the most common issues and known to be used by attackers. \r\n- It will not show you if you have been comprised, but will help you identify unexpected configuration.\r\n\r\n----\r\n\r\n## Quick reminder of how Exchange works\r\n\r\nDuring Exchange installation two very important groups are created :\r\n- Exchange Trusted Subsystem : Contain all the computer accounts for Exchange Server\r\n- Exchange Windows Permissions : Contain the group Exchange trusted Subsystem\r\n\r\nThese groups have :\r\n- Very high privileges in ALL AD domains including the root domain\r\n- Right on any Exchange including mailboxes\r\n\r\nAs each Exchange server computer account is member of Exchange Trusted Subsystem, it means by taking control of the computer account or being System on an Exchange server you will gain access to all the permissions granted to Exchange Trusted Subsystem and Exchange Windows Permissions.\r\n\r\nTo protect AD and Exchange, it is very important to ensure the following:\r\n- There is a very limited number of persons that are local Administrator on Exchange server\r\n- To protect user right like : Act part of the operating System, Debug\r\n\r\nEvery service account or application that have high privileges on Exchange need to be considered as sensitive\r\n\r\n** 💡 Exchange servers need to be considered as very sensitive servers**\r\n\r\n-----\r\n\r\n\r\n## Tabs\r\n\r\n### Mailbox Access\r\n\r\nThis tab will show you several top sensitive delegations that allow an account to access, modify, act as another user, search, export the content of a mailbox.\r\n\r\n### Exchange & AD Groups\r\n\r\nThis tab will show you the members of Exchange groups and Sensitive AD groups.\r\n\r\n### Local Administrators\r\n\r\nThis tab will show you the non standard content of the local Administrators group. Remember that a member of the local Administrators group can take control of the computer account of the server and then it will have all the permissions associated with Exchange Trusted Subsytem and Exchange Windows Permissions\r\n\r\nThe information is displayed with different views : \r\n- List of nonstandard users\r\n- Number of servers with a nonstandard a user\r\n- Nonstandard groups content\r\n- For each user important information are displayed like last logon, last password set, enabled\r\n\r\n### Exchange Security configuration\r\n\r\nThis tab will show you some important configuration for your Exchange Organization\r\n- Status of Admin Audit Log configuration\r\n- Status of POP and IMAP configuration : especially, is Plaintext Authentication configured ?\r\n- Nonstandard permissions on the Exchange container in the Configuration Partition\r\n\r\n### Transport Configuration\r\n\r\nThis tab will show you the configuration of the main Transport components\r\n- Receive Connectors configured with Anonymous and/or Open Relay\r\n- Remote Domain Autoforward configuration\r\n- Transport Rules configured with BlindCopyTo, SendTo, RedirectTo\r\n- Journal Rule and Journal Recipient configurations\r\n- Accepted Domains with *\r\n\r\n"
+            },
+            "name": "WorkbookInfo"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selected",
+        "comparison": "isEqualTo",
+        "value": "Start"
+      },
+      "name": "InformationTab"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Display important security configurations that allow to mailboxes content (direct delegation on mailboxes are not listed (Full Access mailboxes or direct delegation on mailboxes  folders)",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !contains \"Deleg\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and  CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\" and CmdletResultValue.RoleAssigneeName !contains \"RIM-MailboxAdmins\"\r\n| where CmdletResultValue.Role contains \"Export\" or CmdletResultValue.Role contains \"Impersonation\" or CmdletResultValue.Role contains \"Search\"\r\n| summarize dcount(tostring(CmdletResultValue.RoleAssigneeName)) by role=tostring(CmdletResultValue.Role)",
+              "size": 3,
+              "title": "Number of accounts with sensitive RBAC roles",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "role",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "dcount_CmdletResultValue_RoleAssigneeName",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal",
+                      "maximumFractionDigits": 2,
+                      "maximumSignificantDigits": 3
+                    }
+                  }
+                },
+                "showBorder": true,
+                "sortCriteriaField": "role",
+                "sortOrderField": 1
+              }
+            },
+            "name": "MRAQuery"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "**ApplicationImpersonation** is an RBAC role that allows access (read and modify) to the content of all mailboxes using EWS. This role is very powerfull and should be carefully delegated. When a delegation is necessary, RBAC scopes should be configured to limit the list of impacted mailboxes.\r\n\r\nIt is common to see service accounts for backup solution, antivirus software, MDM...\r\n\r\nNote that the default configuration to the group Hygiene Management is excluded. this group is a sensitive group. Remember to monitor the content of this group",
+              "style": "info"
+            },
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "SensitiveRBACHelp"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Application Impersonation Role",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "This delegation allows the delegated account to access and modify the content of every mailboxes using EWS."
+                  },
+                  "name": "text - 0"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Role contains \"Impersonation\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and CmdletResultValue.RoleAssigneeName !contains \"RIM-MailboxAdmins\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"User\" , \"User\", \"RoleGroup\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)\r\n| extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)\r\n| extend RecipientWriteScope = CmdletResultValue.RecipientWriteScope\r\n| extend ConfigWriteScope = CmdletResultValue.ConfigWriteScope\r\n| extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)\r\n| extend Status= tostring(CmdletResultValue.Enabled)\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project RoleAssigneeName, RoleAssigneeType, Status,CustomRecipientWriteScope,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,ManagementRoleAssignement,WhenChanged,WhenCreated",
+                    "size": 3,
+                    "showAnalytics": true,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "rowLimit": 10000,
+                      "filter": true
+                    }
+                  },
+                  "name": "query - 1",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "name": "Application Impersonation Role"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Mailbox Import Export Role",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "This delegation allows to export the content all  mailboxes in a scope in PST file.\r\nExcluded from the result as default configuration :\r\nDelegating delegation to Organization Management\r\n"
+                  },
+                  "name": "text - 0"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "**Mailbox Import Export**  is an RBAC role that allows an account to export the content of any maibox in a PST. It also allows search in all mailboxes.\r\n\r\n⚡ This role is very powerfull.\r\n\r\nBy default, this role is not delegated to any user or group. The members of the group Organization Management by default do not have this role but are able to delegate it.\r\n\r\nℹ️ Recommendations\r\n\r\nIf you temporarily need this delegation, consider the following:\r\n- create an empty group with this delegation\r\n- monitor the group content and  alert when the group modified\r\n- add administrators in this group only for a short period of time",
+                    "style": "info"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "SearchRBACHelp"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Role contains \"export\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"User\" , \"User\", \"RoleGroup\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)\r\n| extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)\r\n| extend RecipientWriteScope = CmdletResultValue.RecipientWriteScope\r\n| extend ConfigWriteScope = CmdletResultValue.ConfigWriteScope\r\n| extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)\r\n| extend Status= tostring(CmdletResultValue.Enabled)\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project RoleAssigneeName, RoleAssigneeType, Status,CustomRecipientWriteScope,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,ManagementRoleAssignement,WhenChanged,WhenCreated",
+                    "size": 3,
+                    "showAnalytics": true,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "rowLimit": 10000,
+                      "filter": true,
+                      "sortBy": [
+                        {
+                          "itemKey": "ConfigWriteScope",
+                          "sortOrder": 1
+                        }
+                      ]
+                    },
+                    "sortBy": [
+                      {
+                        "itemKey": "ConfigWriteScope",
+                        "sortOrder": 1
+                      }
+                    ]
+                  },
+                  "name": "query - 1",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "name": "Mailbox Import Export Role"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Mailbox Search Role",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "This delegation allows to search inside all or in a scope of mailboxes and export the result in PST.\r\nExcluded from the result as default configuration :\r\nDelegating delegation to Organization Management\r\nExchange Online-ApplicationAccount\r\nDiscovery Management has been excluded\r\n"
+                  },
+                  "name": "text - 0"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "**Mailbox Search** is an RBAC role that allows an account to search in any mailbox and export the results to a PST.\r\n\r\n⚡ This role is very powerfull.\r\n\r\nBy default, this role is only delegated to the group Discovery Management. The members of the group Organization Management do not have this role but are able to delegate it.\r\n\r\nℹ️ Recommendations\r\n\r\nIf you temporarily need this delegation, consider the following:\r\n\r\n- add the administrators in the Discovery Management group\r\n- monitor the group content and alert when the group modified\r\n- add administrators in this group only for a short period of time",
+                    "style": "info"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "SearchRBACHelp"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Role contains \"search\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| where CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\"\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"User\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)\r\n| extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)\r\n| extend RecipientWriteScope = CmdletResultValue.RecipientWriteScope\r\n| extend ConfigWriteScope = CmdletResultValue.ConfigWriteScope\r\n| extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)\r\n| extend Status= tostring(CmdletResultValue.Enabled)\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project RoleAssigneeName, RoleAssigneeType, Status,CustomRecipientWriteScope,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,ManagementRoleAssignement,WhenChanged,WhenCreated",
+                    "size": 3,
+                    "showAnalytics": true,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "rowLimit": 10000,
+                      "filter": true,
+                      "sortBy": [
+                        {
+                          "itemKey": "ConfigWriteScope",
+                          "sortOrder": 1
+                        }
+                      ]
+                    },
+                    "sortBy": [
+                      {
+                        "itemKey": "ConfigWriteScope",
+                        "sortOrder": 1
+                      }
+                    ]
+                  },
+                  "name": "query - 1",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "name": "Mailbox Search Role"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selected",
+        "comparison": "isEqualTo",
+        "value": "Delegation"
+      },
+      "name": "Importantsecurityconfiguration"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Exchange and AD GRoup",
+        "items": [
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Exchange group",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "ℹ️ Recommendations\r\n\r\n- Ensure that no service account are a member of the high privilege groups. Use RBAC to delegate the exact required permissions.\r\n- Limit the usage of nested group for administration.\r\n- Ensure that accounts are given only the required pernissions to execute their tasks.\r\n- Use just in time administration principle by adding users in a group only when they need the permissions, then remove them when their operation is over.\r\n- Limit the number of Organization management members. When you review the Admin Audit logs you might see that the administrators rarely needed Organization Management privileges.\r\n- Monitor the content of the following groups:\r\n  - TenantAdmins_-xxx (Membership in this role group is synchronized across services and managed centrally)\r\n  - Organization Management\r\n  - ExchangeServiceAdmins_-xxx (Membership in this role group is synchronized across services and managed centrally)\r\n  - Recipient Management (Member of this group have at least the following rights : set-mailbox, Add-MailboxPermission)\r\n  - Discovery Management\r\n  - Hygiene Management\r\n  - Security Administrator (Membership in this role group is synchronized across services and managed centrally)\r\n  - xxx High privilege group (not an exhaustive list)\r\n  - Compliance Management\r\n  - All RBAC groups that have high roles delegation\r\n  - All nested groups in high privileges groups\r\n  - Note that this is not a complete list. The content of all the groups that have high privileges should be monitored.\r\n- Each time a new RBAC group is created, decide if the content of this groups should be monitored\r\n- Periodically review the members of the groups",
+                    "style": "info"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "text - 0"
+                },
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "title": "To groups  - Number of  direct members per group with RecipientType User",
+                    "items": [
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "ExchangeConfiguration(SpecificSectionList=\"RoleGroupMember\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| project CmdletResultValue\r\n//| where CmdletResultValue.RecipientType !contains \"group\"\r\n| extend Members= tostring(CmdletResultValue.Identity)\r\n| summarize dcount(tostring(Members)) by RoleGroup = tostring(CmdletResultValue.RoleGroup)\r\n| where RoleGroup has_any (\"TenantAdmins\",\"Organization Management\", \"Discovery Management\", \"Compliance  Management\", \"Server Management\", \"ExchangeServiceAdmins\",\"Security Administrator\", \"SecurityAdmins\", \"Recipient Manangement\", \"Records Manangement\",\"Impersonation\",\"Export\")\r\n| sort by dcount_Members\r\n",
+                          "size": 3,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "visualization": "tiles",
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "RoleGroup",
+                              "formatter": 1
+                            },
+                            "leftContent": {
+                              "columnMatch": "dcount_Members",
+                              "formatter": 12,
+                              "formatOptions": {
+                                "palette": "auto"
+                              }
+                            },
+                            "showBorder": true,
+                            "sortCriteriaField": "dcount_Members",
+                            "sortOrderField": 2,
+                            "size": "auto"
+                          }
+                        },
+                        "name": "query - 0"
+                      }
+                    ]
+                  },
+                  "name": "ExchangeGroupsList"
+                },
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "title": "Number of  direct members per group with RecipientType User",
+                    "expandable": true,
+                    "items": [
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "ExchangeConfiguration(SpecificSectionList=\"RoleGroupMember\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.RecipientType !contains \"group\"\r\n| extend Members= tostring(CmdletResultValue.Identity)\r\n| summarize dcount(tostring(Members)) by RoleGroup = tostring(CmdletResultValue.RoleGroup)\r\n| sort by dcount_Members\r\n",
+                          "size": 3,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "visualization": "tiles",
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "RoleGroup",
+                              "formatter": 1
+                            },
+                            "leftContent": {
+                              "columnMatch": "dcount_Members",
+                              "formatter": 12,
+                              "formatOptions": {
+                                "palette": "auto"
+                              }
+                            },
+                            "showBorder": true,
+                            "sortCriteriaField": "dcount_Members",
+                            "sortOrderField": 2,
+                            "size": "auto"
+                          }
+                        },
+                        "name": "query - 0"
+                      }
+                    ]
+                  },
+                  "name": "ExchangeGroupsList - Copy"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "Exchange groups content (Extract for the OU \"Microsoft Exchange Security Groups\").\r\nSelect a group to display detailed information of its contents.\r\nLevel attribute helps you understand the level of nested groups."
+                  },
+                  "name": "text - 2"
+                },
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "b4b7a6ad-381a-48d6-9938-bf7cb812b474",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "Group",
+                        "type": 2,
+                        "query": "ExchangeConfiguration(SpecificSectionList=\"RoleGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n//| where CmdletResultValue.Parentgroup != \"Exchange Trusted Subsystem\"\r\n//| where CmdletResultValue.Parentgroup != \"Exchange Windows Permissions\"\r\n| project CmdletResultValue\r\n| extend GroupName = tostring(CmdletResultValue.Name)\r\n| distinct GroupName\r\n| sort by GroupName asc\r\n",
+                        "typeSettings": {
+                          "showDefault": false
+                        },
+                        "queryType": 0,
+                        "resourceType": "microsoft.operationalinsights/workspaces"
+                      }
+                    ],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "parameters - 3"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "//ExchangeConfiguration(SpecificSectionList=\"ExGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\nExchangeConfiguration(SpecificSectionList=\"RoleGroupMember\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| search CmdletResultValue.RoleGroup == \"{Group}\"\r\n//| where CmdletResultValue.Level != 0\r\n| project CmdletResultValue\r\n| extend Members = tostring(CmdletResultValue.Identity)\r\n//| extend Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n//| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n//| extend Level = tostring(CmdletResultValue.Level)\r\n//| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n//| extend LastLogon = CmdletResultValue.LastLogonString\r\n//| extend LastLogon = iif ( todatetime (CmdletResultValue.LastLogonString) < ago(-366d), CmdletResultValue.LastLogonString,strcat(\"💥\",CmdletResultValue.LastLogonString))\r\n//| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n//| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend Members = case( CmdletResultValue.RecipientType == \"Group\", strcat( \"👪 \", Members), strcat( \"🧑‍🦰 \", Members) )\r\n| extend RecipientType = tostring(CmdletResultValue.RecipientType)",
+                    "size": 3,
+                    "showAnalytics": true,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "CmdletResultValue",
+                          "formatter": 5
+                        }
+                      ],
+                      "rowLimit": 10000,
+                      "filter": true
+                    }
+                  },
+                  "name": "ExchangeServersGroupsGrid",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "name": "Exchange group"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selected",
+        "comparison": "isEqualTo",
+        "value": "ExchAD"
+      },
+      "name": "Exchange and AD GRoup"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Transport Security configuration",
+        "items": [
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Inbound Connector configuration",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "This section shows the configuration of the Inbound connnectors",
+                    "style": "info"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "TransportRulesHelp"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"InBoundC\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| project CmdletResultValue\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend State = tostring(CmdletResultValue.Enabled)\r\n| extend ConnectorType = tostring(CmdletResultValue.ConnectorType)\r\n| extend ConnectorSource = tostring(CmdletResultValue.ConnectorSource)\r\n| extend SenderIPAddresses = tostring(CmdletResultValue.SenderIPAddresses)\r\n| extend SenderDomains = tostring(CmdletResultValue.SenderDomains)\r\n| extend TrustedOrganizations = tostring(CmdletResultValue.TrustedOrganizations)\r\n| extend AssociatedAcceptedDomainsRequireTls = tostring(CmdletResultValue.AssociatedAcceptedDomainsRequireTls)\r\n| extend RestrictDomainsToIPAddresses = tostring(CmdletResultValue.RestrictDomainsToIPAddresses)\r\n| extend RestrictDomainsToCertificate = tostring(CmdletResultValue.RestrictDomainsToCertificate)\r\n| extend CloudServicesMailEnabled = tostring(CmdletResultValue.CloudServicesMailEnabled)\r\n| extend TreatMessagesAsInternal = tostring(CmdletResultValue.TreatMessagesAsInternal)\r\n| extend TlsSenderCertificateName = tostring(CmdletResultValue.TlsSenderCertificateName)\r\n| extend ScanAndDropRecipients = tostring(CmdletResultValue.ScanAndDropRecipients)\r\n| extend Comment = tostring(CmdletResultValue.Comment)\r\n| extend WhenChanged = tostring(CmdletResultValue.WhenChanged)\r\n| extend WhenCreated = tostring(CmdletResultValue.WhenCreated)\r\n| project-away CmdletResultValue\r\n| sort  by Name asc",
+                    "size": 3,
+                    "showAnalytics": true,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "query - 1",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "name": "Inbound Connector configuration"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Outbound Connector configuration",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "This section shows the configuration of the Outbound connnectors",
+                    "style": "info"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "TransportRulesHelp"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"OutBoundC\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| project CmdletResultValue\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend State = tostring(CmdletResultValue.Enabled)\r\n| extend UseMXRecord = tostring(CmdletResultValue.UseMXRecord)\r\n| extend ConnectorType = tostring(CmdletResultValue.ConnectorType)\r\n| extend ConnectorSource = tostring(CmdletResultValue.ConnectorSource)\r\n| extend RecipientDomains = tostring(CmdletResultValue.RecipientDomains)\r\n| extend SmartHosts = tostring(CmdletResultValue.SmartHosts)\r\n| extend TlsDomain = tostring(CmdletResultValue.TlsDomain)\r\n| extend TlsSettings = tostring(CmdletResultValue.TlsSettings)\r\n| extend IsTransportRuleScoped = tostring(CmdletResultValue.IsTransportRuleScoped)\r\n| extend RouteAllMessagesViaOnPremises = tostring(CmdletResultValue.RouteAllMessagesViaOnPremises)\r\n| extend CloudServicesMailEnabled = tostring(CmdletResultValue.CloudServicesMailEnabled)\r\n| extend AllAcceptedDomains = tostring(CmdletResultValue.AllAcceptedDomains)\r\n| extend SenderRewritingEnabled = tostring(CmdletResultValue.SenderRewritingEnabled)\r\n| extend TestMode = tostring(CmdletResultValue.TestMode)\r\n| extend LinkForModifiedConnector = tostring(CmdletResultValue.LinkForModifiedConnector)\r\n| extend ValidationRecipients = tostring(CmdletResultValue.ValidationRecipients)\r\n| extend IsValidated = tostring(CmdletResultValue.IsValidated)\r\n| extend LastValidationTimestamp = tostring(CmdletResultValue.LastValidationTimestamp)\r\n| extend Comment = tostring(CmdletResultValue.Comment)\r\n| extend WhenChanged = tostring(CmdletResultValue.WhenChanged)\r\n| extend WhenCreated = tostring(CmdletResultValue.WhenCreated)\r\n| project-away CmdletResultValue\r\n| sort  by Name asc",
+                    "size": 3,
+                    "showAnalytics": true,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "query - 1",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "name": "Outbound Connector configuration - Copy"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Transport Rules with specific actions to monitor",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "A  common way used by attackers to exfiltrate data is to set Transport Rules that send all or sensitive messages outside the organization or to a mailbox where they already have full control.\r\n\r\nThis section shows your Transport rules with sentitive actions that can lead to data leaks:\r\n- BlindCopyTo\r\n- SentTo\r\n- CopyTo",
+                    "style": "info"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "TransportRulesHelp"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"TransportRule\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| project CmdletResultValue\r\n| extend Identity = iif( CmdletResultValue.Identity contains \"OrgHierarchyToIgnore\",tostring(CmdletResultValue.Identity.Name),tostring(CmdletResultValue.Identity))\r\n| extend State = tostring(CmdletResultValue.State)\r\n| extend SentTo = tostring(CmdletResultValue.SentToString)\r\n| extend BlindCopyTo = tostring(CmdletResultValue.BlindCopyToString)\r\n| extend CopyTo = tostring(CmdletResultValue.CopyToString)\r\n| extend RedirectMessageTo = tostring(CmdletResultValue.RedirectMessageToString)\r\n| extend Mode = tostring(CmdletResultValue.Identity.Mode)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc",
+                    "size": 1,
+                    "showAnalytics": true,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "query - 1",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "name": "Transport Rules actions to monitor"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Remote Domain Autofoward Configuration - * should not allow AutoForwardEnabled",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "If **AutoForwardEnabled** is set to True for an SMTP domain, then users in Outlook are allowed to set automatic transfer of all their emails to addresses in this domain.\r\n\r\nWhen the Default Remote domain is set to * and has the AutoForwardEnabled set True, any user can configure an Outlook rule to automatically forward all emails to any SMTP domain domains outside the organization. This is a high risk configuration as it might allow accounts to leak information. \r\n\r\nAlso, when setting AutoForwardEnabled to a specific domain, it is strongly recommended enable TLS encryption.",
+                    "style": "info"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "AutoForwardHelp"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"RemoteDomain\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| project CmdletResultValue\r\n| extend Name =  tostring(CmdletResultValue.Name)\r\n| extend Address =  tostring(CmdletResultValue.DomainName)\r\n| extend AutoForwardEnabled =  iff (CmdletResultValue.AutoForwardEnabled== \"true\" and CmdletResultValue.DomainName == \"*\", strcat (\"❌ \",tostring(CmdletResultValue.AutoForwardEnabled)),iff(CmdletResultValue.AutoForwardEnabled== \"true\" and CmdletResultValue.DomainName != \"*\", strcat (\"⚠️ \",tostring(CmdletResultValue.AutoForwardEnabled)),strcat (\"✅ \",tostring(CmdletResultValue.AutoForwardEnabled))))\r\n| project-away CmdletResultValue\r\n| sort  by Address asc ",
+                    "size": 1,
+                    "showAnalytics": true,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "rowLimit": 10000,
+                      "filter": true
+                    }
+                  },
+                  "name": "query - 1",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
+            },
+            "name": "ForwardGroup"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selected",
+        "comparison": "isEqualTo",
+        "value": "Transport"
+      },
+      "name": "Transport Security configuration"
+    }
+  ],
+  "fromTemplateId": "sentinel-MicrosoftExchangeSecurityReview-Online",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

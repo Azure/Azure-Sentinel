@@ -2,11 +2,11 @@
 Author: Thijs Lecomte
 
 ## Overview
-This tool will synchronize incidents between Azure Sentinel and JIRA Service Management using the following tools:
+This tool will synchronize incidents between Microsoft Sentinel and JIRA Service Management using the following tools:
 * Azure Logic Apps
 * Azure Functions
 * Automation for JIRA
-* Azure Sentinel Automation Rules
+* Microsoft Sentinel Automation Rules
 * Azure Key Vault
 
 This tool will do the following:
@@ -25,7 +25,7 @@ To implement this solution, a few different steps need to be done:
 1. Create necessary Service Principals
 2. JIRA Configuration
    1. Custom fields
-   2. Deploy Automation for JIRA rules (used for sync from JIRA to Azure Sentinel)
+   2. Deploy Automation for JIRA rules (used for sync from JIRA to Microsoft Sentinel)
 3. Deploy the Key Vault and add secrets
 4. Deploy Azure Logic Apps (4) through ARM deployment
 5. Deploy Azure Function for comment sychronization and add the Powershell code (check the Functions)
@@ -99,7 +99,7 @@ Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook
 ![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Create%20Link.png)
 
 #### Sync comment
-This automation rule will trigger the function app to sync public comments to Azure Sentinel.
+This automation rule will trigger the function app to sync public comments to Microsoft Sentinel.
 Provide the POST URL of the Sync Comment Function in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
 ![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Sync%20Comment.png)
@@ -107,7 +107,7 @@ Provide the POST URL of the Sync Comment Function in the 'Send Web Request' Step
 ## 3. Deploy Key Vault
 The Key Vault is used to store three secrets:
 * One for the AAD Service Principal
-* One for the Azure Sentinel Service Principal
+* One for the Microsoft Sentinel Service Principal
 * One for the JIRA Secret
 
 Create a new Key Vault or deploy an existing one and add the different secrets to it.
@@ -171,10 +171,10 @@ It uses one connections:
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-AssignedUser%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-AssignedUser%2Fazuredeploy.json)
 
-When a incident is assigned in JIRA, this will assign the correct user inside of Azure Sentinel.
+When a incident is assigned in JIRA, this will assign the correct user inside of Microsoft Sentinel.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule when the assigned user of an incident is changed.
 
-It will retrieve the client secret for the service principal with permissions to retrieve users in your Azure Active Directory. With this, it will query the user and retrieve the AAD Object ID from that user. Wit this information, we will update the incident in Azure Sentinel.
+It will retrieve the client secret for the service principal with permissions to retrieve users in your Azure Active Directory. With this, it will query the user and retrieve the AAD Object ID from that user. Wit this information, we will update the incident in Microsoft Sentinel.
 
 There is a check built-in to make sure that JIRA provides the assigned user. Sometimes it does not and then we don't need to update the incident in Sentinel.
 * One connection to Sentinel through a Managed Identity
@@ -197,7 +197,7 @@ It uses one connections:
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FSync-Comments%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FSync-Comments%2Fazuredeploy.json)
 
-To sync incident comments from JIRA to Azure Sentinel an Azure Function is used. This Function App contains one Powershell Function.
+To sync incident comments from JIRA to Microsoft Sentinel an Azure Function is used. This Function App contains one Powershell Function.
 There are two types of comments in JIRA: internal and public comments. This script will only sync the public comments, so that customers don't have access to the internal ones.
 
 The code for this function can be found [in this repository](Sync-Comments/Sync-Comment.ps1).
@@ -227,7 +227,7 @@ For actions, choose 'Run Playbook' and select the 'Sync-Incidents' Playbook.
 ![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/Sentinel%20-%20Automation%20Rule.png)
 
 ## Conclusion
-After this solution, you are able to work on Azure Sentinel incidents while staying in your trusted ITSM tool.
+After this solution, you are able to work on Microsoft Sentinel incidents while staying in your trusted ITSM tool.
 This tool should take care of any previous synchronization issues between the JIRA and Sentinel.
 
 For any issues with the tool or requested improvements, feel free to create an issue on Github or contact me through [Twitter](https://twitter.com/thijslecomte).

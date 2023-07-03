@@ -1,0 +1,682 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "micha@cynerio.co",
+    "comments": "Solution template for Cynerio"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "cynerio1681887657820.cynerio-medical-device-security-sentinel-connector",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "CynerioSecurityEvents",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "CynerioSecurityEvents",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "CynerioEvent_Authentication-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "CynerioEvent_Authentication",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]",
+    "parserVersion2": "1.0.0",
+    "parserContentId2": "CynerioEvent_NetworkSession-Parser",
+    "_parserContentId2": "[variables('parserContentId2')]",
+    "parserName2": "CynerioEvent_NetworkSession",
+    "_parserName2": "[concat(parameters('workspace'),'/',variables('parserName2'))]",
+    "parserId2": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName2'))]",
+    "_parserId2": "[variables('parserId2')]",
+    "parserTemplateSpecName2": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId2')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Cynerio data connector with template",
+        "displayName": "Cynerio template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Cynerio data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Cynerio Security Events",
+                  "publisher": "Cynerio",
+                  "descriptionMarkdown": "The [Cynerio](https://www.cynerio.com/) connector allows you to easily connect your Cynerio Security Events with Microsoft Sentinel, to view IDS Events. This gives you more insight into your organization network security posture and improves your security operation capabilities. ",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "CynerioEvent_CL",
+                      "baseQuery": "CynerioEvent_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "SSH Connections events in the last 24 hours",
+                      "query": "CynerioEvent_CL\n | where date_t > ago(24h) and title_s == 'SSH Connection'"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CynerioEvent_CL",
+                      "lastDataReceivedQuery": "CynerioEvent_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "CynerioEvent_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Cynerio can integrate with and export events directly to Microsoft Sentinel via Azure Server. Follow these steps to establish integration:\n\n1. In the Cynerio console, go to Settings > Integrations tab (default), and click on the **+Add Integration** button at the top right.\n\n2. Scroll down to the **SIEM** section.\n\n3. On the Microsoft Sentinel card, click the Connect button.\n\n4. The Integration Details window opens. Use the parameters below to fill out the form and set up the connection.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "Configure and connect Cynerio"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "Unique Identifier (GUID) used to identify dependencies and content from solutions or community.",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "solution",
+                      "name": "Cynerio"
+                    },
+                    "author": {
+                      "name": "Cynerio"
+                    },
+                    "support": {
+                      "tier": "Type of support for content item: microsoft | developer | community",
+                      "name": "Name of support contact or company",
+                      "email": "Optional: Email of support contact",
+                      "link": "Optional: Link for support help, like to support page to open a ticket etc"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cynerio",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "micha@cynerio.co"
+                },
+                "support": {
+                  "name": "Cynerio",
+                  "email": "support@cynerio.com",
+                  "tier": "Partner",
+                  "link": "https://cynerio.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cynerio",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "micha@cynerio.co"
+        },
+        "support": {
+          "name": "Cynerio",
+          "email": "support@cynerio.com",
+          "tier": "Partner",
+          "link": "https://cynerio.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Cynerio Security Events",
+          "publisher": "Cynerio",
+          "descriptionMarkdown": "The [Cynerio](https://www.cynerio.com/) connector allows you to easily connect your Cynerio Security Events with Microsoft Sentinel, to view IDS Events. This gives you more insight into your organization network security posture and improves your security operation capabilities. ",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "CynerioEvent_CL",
+              "baseQuery": "CynerioEvent_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CynerioEvent_CL",
+              "lastDataReceivedQuery": "CynerioEvent_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "CynerioEvent_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "SSH Connections events in the last 24 hours",
+              "query": "CynerioEvent_CL\n | where date_t > ago(24h) and title_s == 'SSH Connection'"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Cynerio can integrate with and export events directly to Microsoft Sentinel via Azure Server. Follow these steps to establish integration:\n\n1. In the Cynerio console, go to Settings > Integrations tab (default), and click on the **+Add Integration** button at the top right.\n\n2. Scroll down to the **SIEM** section.\n\n3. On the Microsoft Sentinel card, click the Connect button.\n\n4. The Integration Details window opens. Use the parameters below to fill out the form and set up the connection.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "Configure and connect Cynerio"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "CynerioEvent_Authentication Data Parser with template",
+        "displayName": "CynerioEvent_Authentication Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "CynerioEvent_Authentication Data Parser with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "CynerioEvent_Authentication",
+                "category": "Samples",
+                "functionAlias": "CynerioEvent_Authentication",
+                "query": "\n  let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [\n    'Low', 'Informational',\n    'Medium', 'Low',\n    'High', 'Medium',\n    'Critical', 'High'\n  ];\n\n  let Passwords = CynerioEvent_CL\n    | where title_s == 'Default Password' or title_s == 'Weak Password'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'Logon',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventMessage = details_s,\n        DvcIdType = 'Cynerio',\n        Dvc = tostring(asset_id_g),\n        DvcId = tostring(asset_id_g),\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'NA',\n        EventVendor = 'Cynerio',\n        EventSchema = 'Authentication',\n        EventSchemaVersion = '0.1.3',\n        SrcIpAddr = client_ip_s,\n        IpAddr = client_ip_s,\n        TargetIpAddr = dst_ip_s,\n        TargetPortNumber = toint(port_d),\n        LogonProtocol = service_s\n    | parse EventMessage with * \"User Name: \" ActorUserName \",\" *\n    | project-away\n        *_d, *_s, *_g;\n\n  Passwords",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "CynerioEvent_Authentication"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Cynerio",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "micha@cynerio.co"
+                },
+                "support": {
+                  "name": "Cynerio",
+                  "email": "support@cynerio.com",
+                  "tier": "Partner",
+                  "link": "https://cynerio.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "CynerioEvent_Authentication",
+        "category": "Samples",
+        "functionAlias": "CynerioEvent_Authentication",
+        "query": "\n  let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [\n    'Low', 'Informational',\n    'Medium', 'Low',\n    'High', 'Medium',\n    'Critical', 'High'\n  ];\n\n  let Passwords = CynerioEvent_CL\n    | where title_s == 'Default Password' or title_s == 'Weak Password'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'Logon',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventMessage = details_s,\n        DvcIdType = 'Cynerio',\n        Dvc = tostring(asset_id_g),\n        DvcId = tostring(asset_id_g),\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'NA',\n        EventVendor = 'Cynerio',\n        EventSchema = 'Authentication',\n        EventSchemaVersion = '0.1.3',\n        SrcIpAddr = client_ip_s,\n        IpAddr = client_ip_s,\n        TargetIpAddr = dst_ip_s,\n        TargetPortNumber = toint(port_d),\n        LogonProtocol = service_s\n    | parse EventMessage with * \"User Name: \" ActorUserName \",\" *\n    | project-away\n        *_d, *_s, *_g;\n\n  Passwords",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cynerio",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "micha@cynerio.co"
+        },
+        "support": {
+          "name": "Cynerio",
+          "email": "support@cynerio.com",
+          "tier": "Partner",
+          "link": "https://cynerio.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "CynerioEvent_NetworkSession Data Parser with template",
+        "displayName": "CynerioEvent_NetworkSession Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName2'),'/',variables('parserVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName2'))]"
+      ],
+      "properties": {
+        "description": "CynerioEvent_NetworkSession Data Parser with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion2')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName2')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "CynerioEvent_NetworkSession",
+                "category": "Samples",
+                "functionAlias": "CynerioEvent_NetworkSession",
+                "query": "\nlet SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [\n    'Low', 'Informational',\n    'Medium', 'Low',\n    'High', 'Medium',\n    'Critical', 'High'\n  ];\n\n  let ScannerActivities = CynerioEvent_CL\n    | where title_s == 'Scanner Activity'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = 'Scanner Activity',\n        EventMessage = details_s,\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        Dvc = tostring(asset_id_g),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d)\n    | parse EventMessage with \"Scanner type: \" SrcAppName \" Source IP\" * \"Expliot: \" ThreatName \",\" *\n    | project-away\n        *_d, *_s, *_g;\n\n  let InternetBrowsings = CynerioEvent_CL\n    | where title_s == 'Internet Browsing'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventOriginalUid = uid_s,\n        EventMessage = details_s,\n        Dvc = tostring(asset_id_g),\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d),\n        DstFQDN = host_s,\n        FQDN = host_s,\n        SrcAppName = browser_s\n    | project-away\n        *_d, *_s, *_g;\n\n  let SuspiciousConnections = CynerioEvent_CL\n    | where title_s == 'Suspicious Connection'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventMessage = details_s,\n        DvcIdType = 'Cynerio',\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        Dvc = tostring(asset_id_g),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d),\n        NetworkApplicationProtocol = service_s,\n        DstDomainType = 'FQDN'\n    | parse EventMessage with * \"Suspicious Connection Entity: \" DstDomain \",\" *\n    | project-away\n        *_d, *_s, *_g;\n\n  let ExplotationAttempts = CynerioEvent_CL\n    | where title_s == 'Exploitation Attempt'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventMessage = details_s,\n        DvcIdType = 'Cynerio',\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        Dvc = tostring(asset_id_g),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d)\n    | parse EventMessage with * \"Expliot: \" ThreatName \",\" *\n    | project-away\n      *_d, *_s, *_g;\n\n  let Connections = CynerioEvent_CL\n    | where title_s in ('SSH Connection', 'Telnet Connection', 'RDP Connection', 'REXEC Connection')\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventMessage = details_s,\n        DvcIdType = 'Cynerio',\n        Dvc = tostring(asset_id_g),\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d)\n    | project-away\n      *_d, *_s, *_g;\n\n  union InternetBrowsings, ScannerActivities, SuspiciousConnections, ExplotationAttempts, Connections",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "CynerioEvent_NetworkSession"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId2'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName2')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName2'))]",
+                "contentId": "[variables('_parserContentId2')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion2')]",
+                "source": {
+                  "name": "Cynerio",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "micha@cynerio.co"
+                },
+                "support": {
+                  "name": "Cynerio",
+                  "email": "support@cynerio.com",
+                  "tier": "Partner",
+                  "link": "https://cynerio.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName2')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "CynerioEvent_NetworkSession",
+        "category": "Samples",
+        "functionAlias": "CynerioEvent_NetworkSession",
+        "query": "\nlet SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [\n    'Low', 'Informational',\n    'Medium', 'Low',\n    'High', 'Medium',\n    'Critical', 'High'\n  ];\n\n  let ScannerActivities = CynerioEvent_CL\n    | where title_s == 'Scanner Activity'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = 'Scanner Activity',\n        EventMessage = details_s,\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        Dvc = tostring(asset_id_g),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d)\n    | parse EventMessage with \"Scanner type: \" SrcAppName \" Source IP\" * \"Expliot: \" ThreatName \",\" *\n    | project-away\n        *_d, *_s, *_g;\n\n  let InternetBrowsings = CynerioEvent_CL\n    | where title_s == 'Internet Browsing'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventOriginalUid = uid_s,\n        EventMessage = details_s,\n        Dvc = tostring(asset_id_g),\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d),\n        DstFQDN = host_s,\n        FQDN = host_s,\n        SrcAppName = browser_s\n    | project-away\n        *_d, *_s, *_g;\n\n  let SuspiciousConnections = CynerioEvent_CL\n    | where title_s == 'Suspicious Connection'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventMessage = details_s,\n        DvcIdType = 'Cynerio',\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        Dvc = tostring(asset_id_g),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d),\n        NetworkApplicationProtocol = service_s,\n        DstDomainType = 'FQDN'\n    | parse EventMessage with * \"Suspicious Connection Entity: \" DstDomain \",\" *\n    | project-away\n        *_d, *_s, *_g;\n\n  let ExplotationAttempts = CynerioEvent_CL\n    | where title_s == 'Exploitation Attempt'\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventMessage = details_s,\n        DvcIdType = 'Cynerio',\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        Dvc = tostring(asset_id_g),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d)\n    | parse EventMessage with * \"Expliot: \" ThreatName \",\" *\n    | project-away\n      *_d, *_s, *_g;\n\n  let Connections = CynerioEvent_CL\n    | where title_s in ('SSH Connection', 'Telnet Connection', 'RDP Connection', 'REXEC Connection')\n    | extend EventOriginalSeverity = severity_s\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend\n        Type = 'CynerioEvent_CL',\n        EventStartTime = unixtime_seconds_todatetime(timestamp_d),\n        EventEndTime = unixtime_seconds_todatetime(timestamp_d),\n        EventOriginalUid = uid_s,\n        EventType = 'EndpointNetworkSession',\n        EventOriginalType = 'IDS',\n        EventOriginalSubType = title_s,\n        EventMessage = details_s,\n        DvcIdType = 'Cynerio',\n        Dvc = tostring(asset_id_g),\n        AdditonalFields = pack(\"AssetType\", asset_type_s),\n        DvcId = tostring(asset_id_g),\n        DvcIpAddr = asset_ip_s,\n        EventProduct = 'Cynerio',\n        EventCount = int(1),\n        EventResult = 'Success',\n        EventVendor = 'Cynerio',\n        EventSchema = 'NetworkSession',\n        EventSchemaVersion = '0.2.5',\n        SrcIpAddr = src_ip_s,\n        IpAddr = src_ip_s,\n        DstIpAddr = dst_ip_s,\n        NetworkProtocol = trans_s,\n        DstPortNumber = toint(port_d)\n    | project-away\n      *_d, *_s, *_g;\n\n  union InternetBrowsings, ScannerActivities, SuspiciousConnections, ExplotationAttempts, Connections",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId2'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId2')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName2'))]",
+        "contentId": "[variables('_parserContentId2')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion2')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cynerio",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "micha@cynerio.co"
+        },
+        "support": {
+          "name": "Cynerio",
+          "email": "support@cynerio.com",
+          "tier": "Partner",
+          "link": "https://cynerio.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cynerio",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "micha@cynerio.co"
+        },
+        "support": {
+          "name": "Cynerio",
+          "email": "support@cynerio.com",
+          "tier": "Partner",
+          "link": "https://cynerio.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId2')]",
+              "version": "[variables('parserVersion2')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-03-29",
+        "lastPublishDate": "2023-03-29",
+        "providers": [
+          "Cynerio"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Vulnerability Management",
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

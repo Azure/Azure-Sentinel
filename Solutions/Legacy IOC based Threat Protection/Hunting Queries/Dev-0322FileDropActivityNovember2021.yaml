@@ -1,0 +1,60 @@
+id: 5bf2d4d8-ea03-4673-aaf8-716a61446022
+name: Dev-0322 File Drop Activity November 2021
+description: |
+  'This hunting query looks for file creation events related to activity observed by Dev-0322 relating to compromise of systems running the ZOHO ManageEngine ADSelfService Plus software.
+    The files this query hunts for are dropped as part of the threat actors post exploitation activity. Some or all of the files may be dropped by the threat actor.
+    The risk score associated with each result is based on a number of factors, hosts with higher risk events should be investigated first.'
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+      - DeviceProcessEvents
+tactics:
+  - Persistence
+  - CommandAndControl
+relevantTechniques:
+  - T1078
+  - T1219
+query: |
+    // Look for the specific files dropped by threat actor
+    let files = dynamic(["C:\\ProgramData\\Microsoft\\Crypto\\RSA\\key.dat ", "c:\\windows\\temp\\ccc.exe"]);
+    DeviceFileEvents
+    | where FileName endswith "elrs.exe" or FolderPath has_any (files)
+    // Increase the risk score of command accessing file also seen
+    | join kind=leftouter (DeviceProcessEvents
+    | where ProcessCommandLine contains "cmd /c elrs.exe") on DeviceId
+    | extend RiskScore = iif(isnotempty(DeviceId1), 1.0, 0.5)
+    | project-reorder TimeGenerated, DeviceName, FileName, FolderPath, ProcessCommandLine, RiskScore, InitiatingProcessAccountName
+    // Increase risk score if recent alerts for the host
+    | join kind=leftouter (SecurityAlert
+    | where ProviderName =~ "MDATP"
+    | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+    | mv-expand todynamic(Entities)
+    | extend DeviceId = tostring(parse_json(Entities).MdatpDeviceId)
+    | where isnotempty(DeviceId)
+    // Higher risk score are for Defender alerts related to threat actor
+    | extend AlertRiskScore = iif(ThreatName has_any ("Zebracon", "Trojan:MSIL/Gacker.A!dha", "Backdoor:MSIL/Kokishell.A!dha"), 1.0, 0.5)
+    | project DeviceId, AlertRiskScore) on DeviceId
+    // Create agregate risk score
+    | extend RiskScore = RiskScore + AlertRiskScore
+    | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName, AccountCustomEntity = AccountName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: SHA256

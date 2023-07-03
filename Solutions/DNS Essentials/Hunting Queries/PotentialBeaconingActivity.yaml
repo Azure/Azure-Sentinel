@@ -1,0 +1,52 @@
+id: c4956c0b-4527-406c-b135-ef44002e1e70
+name: Potential beaconing activity (ASIM DNS Solution)
+description: |
+  'This query identifies beaconing patterns from DNS logs based on recurrent frequency patterns. Such a potential outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.'
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1095
+  - T1573
+  - T1008
+  - T1571
+  - T1219
+query: |
+  let querystarttime = 2d;
+  let queryendtime = 1d;
+  let TimeDeltaThreshold = 10;
+  let TotalEventsThreshold = 15;
+  let PercentBeaconThreshold = 80;
+  _Im_Dns(starttime=ago(querystarttime), endtime=ago(queryendtime))
+  | where isnotempty(SrcIpAddr)
+  | project TimeGenerated, SrcIpAddr, DnsQuery
+  | sort by SrcIpAddr asc,TimeGenerated asc
+  | serialize
+  | extend nextTimeGenerated = next(TimeGenerated, 1), nextSrcIpAddr = next(SrcIpAddr, 1)
+  | extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated)
+  | where SrcIpAddr == nextSrcIpAddr
+  //Whitelisting criteria/ threshold criteria
+  | where TimeDeltainSeconds > TimeDeltaThreshold
+  | project TimeGenerated, TimeDeltainSeconds, SrcIpAddr, DnsQuery
+  | summarize count(), make_list(TimeDeltainSeconds) by TimeDeltainSeconds, bin(TimeGenerated, 1h), SrcIpAddr, DnsQuery
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)
+  by bin(TimeGenerated, 1h), SrcIpAddr, DnsQuery
+  | where TotalEvents > TotalEventsThreshold
+  | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
+  | where BeaconPercent > PercentBeaconThreshold
+  | order by BeaconPercent
+  | take 50
+  | extend IP_0_Address = SrcIpAddr
+  | extend DNS_0_DomainName = DnsQuery
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DnsQuery
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr

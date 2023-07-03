@@ -1,0 +1,41 @@
+id: e472c490-4792-4f12-8b6b-6ab3e0404d35
+name: Squid data volume timeseries anomalies
+description: |
+  'Malware infections or data exfiltration activity often leads to anomalies in network data volume
+  this hunting query looks for anomalies in the volume of bytes traversing a squid proxy. Anomalies require further
+  investigation to determine cause. This query presumes the default squid log format is being used.'
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1071
+  - T1030
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let timeframe = 1h;
+  let TimeSeriesData =
+  Syslog
+  | where TimeGenerated between(starttime..endtime)
+  | where ProcessName contains "squid"
+  | extend URL = extract("(([A-Z]+ [a-z]{4,5}:\\/\\/)|[A-Z]+ )([^ :]*)",3,SyslogMessage),
+           SourceIP = extract("([0-9]+ )(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3}))",2,SyslogMessage),
+           Status = extract("(TCP_(([A-Z]+)(_[A-Z]+)*)|UDP_(([A-Z]+)(_[A-Z]+)*))",1,SyslogMessage),
+           HTTP_Status_Code = extract("(TCP_(([A-Z]+)(_[A-Z]+)*)|UDP_(([A-Z]+)(_[A-Z]+)*))/([0-9]{3})",8,SyslogMessage),
+           User = extract("(CONNECT |GET )([^ ]* )([^ ]+)",3,SyslogMessage),
+           RemotePort = extract("(CONNECT |GET )([^ ]*)(:)([0-9]*)",4,SyslogMessage),
+           Domain = extract("(([A-Z]+ [a-z]{4,5}:\\/\\/)|[A-Z]+ )([^ :\\/]*)",3,SyslogMessage),
+           Bytes = toint(extract("([A-Z]+\\/[0-9]{3} )([0-9]+)",2,SyslogMessage)),
+           contentType = extract("([a-z/]+$)",1,SyslogMessage)
+  | extend TLD = extract("\\.[a-z]*$",0,Domain)
+  | where isnotempty(Bytes)
+  | make-series TotalBytesSent=sum(Bytes) on TimeGenerated from startofday(starttime) to startofday(endtime) step timeframe by ProcessName;
+  TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent,3, -1, 'linefit')
+  | extend timestamp = TimeGenerated
+  | render timechart with (title="Squid Time Series anomalies")

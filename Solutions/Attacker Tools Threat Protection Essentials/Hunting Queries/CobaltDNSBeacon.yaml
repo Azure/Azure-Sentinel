@@ -1,0 +1,49 @@
+id: dde206fc-3f0b-4175-bb5d-42d2aae9d4c9
+name: Cobalt Strike DNS Beaconing
+description: |
+  'Cobalt Strike is a famous Pen Test tool that is used by pen testers as well as attackers alike To compromise an environment. 
+  The query tries to detect suspicious DNS queries known from Cobalt Strike beacons.
+  This is based out of sigma rules described here: https://github.com/Neo23x0/sigma/blob/master/rules/network/net_mal_dns_cobaltstrike.yml'
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+  - T1008
+query: |
+  let badNames = dynamic(["aaa.stage.", "post.1"]);
+  (union isfuzzy=true
+  (DnsEvents 
+  | where Name has_any (badNames)
+  | extend Domain = Name, SourceIp = ClientIP, RemoteIP = todynamic(IPAddresses)
+  | mvexpand RemoteIP
+  | extend RemoteIP = tostring(RemoteIP)),
+  (VMConnection
+  | where isnotempty(RemoteDnsCanonicalNames) 
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | where DNSName has_any (badNames)
+  | extend Domain = DNSName, RemoteIP = RemoteIp
+  ))
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Domain, SourceIp, RemoteIP, Computer
+  | extend timestamp = StartTimeUtc, HostName = split(Computer, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend IP_0_Address = RemoteIP
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP
+version: 1.0.1

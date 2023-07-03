@@ -40,6 +40,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWDnsQuery
   - connectorId: WindowsFirewall
     dataTypes:
       - WindowsFirewall      
@@ -101,8 +103,8 @@ query:  |
   ),
   (DeviceNetworkEvents
   | where RemoteUrl has_any (domains) or RemoteIP in (IPList) or InitiatingProcessSHA256 in (sha256Hashes)
-  | project TimeGenerated, ActionType, DeviceId, Computer = DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type
-  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP,  HostCustomEntity = Computer, AccountCustomEntity = InitiatingProcessAccountName
+  | project TimeGenerated, ActionType, DeviceId, Computer = DeviceName, InitiatingProcessSHA256, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, FileHashCustomEntity = InitiatingProcessSHA256,  HostCustomEntity = Computer, AccountCustomEntity = InitiatingProcessAccountName
   ),
   (WindowsFirewall
   | where SourceIP in (IPList) or DestinationIP in (IPList) 
@@ -114,14 +116,53 @@ query:  |
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
-  | where DestinationHost has_any (domains)  
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList) or DestinationHost has_any (domains) 
   | extend DNSName = DestinationHost 
   | extend IPCustomEntity = SourceHost
-  ), 
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallNetworkRule"
+  | where msg_s has_any (IPList)
+  | parse msg_s with Protocol " request from " SourceIP ":" SourcePortInt:int " to " TargetIP ":" TargetPortInt:int *
+  | parse kind=regex flags=U msg_s with * ". Action\\: " Action1a "\\."
+  | parse msg_s with * ". Policy: " Policy ". Rule Collection Group: " RuleCollectionGroup "." *
+  | parse msg_s with * " Rule Collection: "  RuleCollection ". Rule: " Rule 
+  | extend IPCustomEntity = SourceIP
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | where msg_s has_any (domains)
+  | parse msg_s with "DNS Request: " SourceIP ":" SourcePortInt:int " - " QueryID:int " " RequestType " " RequestClass " " hostname ". " protocol " " details
+  | extend
+      ResponseDuration = extract("[0-9]*.?[0-9]+s$", 0, msg_s),
+      SourcePort = tostring(SourcePortInt),
+      QueryID =  tostring(QueryID)
+  | extend IPCustomEntity = SourceIP
+  | project TimeGenerated,SourceIP,hostname,RequestType,ResponseDuration,details,msg_s
+  | order by TimeGenerated
+  ),
+  (AZFWApplicationRule
+  | where Fqdn has_any (domains) or Fqdn has_any (IPList)
+  | extend IPCustomEntity = SourceIp
+  ),
+  (AZFWDnsQuery
+  | where isnotempty(QueryName)
+  | where QueryName has_any (domains)
+  | extend DNSName = QueryName
+  | extend IPCustomEntity = SourceIp
+  ),
+  (AZFWNetworkRule
+  | where DestinationIp  has_any (IPList)  
+  | extend DestinationIP = DestinationIp 
+  | extend IPCustomEntity = SourceIp
+  ),
   (CommonSecurityLog
   | where FileHash in (sha256Hashes)
   | project TimeGenerated, Message, SourceUserID, FileHash, Type
-  | extend timestamp = TimeGenerated, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = FileHash, AccountCustomEntity = SourceUserID
+  | extend timestamp = TimeGenerated, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(FileHash), AccountCustomEntity = SourceUserID
   ),
   (imFileEvent
   | where TargetFileSHA256 has_any (sha256Hashes)
@@ -132,12 +173,12 @@ query:  |
   (DeviceFileEvents
   | where SHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = InitiatingProcessSHA256,  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
   ),
   (DeviceImageLoadEvents
   | where SHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = InitiatingProcessSHA256,  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
   ),
   (Event
   | where Source =~ "Microsoft-Windows-Sysmon"
@@ -146,11 +187,12 @@ query:  |
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"])
   | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
-  | extend Hashes = column_ifexists("Hashes", ""), CommandLine = column_ifexists("CommandLine", "")
-  | where (Hashes has_any (sha256Hashes) )  
+  | extend Hashes = column_ifexists("Hashes", dynamic(["", ""])), CommandLine = column_ifexists("CommandLine", "")
+  | mv-expand Hashes
+  | where Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes) 
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, FileHashCustomEntity = Hashes
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, FileHashCustomEntity = tostring(Hashes[1]), AlgorithmCustomEntity = tostring(Hashes[0])
   )
   )
 entityMappings:
@@ -172,7 +214,7 @@ entityMappings:
         columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:
