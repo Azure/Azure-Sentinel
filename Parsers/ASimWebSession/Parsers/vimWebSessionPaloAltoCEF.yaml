@@ -61,8 +61,10 @@ ParserQuery: |
     disabled:bool=false
   )
   {
-      let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-      let ip_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let src_or_any                = set_union(
+        srcipaddr_has_any_prefix,
+        ipaddr_has_any_prefix
+      ); 
       let EventLookup=datatable(DeviceAction:string, DvcAction:string,EventResult:string,HttpStatusCode:string)
       [
         "alert", "Allow", "Success","200",
@@ -106,11 +108,13 @@ ParserQuery: |
       | where (array_length(url_has_any) == 0 or RequestURL has_any (remove_protocol_from_list(url_has_any)))
       | where (array_length(httpuseragent_has_any) == 0 or RequestClientApplication has_any (httpuseragent_has_any))
       | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any)
+      | extend temp_DstMatch = has_any_ipv4_prefix(DestinationIP,ipaddr_has_any_prefix)
       | extend ASimMatchingIpAddr = case(
-        array_length(src_or_any) == 0, "-",
-        temp_SrcMatch , "Both",
-        temp_SrcMatch, "SrcIpAddr",
-        "No match")
+          array_length(src_or_any) == 0, "-",
+          temp_DstMatch and temp_SrcMatch, "Both",
+          temp_SrcMatch , "SrcIpAddr",
+          temp_DstMatch, "DstIpAddr",
+          "No match") 
       | where ASimMatchingIpAddr != "No match" 
       | project-away temp_*
       | extend EventResultDetails     = "NA"
