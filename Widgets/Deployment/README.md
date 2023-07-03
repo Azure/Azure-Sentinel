@@ -46,7 +46,7 @@ For each widget, configure the secrets and other parameters it requires using th
 - [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsAbuseIPDBARM). You will get the form shown below.
 - Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
 - Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
-- Enter the API key defined in your AbuseIPDB account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterAbubeIPDB) to a free AbuseIPDB account to get an API key.
+- Enter the API key defined in your AbuseIPDB account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterAbuseIPDB) to a free AbuseIPDB account to get an API key.
 - Press on the “Review + create” button and deploy the template – this should add a secret named “AbuseIPDB” to your key vault.
 
 #### Configure Anomali
