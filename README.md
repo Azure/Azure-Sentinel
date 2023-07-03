@@ -1,157 +1,764 @@
+# Commvault -- Sentinel Integration
+This Sentinel integration enables Commvault users to ingest alerts and other data into their Sentinel instance. With Analytic Rules, Sentinel can automatically create Sentinel incidents from incoming Commvault syslogs. 
 
-# Microsoft Sentinel and Microsoft 365 Defender 
-Welcome to the unified Microsoft Sentinel and Microsoft 365 Defender repository! This repository contains out of the box detections, exploration queries, hunting queries, workbooks, playbooks and much more to help you get ramped up with Microsoft Sentinel and provide you security content to secure your environment and hunt for threats. The hunting queries also include Microsoft 365 Defender hunting queries for advanced hunting scenarios in both Microsoft 365 Defender and Microsoft Sentinel. You can also submit to [issues](https://github.com/Azure/Azure-Sentinel/issues) for any samples or resources you would like to see here as you onboard to Microsoft Sentinel. This repository welcomes contributions and refer to this repository's [wiki](https://aka.ms/threathunters) to get started. For questions and feedback, please contact [AzureSentinel@microsoft.com](AzureSentinel@microsoft.com) 
+### Key Features
+- Using Azure KeyVault, Commvault access tokens are automatically rotated, providing enhanced security. 
+- Perform automated actions such as disabling IDP, specific users, or data aging on your Commvault/Metallic environment from inside Sentinel.
 
-# Resources
-* [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2073774&clcid=0x409)
-* [Microsoft 365 Defender documentation](https://docs.microsoft.com/microsoft-365/security/defender/microsoft-365-defender?view=o365-worldwide)
-* [Security Community Webinars](https://aka.ms/securitywebinars)
-* [Getting started with GitHub](https://help.github.com/en#dotcom)
+## Prerequisites
+- Administrative access to your Commvault/Metallic environment.
+- Administrative access to your Azure Resource Group and Subscription.
+- An Azure Sentinel instance in the aforementioned Azure Resource Group.
+- An Azure Log Analytic Workspace in the aformentioned Azure Resource Group.
+- A properly setup Syslog Forwarder VM injesting Commvault/Metallic alerts: [Azure Documentation](https://learn.microsoft.com/en-us/azure/sentinel/connect-syslog)
 
-We value your feedback. Here are some channels to help surface your questions or feedback:
-1. General product specific Q&A for SIEM and SOAR - Join in the [Microsoft Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/microsoft-sentinel/bd-p/MicrosoftSentinel)
-2. General product specific Q&A for XDR - Join in the [Microsoft 365 Defender Tech Community conversations](https://techcommunity.microsoft.com/t5/microsoft-365-defender/bd-p/MicrosoftThreatProtection)
-3. Product specific feature requests - Upvote or post new on [Microsoft Sentinel feedback forums](https://feedback.azure.com/d365community/forum/37638d17-0625-ec11-b6e6-000d3a4f07b8)
-4. Report product or contribution bugs - File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
-5. General feedback on community and contribution process - File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
-
-
-# Contributing
-
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.microsoft.com.
-
-## Add in your new or updated contributions to GitHub
-Note: If you are a first time contributor to this repository, [General GitHub Fork the repo guidance](https://docs.github.com/github/getting-started-with-github/fork-a-repo) before cloning or [Specific steps for the Sentinel repo](https://github.com/Azure/Azure-Sentinel/blob/master/GettingStarted.md). 
-
-## General Steps
-Brand new or update to a contribution via these methods:
-* Submit for review directly on GitHub website 
-    * Browse to the folder you want to upload your file to
-    * Choose Upload Files and browse to your file. 
-    * You will be required to create your own branch and then submit the Pull Request for review.
-* Use [GitHub Desktop](https://help.github.com/en/desktop/getting-started-with-github-desktop) or [Visual Studio](https://visualstudio.microsoft.com/vs/) or [VSCode](https://code.visualstudio.com/?wt.mc_id=DX_841432)
-    * [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo)  
-    * [Clone the repo](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository)
-    * [Create your own branch](https://help.github.com/en/desktop/contributing-to-projects/creating-a-branch-for-your-work)
-    * Do your additions/updates in GitHub Desktop
-    * Be sure to merge master back to your branch before you push. 
-    * [Push your changes to GitHub](https://help.github.com/en/github/using-git/pushing-commits-to-a-remote-repository)
-
-## Pull Request
-* After you push your changes, you will need to submit the [Pull Request (PR)](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests)
-* Details about the Proposed Changes are required, be sure to include a minimal level of detail so a review can clearly understand the reason for the change and what he change is related to in the code.
-* After submission, check the [Pull Request](https://github.com/Azure/Azure-Sentinel/pulls) for comments
-* Make changes as suggested and update your branch or explain why no change is needed. Resolve the comment when done.
-
-### Pull Request Detection Template Structure Validation Check
-As part of the PR checks we run a structure validation to make sure all required parts of the YAML structure are included.  For Detections, there is a new section that must be included.  See the [contribution guidelines](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries#now-onto-the-how) for more information.  If this section or any other required section is not included, then a validation error will occur similar to the below.
-The example is specifically if the YAML is missing the entityMappings section:
-
-```
-A total of 1 test files matched the specified pattern.
-[xUnit.net 00:00:00.95]     Kqlvalidations.Tests.DetectionTemplateStructureValidationTests.Validate_DetectionTemplates_HaveValidTemplateStructure(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [FAIL]
-  X Kqlvalidations.Tests.DetectionTemplateStructureValidationTests.Validate_DetectionTemplates_HaveValidTemplateStructure(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [104ms]
-  Error Message:
-   Expected object to be <null>, but found System.ComponentModel.DataAnnotations.ValidationException with message "An old mapping for entity 'AccountCustomEntity' does not have a matching new mapping entry."
-```
-
-### Pull Request KQL Validation Check
-As part of the PR checks we run a syntax validation of the KQL queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
-![Azurepipeline](.github/Media/Azurepipeline.png)
-In the pipeline you can see which test failed and what is the cause:
-![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
-
-Example error message:
-```
-A total of 1 test files matched the specified pattern.
-[xUnit.net 00:00:01.81]     Kqlvalidations.Tests.KqlValidationTests.Validate_DetectionQueries_HaveValidKql(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [FAIL]
-  X Kqlvalidations.Tests.KqlValidationTests.Validate_DetectionQueries_HaveValidKql(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [21ms]
-  Error Message:
-   Template Id:fa0ab69c-7124-4f62-acdd-61017cf6ce89 is not valid Errors:The name 'SymantecEndpointProtection' does not refer to any known table, tabular variable or function., Code: 'KS204', Severity: 'Error', Location: '67..93',The name 'SymantecEndpointProtection' does not refer to any known table, tabular variable or function., Code: 'KS204', Severity: 'Error', Location: '289..315'
-```
-If you are using custom logs table (a table which is not defined on all workspaces by default) you should verify
-your table schema is defined in json file in the folder *Azure-Sentinel\\.script\tests\KqlvalidationsTests\CustomTables*
-
-**Example for table tablexyz.json**
-```json
-{
-  "Name": "tablexyz",
-  "Properties": [
-    {
-      "Name": "SomeDateTimeColumn",
-      "Type": "DateTime"
-    },
-    {
-      "Name": "SomeStringColumn",
-      "Type": "String"
-    },
-    {
-      "Name": "SomeDynamicColumn",
-      "Type": "Dynamic"
-    }
-  ]
-}
-```
-### Run KQL Validation Locally
-In order to run the KQL validation before submitting Pull Request in you local machine:
-* You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
-* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\KqlvalidationsTests\`
-* Execute `dotnet test`
-
-Example of output (in Ubuntu):
-```
-Welcome to .NET Core 3.1!
----------------------
-SDK Version: 3.1.403
-
-Telemetry
----------
-The .NET Core tools collect usage data in order to help us improve your experience. The data is anonymous. It is collected by Microsoft and shared with the community. You can opt-out of telemetry by setting the DOTNET_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your favorite shell.
-
-Read more about .NET Core CLI Tools telemetry: https://aka.ms/dotnet-cli-telemetry
-
-----------------
-Explore documentation: https://aka.ms/dotnet-docs
-Report issues and find source on GitHub: https://github.com/dotnet/core
-Find out what's new: https://aka.ms/dotnet-whats-new
-Learn about the installed HTTPS developer cert: https://aka.ms/aspnet-core-https
-Use 'dotnet --help' to see available commands or visit: https://aka.ms/dotnet-cli-docs
-Write your first app: https://aka.ms/first-net-core-app
---------------------------------------------------------------------------------------
-Test run for /mnt/c/git/Azure-Sentinel/.script/tests/KqlvalidationsTests/bin/Debug/netcoreapp3.1/Kqlvalidations.Tests.dll(.NETCoreApp,Version=v3.1)
-Microsoft (R) Test Execution Command Line Tool Version 16.7.0
-Copyright (c) Microsoft Corporation.  All rights reserved.
-
-Starting test execution, please wait...
-
-A total of 1 test files matched the specified pattern.
-
-Test Run Successful.
-Total tests: 171
-     Passed: 171
- Total time: 25.7973 Seconds
-```
-
-### Detection schema validation tests
-Similarly to KQL Validation, there is an automatic validation of the schema of a detection.
-The schema validation includes the detection's frequency and period, the detection's trigger type and threshold, validity of connectors Ids ([valid connectors Ids list](https://github.com/Azure/Azure-Sentinel/blob/master/.script/tests/detectionTemplateSchemaValidation/ValidConnectorIds.json)), etc.
-A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
-
-### Run Detection Schema Validation Locally
-In order to run the KQL validation before submitting Pull Request in you local machine:
-* You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
-* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateSchemaValidation\`
-* Execute `dotnet test`
+## Inventory of Required Assets
+The following Azure assets need to all be created in order for this integration to function properly. In addition to these assets, proper permissions need to be granted. When following the installation instructions, please use the same asset names to ensure compatibility.
+### Automation Account
+- **Commvault-Automation-Account:** This is where the runbooks are stored.
+### Runbooks
+All runbooks are stored in the Automation Account *Commvault-Automation-Account*.
+- **Commvault_Cycle_Token:** Used in the the *CommvaultTokenCycle* Logic App to execute the API calls that generate a new Commvault/Metallic access token.
+- **Commvault_Disable_Data_Aging:** Used in the *Commvault-Logic-App* Logic App to execute the API calls that disable data aging for a specific client. 
+- **Commvault_Disable_IDP:** Used in the *Commvault-Logic-App* Logic App to execute the API calls that disable the IDP in your environment.
+- **Commvault_Disable_User:** Used in the *Commvault-Logic-App* Logic App to execute the API calls that disable a specific user given their email address.
+### Logic Apps
+- **Commvault-Logic-App:** This Logic App (also referred to as a *Playbook*) executes when called upon by an Automation Rule. Accessing the KeyVault to retrieve various credentials, it executes a specific runbook depending on the use case. 
+- **CommvaultTokenCycle:** This Logic App (also referred to as a *Playbook*) executes periodically to generate a new Commvault/Metallic access token and securely overwrites the old access token in your KeyVault.
+### KeyVaults
+- **Commvault-Integration-KV:** This KeyVault stores all required credentials as *secrets*.
+### KeyVault Secrets
+All of these secrets are stored in the *Commvault-IntegrationKV* KeyVault. For the first time setup, their values need to be manually retrieved.
+- **access-token:** The access token for Commvault/Metallic.
+- **environment-endpoint-url:** The URL of your Commvault/Metallic endpoint.
+- **keyvault-url:** The URL of your Azure KeyVault. 
+- **client-id:** The ID of the Azure App Registration client.
+- **tenant-id:** The ID of your Azure Tenant.
+- **secret-id:** The ID of your Azure App Registration client secret. 
+- **keyvaultsecret:** The value of your Azure App Registration client secret. 
+### App Registrations
+- **Commvault_Token_Cycle_App:** An Azure Active Directory App Registration used for authorized KeyVault access. 
+### Sentinel Analytic Rules
+Each of these Analytic Rules run on a continuous basis and are querying for the manually triggered Sentinel incident. Once it discovers a specific incident, a new incident is created that triggers the corresponding Automation Rule. 
+- **IDP Compromised:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a compromised Commvault/Metallic IDP. 
+- **User Compromised:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a compromised Commvault/Metallic user. 
+- **Data Aging:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a request to disable data aging on a specific Commvault/Metallic client. 
 
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+## Installation
+### Syslog Data Connector
+In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog" Data Connector. 
+### Create the Runbooks
+* Go to Automation Accounts -> Create 
+  * Basics:
+    * Select the correct subscription and resource group 
+    * Name it “Commvault-Automation-Account" 
+  * Click “Create” 
+* Go to “Commvault-Automation-Account" ->  Runbooks (under “Process Automation”) -> Create a Runbook 
+  * Name =  
+    * Commvault_Disable_IDP
+  * Runbook Type =  
+    * Powershell 
+  * Runtime Version =  
+    * 5.1 
+  * Click “Create” 
+  * Edit Powershell Runbook =
+    * Use the content in this file: **Runbooks/Commvault_Disable_IDP.ps1**
+    * Click "Publish"
+  * Click "Save"
+* Go to “Commvault-Automation-Account" ->  Runbooks (under “Process Automation”) -> Create a Runbook 
+  * Name = 
+    * Commvault_Disable_User
+  * Runbook Type = 
+    * Powershell
+  * Runtime Version = 
+    * 5.1
+  * Click "Create"
+  * Edit Powershell Runbook = 
+    * Use the content in this file: **Runbooks/Commvault_Disable_Users.ps1**
+    * Click "Publish"
+  * Click "Save"
+* Go to “Commvault-Automation-Account" ->  Runbooks (under “Process Automation”) -> Create a Runbook 
+  * Name = 
+    * Commvault_Disable_Data_Aging
+  * Runbook Type =
+    * Powershell
+  * Runtime Version = 
+    * 5.1
+  * Click "Create"
+  * Edit Powershell Runbook = 
+    * Use the content in this file: **Runbooks/Commvault_Disable_Data_Aging.ps1**
+    * Click "Publish"
+  * Click "Save"
+### Initialize the Logic App (*Playbook*):
+* Go to "All Resources" -> Create -> Integration -> Logic App -> Add
+  * Basics:
+    * Select the correct subscription and resource group
+    * Logic App Name:
+      * Commvault-Logic-App
+    * Plan Type:
+      * Consumption
+  * Click "Review + Create"
+  * Click "Create"
+* Go to "Commvault-Logic-App":
+  * Under "Settings", click "Identity"
+  * In the "System assigned" tab, turns the "Status" to "On" then click "Save"
+    * If prompted for confirmation, click "Yes"
+* Go to "Logic App Designer" (under "Development Tools")
+  * Under "Templates", click "Blank Logic App"
+  * In the search bar, search for "Sentinel Incident"
+  * Under "Triggers", select the "Microsoft Sentinel Incident (Preview)" search result
+  * Select "Connect With Managed Identity"
+    * Connection Name:
+      * Commvault-Managed-Identity-Connection
+    * Managed Identity:
+      * Use the default option of "System-assigned managed identity"
+    * Click "Create"
+  * Click "Save" (Done with this for now. We will come back later)
+### Create The KeyVault:
+* Go to KeyVault -> Create
+  * Basics:
+    * Select the correct subscription and resource group
+    * KeyVault name = 
+      * Commvault-Integration-KV
+  * Access Configuration:
+    * Permission Model = 
+      * Vault Access Policy
+    * Go to "Access Policies" -> "Create"
+      * Under "Permissions" -> "Secret Permissions"
+        * Select "Get", "List", and "Set"
+        * Click "Next"
+      * Under "Principal"
+        * Search for "Commvault-Logic-App"
+          * Select "Commvault-Logic-App from the search results
+        * Click "Next"
+      * Under "Application (Optional)"
+        * Do nothing here except click "Next"
+      * Under "Review + Create"
+        * Click "Create"
+  * Click "Review + Create"
+  * Click "Create"
+### Create the KeyVault Secrets:
+* Go to KeyVault -> "Commvault-Integration-KV" -> Secrets (Under "Objects") -> "Generate/Import"
+  * Upload Options:
+    * Manual
+  * Name: 
+    * access-token
+  * Secret Value:
+    * (Your Commvault/Metallic access token)
+  * Enabled:
+    * Yes
+  * Click "Create"
+* Go to KeyVault -> "Commvault-Integration-KV" -> Secrets (Under "Objects") -> "Generate/Import"
+  * Upload Options: 
+    * Manual
+  * Name: 
+    * environment-endpoint-url
+  * Secret Value:
+    * (Your Commvault/Metallic endpoint's URL)
+  * Enabled:
+    * Yes
+  * Click "Create"
+### Setup the Managed Identity
+* Go to Automation Accounts -> "Commvault-Sandbox-Automation-Account" -> "Access Control (IAM)" -> "Add" -> "Add Role Assignment
+  * In "Job function roles" under "role":
+    * Click on "Automation Contributor" so that it is highlighted in grey
+  * Click "Next"
+  * Assign Access To:
+    * Select "Managed Identity"
+  * Members:
+    * Select "Select Members"
+      * Select the correct subscription
+      * For Managed Identity, select "Logic App"
+      * Select "Commvault-Logic-App" form the list
+      * Click the blue "select" button
+  * Go to the "Review + Assign" tab
+    * Click the blue "Review + Assign" button
+* Go to your resource group -> "Access Control (IAM)" -> "Add" -> "Add Role Assignment"
+  * In "Job Function Roles" under "Role"
+    * Find "Microsoft Sentinel Automation Contributor" and click it so that it is highlighted in grey
+  * Under the "Members" tab
+    * Assign access to: 
+      * Managed Identity
+    * Click "+ Select Members"
+      * Select the correct subscription
+      * Managed Identity:
+        * Logic App
+      * From the list, select "Commvault-Logic-App"
+      * Click the blue "Select" button
+  * Under "Review + Assign" tab
+    * Click the blue "Review + Assign" button
+* Go to "Logic Apps" -> "Commvault-Logic-App" -> "Identity" (under "Settings") -> "System Assigned" tab -> "Azure Role Assignments"
+  * Add Role Assignment
+    * Scope: 
+      * KeyVault
+    * Resource:
+      * Commvault-Integration-KV
+    * Role:
+      * KeyVault Secrets Officer
+    * Click the blue "Save" button
+### Complete the Logic App
+* Go to "Logic Apps" -> "Commvault-Logic-App" -> "Logic App Designer" (under "Development Tools")
+  * Click "+ New Step"
+    * Secret "Get Secret"
+    * From the results in the "Actions" tab, click "Get Secret Azure Key Vault"
+      * Connection Name: 
+        * Commvault-KeyVault-Connection
+      * Authentication Type:
+        * Managed Identity
+      * Vault Name: 
+        * Commvault-Integration-KV
+      * Click "Create"
+      * Name of Secret:
+        * access-token
+    * In this Action Box, click the three dots in the top right corner
+      * Rename:
+        * Access Token
+  * Click "+ New Step"
+    * Search "Get Secret"
+    * From the results in the "Actions" tab, click "Get Secret Azure Key Vault"
+      * Name of Secret:
+        * enviornment-endpoint-url
+    * In this Action Box, click the three dots in the top right corner
+      * Rename:
+        * Enviornment Endpoint URL
+  * Click "+ New Step"
+    * Switch to the "Built-in" tab (located under the search bar)
+    * Under "Actions", click "Condition Control"
+    * Rename this grey Action Box (currently named "Condition") to "Disable Data Aging" by clicking the three dots (located in the top right corner of the Action Box) and then clicking "Rename"
+    * In the grey "Disable Data Aging" Action Box, click in the box where it says "Chose a value". A search window will appear
+      * Search for "Incident Description" and select "Incident Description" from the search results
+    * Click on where it says "is equal to" and select "contains"
+    * Click where it says "Chose a value" and type "Data Compromised"
+  * In the green "True" Action Box, click "Add an action"
+    * In the search box, type "Create Job"
+      * In the "Actions" tab, select "Create job"
+    * Select the correct subscription and resource group
+    * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
+    * Under "Wait for job", select "Yes"
+    * Click where it says "Add new parameter"
+      * Select "Runbook name"
+      * Click in the whitespace under the "Create Job" Action Box to confirm the selection
+    * Click "Add new parameter"
+      * Select "Runbook Parameter apiAccessToken"
+      * Click in the whitespace outside of the Action Box to confirm the selection
+    * In the "Runbook Parameter apiAccessToken" box, select "value" under "AccessToken"
+    * Click in the whitespace outside of the Action Box to confirm the selection
+    * Click "Add new parameter"
+      * Select "Runbook Parameter EnvironmentEndpointURL"
+    * In the "Runbook Parameter EnvironmentEndpointURL" box, select "value" under "Environment Endpoint URL"
+    * Click in the whitespace outside of the Action Box to confirm the selection
+    * For "Runbook Name", select "Commvault_Disable_Data_Aging" from the dropdown menu
+    * Click the "Change Connection" blue text
+      * Switch the "Authentication Type" to "Logic Apps Managed Identity"
+      * Name the connection "Commvault-Automation-Connection"
+      * Click "Create"
+    * In this Action Box (currently named "Create Job"), rename it to "Disable Data Aging Job" by click in the three dots in the top right corner of this Action Box, then clicking "Rename"
+  * Still in the green "True" Action Box, click "Add an Action"
+    * In the search bar, type "Job Output"
+      * In the "Actions" tab, select "Get Job Output" search result
+    * Select the correct subscription and resource group
+    * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
+    * For the Job ID, click in the box that says "GUID for the ID of the run"
+      * In the pop-up window, under "Disable Data Aging Job", click "Job ID"
+      * Click in the whitespace under the "Get Job Output" Action Box to confirm the selection
+    * Click the "Change Connection blue text
+      * Select "Commvault-Automation-Connection"
+    * In this Action Box (currently named "Get job output"), rename it to be "Disable Data Aging Job Output" by clicking the three dots in the top right corner of this Action Box, then clicking "Rename"
+  * Collapse the grey "Disable Data Aging" Action Box by clicking the name of the box ("Disable Data Aging")
+  * Hover your mouse cursor on the downwards arrow between "Environment Endpoint URL" and "Disable Data Aging"
+    * Click on the blue plus sign that appears
+    * Click on "add parallel branch"
+      * A new grey Action Box appears
+  * In the new grey box
+    * Switch to the "Built-in" tab (located under the search bar)
+    * Under "Actions", click "Condition Control"
+    * Rename this grey Action Box (currently named "Condition") to "Disable IDP" by clicking on the three dots (located in the top right corner of the action box) and then clicking "Rename"
+    * In the grey "Disable IDP" Action Box, click in the box where it says "Choose a value". A search window will appear
+      * Search for "Incident Description" and select "Incident Description" from the search results
+      * Click in the whitespace outside of the Action Box to confirm the selection
+    * Click on where it says "is equal to" and select "contains"
+    * Click where it says "Choose a value" and type "IDP Compromised"
+  * In the green "True" Action Box, click "Add an Action"
+    * In the search box, type "Create Job"
+      * In the "Actions" tab, select "Create job"
+    * Select the correct subscription and resource group
+    * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
+    * Under "Wait for Job", select "Yes"
+    * Click where it says "Add new parameter"
+      * Select "Runbook Name"
+      * Click in the whitespace outside of the Action Box to confirm the selection
+    * For "Runbook Name", select "Commvault_Disable_IDP" from the dropdown menu
+    * Click the "Change Connection" blue text
+      * Select "Commvault-Automation-Connection"
+    * In this Action Box (currently named "Create Job"), rename it to "Disable IDP Job" by clicking the three dots in the top right corner of this Action Box, then clicking "Rename"
+  * Still in the green "True" Action Box, click "Add an Action"
+    * In the search bar, type "Job Output"
+      * In the "Actions" tab, select "Get Job Output" search result
+    * Search the correct subscription and resource group
+    * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
+    * For Job ID, click in the box that says "GUID for the ID of the run"
+      * In the pop-up window, under "Disable IDP Job, click "Job ID"
+        * Click in the whitespace under "Get Job Output" Action Box to confirm the selection
+      * Click the "Change Connection" blue text
+        * Select "Commvault-Automation-Connection"
+      * In this Action Box (currently named "Get Job Output"), rename it to be "Disable IDP Job Output" by clicking the three dots in the top right corner of this Action Box, then clicking "Rename"
+    * Collapse the grey "Disable IDP" Action Box by clicking the name of the box ("Disable IDP")
+    * Hover your mouse cursor on the downwards arrow below "Environment Endpoint URL"
+      * Click on the blue plus sign that appears
+      * Click on "add parallel branch"
+        * A new grey Action Box appears
+    * In the new grey Action Box
+      * Switch to the "Built-In" tab (located under the search bar)
+      * Under "Actions", click "Condition Control"
+      * Rename this grey Action Box (currently named "Condition") to "Disable User" by clicking on the three dots (located in the top right corner of the Action Box) and then clicking "Rename"
+      * In the grey "Disable User" action box, click in the box where it says "Choose a value". A search window will appear
+        * Search for "Incident Description" and select "Incident Description" from the search results
+        * Click in the whitespace outside of the Action Box to confirm the selection
+    * In the green "True" Action Box, click "Add an action"
+      * In the search box, type "Create Job"
+        * In the "Actions" tab, select "Create job"
+      * Select the correct subscription and resource group
+      * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
+      * Under "Wait for Job", select "Yes"
+      * Click where it says "Add new parameter"
+        * Select "Runbook Name"
+        * Click in the whitespace outside of the Action Box to confirm the selection
+      * For "Runbook Name", select "Commvault_Disable_User" from the dropdown menu
+      * Click the "Change Connection" blue text
+        * Select "Commvault-Automation-Connection"
+      * In this Action Box (currently named “Create Job”), rename it to “Disable User Job” by clicking the three dots in the top right corner of this Action Box, then clicking “Rename” 
+    * Still in the green “True” Action Box, click “Add an Action” 
+      * In the search bar, type “Job Output” 
+        * In the “Actions” tab, select “Get Job Output” search result 
+      * Select the correct subscription and resource group 
+      * Under “Automation Account”, select “Commvault-Automation-Account" from the dropdown menu
+      * For Job ID, click in the box that says “GUID for the ID of the run” 
+        * In the pop-up window, under “Disable IDP Job”, click “Job ID” 
+        * Click in the whitespace under the “Get Job Output” Action Box to confirm the selection 
+      * Click the “Change Connection” blue text 
+        * Select “Commvault-Automation-Connection" 
+      * In this Action Box (currently named “Get job output”), rename it to “Disable User Job Output” by clicking the three dots in the top right corner of this Action Box, then clicking “Rename” 
+    * Click “Save” 
+### Create the Analytic Rules:
+* Go to Sentinel -> (The name of your Sentinel instance) -> Analytics (located under “Configuration”) -> Create -> Scheduled Query Rule 
+  * General: 
+    * Name: 
+      * IDP Alert
+    * Description:
+      * IDP Compromised
+  * Set Rule Logic:
+    * Rule Query:
+      SecurityIncident  
+      | where Title has "Cvlt Alert"   
+      and Description == "IDP Compromised"   
+      and Status has "New" 
+    * Run Query Every:
+      * 5 minutes
+    * Lookup data from the last:
+      * 5 minutes
+  * Incident Settings:
+    * Alert Grouping:
+      * Enabled
+  * Review and Create:
+    * Create
+* Go to Sentinel -> (The name of your Sentinel instance) -> Analytics (located under “Configuration”) -> Create -> Scheduled Query Rule 
+  * General: 
+    * Name: 
+      * Data Alert
+    * Description: 
+      * Data Compromised
+  * Set Rule Logic: 
+    * Rule Query: 
+      SecurityIncident  
+      | where Title has "Cvlt Alert" and Description has "Client" and Description has "Compromised" and Status has "New" 
+      | extend extracted_word = extract("Client\\s(.*?)\\sCompromised", 1, Description) 
+      | project TimeGenerated, 
+        Title, 
+        Description, 
+        Status, 
+        CustomDetails = extracted_word
+    * Alert Details:
+      * Alert Name Format: 
+        * User Alert
+      * Alert Description Format:
+      * {{Custom Details}}
+    * Run Query Every: 
+      * 5 minutes
+    * Lookup data from the last:
+      * 5 minutes
+  * Incident Settings: 
+    * Alert Grouping: 
+      * Enabled
+  * Review and Create:
+    * Create
+* Go to Sentinel -> (The name of your Sentinel instance) -> Analytics (located under “Configuration”) -> Create -> Scheduled Query Rule 
+  * General:
+    * Name: 
+      * User Alert
+    * Description: 
+      * User Compromised
+  * Set Rule Logic:
+    * Rule Query:
+      SecurityIncident  
+      | where Title has "Cvlt Alert" and Description has "User" and Description has "Compromised" and Status has "New" 
+      | extend extracted_word = extract("User\\s(.*?)\\sCompromised", 1, Description) 
+      | project TimeGenerated, 
+        Title, 
+        Description, 
+        Status, 
+        CustomDetails = extracted_word 
+    * Alert Details:
+      * Alert Format:
+        * User Alert
+      * Alert Description Format:
+        * {{CustomDetails}}
+    * Run Query Every:
+      * 5 minutes
+    * Lookup data from the last:
+      * 5 minutes
+  * Incident Settings:
+    * Alert Grouping:
+      * Enabled
+  * Review and Create
+    * Create
+### Create The Automation Rules
+* Go to Sentinel -> (The name of your Sentinel instance) -> Automation (located under “Configuration”) -> Create -> Automation Rule 
+  * Automation Rule Name: 
+    * Commvault-Disable-Data-Aging-Rule
+  * Trigger: 
+    * When incident is created
+  * Conditions: 
+    * If incident provider:
+      * Equals
+      * Microsoft Sentinel
+    * Analytic Rule Name: 
+      * Contains
+      * Data Alert
+  * In the box in the "Actions" section, select "Change Status"
+  * In the box below "Change Status" in the "Actions" section, select "Closed"
+  * In the box below that, select "True Positive - Suspicious Activity"
+  * At the bottom of the "Actions" section, click "+ Add Action"
+  * As an owner of the resource group, click the blue "Manage Playbook Permissions" text
+    * Select your resource group
+    * Click "Apply"
+  * Click the box below "Run Playbook" in the "Actions" section
+    * Select "Commvault-Logic-App"
+  * Order: 
+    * 1
+  * Click "Apply"
+* Go to Sentinel -> (The name of your Sentinel instance) -> Automation (located under “Configuration”) -> Create -> Automation Rule 
+  * Automation Rule Name: 
+    * Commvault-Disable-IDP-Automation-Rule
+  * Trigger:
+    * When incident is created
+  * Conditions: 
+    * If incident provider: 
+      * Equals 
+      * Microsoft Sentinel 
+    * Analytic Rule Name: 
+      * Contains 
+      * IDP Alert
+  * In the box in the "Actions" section, select "Change Status"
+  * In the box below "Change Status" in the "Actions" section, select "Closed"
+  * In the box below that, select "True Positive - Suspicious Activity"
+  * At the bottom of the "Actions" section, click "+ Add Action"
+  * Click the box below "Run Playbook" in the "Actions" section
+    * Select "Commvault-Logic-App"
+  * Order:
+    * 2
+  * Click "Apply"
+* Go to Sentinel -> (The name of your Sentinel instance) -> Automation (located under “Configuration”) -> Create -> Automation Rule 
+  * Automation Rule Name: 
+    * Commvault-Disable-User-Automation-Rule
+  * Trigger:
+    * When incident is created
+  * Conditions: 
+    * If incident provider: 
+      * Equals
+      * Microsoft Sentinel 
+    * Analytic Rule Name: 
+      * Contains
+      * User Alert
+  * In the box in the "Actions" section, select "Change Status"
+  * In the box below "Change Status" in the "Actions" section, select "Closed"
+  * In the box below that, select "True Positive - Suspicious Activity"
+  * At the bottom of the "Actions" section, click "+ Add Action"
+  * Click the box below "Run Playbook" in the "Actions" section 
+    * Select "Commvault-Logic-App"
+  * Order: 
+    * 3
+  * Click "Apply"
+### Create the Active Directory App Registration: 
+* From Home, go to Azure Active Directory -> App Registrations (under “Manage”) 
+* In the top left corner, click “+ New Registration” 
+  * Name: 
+    * Commvault_Token_Cycle_App
+  * Click the blue "Register" button 
+* From Home, go to Azure Active Directory -> App Registrations (under “Manage”) 
+* Under “Owned Applications”, click on “Commvault_Token_Cycle_App” 
+  * In the middle of the screen (under “Essentials”): 
+    * Copy the “Application (client) ID” to another document. Hereon, this value will be referenced to as the App Registration Client ID.
+    * Copy the “Directory (tenant) ID” to another document. Hereon, this value will be referenced to as the Tenant ID.  
+  * On the left (under “Manage”), click “API Permissions” 
+    * In the middle of the screen, click “+ Add A Permission” 
+      * In the right window that just popped open, select “Azure Key Vault” 
+        * Under “Permissions”, select “user_impersonation” 
+        * On the bottom of the screen, click the blue “Add Permissions” button 
+  * On the left (under “Manage”), click “Certificates & Secrets” 
+    * In the middle of the screen under “Client Secrets”, click “+ New Client Secret” 
+      * Description: 
+        * TokenCycle
+      * On the bottom of the screen, click the blue "Add" button
+    * In the table in the middle of the screen, copy the “Value” of the client secret “TokenCycle”. Copy this value to another document. Hereon, this value will be referenced to as the App Registration Client Secret.  
+### Define more KeyVault secrets:
+* From Home, go to Key Vaults -> Commvault-Integration-KV 
+* In the middle of the screen, copy the “Vault URI” to another document. Hereon, this value will be referenced to as the KeyVault URL. 
+* Under “Objects” on the left, click “Secrets” 
+  * On the top, click "+ Generate/Import"
+    * Name: 
+      * client-id
+    * For "Secret Value", paste in the value of the App Registration Client ID
+  * On the top, click "+ Generate/Import"
+    * Name: 
+      * keyvault-url 
+    * For "Secret Value", paste in the KeyVault URL
+  * On the top, click "+ Generate/Import"
+    * Name: 
+      * keyvaultsecret
+    * For "Secret Value", paste in the App Registration Client Secret
+  * On the top, click "+ Generate/Import"
+    * Name: 
+      * tenant-id
+    * For "Secret Value", paste in the Tenant ID.
+### Token Rotation Logic App: 
+* From Home, go to Logic Apps
+* In the top left corner, click "+ Add"
+  * Basics: 
+    * Project Details: 
+      * Select your subscription and resource group 
+    * Instance Details: 
+      * Logic App Name: 
+        * CommvaultTokenCycle
+    * Play Type: 
+      * Consumption 
+  * In the bottom left corner, click the blue "Review + Create" button
+* In the "Logic App Designer" popup menu, select "Recurrence" Under "Start with a common trigger"
+* In the "Recurrence" block:
+  * Interval: 
+    * 5
+  * Frequency: 
+    * Days
+* Save this by clicking the "Save" button in the top left corner. We will return to this later. 
+### Token Rotation Logic App Permissions:
+* From Home, go to Logic Apps -> CommvaultTokenCycle
+  * On the left side, click on "Identity" (under "Settings")
+    * Under "System Assigned", switch "Status" to "On"
+    * Click "Save" (located just above the "Status" switch)
+    * If prompted, click "Yes"
+    * There should now be a blue "Azure Role Assignments" button. Click it. 
+      * In the new page named "Azure Role Assignments", click "+ Add Role Assignment"
+        * Scope:
+          * KeyVault
+        * Subscription: 
+          * (Your subscription)
+        * Resource:
+          * Commvault-Integration-KV
+        * Role:
+          * Key Vault Secrets Officer
+        * Click the blue "Save" button
+      * Click "+ Add Role Assignment"
+        * Scope:
+          * Resource Group
+        * Subscription: 
+          * (Your subscription)
+        * Resource Group:
+          * (Your resource group)
+        * Role: 
+          * Automation Runbook Operator
+        * Click the blue "Save" button
+      * Click "+ Add Role Assignment"
+        * Scope: 
+          * Resource Group
+        * Subscription: 
+          * (Your subscription)
+        * Resource Group:
+          * (Your resource group)
+        * Role: 
+          * Microsoft Sentinel Contributor
+        * Click the blue "Save" button
+      * Click "+ Add Role Assignment"
+        * Scope: 
+          * Resource Group
+        * Subscription: 
+          * (Your subscription)
+        * Resource Group:
+          * (Your resource group)
+        * Role: 
+          * Automation Contributor
+        * Click the blue "Save" button
+### More KeyVault Permissions:
+* From Home, go to KeyVaults -> Commvault-Integration-KV
+  * On the left pane, click "Access Policies"
+    * On the top left, click "+ Create"
+      * Permissions: 
+        * Secret Permissions:
+          * Select "Get", "List", and "Set"
+      * Principal:
+        * Commvault_Token_Cycle_App
+      * Review + Create:
+        * Click the blue "Create" button on the bottom left
+    * On the top left, click "+ Create"
+      * Permissions: 
+        * Secret Permissions:
+          * Select "Get", "List", and "Set"
+      * Principal: 
+        * CommvaultTokenCycle
+      * Review + Create:
+        * Click the blue "Create" button on the bottom left
+### Token Cycle Runbook:
+* From Home, go to Automation Accounts -> Commvault-Automation-Account 
+  * On the left pane, click “Runbooks” (under “Process Automation”)    
+    * In the top left corner, click "+ Create a Runbook"
+      * Name: 
+        * Commvault_Cycle_Token
+      * Runbook Type:
+        * PowerShell
+      * Runtime Version:
+        * 5.1 
+    * In the bottom left corner, click the blue "Create" button
+    * Copy and paste the content from **runbooks/Commvault_Cycle_Token.ps1** into the runbook editor
+    * In the top left, click "Save"
+    * In the top left, click "Publish"
+### Completing the Token Rotation Logic App: 
+* From Home, go to Logic Apps -> CommvaultTokenCycle
+  * On the left pane, click "Logic App Designer" (located under "Development Tools")
+    * In the center of the screen (under the "Recurrence" block), click "+ New Step"
+      * Search for "get secret"
+      * Under All -> Actions, select "Get Secret - Azure KeyVault"
+        * Name of Secret:
+          * access-token
+        * Rename this block to be "Access Token" by clicking the three dots in the top right corner and selecting "Rename"
+    * In the center of the screen (under the "Access Token" block), click "+ New Step"
+      * Search for "get secret"
+      * Under All -> Actions, select "Get Secret - Azure KeyVault"
+        * Name of the secret
+          * environment-endpoint-url
+        * Rename this block to be "Endpoint URL" by clicking the three dots in the top right corner and selecting "Rename"
+    * In the center of the screen (under the "Endpoint URL" block), click "+ New Step"
+      * Search for "get secret"
+      * Under All -> Actions, select "Get Secret - Azure KeyVault"
+        * Name of the Secret: 
+          * keyvault-url
+        * Rename this block to be "KeyVault URL" by clicking the three dots in the top right corner and selecting "Rename"
+    * In the center of the screen (under the "KeyVault URL" block), click "+ New Step"
+      * Search for "get secret"
+      * Under All -> Actions, select "Get Secret - Azure KeyVault"
+        * Name of the Secret
+          * tenant-id
+        * Rename this block to be "KeyVault Tenant ID" by clicking the three dots in the top right corner and selecting "Rename"
+    * In the center of the screen (under the "KeyVault Tenant ID" block), click "+ New Step"
+      * Search for "get secret"
+        * Under All -> Actions, select "Get Secret - Azure KeyVault"
+          * Name of the secret
+            * client-id
+          * Rename this block to be "KeyVault Client ID" by clicking the three dots in the top right corner and selecting "Rename"
+    * In the center of the screen (under the "KeyVault Client ID" block), click "+ New Step"
+      * Search for "get secret"
+      * Under All -> Actions, select "Get Secret - Azure KeyVault"
+        * Name of the Secret
+          * keyvaultsecret
+        * Rename this block to be "KeyVault Client Secret" by clicking the three dots in the top right corner and selecting "Rename"
+    * In the center of the screen (under the "KeyVault Client ID" block), click "+ New Step"
+      * Search for "create job"
+      * Under All -> Actions, select "Create Job - Azure Automation"
+        * Subscription: 
+          * (Your subscription)
+        * Resource Group:
+          * (Your resource group)
+        * Automation Account:
+          * Commvault-Automation-Account
+        * Runbook Name:
+          * Commvault_Cycle_Token
+        * Wait for Job:
+          * Yes
+        * Runbook Parameter keyvaulturl:
+          * (The value of the "KeyVault URL" block)
+        * Runbook Parameter apiAccessToken:
+          * (The value of the "Access Token" block)
+        * Runbook Parameter EnvironmentEndpointURL:
+          * (The value of the "Endpoint URL" block)
+        * Runbook Parameter KeyVaultTenantID:
+          * (The value of the "KeyVault Client ID" block)
+        * Runbook Parameter KeyVaultClientSecret:
+          * (The value of the "KeyVault Client Secret" block)
+      * Rename this block to be "Cycle Token Job" by clicking the three dots in the top right corner and selecting "Rename"
+    * In the center of the screen (under the "KeyVault Client ID" block), click "+ New Step"
+      * Search for "get job output"
+      * Under All -> Actions, select "Get Job Output - Azure KeyVault"
+        * Subscription:
+          * (Your subscription)
+        * Resource Group:
+          * (Your resource group)
+        * Automation Account:
+          * Commvault-Automation-Account
+        * Job ID:
+          * (The job ID of "Cycle Token Job")
+    * In the top left corner, click "Save"
 
-For information on what you can contribute and further details, refer to the ["get started"](https://github.com/Azure/Azure-Sentinel/wiki#get-started) section on the project's [wiki](https://aka.ms/threathunters).
+## Example Usage
+### Disable a compromised Commvault/Metallic IDP from Sentinel
+* Go to Sentinel -> (The name of your Sentinel instance) -> Incidents (under Threat Management) -> Create Incident
+  * Title:
+    * Cvlt Alert
+  * Description:
+    * IDP Compromised
+  * Severity:
+    * Medium
+  * Status:
+    * New
+  * Click "Create"
+* Wait 5-10 minutes for it to run
+* Check if it ran:
+  * Go to Logic Apps -> Commvault-Logic-App
+    * In the middle of the screen is a table with the column headers Status, Start Time, etc. 
+    * Sort the rows by start time by clicking the "Start Time" column header
+    * The latest run should say "Succeeded". Click it. 
+    * Check to see the result of the runbook at the end of the logic app chain.
+### Disable a compromised Commvault/Metallic User from Sentinel
+* Go to Sentinel -> (The name of your Sentinel instance) -> Incidents (under Threat Management) -> Create Incident
+  * Title:
+    * Cvlt Alert
+  * Description (Where "< user email >" is the email address of the user that is compromised):
+    * User < user email > Compromised
+  * Severity:
+    * Medium
+  * Status:
+    * New
+  * Click "Create"
+* Wait 5-10 minutes for it to run
+* Check if it ran:
+  * Go to Logic Apps -> Commvault-Logic-App
+    * In the middle of the screen is a table with the column headers Status, Start Time, etc. 
+    * Sort the rows by start time by clicking the "Start Time" column header
+    * The latest run should say "Succeeded". Click it. 
+    * Check to see the result of the runbook at the end of the logic app chain.
+### Disable Data Aging from Sentinel
+* Go to Sentinel -> (The name of your Sentinel instance) -> Incidents (under Threat Management) -> Create Incident
+  * Title:
+    * Cvlt Alert
+  * Description (Where "< client name >" is the name of the client that you would like to disable data aging on):
+    * Client < client name > Compromised
+  * Severity:
+    * Medium
+  * Status:
+    * New
+  * Click "Create"
+* Wait 5-10 minutes for it to run
+* Check if it ran:
+  * Go to Logic Apps -> Commvault-Logic-App
+    * In the middle of the screen is a table with the column headers Status, Start Time, etc. 
+    * Sort the rows by start time by clicking the "Start Time" column header
+    * The latest run should say "Succeeded". Click it. 
+    * Check to see the result of the runbook at the end of the logic app chain.
