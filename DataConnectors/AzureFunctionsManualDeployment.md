@@ -1,11 +1,5 @@
 # Function app manual deployment instructions 
 
-1. Deploy a Function App
-
-	NOTE: You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.
-
-	Download the Azure Function App file . Extract archive to your local development computer.
-
 	- Start VS Code. Choose File in the main menu and select Open Folder.
 	
 	- Select the top level folder from extracted files.
@@ -22,6 +16,7 @@
 		(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/subscription.png)
 
 		c. Right click on the functions and select **Create new Function App in Azure** (Don't choose the Advanced option)
+		
 		(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/CreatenewFunctionApp.png)
 
 		d. **Enter a globally unique name for the function app**: Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. UmbrellaXYZ).
