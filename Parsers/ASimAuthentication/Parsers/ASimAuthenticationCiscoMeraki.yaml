@@ -52,7 +52,7 @@ ParserQuery: |
       "23", "Other",
       "24", "Logon violates policy",
   ];
-  let LookupForEvents = datatable (
+  let EventFieldsLookup = datatable (
       LogSubtype: string,
       EventResult: string,
       EventType: string,
@@ -89,47 +89,28 @@ ParserQuery: |
           LogType = tostring(Parser[2]),
           Substring = tostring(Parser[3])
       | where LogType == "events"
-      | parse Substring with * "type=" LogSubType " " restOfMessage
+      | parse Substring with * "type=" LogSubType:string " " restOfMessage:string
       | where LogSubType in ("8021x_auth", "wpa_auth", "splash_auth", "8021x_deauth", "8021x_client_deauth", "wpa_deauth", "8021x_eap_failure", "8021x_eap_success") or (LogSubType == "disassociation" and Substring has "auth_neg_failed")
       | extend EpochTimestamp = split(Epoch, ".")
       | extend EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
       | extend EventEndTime = EventStartTime
       | invoke _ASIM_ResolveDvcFQDN('Device')
-      | extend Dvc = DvcHostname
-      | parse-kv Substring as(last_known_client_ip: string, ip: string, client_ip: string, client_mac: string, identity: string, reason: string, aid: string) with (pair_delimiter=" ", kv_delimiter="=")
-      | extend aid = iff(
-                    aid has '"',
-                    replace_string(aid, '"', ''),
-                    replace_string(aid, "'", "")
-                )
+      | parse-kv Substring as(last_known_client_ip: string, ip: string, client_ip: string, client_mac: string, identity: string, reason: string, aid: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+      | extend Dvc = DvcHostname, 
+            aid = trim('"', aid)
       | extend
-          DvcIpAddr = split(coalesce(last_known_client_ip, ip, client_ip), " ")[0],
-          DvcMacAddr = column_ifexists("client_mac", ""),
-          User = column_ifexists("identity", ""),
-          reason = column_ifexists("reason", ""),
-          AdditionalFields = parse_json(column_ifexists("aid", ""))
+          DvcIpAddr = tostring(split(coalesce(last_known_client_ip, ip, client_ip), " ")[0]),
+          DvcMacAddr = client_mac,
+          User = identity,
+          AdditionalFields = bag_pack("aid", aid),
+          EventOriginalType = LogType,
+          EventOriginalSubType = LogSubType
       | extend
-          DvcIpAddr = iff(
-                          DvcIpAddr has '"',
-                          replace_string(tostring(DvcIpAddr), '"', ''),
-                          replace_string(tostring(DvcIpAddr), "'", "")
-                      ),
-          DvcMacAddr = iff(
-                  DvcMacAddr has '"',
-                  replace_string(DvcMacAddr, '"', ''),
-                  replace_string(DvcMacAddr, "'", "")
-              ),
-          User = iff(
-            User has '"',
-            replace_string(User, '"', ''),
-            replace_string(User, "'", "")
-        ),
-          reason = iff(
-              reason has '"',
-              replace_string(reason, '"', ''),
-              replace_string(reason, "'", "")
-          )
-      | lookup LookupForEvents on $left.LogSubType == $right.LogSubtype
+          DvcIpAddr = trim('"', DvcIpAddr),
+          DvcMacAddr = trim('"', DvcMacAddr),
+          User = trim('"', User),
+          reason = trim('"', reason)
+      | lookup EventFieldsLookup on $left.LogSubType == $right.LogSubtype
       | lookup EventResultDetailsLookup on reason
       | extend EventResultDetails = iff(tolong(reason) between (25 .. 65535), "Other", EventResultDetails)
       | extend
