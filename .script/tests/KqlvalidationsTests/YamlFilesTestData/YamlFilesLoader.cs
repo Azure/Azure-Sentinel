@@ -26,7 +26,8 @@ namespace Kqlvalidations.Tests
             foreach (var file in prFiles)
             {
                 var modifiedFile = Path.Combine(basePath, file.FileName);
-                prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
+                prFilesListModified.Add(modifiedFile);
+                //prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
 
             }
 
