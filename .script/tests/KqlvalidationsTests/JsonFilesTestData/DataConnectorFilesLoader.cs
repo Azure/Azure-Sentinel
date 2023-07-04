@@ -29,52 +29,47 @@ namespace Kqlvalidations.Tests
                 var directoryPaths = GetDirectoryPaths();
                 var prFiles = GetPRFiles();
 
-                return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
+                var filteredFiles = directoryPaths
+                    .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories))
+                    .Where(file => prFiles.Contains(file))
+                    .ToList();
+
+                filteredFiles.ForEach(filePath =>
                 {
-                    var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories)?.ToList();
-
-                    if (files != null)
+                    try
                     {
-                        files
-                            .Where(filePath => prFiles.Contains(filePath)) // Filter files based on PR files list
-                            .ToList() // Convert the filtered files to a list
-                            .ForEach(filePath =>
-                            {
-                                try
-                                {
-                                    JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
+                        JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
 
-                                    var jsonString = File.ReadAllText(filePath);
-                                    JObject dataConnectorJsonObject = JObject.Parse(jsonString);
+                        var jsonString = File.ReadAllText(filePath);
+                        JObject dataConnectorJsonObject = JObject.Parse(jsonString);
 
-                                    if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
-                                    {
-                                        validFiles.Add(filePath);
-                                    }
-                                    else
-                                    {
-                                        throw new Exception("Invalid JSON schema for file: " + filePath);
-                                    }
-                                }
-                                catch (JsonReaderException ex)
-                                {
-                                    Console.WriteLine("Invalid JSON file: " + filePath);
-                                    Console.WriteLine("Error message: " + ex.Message);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine("An error occurred while processing file: " + filePath);
-                                    Console.WriteLine("Error message: " + ex.Message);
-                                }
-                            });
+                        if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
+                        {
+                            validFiles.Add(filePath);
+                        }
+                        else
+                        {
+                            throw new Exception("Invalid JSON schema for file: " + filePath);
+                        }
                     }
-                    else
+                    catch (JsonReaderException ex)
                     {
-                        Console.WriteLine("No JSON files found in directory: " + directoryPath);
+                        Console.WriteLine("Invalid JSON file: " + filePath);
+                        Console.WriteLine("Error message: " + ex.Message);
                     }
-
-                    return accumulator.Concat(validFiles).ToList();
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("An error occurred while processing file: " + filePath);
+                        Console.WriteLine("Error message: " + ex.Message);
+                    }
                 });
+
+                if (validFiles.Count == 0)
+                {
+                    validFiles.Add("NoFile.json");
+                }
+
+                return validFiles;
             }
             catch (Exception ex)
             {
@@ -84,6 +79,7 @@ namespace Kqlvalidations.Tests
 
             return validFiles;
         }
+
 
         private List<string> GetPRFiles()
         {
