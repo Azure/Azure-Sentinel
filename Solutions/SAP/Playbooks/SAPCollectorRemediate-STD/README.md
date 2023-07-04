@@ -20,7 +20,7 @@ Sophisticated scenario distinguishing between SAP maintenance events and malicio
 
 | Role Name | Resource Type Scope | Purpose |
 | --- | --- | --- |
-| [Sentinel Responder](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#microsoft-sentinel-responder) | At least resource group where Sentinel lives | Required for Incident state update |
+| [Microsoft Sentinel Responder](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#microsoft-sentinel-responder) | At least resource group where Sentinel lives | Required for Incident state update |
 | [Azure Center for SAP solutions reader](https://learn.microsoft.com/azure/sap/center-sap-solutions/manage-with-azure-rbac) | Subscription level | Required for Azure resource graph SAP Virtual Instance discovery by Sentinel known SAP SID |
 | [Virtual Machine Contributor](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#virtual-machine-contributor) | At least resource group/virtual machine where Sentinel Collector runs | Required for remediation option to restart the collector VM |
 

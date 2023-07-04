@@ -13,7 +13,7 @@ Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-
 
 The deployment process first creates the infrastructure and generates the IDs for the managed identity of your logic app (Standard). Due to that a two-step deployment is required to add the required Connections for your workflow.
 
-> **Info**: the templates are self-contained and therefore assume that no app service plan, connections or any other sharable Azure resources are available yet. Adjust the references to your liking where needed. Especially the app service plan is often used most efficiently and economically if it powers multiple workflows.
+> **Note**: the templates are self-contained and therefore assume that no app service plan, connections or any other sharable Azure resources are available yet. Adjust the references to your liking where needed. Especially the app service plan is often used most efficiently and economically if it powers multiple workflows.
 
 ## Create Logic App (Standard) infrastructure
 
@@ -33,7 +33,7 @@ The deployment process first creates the infrastructure and generates the IDs fo
 ### Create Connections objects
 
 6. Create a second deployment again using the custom [deployment link](https://portal.azure.com/?feature.customportal=false#create/Microsoft.Template) or the "Deploy to Azure button" to add the required Connections. Provide the values from step 5.
-7. After the deployment is finished, navigate to **Outputs pane** and grab the values for the runtime URLs of your Connections.
+7. After the deployment is finished, navigate to **Outputs pane** and grab the values for the runtime URLs of your Connections. Alternatively, grab the URLs from the newly created API Connection resource (General -> Properties -> Connection Runtime URL)
 8. Navigate to the created Connections, open every one and click `Edit API connection`, authorize and save.
 
 ### Connect Logic App (Standard) to the new Connections
