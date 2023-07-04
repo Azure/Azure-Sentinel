@@ -2,7 +2,7 @@
 
 < 🏡[home](../README.md)
 
-Sophisticated scenario distinguishing between SAP maintenance events and malicious deactivation of the audit log ingestion into Sentinel using Azure Center for SAP Solutions health APIs.
+Sophisticated scenario distinguishing between SAP maintenance events and malicious deactivation of the audit log ingestion into Sentinel using [Azure Center for SAP Solutions (ACSS)](https://learn.microsoft.com/azure/sap/center-sap-solutions/overview) health info exposed via the [Azure Resource Graph](https://learn.microsoft.com/azure/governance/resource-graph/overview). Find the REST API docs for the resource graph [here](https://learn.microsoft.com/rest/api/azureresourcegraph/resourcegraph(2021-03-01)/resources/resources?tabs=HTTP).
 
 👨🏽‍🔧[**installation guide**](../INSTALLATION.md).
 
@@ -23,5 +23,24 @@ Sophisticated scenario distinguishing between SAP maintenance events and malicio
 | [Virtual Machine Contributor](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#virtual-machine-contributor) | At least resource group/virtual machine where Sentinel Collector runs | Required for remediation option to restart the collector VM |
 
 Learn more about Microsoft Sentinel built-in roles [here](https://learn.microsoft.com/azure/sentinel/roles) and Azure built-in roles [here](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles).
+
+## Additional integration options with Azure Resource Graph query for ACSS
+
+[Azure Resource Graph Explorer🔗](https://portal.azure.com/?#view/HubsExtension/ArgQueryBlade)
+
+This playbook uses below query (dynmic SID param coming from Sentinel). Get inspired from it to expand to your own scenarios.
+
+`POST https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01`
+
+BODY
+
+```json
+// Global SAP ACSS details by SID
+// Click the "Run query" command above to execute the query and see results.
+resources
+| where type =~ 'Microsoft.Workloads/sapVirtualInstances' //get all resources of type SAP Virtual Instance
+| where name == 'P01' //get selected SAP SID
+| project id,name,tenantId,resourceGroup,subscriptionId,properties.health,properties.status //get only required fields
+```
 
 [🔝](#)
