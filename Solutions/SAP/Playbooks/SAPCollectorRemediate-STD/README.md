@@ -4,6 +4,8 @@
 
 Sophisticated scenario distinguishing between SAP maintenance events and malicious deactivation of the audit log ingestion into Sentinel.
 
+Used Sentinel alert rule `[SAP - Data collection health check](https://learn.microsoft.com/azure/sentinel/monitor-sap-system-health#use-an-alert-rule-template)`
+
 [Azure Center for SAP Solutions (ACSS)](https://learn.microsoft.com/azure/sap/center-sap-solutions/overview) health info exposed via the [Azure Resource Graph](https://learn.microsoft.com/azure/governance/resource-graph/overview) qualify the incident to drive better triage processes at the SAP Security Operations teams.
 
 👨🏽‍🔧[**installation guide**](../INSTALLATION.md).
