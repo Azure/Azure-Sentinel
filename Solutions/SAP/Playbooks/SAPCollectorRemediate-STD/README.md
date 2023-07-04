@@ -38,7 +38,7 @@ Find the REST API docs for the resource graph [here](https://learn.microsoft.com
 
 BODY
 
-```json
+```sql
 // Global SAP ACSS details by SID
 // Click the "Run query" command above to execute the query and see results.
 resources
