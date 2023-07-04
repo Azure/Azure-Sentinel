@@ -10,10 +10,15 @@ namespace Kqlvalidations.Tests
         protected const int TestFolderDepth = 6;
 
         protected abstract List<string> GetDirectoryPaths();
-        
+
         public List<string> GetFilesNames()
         {
-            int prNumber = int.Parse(System.Environment.GetEnvironmentVariable("PRNUM"));
+            int prNumber = 0;
+            int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
+            if(prNumber ==0)
+            {
+                prNumber = 8414;
+            }
             var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
             var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
             var prFilesListModified = new List<string>();

@@ -1,12 +1,11 @@
-﻿using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Schema.Generation;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Schema;
+using Octokit;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using Newtonsoft.Json;
 
 namespace Kqlvalidations.Tests
 {
@@ -28,6 +27,7 @@ namespace Kqlvalidations.Tests
             try
             {
                 var directoryPaths = GetDirectoryPaths();
+                var prFiles = GetPRFiles();
 
                 return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
                 {
@@ -35,35 +35,38 @@ namespace Kqlvalidations.Tests
 
                     if (files != null)
                     {
-                        files.ForEach(filePath =>
-                        {
-                            try
+                        files
+                            .Where(filePath => prFiles.Contains(filePath)) // Filter files based on PR files list
+                            .ToList() // Convert the filtered files to a list
+                            .ForEach(filePath =>
                             {
-                                JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
-
-                                var jsonString = File.ReadAllText(filePath);
-                                JObject dataConnectorJsonObject = JObject.Parse(jsonString);
-
-                                if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
+                                try
                                 {
-                                    validFiles.Add(filePath);
+                                    JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
+
+                                    var jsonString = File.ReadAllText(filePath);
+                                    JObject dataConnectorJsonObject = JObject.Parse(jsonString);
+
+                                    if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
+                                    {
+                                        validFiles.Add(filePath);
+                                    }
+                                    else
+                                    {
+                                        throw new Exception("Invalid JSON schema for file: " + filePath);
+                                    }
                                 }
-                                else
+                                catch (JsonReaderException ex)
                                 {
-                                    throw new Exception("Invalid JSON schema for file: " + filePath);
+                                    Console.WriteLine("Invalid JSON file: " + filePath);
+                                    Console.WriteLine("Error message: " + ex.Message);
                                 }
-                            }
-                            catch (JsonReaderException ex)
-                            {
-                                Console.WriteLine("Invalid JSON file: " + filePath);
-                                Console.WriteLine("Error message: " + ex.Message);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine("An error occurred while processing file: " + filePath);
-                                Console.WriteLine("Error message: " + ex.Message);
-                            }
-                        });
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine("An error occurred while processing file: " + filePath);
+                                    Console.WriteLine("Error message: " + ex.Message);
+                                }
+                            });
                     }
                     else
                     {
@@ -81,5 +84,29 @@ namespace Kqlvalidations.Tests
 
             return validFiles;
         }
+
+        private List<string> GetPRFiles()
+        {
+            int prNumber;
+            int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
+            if (prNumber ==0)
+            {
+                prNumber = 8414;
+            }
+            var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
+            var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
+            var prFilesListModified = new List<string>();
+            var basePath = Utils.GetTestDirectory(TestFolderDepth);
+
+            foreach (var file in prFiles)
+            {
+                var modifiedFile = Path.Combine(basePath, file.FileName);
+                prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
+            }
+
+            return prFilesListModified;
+        }
+
+
     }
 }
