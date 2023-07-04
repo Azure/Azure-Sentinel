@@ -23,6 +23,37 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let barracudaSchema = datatable(
+      ServerIP_s: string,
+      UnitName_s: string,
+      HTTPStatus_s: string,
+      Action_s: string,
+      Severity_s: string,
+      DeviceReceiptTime_s: string,
+      LogType_s: string,
+      TimeGenerated: datetime,
+      Type: string,
+      ClientIP_s: string,
+      host_s: string,
+      HostIP_s: string,
+      BytesReceived_d: real,
+      ServerPort_d: real,
+      Cookie_s: string,
+      Referer_s: string,
+      Method_s: string,
+      BytesSent_d: real,
+      SessionID_s: string,
+      ClientPort_d: real,
+      AuthenticatedUser_s: string,
+      CertificateUser_s: string,
+      UserAgent_s: string,
+      URL_s: string,
+      CacheHit_d: real,
+      ProxyIP_s: string,
+      ProxyPort_d: real,
+      RuleType_s: string,
+      TimeTaken_d: real 
+  )[];
   let SeverityLookup = datatable (severity: int, EventSeverity: string)
     [
       0, "High", 
@@ -40,77 +71,96 @@ ParserQuery: |
       DvcAction: string
   )
       [
-      "LOG", "Success", "ALLOW",
-      "DENY", "Failure", "DENY",
-      "WARNING", "Success", "WARNING"
+      "LOG", "Success", "Allow",
+      "DENY", "Failure", "Deny",
+      "WARNING", "Success", "Allow"
   ];
-  let EventTypeLookup = datatable (LogType_s: string, EventType: string, EventOriginalType: string )
+  let EventTypeLookup = datatable (
+      LogType_s: string,
+      EventType_lookup: string,
+      EventOriginalType: string
+  )
       [
       "WF", "HTTPsession", "Web Firewall",
       "TR", "WebServerSession", "Access"
   ];
-  let parser=(disabled: bool=false) {
-      barracuda_CL
-      | where not(disabled) and (LogType_s == "WF" or LogType_s == "TR")
+  let BarracudaCustom = (disabled: bool=false) {
+      (union isfuzzy=false
+          barracudaSchema,
+          barracuda_CL
+      | where not(disabled) and (LogType_s in ("WF", "TR"))
       | lookup EventResultWFLookup on Action_s
       | lookup EventTypeLookup on LogType_s
       | extend
+          EventType = EventType_lookup,
           severity = toint(Severity_s)
       | lookup SeverityLookup on severity
       | extend
-          Dst = column_ifexists("ServerIP_s", ""),
+          Dst = ServerIP_s,
           EventCount = toint(1),
           EventProduct = "WAF",
           EventSchema = "WebSession",
           EventSchemaVersion = "0.2.6",
           EventVendor = "Barracuda",
-          status_code = toint(column_ifexists("HTTPStatus_s", ""))
-      | extend EventResult_TR = case(
-                                status_code between (200 .. 299),
-                                "Success", 
-                                status_code between (400 .. 599),
-                                "Failure",
-                                status_code between (300 .. 399),
-                                "Partial",
-                                "NA"
-                            )
+          status_code = toint(HTTPStatus_s)
       | extend
-          Dvc = column_ifexists("UnitName_s", ""),
+          EventResult_TR = case(
+                      status_code between (200 .. 299),
+                      "Success", 
+                      status_code between (400 .. 599),
+                      "Failure",
+                      status_code between (300 .. 399),
+                      "Partial",
+                      "NA"
+                  ),
+          RuleName = RuleType_s
+      | extend
+          Dvc = UnitName_s,
           EventResult = iff(LogType_s == "TR", EventResult_TR, EventResult_WF),
           EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)),
-          DstIpAddr = column_ifexists("ServerIP_s", ""),
-          SrcIpAddr = column_ifexists("ClientIP_s", ""),
-          DstBytes = tolong(column_ifexists("BytesReceived_d", "")),
-          DstPortNumber = toint(column_ifexists("ServerPort_d", "")),
-          HttpCookie = column_ifexists("Cookie_s", ""),
-          HttpReferrer = column_ifexists("Referer_s", ""),
-          HttpRequestBodyBytes = tolong(column_ifexists("BytesReceived_d", "")),
-          HttpRequestMethod = column_ifexists("Method_s", ""),
-          HttpResponseBodyBytes = tolong(column_ifexists("BytesSent_d", "")),
-          HttpResponseTime = toint(column_ifexists("TimeTaken_d", "")),
-          HttpUserAgent = column_ifexists("UserAgent_s", ""),
-          NetworkSessionId = column_ifexists("SessionID_s", ""),
-          Rule = column_ifexists("RuleType_s", ""),
-          SrcPortNumber = toint(column_ifexists("ClientPort_d", "")),
-          SrcUsername = column_ifexists("AuthenticatedUser_s", ""),
-          Url = column_ifexists("URL_s", ""),
+          DstIpAddr = ServerIP_s,
+          SrcIpAddr = ClientIP_s,
+          DstBytes = tolong(BytesReceived_d),
+          DstPortNumber = toint(ServerPort_d),
+          HttpCookie = Cookie_s,
+          HttpReferrer = Referer_s,
+          HttpRequestBodyBytes = tolong(BytesReceived_d),
+          HttpRequestMethod = Method_s,
+          HttpResponseBodyBytes = tolong(BytesSent_d),
+          NetworkDuration = toint(TimeTaken_d),
+          HttpUserAgent = UserAgent_s,
+          NetworkSessionId = SessionID_s,
+          Rule = RuleName,
+          SrcPortNumber = toint(ClientPort_d),
+          SrcUsername = CertificateUser_s,
+          DstUsername = AuthenticatedUser_s,
+          Url = URL_s,
           HttpResponseCacheControl = iff(
-                                column_ifexists("CacheHit_d", "") == 0,
+                                CacheHit_d == 0,
                                 "Response from the server",
                                 "Response from the cache"
                             ),
-          SrcUsernameType = "Simple",
-          ProxyIP = column_ifexists("ProxyIP_s", ""),
-          ProxyPort = column_ifexists("ProxyPort_d", ""),
-          DvcHostname = column_ifexists("host_s", ""),
-          DvcIpAddr = column_ifexists("HostIP_s", "")
+          AdditionalFields = bag_pack(
+                        "ProxyIP",
+                        ProxyIP_s,
+                        "ProxyPort",
+                        ProxyPort_d
+                    ),
+          DvcHostname = host_s,
+          DvcIpAddr = HostIP_s,
+          EventResultDetails = HTTPStatus_s
+      | extend 
+          SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
+          DstUsernameType = iff(isnotempty(DstUsername), "Simple", "")
       | extend
+          Duration = NetworkDuration,
           SessionId = NetworkSessionId,
           EventEndTime = EventStartTime,
           UserAgent = HttpUserAgent,
           User = SrcUsername,
           IpAddr = SrcIpAddr,
-          Src=SrcIpAddr
+          Src = SrcIpAddr,
+          HttpStatusCode = EventResultDetails
       | project-away
           *_d,
           *_s,
@@ -118,14 +168,137 @@ ParserQuery: |
           severity,
           status_code,
           RawData,
-          EventResult_TR,
-          EventResult_WF,
+          EventResult_*,
           SourceIP,
           Message,
+          EventType_lookup,
           Computer,
           MG,
           ManagementGroupName,
           TenantId,
           SourceSystem
+      )
   };
-  parser(disabled=disabled)
+  let BarracudaCEF = (disabled: bool=false) {
+      CommonSecurityLog
+      | where not(disabled) and DeviceVendor == "Barracuda" and DeviceProduct == "WAF"
+      | where DeviceEventCategory in ("WF", "TR")
+      | lookup EventResultWFLookup on $left.DeviceAction == $right.Action_s
+      | lookup EventTypeLookup on $left.DeviceEventCategory == $right.LogType_s
+      | extend
+          EventType = EventType_lookup,
+          severity = toint(LogSeverity)
+      | lookup SeverityLookup on severity
+      | extend
+          Dst = DestinationIP,
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.6",
+          EventVendor = "Barracuda",
+          status_code = toint(EventOutcome)
+      | extend
+          EventResult_TR = case(
+                      status_code between (200 .. 299),
+                      "Success", 
+                      status_code between (400 .. 599),
+                      "Failure",
+                      status_code between (300 .. 399),
+                      "Partial",
+                      "NA"
+                  ),
+          RuleName = iff(DeviceEventCategory == "WF", DeviceCustomString3, "")
+      | extend
+          Dvc = DeviceName,
+          EventResult = iff(DeviceEventCategory == "TR", EventResult_TR, EventResult_WF),
+          EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
+          DstIpAddr = DestinationIP,
+          SrcIpAddr = SourceIP,
+          DstBytes = tolong(ReceivedBytes),
+          DstPortNumber = toint(DestinationPort),
+          HttpCookie = RequestCookies,
+          HttpReferrer = RequestContext,
+          HttpRequestBodyBytes = tolong(ReceivedBytes),
+          HttpRequestMethod = RequestMethod,
+          HttpResponseBodyBytes = tolong(SentBytes),
+          NetworkDuration = toint(FlexNumber2),
+          HttpUserAgent = RequestClientApplication,
+          NetworkSessionId = SourceUserID,
+          Rule = RuleName,
+          SrcPortNumber = toint(SourcePort),
+          SrcUsername = SourceUserName,
+          DstUsername = DestinationUserName,
+          Url = RequestURL,
+          HttpResponseCacheControl = iff(
+                                DeviceCustomNumber2 == 0,
+                                "Response from the server",
+                                "Response from the cache"
+                            ),
+          AdditionalFields = bag_pack(
+                        "ProxyIP",
+                        iff(DeviceEventCategory == "WF", DeviceCustomString5, DeviceCustomString3),
+                        "ProxyPort",
+                        DeviceCustomNumber3
+                    ),
+          DvcHostname = DeviceName,
+          DvcIpAddr = DeviceAddress,
+          EventResultDetails = EventOutcome
+      | extend 
+          SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
+          DstUsernameType = iff(isnotempty(DstUsername), "Simple", "")
+      | extend
+          Duration = NetworkDuration,
+          SessionId = NetworkSessionId,
+          EventEndTime = EventStartTime,
+          UserAgent = HttpUserAgent,
+          User = SrcUsername,
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          HttpStatusCode = EventResultDetails
+      | project-away
+          ThreatConfidence,
+          CommunicationDirection,
+          AdditionalExtensions,
+          Device*,
+          Source*,
+          Destination*,
+          Activity,
+          LogSeverity,
+          ApplicationProtocol,
+          ProcessID,
+          ExtID,
+          Protocol,
+          Reason,
+          ReceiptTime,
+          SimplifiedDeviceAction,
+          OriginalLogSeverity,
+          ProcessName,
+          EndTime,
+          ExternalID,
+          File*,
+          ReceivedBytes,
+          Message,
+          Old*,
+          EventOutcome,
+          Request*,
+          StartTime,
+          Field*,
+          Flex*,
+          Remote*,
+          Malicious*,
+          severity,
+          ThreatSeverity,
+          IndicatorThreatType,
+          ThreatDescription,
+          _ResourceId,
+          SentBytes,
+          ReportReferenceLink,
+          Computer,
+          EventResult_*,
+          status_code,
+          EventType_lookup,
+          TenantId
+  };
+  union isfuzzy = true 
+      BarracudaCustom(disabled=disabled),
+      BarracudaCEF(disabled=disabled)
