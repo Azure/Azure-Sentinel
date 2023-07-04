@@ -306,7 +306,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         $Author = $contentToImport.Author.Split(" - ");
         $newMetadata = [PSCustomObject]@{
             type       = $contentResourceDetails.metadata #"Microsoft.OperationalInsights/workspaces/providers/metadata";
-            apiVersion = $contentResourceDetails.apiVersion -eq '3.0.0' ? "2023-04-01-preview" : "2022-01-01-preview";
+            apiVersion = $contentResourceDetails.metadataApiVersion;
             location   = "[parameters('workspace-location')]";
             properties = [PSCustomObject] @{
                 version = $contentToImport.Version;
@@ -544,7 +544,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             name       = "[parameters('workbook$global:workbookCounter-id')]";
                             location   = "[parameters('workspace-location')]";
                             kind       = "shared";
-                            apiVersion = "2021-08-01";
+                            apiVersion = $contentResourceDetails.insightsWorkbookApiVersion; #"2021-08-01";
                             metadata   = [PSCustomObject]@{};
                             properties = [PSCustomObject] @{
                                 displayName    = $contentToImport.Workbooks ? "[parameters('workbook$global:workbookCounter-name')]" : "[concat(parameters('workbook$global:workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
@@ -649,7 +649,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 # Add base templateSpec
                                 $baseWorkbookTemplateSpec = [PSCustomObject]@{
                                     type       = $contentResourceDetails.resourcetype;  # "Microsoft.Resources/templateSpecs";
-                                    apiVersion = "2022-02-01";
+                                    apiVersion = $contentResourceDetails.templateSpecsApiVersion; # "2022-02-01";
                                     name       = "[variables('workbookTemplateSpecName$global:workbookCounter')]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -675,7 +675,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                             $workbookMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2022-01-01-preview";
+                                apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId$global:workbookCounter'),'/'))))]";
                                 properties = [PSCustomObject]@{
                                     description = "$dependencies.description";
@@ -705,7 +705,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             # Add templateSpecs/versions resource to hold actual content
                             $workbookTemplateSpecContent = [PSCustomObject]@{
                                 type       = $contentResourceDetails.subtype; # "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = $contentResourceDetails.apiVersion -eq '3.0.0' ? "2023-04-01-preview" : "2022-02-01";
+                                apiVersion = $contentResourceDetails.templateSpecsVersionApiVersion;
                                 name       = $contentResourceDetails.apiVersion -eq '3.0.0' ? "[variables('workbookTemplateSpecName$global:workbookCounter')]" : "[concat(variables('workbookTemplateSpecName$global:workbookCounter'),'/',variables('workbookVersion$global:workbookCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1339,7 +1339,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         {
                             $basePlaybookTemplateSpec = [PSCustomObject]@{
                                 type       = $contentResourceDetails.resourcetype; # "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2022-02-01";
+                                apiVersion = $contentResourceDetails.templateSpecsApiVersion; #"2022-02-01";
                                 name       = "[variables('playbookTemplateSpecName$global:playbookCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1378,7 +1378,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         $playbookMetadata = [PSCustomObject]@{
                             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                            apiVersion = "2022-01-01-preview";
+                            apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
                             name       = $IsLogicAppsCustomConnector ? "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('LogicAppsCustomConnector-', last(split(variables('playbookId$global:playbookCounter'),'/'))))]" : 
                             $IsFunctionAppResource ? "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('AzureFunction-', last(split(variables('playbookId$global:playbookCounter'),'/'))))]" :
                             "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId$global:playbookCounter'),'/'))))]";
@@ -1434,7 +1434,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         # Add templateSpecs/versions resource to hold actual content
                         $playbookTemplateSpecContent = [PSCustomObject]@{
                             type       = $contentResourceDetails.subtype; # "Microsoft.Resources/templateSpecs/versions";
-                            apiVersion = $contentResourceDetails.apiVersion -eq '3.0.0' ? "2023-04-01-preview" : "2022-02-01";
+                            apiVersion = $contentResourceDetails.templateSpecsVersionApiVersion;
                             name       = $contentResourceDetails.apiVersion -eq '3.0.0' ? "[variables('playbookTemplateSpecName$global:playbookCounter')]" : "[concat(variables('playbookTemplateSpecName$global:playbookCounter'),'/',variables('playbookVersion$global:playbookCounter'))]";
                             location   = "[parameters('workspace-location')]";
                             tags       = [PSCustomObject]@{
@@ -1603,7 +1603,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             # Add base templateSpec
                             $baseDataConnectorTemplateSpec = [PSCustomObject]@{
                                 type       = $contentResourceDetails.resourcetype; # "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2022-02-01";
+                                apiVersion = $contentResourceDetails.templateSpecsApiVersion; #"2022-02-01";
                                 name       = "[variables('dataConnectorTemplateSpecName$global:connectorCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1641,7 +1641,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         $dataConnectorContent = [PSCustomObject]@{
                             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$global:connectorCounter'))]";
-                            apiVersion = "2021-03-01-preview";
+                            apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
                             kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : (($ccpConnector -eq $true) ? $connectorData.resources[0].kind : "GenericUI");
@@ -1663,7 +1663,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         $dataConnectorMetadata = [PSCustomObject]@{
                             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                            apiVersion = "2022-01-01-preview";
+                            apiVersion = $contentResourceDetails.metadataApiVersion; #"2022-01-01-preview";
                             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId$global:connectorCounter'),'/'))))]";
                             properties = [PSCustomObject]@{
                                 parentId  = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$global:connectorCounter'))]";
@@ -1683,7 +1683,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         # Add templateSpecs/versions resource to hold actual content
                         $dataConnectorTemplateSpecContent = [PSCustomObject]@{
                             type       = $contentResourceDetails.subtype; # "Microsoft.Resources/templateSpecs/versions";
-                            apiVersion = $contentResourceDetails.apiVersion -eq '3.0.0' ? "2023-04-01-preview" : "2022-02-01";
+                            apiVersion = $contentResourceDetails.templateSpecsVersionApiVersion;
                             name       = $contentResourceDetails.apiVersion -eq '3.0.0' ? "[variables('dataConnectorTemplateSpecName$global:connectorCounter')]" : "[concat(variables('dataConnectorTemplateSpecName$global:connectorCounter'),'/',variables('dataConnectorVersion$global:connectorCounter'))]";
                             location   = "[parameters('workspace-location')]";
                             tags       = [PSCustomObject]@{
@@ -1730,7 +1730,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         # Add content-metadata item, in addition to template spec metadata item
                         $dataConnectorActiveContentMetadata = [PSCustomObject]@{
                             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                            apiVersion = "2022-01-01-preview";
+                            apiVersion = $contentResourceDetails.metadataApiVersion; #"2022-01-01-preview";
                             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId$global:connectorCounter'),'/'))))]";
                             dependsOn  = @("[variables('_dataConnectorId$global:connectorCounter')]");
                             location   = "[parameters('workspace-location')]";
@@ -1777,7 +1777,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         $connectorObj = [PSCustomObject]@{
                             name       = if ($contentToImport.TemplateSpec) { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$global:connectorCounter'))]" }else { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$global:connectorCounter-name'))]" }
-                            apiVersion = "2021-03-01-preview";
+                            apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
                             kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
@@ -1804,7 +1804,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         $connectorObj = [PSCustomObject]@{
                             name       = if ($contentToImport.TemplateSpec) { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$global:connectorCounter'))]" }else { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$global:connectorCounter-name'))]" }
-                            apiVersion = "2021-03-01-preview";
+                            apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
                             kind       = $connectorData.kind;
@@ -1934,7 +1934,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             if (!$(queryResourceExists) -and !$contentToImport.TemplateSpec) {
                                 $baseHuntingQueryResource = [PSCustomObject] @{
                                     type       = "Microsoft.OperationalInsights/workspaces";
-                                    apiVersion = $contentResourceDetails.apiVersion -eq '3.0.0' ? "2023-04-01-preview" : "2021-06-01";
+                                    apiVersion = $contentResourceDetails.huntingOperationalInsightsWorkspacesApiVersion;
                                     name       = "[parameters('workspace')]";
                                     location   = "[parameters('workspace-location')]";
                                     resources  = @()
@@ -1978,7 +1978,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         $huntingQueryObj = [PSCustomObject] @{
                             type       = $contentToImport.TemplateSpec ? "Microsoft.OperationalInsights/savedSearches" : "savedSearches";
-                            apiVersion = "2020-08-01";
+                            apiVersion = $contentResourceDetails.savedSearchesApiVersion; #"2020-08-01";
                             name       = $contentToImport.TemplateSpec ? "$($solutionName.Replace(' ', '_'))_Hunting_Query_$global:huntingQueryCounter" : "$solutionName Hunting Query $global:huntingQueryCounter";
                             location   = "[parameters('workspace-location')]";
                             properties = [PSCustomObject] @{
@@ -2044,7 +2044,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             {
                                 $baseHuntingQueryTemplateSpec = [PSCustomObject]@{
                                     type       = $contentResourceDetails.resourcetype; # "Microsoft.Resources/templateSpecs";
-                                    apiVersion = "2022-02-01";
+                                    apiVersion = $contentResourceDetails.templateSpecsApiVersion; #"2022-02-01";
                                     name       = "[variables('huntingQueryTemplateSpecName$global:huntingQueryCounter')]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -2077,7 +2077,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                             $huntingQueryMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2022-01-01-preview";
+                                apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(variables('huntingQueryId$global:huntingQueryCounter'),'/'))))]";
                                 properties = [PSCustomObject]@{
                                     description = "$($solutionName) Hunting Query $global:huntingQueryCounter";
@@ -2098,7 +2098,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             # Add templateSpecs/versions resource to hold actual content
                             $huntingQueryTemplateSpecContent = [PSCustomObject]@{
                                 type       = $contentResourceDetails.subtype; # "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = $contentResourceDetails.apiVersion -eq '3.0.0' ? "2023-04-01-preview" : "2022-02-01";
+                                apiVersion = $contentResourceDetails.templateSpecsVersionApiVersion;
                                 name       = $contentResourceDetails.apiVersion -eq '3.0.0' ? "[variables('huntingQueryTemplateSpecName$global:huntingQueryCounter')]" : "[concat(variables('huntingQueryTemplateSpecName$global:huntingQueryCounter'),'/',variables('huntingQueryVersion$global:huntingQueryCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -2361,7 +2361,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         $newAnalyticRule = [PSCustomObject]@{
                             type       = $contentToImport.TemplateSpec ? "Microsoft.SecurityInsights/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$global:analyticRuleCounter-id'))]";
-                            apiVersion = "2022-04-01-preview";
+                            apiVersion = $contentResourceDetails.alertRuleApiVersion; #"2022-04-01-preview";
                             kind       =  "$($yaml.kind)";
                             location   = "[parameters('workspace-location')]";
                             properties = $alertRule;
@@ -2388,7 +2388,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             {
                                 $baseAnalyticRuleTemplateSpec = [PSCustomObject]@{
                                     type       = $contentResourceDetails.resourcetype; # "Microsoft.Resources/templateSpecs";
-                                    apiVersion = "2022-02-01";
+                                    apiVersion = $contentResourceDetails.templateSpecsApiVersion; #"2022-02-01";
                                     name       = "[variables('analyticRuleTemplateSpecName$global:analyticRuleCounter')]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -2422,7 +2422,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                             $analyticRuleMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2022-01-01-preview";
+                                apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId$global:analyticRuleCounter'),'/'))))]";
                                 properties = [PSCustomObject]@{
                                     description = "$($solutionName) Analytics Rule $global:analyticRuleCounter";
@@ -2444,7 +2444,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             # Add templateSpecs/versions resource to hold actual content
                             $analyticRuleTemplateSpecContent = [PSCustomObject]@{
                                 type       = $contentResourceDetails.subtype; # "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = $contentResourceDetails.apiVersion -eq '3.0.0' ? "2023-04-01-preview" : "2022-02-01";
+                                apiVersion = $contentResourceDetails.templateSpecsVersionApiVersion;
                                 name       = $contentResourceDetails.apiVersion -eq '3.0.0' ? "[variables('analyticRuleTemplateSpecName$global:analyticRuleCounter')]" : "[concat(variables('analyticRuleTemplateSpecName$global:analyticRuleCounter'),'/',variables('analyticRuleVersion$global:analyticRuleCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -2582,7 +2582,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     }
 
 
-    function GenerateSavedSearches($json)
+    function GenerateSavedSearches($json, $contentResourceDetails)
     {
         $isStandardTemplate = $false
                     $searchData = $json # Assume input is basic array of SavedSearches to start
@@ -2603,7 +2603,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                             $savedSearchResource = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
-                                apiVersion = "2020-08-01";
+                                apiVersion =  $contentResourceDetails.savedSearchesApiVersion; #"2020-08-01";
                                 name       = "[concat(parameters('workspace'),'/',parameters('$savedSearchIdParameterName'))]";
                                 properties = [PSCustomObject]@{
                                     category      = $search.properties.category;
@@ -2779,6 +2779,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     'metadata' = "Microsoft.OperationalInsights/workspaces/providers/contentPackages"
                     'contentSchemaVersion' = '3.0.0'
                     'apiVersion' = '3.0.0'
+
+                    'metadataApiVersion' = '2023-04-01-preview'
+                    'templateSpecsVersionApiVersion' = '2023-04-01-preview'
+
                     'resources' = @("Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
                                     "Microsoft.OperationalInsights/workspaces/providers/metadata",
                                     "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -2796,6 +2800,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     'metadata' = "Microsoft.OperationalInsights/workspaces/providers/metadata"
                     'contentSchemaVersion' = '2.0.0'
                     'apiVersion' = '2.0.0'
+
+                    'metadataApiVersion' = '2022-01-01-preview'
+                    'templateSpecsVersionApiVersion' = '2022-02-01'
+
                     'resources' = @("Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
                                     "Microsoft.OperationalInsights/workspaces/providers/metadata",
                                     "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -2808,7 +2816,20 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             {
                 Write-Host "Returning Empty dictionary object because the version information is given as null or empty" -ForegroundColor Red
                 return $dict 
-            } 
+            }
+
+            if ($null -ne $dict)
+            {
+                # ADD COMMON API VERSION
+                $dict.Add('templateSpecsApiVersion', '2022-02-01')
+                $dict.Add('dataConnectorsApiVersion', '2021-03-01-preview')
+                $dict.Add('huntingOperationalInsightsWorkspacesApiVersion', '2021-06-01')
+                $dict.Add('parserOperationalInsightsWorkspacesApiVersion', '2020-08-01')
+                $dict.Add('savedSearchesApiVersion', '2022-10-01')
+                $dict.Add('alertRuleApiVersion', '2022-04-01-preview')
+                $dict.Add('commonResourceMetadataApiVersion', '2022-01-01-preview')
+                $dict.Add('insightsWorkbookApiVersion', '2021-08-01')
+            }
 
             return $dict
         }
@@ -2922,7 +2943,7 @@ function Base32Encode([uint32]$charValue)
         return $sb.ToString()
 }
 
-function addTemplateSpecParserResource($content,$yaml,$isyaml)
+function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceDetails)
 {
         # Add workspace resource ID if not available
         if (!$global:baseMainTemplate.variables.workspaceResourceId) {
@@ -2934,7 +2955,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml)
             # Add base templateSpec
             $baseParserTemplateSpec = [PSCustomObject]@{
                 type       = "Microsoft.Resources/templateSpecs";
-                apiVersion = "2022-02-01";
+                apiVersion = $contentResourceDetails.templateSpecsApiVersion;  #"2022-02-01";
                 name       = "[variables('parserTemplateSpecName$global:parserCounter')]";
                 location   = "[parameters('workspace-location')]";
                 tags       = [PSCustomObject]@{
@@ -2951,7 +2972,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml)
         # Parser Content
         $parserContent = [PSCustomObject]@{
             name       = "[variables('_parserName$global:parserCounter')]";
-            apiVersion = "2020-08-01";
+            apiVersion = $contentResourceDetails.savedSearchesApiVersion; #"2020-08-01";
             type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
             location   = "[parameters('workspace-location')]";
             properties = [PSCustomObject]@{
@@ -2979,7 +3000,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml)
         }
         $parserMetadata = [PSCustomObject]@{
             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-            apiVersion = "2022-01-01-preview";
+            apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$global:parserCounter'),'/'))))]";
             dependsOn  =  @(
                 "[variables('_parserName$global:parserCounter')]"
@@ -3002,7 +3023,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml)
         # Add templateSpecs/versions resource to hold actual content
         $parserTemplateSpecContent = [PSCustomObject]@{
             type       =  $contentResourceDetails.subtype; #"Microsoft.Resources/templateSpecs/versions";
-            apiVersion = $contentResourceDetails.apiVersion -eq '3.0.0' ? "2023-04-01-preview" : "2022-02-01";
+            apiVersion = $contentResourceDetails.templateSpecsVersionApiVersion;
             name       = $contentResourceDetails.apiVersion -eq '3.0.0' ? "[variables('parserTemplateSpecName$global:parserCounter')]" : "[concat(variables('parserTemplateSpecName$global:parserCounter'),'/',variables('parserVersion$global:parserCounter'))]";
             location   = "[parameters('workspace-location')]";
             tags       = [PSCustomObject]@{
@@ -3048,7 +3069,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml)
 
         $parserObj = [PSCustomObject] @{
             type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
-            apiVersion = "2020-08-01";
+            apiVersion = $contentResourceDetails.savedSearchesApiVersion; #"2020-08-01";
             name       = "[variables('_parserName$parserCounter')]";
             location   = "[parameters('workspace-location')]";
             properties = [PSCustomObject] @{
@@ -3070,7 +3091,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml)
 
         $parserMetadata = [PSCustomObject]@{
             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-            apiVersion = "2022-01-01-preview";
+            apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion #"2022-01-01-preview";
             location   = "[parameters('workspace-location')]";
             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$global:parserCounter'),'/'))))]";
             dependsOn  =  @(
@@ -3173,13 +3194,13 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
 
     if($contentToImport.TemplateSpec) {
         # Adding the Parser respective TemplateSpec Resources and Active Parser and Metadata Resource
-        addTemplateSpecParserResource $content $yaml $isyaml
+        addTemplateSpecParserResource $content $yaml $isyaml $contentResourceDetails
     }
     else {
         if ($global:parserCounter -eq 1 -and $(queryResourceExists) -and !$contentToImport.TemplateSpec) {
             $baseParserResource = [PSCustomObject] @{
                 type       = "Microsoft.OperationalInsights/workspaces";
-                apiVersion = "2020-08-01";
+                apiVersion = $contentResourceDetails.parserOperationalInsightsWorkspacesApiVersion; #"2020-08-01";
                 name       = "[parameters('workspace')]";
                 location   = "[parameters('workspace-location')]";
                 resources  = @(
@@ -3190,7 +3211,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
         }
         $parserObj = [PSCustomObject] @{
             type       = "savedSearches";
-            apiVersion = "2020-08-01";
+            apiVersion = $contentResourceDetails.savedSearchesApiVersion; #"2020-08-01";
             name       = "$solutionName Data Parser";
             dependsOn  = @(
                 "[variables('workspace-dependency')]"
