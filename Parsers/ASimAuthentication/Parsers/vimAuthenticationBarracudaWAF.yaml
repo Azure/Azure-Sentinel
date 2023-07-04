@@ -32,6 +32,21 @@ ParserParams:
     Type: string
     Default: '*'
 ParserQuery: |
+  let barracudaSchema = datatable(
+      LogType_s: string,
+      UnitName_s: string,
+      EventName_s: string,
+      DeviceReceiptTime_s: string,
+      TimeGenerated: datetime,
+      Type: string,
+      HostIP_s: string,
+      host_s: string,
+      LoginIP_s: string,
+      Severity_s: string,
+      LoginPort_d: real,
+      AdminName_s: string,
+      EventMessage_s: string
+  )[];
   let SeverityLookup = datatable (severity: int, EventSeverity: string)
       [
       0, "High", 
@@ -45,7 +60,7 @@ ParserQuery: |
   ];
   let EventTypeLookup = datatable (
       EventName_s: string,
-      EventType: string,
+      EventType_lookup: string,
       EventResult: string
   )
       [
@@ -53,12 +68,26 @@ ParserQuery: |
       "UNSUCCESSFUL_LOGIN", "Logoff", "Failure",
       "LOGOUT", "Logoff", "Success"
   ];
-  let parser=(
+  let EventResultDetailsLookup = datatable (
+      Reason: string,
+      EventResultDetails: string
+  )
+      [
+      "Invalid Username/Password", "Incorrect password",
+      "Account Lockout", "User locked",
+      "Expired or Disabled Accounts", "User disabled",
+      "IP Blocking", "Logon violates policy",
+      "Session Timeouts", "Session expired",
+      "CAPTCHA Verification", "Other"
+  ];
+  let BarracudaCustom = (
       starttime: datetime = datetime(null),
       endtime: datetime = datetime(null),
       targetusername_has: string = "*",
       disabled: bool = false) {
-      barracuda_CL
+      (union isfuzzy=false
+          barracudaSchema,
+          barracuda_CL
       | where not(disabled)
           and (LogType_s == "AUDIT")
           and (EventName_s in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
@@ -67,32 +96,38 @@ ParserQuery: |
       | where (isnull(starttime) or EventStartTime >= starttime)
           and (isnull(endtime) or EventEndTime <= endtime)
           and (targetusername_has == '*' or (AdminName_s has targetusername_has))
+      | parse trim(@'[^\w(")]+', EventMessage_s) with * "Reason=" Reason:string
+      | extend Reason = trim(@'(")', Reason)
+      | lookup EventResultDetailsLookup on Reason
       | lookup EventTypeLookup on EventName_s
       | extend 
+          EventType = EventType_lookup,
           severity = toint(Severity_s)
       | lookup SeverityLookup on severity
       | extend
-          Dvc = column_ifexists("UnitName_s", ""),
+          Dvc = UnitName_s,
           EventCount = toint(1),
           EventProduct = "WAF",
           EventSchema = "Authentication",
           EventSchemaVersion = "0.1.3",
-          EventVendor = "Barracuda",
-          ActorUsernameType = "Simple"
+          EventVendor = "Barracuda"
       | extend
-          EventType = iff(EventName_s == "LOGOUT", "Logoff", "Logon"),
           SrcPortNumber = toint(LoginPort_d),
-          DvcIpAddr = column_ifexists("HostIP_s", ""),
-          SrcIpAddr = column_ifexists("LoginIP_s", ""),
-          DvcHostname = column_ifexists("host_s", ""),
-          ActorUsername= column_ifexists("AdminName_s", "")
+          DvcIpAddr = HostIP_s,
+          SrcIpAddr = LoginIP_s,
+          DvcHostname = host_s,
+          ActorUsername = AdminName_s
       | extend
-          IpAddr=SrcIpAddr,
+          ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+          ActorUserType = iff(isnotempty(ActorUsername), "Admin", "")
+      | extend
+          IpAddr = SrcIpAddr,
           Src = SrcIpAddr
       | project-away
           *_s,
           *_d,
           severity,
+          EventType_lookup,
           TenantId,
           Message,
           SourceSystem,
@@ -101,9 +136,102 @@ ParserQuery: |
           Computer,
           MG,
           ManagementGroupName,
-          SourceIP
+          SourceIP,
+          Reason
+      )
   };
-  parser(
+  let BarracudaCEF = (
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      targetusername_has: string = "*",
+      disabled: bool = false) {
+      CommonSecurityLog
+      | where not(disabled) and DeviceVendor == "Barracuda" and DeviceProduct == "WAF"
+      | where DeviceEventCategory == "AUDIT"
+          and (toupper(ProcessName) in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
+      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime))
+      | extend EventEndTime = EventStartTime
+      | where (isnull(starttime) or EventStartTime >= starttime)
+          and (isnull(endtime) or EventEndTime <= endtime)
+          and (targetusername_has == '*' or (DestinationUserName has targetusername_has))
+      | parse trim(@'[^\w(")]+', Message) with * "Reason=" Reason:string
+      | extend Reason = trim(@'(")', Reason)
+      | lookup EventResultDetailsLookup on Reason
+      | extend ProcessName = toupper(ProcessName)
+      | lookup EventTypeLookup on $left.ProcessName == $right.EventName_s
+      | extend 
+          EventType = EventType_lookup,
+          severity = toint(LogSeverity)
+      | lookup SeverityLookup on severity
+      | extend
+          Dvc = DeviceName,
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.3",
+          EventVendor = "Barracuda"
+      | extend
+          SrcPortNumber = toint(SourcePort),
+          DvcIpAddr = DeviceAddress,
+          SrcIpAddr = SourceIP,
+          DvcHostname = DeviceName,
+          ActorUsername = DestinationUserName
+      | extend
+          ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+          ActorUserType = iff(isnotempty(ActorUsername), "Admin", "")
+      | extend
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr
+      | project-away
+          ThreatConfidence,
+          EventType_lookup,
+          CommunicationDirection,
+          AdditionalExtensions,
+          Device*,
+          Source*,
+          Destination*,
+          Activity,
+          LogSeverity,
+          ApplicationProtocol,
+          ProcessID,
+          ExtID,
+          Protocol,
+          Reason,
+          ReceiptTime,
+          SimplifiedDeviceAction,
+          OriginalLogSeverity,
+          ProcessName,
+          EndTime,
+          ExternalID,
+          File*,
+          ReceivedBytes,
+          Message,
+          Old*,
+          EventOutcome,
+          Request*,
+          StartTime,
+          Field*,
+          Flex*,
+          Remote*,
+          Malicious*,
+          severity,
+          ThreatSeverity,
+          IndicatorThreatType,
+          ThreatDescription,
+          _ResourceId,
+          SentBytes,
+          ReportReferenceLink,
+          Computer,
+          TenantId
+  };
+  union isfuzzy = true 
+  BarracudaCustom(
+      starttime = starttime,
+      endtime = endtime,
+      targetusername_has = targetusername_has,
+      disabled=disabled
+  ),
+  BarracudaCEF(
       starttime = starttime,
       endtime = endtime,
       targetusername_has = targetusername_has,
