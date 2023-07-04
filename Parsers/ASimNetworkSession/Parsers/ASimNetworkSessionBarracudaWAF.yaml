@@ -23,7 +23,23 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let protocollookup = datatable(
+  let barracudaSchema = datatable(
+      UnitName_s: string,
+      DeviceReceiptTime_s: string,
+      ActionID_s: string,
+      DestinationIP_s: string,
+      SourceIP: string,
+      host_s: string,
+      HostIP_s: string,
+      Severity_s: string,
+      LogType_s: string,
+      DestinationPort_d: real,
+      SourcePort_d: real,
+      Protocol_s: string,
+      TimeGenerated: datetime,
+      Type: string,
+  )[];
+  let ProtocolLookup = datatable(
       Protocol_s: string,
       NetworkProtocol: string,
       NetworkProtocolVersion: string
@@ -46,19 +62,25 @@ ParserQuery: |
       6, "Informational",
       7, "Informational"
   ];
-  let EventResultLookup = datatable (ActionID_s: string, EventResult: string)
+  let EventResultLookup = datatable (
+      ActionID_s: string,
+      EventResult: string,
+      DvcAction: string
+  )
       [
-      "ALLOW", "Success",
-      "DENY", "Failure"
+      "ALLOW", "Success", "Allow",
+      "DENY", "Failure", "Deny"
   ];
-  let parser=(disabled: bool=false) {
-      barracuda_CL
+  let BarracudaCustom = (disabled: bool=false) {
+      (union isfuzzy=false
+          barracudaSchema,
+          barracuda_CL
       | where not(disabled) and LogType_s == "NF"
       | extend
           severity = toint(Severity_s)
       | lookup EventResultLookup on ActionID_s
       | lookup SeverityLookup on severity
-      | lookup protocollookup on Protocol_s
+      | lookup ProtocolLookup on Protocol_s
       | extend
           EventCount = toint(1),
           EventProduct = "WAF",
@@ -67,24 +89,19 @@ ParserQuery: |
           EventType = "NetworkSession",
           EventVendor = "Barracuda"
       | extend
-          Dvc =  column_ifexists("UnitName_s", ""),
+          Dvc =  UnitName_s,
           EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)),
-          DvcAction = column_ifexists("ActionID_s", ""),
-          DstIpAddr = column_ifexists("DestinationIP_s", ""),
-          SrcIpAddr = column_ifexists("SourceIP", ""),
-          DvcHostname = column_ifexists("host_s", ""),
-          DvcIpAddr = column_ifexists("HostIP_s", ""),                             
-          DstPortNumber = toint(column_ifexists("DestinationPort_d", "")),
-          SrcPortNumber = toint(column_ifexists("SourcePort_d", "")),
-          EventOriginalType = "Network Firewall"
+          DstIpAddr = DestinationIP_s,
+          SrcIpAddr = SourceIP,
+          DvcHostname = host_s,
+          DvcIpAddr = HostIP_s,
+          DstPortNumber = toint(DestinationPort_d),
+          SrcPortNumber = toint(SourcePort_d)
       | extend
           IpAddr = SrcIpAddr,
-          SrcHostname = SrcIpAddr,
-          Src=SrcIpAddr,
-          Dst=DstIpAddr,
-          EventEndTime = EventStartTime,
-          DstHostname = DstIpAddr
-      | extend Hostname = DstHostname
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          EventEndTime = EventStartTime
       | project-away
           *_d,
           *_s,
@@ -98,5 +115,79 @@ ParserQuery: |
           ManagementGroupName,
           TenantId,
           SourceSystem
+      )
   };
-  parser(disabled=disabled)
+  let BarracudaCEF = (disabled: bool=false) {
+      CommonSecurityLog
+      | where not(disabled) and DeviceVendor == "Barracuda" and DeviceProduct == "WAF"
+      | where DeviceEventCategory == "NF"
+      | extend
+          severity = toint(LogSeverity)
+      | lookup EventResultLookup on $left.DeviceAction == $right.ActionID_s
+      | lookup SeverityLookup on severity
+      | lookup ProtocolLookup on $left.Protocol == $right.Protocol_s
+      | extend
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "NetworkSession",
+          EventVendor = "Barracuda"
+      | extend
+          Dvc =  DeviceName,
+          EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
+          DstIpAddr = DestinationIP,
+          SrcIpAddr = SourceIP,
+          DvcHostname = DeviceName,
+          DvcIpAddr = DestinationIP,
+          DstPortNumber = toint(DestinationPort),
+          SrcPortNumber = toint(SourcePort)
+      | extend
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          EventEndTime = EventStartTime
+      | project-away
+          ThreatConfidence,
+          CommunicationDirection,
+          AdditionalExtensions,
+          Device*,
+          Source*,
+          Destination*,
+          Activity,
+          LogSeverity,
+          ApplicationProtocol,
+          ProcessID,
+          ExtID,
+          Protocol,
+          Reason,
+          ReceiptTime,
+          SimplifiedDeviceAction,
+          OriginalLogSeverity,
+          ProcessName,
+          EndTime,
+          ExternalID,
+          File*,
+          ReceivedBytes,
+          Message,
+          Old*,
+          EventOutcome,
+          Request*,
+          StartTime,
+          Field*,
+          Flex*,
+          Remote*,
+          Malicious*,
+          severity,
+          ThreatSeverity,
+          IndicatorThreatType,
+          ThreatDescription,
+          _ResourceId,
+          SentBytes,
+          ReportReferenceLink,
+          Computer,
+          TenantId
+  };
+  union isfuzzy = true 
+      BarracudaCustom(disabled=disabled),
+      BarracudaCEF(disabled=disabled)
