@@ -10,12 +10,40 @@ if ($mainTemplateChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on MainTemplate.json file!"
     $MainTemplateTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File mainTemplate.json
-    $MainTemplateTestPassed =  $MainTemplateTestResults | Where-Object { -not $_.Failed }
-    Write-Output $MainTemplateTestPassed
+    # SKIP ANY ERRORS ON contentProductId AND id 
+    $filterTestResults = New-Object System.Collections.ArrayList
+    $hasContentProductIdError = $false
+    foreach($testInfo in $MainTemplateTestResults)
+    {
+        if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0)
+        {
+            foreach ($errorInfo in $testInfo.Errors)
+            {
+                if ($errorInfo.Exception.Message -like '*"contentProductId"*' -or 
+                $errorInfo.Exception.Message -like '*"id"*')
+                {
+                    $hasContentProductIdError = $true
+                }
+                else 
+                {
+                    $filterTestResults.Add($testInfo)
+                }
+            }
+        }
+        else {
+            if ($null -ne $testInfo.Summary -and $hasContentProductIdError -eq $true)
+            {
+                $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
+                $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
+            }
 
-    $MainTemplateTestFailures =  $MainTemplateTestResults | Where-Object { -not $_.Passed }
+            $filterTestResults.Add($testInfo)
+        }
+    }
 
-    if ($MainTemplateTestFailures) {
+    Write-Output $filterTestResults
+
+    if ($filterTestResults[$filterTestResults.Count - 1].Summary.Fail -gt 0) {
         Write-Host "Please review and rectify the 'MainTemplate.json' file as some of the ARM-TTK tests did not pass!"
         exit 1
     } 

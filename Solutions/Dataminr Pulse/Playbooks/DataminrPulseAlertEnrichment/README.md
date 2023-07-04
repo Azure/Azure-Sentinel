@@ -20,7 +20,7 @@ This playbook provides an end-to-end example of how alert enrichment works. This
 ### Deployment instructions<a name="Deployment-instructions"></a>
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
     * Key Vault Name: Name of keyvault where secrets are stored.
     * Tenant Id: TenantId of azure active directory where keyvault is located.
