@@ -25,7 +25,7 @@ STARTPARAMS="$@"
 dockerimage="mcr.microsoft.com/azure-sentinel/solutions/sapcon"
 sdkfileloc="/sapcon-app/inst/"
 CONTAINERNAMES=()
-logs = "NO LOGS TO DISPLAY"
+test_logs="NO LOGS TO DISPLAY"
 
 
 while [[ $# -gt 0 ]]; do
@@ -324,7 +324,7 @@ while IFS= read -r contname; do
 				docker stop "$testruncontainer" >/dev/null
 			fi
 			log "Test run finished, removing agent in test run mode"
-			logs=$(docker logs "$testruncontainer" --tail 70)
+            		test_logs=$(docker logs "$testruncontainer" --tail 70 2>&1 >/dev/null)
 			docker rm "$testruncontainer" >/dev/null
 		else
 			log "Creating new agent without test mode"
@@ -338,7 +338,7 @@ while IFS= read -r contname; do
 			echo ""
 			log "Test run NOT successful, removing new agent, renaming the old agent to original name"
 			log "----Agent debug logs START----"
-			log $logs
+			log "$test_logs"
 			log "----Agent debug logs END----"
 		fi
 		if [ $dryrunsuccess == 1 ]; then

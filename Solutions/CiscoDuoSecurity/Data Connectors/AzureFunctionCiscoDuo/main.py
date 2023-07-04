@@ -121,7 +121,7 @@ def process_auth_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
     maxtime = int(time.time() - 120) * 1000
     diff = maxtime - mintime
     if(diff > 3600000):
-        maxtime = (int(mintime) + 3600) * 1000
+        maxtime = (int(mintime/1000) + 3600) * 1000
 
     for event in get_auth_logs(admin_api, mintime, maxtime):
         sentinel.send(event)
