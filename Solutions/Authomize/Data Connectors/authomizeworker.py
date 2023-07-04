@@ -1,211 +1,151 @@
 import json
-import sys
 import requests
-import time
 import configparser
-import os.path
+import os
 from azureworker import post_data
 from datetime import datetime, timezone
 
 # Load settings
 config = configparser.ConfigParser()
-config.read('config.cfg')
-# Assign Variables
-URL = config.get('DEFAULT','authomizeURL')
-token = config.get('DEFAULT','authomizeToken')
-customer_id = config.get('DEFAULT','customer_id')
-shared_key = config.get('DEFAULT','shared_key')
-log_type = config.get('DEFAULT','sentinelLog')
-DateFileCFG = config.get('DEFAULT','DateFileCFG')
+try:
+    config.read('config.cfg')
+    # Assign Variables
+    URL = config.get('DEFAULT', 'authomizeURL')
+    token = config.get('DEFAULT', 'authomizeToken')
+    customer_id = config.get('DEFAULT', 'customer_id')
+    shared_key = config.get('DEFAULT', 'shared_key')
+    log_type = config.get('DEFAULT', 'sentinelLog')
+    DateFileCFG = config.get('DEFAULT', 'DateFileCFG')
+except configparser.Error as e:
+    print(f"Error reading or parsing config file: {e}")
+    exit(1)
 
-
-MyNextPage = ""
 currentDate = ""
 
-# Setup the Data for the Search query
 
-def GetJSONData(BooleanValue,nextPage,TheCurrentDateTime):
-  if BooleanValue == True:
-    JsonData = {
-                "filter": {
-                  "createdAt": {
-                    "$lt": TheCurrentDateTime
-                  },
-                  "updatedAt": {
-                  },
-                  "severity": {
-                    "$in": [
-                      ]  
-                  },
-                  "status": {
-                    "$in": [
-                      "Open"
-                      ]
-                  },
-                  "isResolved": {
-                    "$eq": False
-                  }
-                },
-                "pagination": {
-                  "nextPage": nextPage,
-                  "limit": 10
-                },
-                "expand": [
-                  "policy"
-                ],
-                "sort": [
-                  {
-                    "fieldName": "createdAt",
-                    "order": "DESC"
-                  }
-                ]
-              }
-  else:
-    JsonData = {
-              "filter": {
-                "createdAt": {
-                  "$gte": TheCurrentDateTime
-                },
-                "updatedAt": {
-                },
-                "severity": {
-                  "$in": [
-                    ]  
-                },
-                "status": {
-                  "$in": [
-                    "Open"
-                    ]
-                },
-                "isResolved": {
-                  "$eq": False
-                }
-              },
-              "pagination": {
-                "nextPage": nextPage,
-                "limit": 10
-              },
-              "expand": [
-                "policy"
-              ],
-              "sort": [
-                {
-                  "fieldName": "createdAt",
-                  "order": "DESC"
-                }
-              ]
-            }    
-    
-  return JsonData
-    
+def GetJSONData(nextPage, TheCurrentDateTime, last_run_datetime=None):
+    filter_criteria = {
+        "createdAt": {
+            "$lte": TheCurrentDateTime
+        },
+        "status": {
+            "$in": ["Open"]
+        }
+    }
+
+    if last_run_datetime:
+        filter_criteria["createdAt"]["$gte"] = last_run_datetime
+
+    return {
+        "filter": filter_criteria,
+        "expand": [
+            "policy"
+        ],
+        "sort": [
+            {
+                "fieldName": "createdAt",
+                "order": "ASC"
+            }
+        ],
+        "pagination": {
+            "limit": 10,
+            "nextPage": nextPage
+        }
+    }
+
 
 def DateInZulu(currentDate):
-  currentDate = datetime.now(timezone.utc).isoformat()
-  return(currentDate)
+    currentDate = datetime.now(timezone.utc).isoformat()
+    return currentDate
 
 
-def CheckFileExists(FileExistStatus):
-  if os.path.exists(DateFileCFG):
-    FileExistStatus = False
-  else:
-    FileExistStatus = True
-  return bool(FileExistStatus)
-    
+def CheckFileExists():
+    try:
+        # Checking if file exists
+        return os.path.exists(DateFileCFG)
+    except Exception as e:
+        # Log or print the exception message
+        print(f"An error occurred while checking if the file exists: {e}")
+        # Return False, assuming file does not exist in case of an error
+        return False
+
 def WriteFileContent(FileContent):
-  f = open(DateFileCFG, "w")
-  f.write(FileContent)
-  f.close()
-   
+    try:
+        # Opening file for writing
+        with open(DateFileCFG, "w") as f:
+            f.write(FileContent)
+    except Exception as e:
+        # Log or print the exception message
+        print(f"An error occurred while writing to the file: {e}")
+
 def ReadFileContent():
-  f = open(DateFileCFG, "r")
-  line = f.read()
-  return line
+    try:
+        # Opening file for reading
+        with open(DateFileCFG, "r") as f:
+            return f.read()
+    except Exception as e:
+        # Log or print the exception message
+        print(f"An error occurred while reading from the file: {e}")
+        # Return None in case of an error
+        return None
 
 def searchIncident():
-  
-    TheCurrentDateTime = DateInZulu(currentDate)
-    FileState = CheckFileExists(True)
+    FileState = CheckFileExists()
 
+    last_run_datetime = None
     if FileState:
-      WriteFileContent(TheCurrentDateTime)
-      JsonData = GetJSONData(FileState,'',TheCurrentDateTime)
-      theData = json.dumps(JsonData)
-    else:
-      TheTime = ReadFileContent()
-      TheCurrentDateTime = TheTime
-      JsonData = GetJSONData(FileState,'',TheCurrentDateTime)
-      theData = json.dumps(JsonData)
+        last_run_datetime = ReadFileContent()
+
+    TheCurrentDateTime = DateInZulu(currentDate)
 
     theheaders = {
         'Authorization': token,
         'Content-Type': 'application/json'
-        }
- 
-    # Enter while hasMore data
-    hasMore = True
-    # Setup for pulling data until hasMore is False 
-    while hasMore:
-      response = requests.post(url=URL,data=theData, headers=theheaders)      
-      theresponse = response
-      
-      if (response.status_code >= 200 and response.status_code <= 299):
-          getJSONdump = json.dumps(theresponse.json(), indent=2)
-          jsonObj = json.loads(getJSONdump)
-          
-          # Lets test to see if there is any returned data
-          if jsonObj['pagination']['hasMore'] == True:
-            
-            # Just for readability listing the hasMore field
-            print("Has more data: ", jsonObj['pagination']['hasMore'])
-            
-            #access elements in the object
-            limit = jsonObj['pagination']['limit']
-            nextPage = jsonObj['pagination']['nextPage']
-            # Not needed as we set the loop with True - Grab it only when its False
-            # hasMore = jsonObj['pagination']['hasMore']
-            
-            #get the data from the object to send to Sentinel
-            myAzureData = jsonObj['data']
-            print("---",limit,"|", nextPage,"|", hasMore, "---")
-            
-            if myAzureData != []:
-              body = json.dumps(myAzureData)
-              # This sends to Azure (calls over to function in azureworker)
-              post_data(customer_id, shared_key, body, log_type)
-              # print(body)
+    }
+
+    print(f"Status: Started processing.")
+    MyCounter = 0
+    nextPage = ""
+    while True:
+        MyCounter += 1
+        print(f"INFO: --Processing-- [", MyCounter, "]")
+        JsonData = GetJSONData(nextPage, TheCurrentDateTime, last_run_datetime)
+        theData = json.dumps(JsonData)
+        
+        try:
+            response = requests.post(url=URL, data=theData, headers=theheaders, timeout=10)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            print(f"Warning: An error occurred making the API request: {e}")
+            break
+
+        try:
+            response_json = response.json()
+
+            # Handling data element
+            data_element = response_json.get('data', [])
+            if data_element:
+                body = json.dumps(data_element)
+                try:
+                    post_data(customer_id, shared_key, body, log_type)
+                except Exception as e:
+                    print(f"Error posting data: {e}")
             else:
-              print("Empty Data String!!!")
+                print(f"INFO: No data to send, skipping process steps.")
 
-            # Setup the request with new JSON data
-            JsonData = GetJSONData(FileState,nextPage,TheCurrentDateTime)
-            theData = json.dumps(JsonData)
-
-            if hasMore == False:
-              TheCurrentDateTime = DateInZulu(currentDate)
-              WriteFileContent(TheCurrentDateTime)
-          else:
-            # hasMore is False so end the while loop and do nothing more
-            # Data payload will be empty
-            print("Checking if any more data as pagination has ended - hasMore returned: ", jsonObj['pagination']['hasMore'])
-            hasMore = jsonObj['pagination']['hasMore']
-            # print(jsonObj)
-            # Try and get some data
-            IfDataHere = jsonObj['data']
-            
-            # If no more data then we'll do nothing else we will send the last of the data
-            if IfDataHere != []:
-              print("Sending last bit of data...")
-              body = json.dumps(IfDataHere)
-              # This sends to Azure (calls over to function in azureworker)
-              post_data(customer_id, shared_key, body, log_type)
-              # print(body)
+            # Handling pagination
+            pagination = response_json.get('pagination', {})
+            if pagination.get('hasMore'):
+                nextPage = pagination.get('nextPage', "")
             else:
-              print("empty data string not sending anything...")
-            
-            print("---------This is the end check above results---------")
-            
-            #This finishes the work
-      else:
-          print("Response code: {}".format(response.status_code))
+                print(f"Status: Stopped processing.")
+                break
+        except Exception as e:
+            print(f"Error processing response JSON: {e}")
+            break
 
-searchIncident()
+    # Update the timestamp file at the end of processing
+    WriteFileContent(TheCurrentDateTime)
+
+if __name__ == "__main__":
+    searchIncident()
