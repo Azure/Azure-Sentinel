@@ -1,7 +1,7 @@
 Parser:
   Title: File Event ASIM filtering parser for Microsoft Windows Events
-  Version: '0.1.2'
-  LastUpdated: October 27, 2022
+  Version: '0.2.2'
+  LastUpdated: Jul 05, 2023
 Product:
   Name: Microsoft Windows Events
 Normalization:
@@ -13,12 +13,48 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
+  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663, 5140, 4670
 ParserName: vimFileEventMicrosoftWindowsEvents
 ParserQuery: |
-  let Parser=()
-  {
-  let EventTypeLookup = datatable (AccessMask:string,EventType:string)
+let Parser=()
+{  
+  let EventType5140Lookup = datatable (AccessMask:string,EventType:string)
+  [
+      "0x1", "FileAccessed"
+      , "0x2", "FileModified"
+      , "0x4", "FileModified"
+      , "0x8", "FileAccessed"
+      , "0x10", "FileModified"
+      , "0x20", "FileAccessed"
+      , "0x40", "FileDeleted"
+      , "0x80", "FileAccessed"
+      , "0x100", "FileModified"
+      , "0x10000", "FileDeleted"
+      , "0x20000", "FileAccessed"
+      , "0x40000", "FileModified"
+      , "0x80000", "FileModified"
+      , "0x100000", "FileAccessed"
+      , "0x1000000", "FileAccessed"
+  ];
+  let EventSubType5140Lookup = datatable (AccessListTrimmed:string,EventSubType:string)
+  [
+      "%%4416", "Preview"
+      , "%%4417", "Checkin"
+      , "%%4418", "Extended"
+      , "%%4419", "N/A"
+      , "%%4420", "N/A"
+      , "%%4421", "N/A"
+      , "%%4422", "N/A"
+      , "%%4423", "N/A"
+      , "%%4424", "N/A"
+      , "%%1537", "N/A"
+      , "%%1538", "N/A"
+      , "%%1539", "N/A"
+      , "%%1540", "N/A"
+      , "%%1541", "N/A"
+      , "%%1542", "N/A"
+  ];
+  let EventType4663Lookup = datatable (AccessMask:string,EventType:string)
   [
       "0x1", "ObjectAccessed"
       , "0x10", "MetadataModified"
@@ -34,66 +70,179 @@ ParserQuery: |
       , "0x80", "MetadataAccessed"
       , "0x80000", "MetadataModified"
   ];
-  let UserTypeLookup = datatable (AccountType:string, ActorUserType:string)
+  let ActorUserTypeLookup = datatable (AccountType:string, ActorUserType:string)
   [
     'User', 'Regular',
-    'Machine', 'Machine'
+    'Machine', 'Machine',
+    'Unknown', 'Unknown'
   ];    
-  let KnownSIDs = datatable (sid:string, username:string, type:string)
+  let SIDCommonLookup = datatable (sid:string, username:string, type:string)
   [
     'S-1-5-18', 'Local System', 'Simple',
     'S-1-0-0', 'Nobody', 'Simple'
   ];
-  union isfuzzy=false (WindowsEvent
-  | where EventID == 4663 
-    and EventData.ObjectType == "File"
-    and EventData.ObjectName !startswith @"\Device\"
-  | project TimeGenerated
-    , EventID, AccessMask = tostring(EventData.AccessMask)
-    , ProcessName = tostring(EventData.ProcessName)
-    , SubjectUserSid = tostring(EventData.SubjectUserSid)
-    , AccountType = tostring(EventData.AccountType)
-    , Computer = tostring(EventData.Computer)
-    , ObjectName = tostring(EventData.ObjectName)
-    , ProcessId = tostring(EventData.ProcessId)
-    , SubjectUserName = tostring(EventData.SubjectUserName)
-    , SubjectAccount = tostring(EventData.SubjectAccount)
-    , SubjectLogonId = tostring(EventData.SubjectLogonId)
-    , HandleId = tostring(EventData.HandleId)
-  )
-  , (SecurityEvent
-  | where EventID == 4663 
-    and ObjectType == "File"
-    and ObjectName !startswith @"\Device\"
-  | project TimeGenerated, EventID, AccessMask, ProcessName, SubjectUserSid, AccountType, Computer, ObjectName, ProcessId, SubjectUserName, SubjectAccount, SubjectLogonId, HandleId)
-  | lookup EventTypeLookup on AccessMask
-  | lookup UserTypeLookup on AccountType
-  | lookup KnownSIDs on $left.SubjectUserSid == $right.sid
-  | extend ActingProcessName = ProcessName
-    , ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount)
-    , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , TargetFilePath = ObjectName
-    , TargetFilePathFormat = "Windows Local"
-    , ActingProcessId = tostring(toint(ProcessId))
-    , EventOriginalType = tostring(EventID)
-  | project-away EventID, ProcessId, AccountType, type, username
-  | project-rename ActorUserId = SubjectUserSid
-    , DvcHostname = Computer
-    , Process = ProcessName
-    , FilePath = ObjectName
-    , ActorSessionId = SubjectLogonId
-    , FileSessionId = HandleId
-  | extend EventSchema = "FileEvent"
-    , EventSchemaVersion = "0.1.1"
-    , EventResult = "Success"
-    , EventCount = int(1)
-    , EventVendor = 'Microsoft'
-    , EventProduct = 'Security Events'
-    , Dvc = DvcHostname
-    , ActorWindowsUsername = ActorUsername
-    , User = ActorUsername
-    , ActorUserSid = ActorUserId
-  };
-  Parser
+  let 4663events =
+    union isfuzzy=false (
+    WindowsEvent
+        | where EventID == 4663 
+            and EventData.ObjectType == "File"
+            and EventData.ObjectName !startswith @"\Device\"
+        | project TimeGenerated
+            , EventID
+            , AccessMask = tostring(EventData.AccessMask)
+            , ProcessName = tostring(EventData.ProcessName)
+            , SubjectUserSid = tostring(EventData.SubjectUserSid)
+            , AccountType = tostring(EventData.AccountType)
+            , Computer = tostring(EventData.Computer)
+            , ObjectName = tostring(EventData.ObjectName)
+            , ProcessId = tostring(EventData.ProcessId)
+            , SubjectUserName = tostring(EventData.SubjectUserName)
+            , SubjectAccount = tostring(EventData.SubjectAccount)
+            , SubjectLogonId = tostring(EventData.SubjectLogonId)
+            , HandleId = tostring(EventData.HandleId)
+    )
+  , ( 
+    SecurityEvent
+        | where EventID == 4663 
+            and ObjectType == "File"
+            and ObjectName !startswith @"\Device\"
+        | project TimeGenerated
+            , EventID
+            , AccessMask
+            , ProcessName
+            , SubjectUserSid
+            , AccountType
+            , Computer
+            , ObjectName
+            , ProcessId
+            , SubjectUserName
+            , SubjectAccount
+            , SubjectLogonId
+            , HandleId
+    )
+        | lookup EventType4663Lookup on AccessMask
+        | extend ActingProcessName = ProcessName
+            , ActingProcessId = tostring(toint(ProcessId))
+            , TargetFilePath = ObjectName
+        | project-away ProcessId
+        | project-rename Process = ProcessName
+            , FilePath = ObjectName
+            , FileSessionId = HandleId
+  ;
+  let 5140events = 
+    union isfuzzy=false (
+    WindowsEvent
+        | where EventID == 5140
+            and EventData.ObjectType == "File"
+        | project TimeGenerated
+            , Computer
+            , EventID
+            , AccessMask = tostring(EventData.AccessMask)
+            , AccessList = tostring(EventData.AccessList)
+            , SubjectUserSid = tostring(EventData.SubjectUserSid)
+            , SubjectUserName = tostring(EventData.SubjectUserName)
+            , SubjectLogonId = tostring(EventData.SubjectLogonId)
+            , SubjectDomainName = tostring(EventData.SubjectDomainName)
+            , ShareName = tostring(EventData.ShareName)
+        | extend SubjectAccount = strcat(SubjectDomainName,"\\",SubjectUserName)
+        | extend AccountType = "Unknown"
+        | project-away SubjectDomainName
+    )
+  , (
+    SecurityEvent
+        | where EventID == 5140
+            and ObjectType == "File"
+        | project TimeGenerated
+		, EventID
+		, AccessMask
+		, AccessList
+		, SubjectUserSid
+		, AccountType
+		, Computer
+		, SubjectUserName
+		, SubjectAccount
+		, SubjectLogonId
+		, ShareName
+    )
+        | lookup EventType5140Lookup on AccessMask
+        | extend AccessListTrimmed = trim(@"\s+",AccessList)
+        | lookup EventSubType5140Lookup on AccessListTrimmed
+        | extend TargetFilePath = ShareName
+        | project-rename FilePath = ShareName
+        | project-away AccessListTrimmed
+    ;
+  let 4670events = 
+    union isfuzzy=false (
+    WindowsEvent
+        | where EventID == 4670
+            and EventData.ObjectType == "File"
+        | project TimeGenerated
+            , Computer
+            , EventID
+            , SubjectUserSid = tostring(EventData.SubjectUserSid)
+            , AccountType = tostring(EventData.AccountType)
+            , SubjectUserName = tostring(EventData.SubjectUserName)
+            , SubjectAccount = tostring(EventData.SubjectAccount)
+            , SubjectLogonId = tostring(EventData.SubjectLogonId)
+            , SubjectDomainName = tostring(EventData.SubjectDomainName)
+            , ObjectName = tostring(EventData.ObjectName)
+            , ProcessName = tostring(EventData.ProcessName)
+            , ProcessId = tostring(EventData.ProcessId)
+            , HandleId = tostring(EventData.HandleId)
+        | extend SubjectAccount = strcat(SubjectDomainName,"\\",SubjectUserName)
+        | extend AccountType = "Unknown"
+        | project-away SubjectDomainName
+    )
+  , (
+    SecurityEvent
+        | where EventID == 4670
+            and ObjectType == "File"
+        | project TimeGenerated
+		, EventID
+		, SubjectUserSid
+		, AccountType
+		, Computer
+		, SubjectUserName
+		, SubjectAccount
+		, SubjectLogonId
+		, ObjectName
+		, ProcessId
+		, ProcessName
+		, HandleId
+    )
+        | extend ActingProcessName = ProcessName
+            , ActingProcessId = tostring(toint(ProcessId))
+            , TargetFilePath = ObjectName
+        | project-away ProcessId
+        | project-rename Process = ProcessName
+            , FilePath = ObjectName
+            , FileSessionId = HandleId
+    ;
+  union isfuzzy=false
+    4663events
+    , 5140events
+    , 4670events
+        | lookup ActorUserTypeLookup on AccountType
+        | lookup SIDCommonLookup on $left.SubjectUserSid == $right.sid
+        | extend ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount)
+            , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
+            , EventStartTime = TimeGenerated
+            , EventEndTime = TimeGenerated
+            , TargetFilePathFormat = "Windows Local"
+            , EventOriginalType = tostring(EventID)
+        | project-away EventID, AccountType, type, username
+        | project-rename ActorUserId = SubjectUserSid
+            , DvcHostname = Computer
+            , ActorSessionId = SubjectLogonId
+        | extend EventSchema = "FileEvent"
+            , EventSchemaVersion = "0.1.1"
+            , EventResult = "Success"
+            , EventCount = int(1)
+            , EventVendor = 'Microsoft'
+            , EventProduct = 'Security Events'
+            , Dvc = DvcHostname
+            , ActorWindowsUsername = ActorUsername
+            , User = ActorUsername
+            , ActorUserSid = ActorUserId
+};
+Parser
