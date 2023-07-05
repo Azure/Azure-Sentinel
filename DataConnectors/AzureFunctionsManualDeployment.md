@@ -32,9 +32,9 @@
 
 	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Selectalocation.png)
 
-1. Deployment will begin. A notification is displayed after your function app is created.
+- Deployment will begin. A notification is displayed after your function app is created.
 
-2. Deploy the function in Function app: Once the function app is created click on deploy button under workspace section. Select the Subcription and the function app in which function needs to be deployed.
+- Deploy the function in Function app: Once the function app is created click on deploy button under workspace section. Select the Subcription and the function app in which function needs to be deployed.
 (https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Deploythefunction.png)
 
-3. Go to Azure Portal for the Function App configuration.
+- Go to Azure Portal for the Function App configuration. 
