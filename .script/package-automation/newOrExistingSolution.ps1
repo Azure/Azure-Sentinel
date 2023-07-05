@@ -2,8 +2,12 @@ param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath, $instrumentat
 
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 $customProperties = @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; }
-Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "New Or Existing Solution" -CustomProperties $customProperties
-Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for newOrExistingSolution started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+
+if ($instrumentationKey -ne '')
+{
+    Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "New Or Existing Solution" -CustomProperties $customProperties
+    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for newOrExistingSolution started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+}
 
 $isNewSolution = $true
 $solutionSupportedBy = ''
@@ -44,7 +48,10 @@ else {
             $solutionMetadataFilePresent = filesList | Where-Object { $_ -like "Solutions/*SolutionMetadata.json" }
         }
         if ($solutionMetadataFilePresent.Count -le 0) {
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : SolutionMetadata file not found so check in Data input file for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+            if ($instrumentationKey -ne '')
+            {
+                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : SolutionMetadata file not found so check in Data input file for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+            }
 
             # SOLUTIONMETADATA FILE NOT FOUND SO WE FIND OUR DATA IN DATA INPUT FILE
             Write-Host "::warning::SolutionMetadata.json file not found."
@@ -78,7 +85,10 @@ else {
 
         if ($offerId -eq '') {
             Write-Host "OfferId found is empty!"
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : OfferId value cannot be blank for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+            if ($instrumentationKey -ne '')
+            {
+                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : OfferId value cannot be blank for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+            }
         }
         else {
             . ./.script/package-automation/catelogAPI.ps1
@@ -87,11 +97,18 @@ else {
                 Write-Host "OfferDetails not found for provided offerId $offerDetails"
                 $solutionSupportedBy = 'partner-supported-solution'
 
-                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : Based on OfferId $offerId, Offer Details were not found for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; }
+                if ($instrumentationKey -ne '')
+                {
+                    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : Based on OfferId $offerId, Offer Details were not found for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; }
+                }
             }
             else {
                 $isNewSolution = $false
-                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message 'NewOrExistingSolution : Based on OfferId $offerId, found for Solution Name : $solutionName, Job Run Id : $runId' -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; }
+
+                if ($instrumentationKey -ne '')
+                {
+                    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message 'NewOrExistingSolution : Based on OfferId $offerId, found for Solution Name : $solutionName, Job Run Id : $runId' -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; }
+                }
 
                 # CHECK IF MICROSOFT OR PARTNER SUPPORTED. WHEN NULL WE WILL NOT ADD ANY LABEL
                 $isMicrosoftSupported = $offerDetails.supportUri.Contains('https://support.microsoft.com/')
@@ -110,7 +127,10 @@ else {
         Write-Output "solutionOfferId=$offerId" >> $env:GITHUB_OUTPUT
         Write-Output "solutionPublisherId=$publisherId" >> $env:GITHUB_OUTPUT
 
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message 'NewOrExistingSolution : Based on OfferId $offerId, found for Solution Name : $solutionName, Job Run Id : $runId' -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; 'SolutionSupportedBy' = "$solutionSupportedBy"; }
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message 'NewOrExistingSolution : Based on OfferId $offerId, found for Solution Name : $solutionName, Job Run Id : $runId' -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; 'SolutionSupportedBy' = "$solutionSupportedBy"; }
+        }
     }
     catch {
         Write-Host "isNewSolution : $isNewSolution, solutionSupportedBy is ''"
@@ -120,7 +140,10 @@ else {
         Write-Output "solutionOfferId=''" >> $env:GITHUB_OUTPUT
         Write-Output "solutionPublisherId=''" >> $env:GITHUB_OUTPUT
 
-        Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "newOrExistingSolution : Error occured in catch block: $_"; 'EventName' = "New Or Existing Solution"; }
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "newOrExistingSolution : Error occured in catch block: $_"; 'EventName' = "New Or Existing Solution"; }
+        }
         exit 1
     }
 }
