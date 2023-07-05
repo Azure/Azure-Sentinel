@@ -324,7 +324,7 @@ while IFS= read -r contname; do
 				docker stop "$testruncontainer" >/dev/null
 			fi
 			log "Test run finished, removing agent in test run mode"
-            		test_logs=$(docker logs "$testruncontainer" --tail 70 2>&1 >/dev/null)
+            		test_logs=$(docker logs "$testruncontainer" --tail 70 2>&1)
 			docker rm "$testruncontainer" >/dev/null
 		else
 			log "Creating new agent without test mode"
