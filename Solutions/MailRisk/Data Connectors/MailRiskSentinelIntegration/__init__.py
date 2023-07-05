@@ -1,14 +1,13 @@
 import datetime
 import logging
-import requests
 from sentinel_integration import get_new_email_ids_and_event_types, post_emails
-
 import azure.functions as func
 
 
 def main(timer: func.TimerRequest, inputblob, outputblob) -> None:
     utc_timestamp = datetime.datetime.utcnow().replace(
         tzinfo=datetime.timezone.utc).isoformat()
+    logging.info('Python timer trigger function started at %s', utc_timestamp)
 
     if inputblob is not None: 
         input = str(inputblob.read(), "utf-8") 
@@ -23,4 +22,6 @@ def main(timer: func.TimerRequest, inputblob, outputblob) -> None:
     else:
         logging.info('No emails were found')
     
-    logging.info('Python timer trigger function ran at %s', utc_timestamp)
+    utc_timestamp = datetime.datetime.utcnow().replace(
+        tzinfo=datetime.timezone.utc).isoformat()
+    logging.info('Python timer trigger function finished at %s', utc_timestamp)
