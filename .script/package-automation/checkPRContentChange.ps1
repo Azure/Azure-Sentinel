@@ -1,11 +1,7 @@
-param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey)
-. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
+param ($solutionName, $pullRequestNumber, $runId)
 
 try {
     $customProperties = @{ 'RunId' = "$runId"; 'PullRequestNumber' = "$pullRequestNumber"; "EventName" = "CheckContentPR"; }
-    Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CheckContentPR" -CustomProperties $customProperties
-
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CheckContentPR started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
 
     function GetValidDataConnectorFileNames { 
         Param
@@ -106,13 +102,11 @@ try {
         Write-Host "Changes found in Content Package!"
         Write-Output "hasContentPackageChange=$true" >> $env:GITHUB_OUTPUT
         $customProperties["hasContentPackageChange"] = 'true'
-        Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CheckContentPR" -CustomProperties $customProperties
     }
     else {
         Write-Host "Changes Not found in Content Package"
         Write-Output "hasContentPackageChange=$false" >> $env:GITHUB_OUTPUT
         $customProperties = @{ 'RunId' = "$runId"; 'PullRequestNumber' = "$pullRequestNumber"; "EventName" = "CheckContentPR"; "hasContentPackageChange" = "false"; }
-        Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CheckContentPR" -CustomProperties $customProperties
     }
 }
 catch {
@@ -122,6 +116,5 @@ catch {
     Write-Output "Error Details $errorDetails , Error Info $errorInfo"
     
     Write-Host "Package-generator: Error occured in catch block!"
-    Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "CheckContentPR : Error occured in catch block: $_"; 'EventName' = "CheckContentPR"; "hasContentPackageChange" = "false"; }
     exit 1
 }

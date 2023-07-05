@@ -1,13 +1,8 @@
 
-param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $baseFolderPath)
+param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath)
 
-. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 try 
 {
-    $customProperties = @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; "EventName"="CheckPackagingSkipStatus"; }
-    Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CheckPackagingSkipStatus" -CustomProperties $customProperties
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
-
     $filesList = git ls-files | Where-Object { $_ -like "Solutions/$solutionName/data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) } | Where-Object { $_ -notlike 'parameters.json' }
 
     Write-Host "Files List $filesList"
@@ -29,8 +24,6 @@ try
         if ($hasCreatePackageAttribute -eq $true -and $isCreatePackageSetToTrue -eq $false) {
             Write-Host "::warning::Skipping Package Creation for Solution '$solutionName', as Data File has attribute 'createPackage' set to False!"
             Write-Output "isPackagingRequired=$false" >> $env:GITHUB_OUTPUT
-            $customProperties['isPackagingRequired'] = $false
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
         }
         else
         {
@@ -44,21 +37,17 @@ try
             {
                 # WE NEED PACKAGING
                 $isPackagingRequired = $true
-                $customProperties['isPackagingRequired'] = $true
                 Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
             }
 
             Write-Host "isPackagingRequired set to $isPackagingRequired"
-            $customProperties['isPackagingRequired'] = $isPackagingRequired
             Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
 
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
         }
     }
 }
 catch
 {
     Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
-    Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "CheckPackagingSkipStatus : Error occured in catch block: $_"; 'EventName' = "CheckPackagingSkipStatus"; }
     exit 1
 }
