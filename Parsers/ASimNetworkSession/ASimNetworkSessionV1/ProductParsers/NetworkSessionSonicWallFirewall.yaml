@@ -1,7 +1,7 @@
 Parser:
   Title: SonicWall Firewall Network Sessions
   Version: '0.1'
-  LastUpdated: June 28, 2023
+  LastUpdated: June 30, 2023
 Product:
   Name: SonicWall
 Normalization:
@@ -30,6 +30,7 @@ ParserQuery: |
   let NetworkParserSonicWallFirewall=(){
   CommonSecurityLog
   | where DeviceVendor == "SonicWall"
+  | where ( isnotempty(SourceIP) or isnotempty(DestinationIP) )
   | parse-kv AdditionalExtensions as (['gcat']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string) with (pair_delimiter=";", kv_delimiter="=")
   | extend RequestURL_ = extract(@"(?:[.*;]+?)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)(?:;fw_action)", 1, AdditionalExtensions)
   | extend RequestURL_ = iif(RequestURL_ startswith "snpt" or RequestURL_ startswith "dnpt" or RequestURL_ startswith "appid" or RequestURL_ startswith "appName", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), RequestURL_)
@@ -111,8 +112,10 @@ ParserQuery: |
                                                 gcat == 13, "SSL VPN (13)",
                                                 gcat == 14, "Anti-Spam (14)",
                                                 gcat == 15, "WAN Acceleration (15)",
-                                                gcat == 16, "SD-WAN (16)",
-                                                gcat == 17, "Multi-Tenancy (17)",
+                                                gcat == 16, "Object (16)",
+                                                gcat == 17, "SD-WAN (17)",
+                                                gcat == 18, "Multi-Instance (18)",
+                                                gcat == 19, "Unified Policy Engine (19)",
                                                 "Log Category Not Mapped"
                                                 )
   // Handle mapping of the legacy category if one is assigned.
@@ -139,6 +142,7 @@ ParserQuery: |
                                               DeviceEventCategory == 1048576, "Expanded - VoIP Activity (1048576)",
                                               DeviceEventCategory == 2097152, "Expanded - WLAN IDS Activity (2097152)",
                                               DeviceEventCategory == 4194304, "Expanded - SonicPoint Activity (4194304)",
+                                              DeviceEventCategory == 8388608, "Expanded - Unified Policy Engine (8388608)",
                                               "Legacy Category Not Mapped"
                                               )
   // This adds a column for the IPS Priority level, using case() to map the ingested int value to a friendly string.
