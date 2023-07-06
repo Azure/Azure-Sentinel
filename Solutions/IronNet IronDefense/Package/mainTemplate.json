@@ -28,6 +28,10 @@
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
     },
+    "connector1-name": {
+      "type": "string",
+      "defaultValue": "1e656160-8b5c-4b90-80bf-989842b573af"
+    },
     "analytic1-id": {
       "type": "string",
       "defaultValue": "[newGuid()]",
@@ -35,10 +39,6 @@
       "metadata": {
         "description": "Unique id for the scheduled alert rule"
       }
-    },
-    "connector1-name": {
-      "type": "string",
-      "defaultValue": "46e76788-6f40-4146-b1d8-912c357c2598"
     },
     "playbook1-IronApiUsername": {
       "defaultValue": "",
@@ -149,12 +149,12 @@
     }
   },
   "variables": {
-    "IronDefense_Detection_Query_AnalyticalRules": "IronDefense_Detection_Query_AnalyticalRules",
-    "_IronDefense_Detection_Query_AnalyticalRules": "[variables('IronDefense_Detection_Query_AnalyticalRules')]",
     "connector1-source": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector1-name'))]",
     "_connector1-source": "[variables('connector1-source')]",
     "IronNetIronDefenseConnector": "IronNetIronDefenseConnector",
     "_IronNetIronDefenseConnector": "[variables('IronNetIronDefenseConnector')]",
+    "IronDefense_Detection_Query_AnalyticalRules": "IronDefense_Detection_Query_AnalyticalRules",
+    "_IronDefense_Detection_Query_AnalyticalRules": "[variables('IronDefense_Detection_Query_AnalyticalRules')]",
     "playbook1-IronNet_UpdateIronDefenseAlerts": "playbook1-IronNet_UpdateIronDefenseAlerts",
     "_playbook1-IronNet_UpdateIronDefenseAlerts": "[variables('playbook1-IronNet_UpdateIronDefenseAlerts')]",
     "playbook2-IronNet_UpdateSentinelIncidents": "playbook2-IronNet_UpdateSentinelIncidents",
@@ -167,92 +167,11 @@
     "workbook-source": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]",
     "_workbook-source": "[variables('workbook-source')]",
     "IronDefenseAlertDetails_workbook": "IronDefenseAlertDetails_workbook",
-    "_IronDefenseAlertDetails_workbook": "[variables('IronDefenseAlertDetails_workbook')]"
+    "_IronDefenseAlertDetails_workbook": "[variables('IronDefenseAlertDetails_workbook')]",
+    "sourceId": "ironnetcybersecurity1585849518753.irondefense-for-sentinel",
+    "_sourceId": "[variables('sourceId')]"
   },
   "resources": [
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
-      "apiVersion": "2021-03-01-preview",
-      "kind": "Scheduled",
-      "location": "[parameters('workspace-location')]",
-      "properties": {
-        "description": "Creates incidents based on behavioral detections from IronDefense.",
-        "displayName": "Create Incidents from IronDefense",
-        "enabled": false,
-        "query": "CommonSecurityLog\n| where DeviceProduct == \"IronDefense\"\n| summarize arg_max(TimeGenerated, *) by DeviceCustomString4, DeviceCustomString2\n| extend Category = coalesce(column_ifexists(\"DeviceEventCategory\",\"\"),extract(@'cat=([^;]+)(\\;|$)', 1, AdditionalExtensions))\t\n| extend Subcategory = extract(@'subcat=([^;]+)(\\;|$)', 1, AdditionalExtensions)\n| extend AlertDescription = strcat(Category, ': ', Subcategory)\n| extend Status = tostring(DeviceCustomString2)\n| extend IronVueUrl = replace(@'\\\\', @'', tostring(DeviceCustomString3))\n",
-        "queryFrequency": "PT5M",
-        "queryPeriod": "PT5M",
-        "severity": "Medium",
-        "suppressionDuration": "PT1H",
-        "suppressionEnabled": false,
-        "triggerOperator": "GreaterThan",
-        "triggerThreshold": 0,
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "DestinationIP",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SourceIP",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "DestinationHostName",
-                "identifier": "FullName"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SourceHostName",
-                "identifier": "FullName"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "RequestURL",
-                "identifier": "Url"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "customDetails": {
-          "IronDefenseStatus": "Status",
-          "AlertCreatedTime": "TimeGenerated",
-          "IronVueUrl": "IronVueUrl",
-          "AnalystSeverity": "DeviceCustomString1",
-          "IronAlertIdentifier": "DeviceCustomString4",
-          "AnalystRating": "LogSeverity"
-        },
-        "alertDetailsOverride": {
-          "alertSeverityColumnName": "LogSeverity",
-          "alertDescriptionFormat": "IronDefense detected suspicious activity on {{TimeGenerated}} and categorized it as \"{{AlertDescription}}\".  View full details in IronVue: {{IronVueUrl}}\n",
-          "alertDisplayNameFormat": "{{Category}}: {{Subcategory}} ({{DeviceCustomString4}})\n"
-        }
-      }
-    },
     {
       "id": "[variables('_connector1-source')]",
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector1-name'))]",
@@ -417,6 +336,89 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
+      "apiVersion": "2021-03-01-preview",
+      "kind": "Scheduled",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "description": "Creates incidents based on behavioral detections from IronDefense.",
+        "displayName": "Create Incidents from IronDefense",
+        "enabled": false,
+        "query": "CommonSecurityLog\n| where DeviceProduct == \"IronDefense\"\n| summarize arg_max(TimeGenerated, *) by DeviceCustomString4, DeviceCustomString2\n| extend Category = coalesce(column_ifexists(\"DeviceEventCategory\",\"\"),extract(@'cat=([^;]+)(\\;|$)', 1, AdditionalExtensions))\t\n| extend Subcategory = extract(@'subcat=([^;]+)(\\;|$)', 1, AdditionalExtensions)\n| extend AlertDescription = strcat(Category, ': ', Subcategory)\n| extend Status = tostring(DeviceCustomString2)\n| extend IronVueUrl = replace(@'\\\\', @'', tostring(DeviceCustomString3))\n",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "DestinationIP",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SourceIP",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "DestinationHostName",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SourceHostName",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "RequestURL",
+                "identifier": "Url"
+              }
+            ],
+            "entityType": "URL"
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "IronDefenseStatus": "Status",
+          "AlertCreatedTime": "TimeGenerated",
+          "IronVueUrl": "IronVueUrl",
+          "AnalystSeverity": "DeviceCustomString1",
+          "IronAlertIdentifier": "DeviceCustomString4",
+          "AnalystRating": "LogSeverity"
+        },
+        "alertDetailsOverride": {
+          "alertSeverityColumnName": "LogSeverity",
+          "alertDescriptionFormat": "IronDefense detected suspicious activity on {{TimeGenerated}} and categorized it as \"{{AlertDescription}}\".  View full details in IronVue: {{IronVueUrl}}\n",
+          "alertDisplayNameFormat": "{{Category}}: {{Subcategory}} ({{DeviceCustomString4}})\n"
+        }
+      }
+    },
+    {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2019-05-01",
       "name": "[parameters('playbook1-PlaybookName')]",
@@ -428,8 +430,8 @@
           "contentVersion": "1.0.0.0",
           "parameters": {
             "$connections": {
-              "type": "Object", 
-              "defaultValue":{}
+              "type": "Object",
+              "defaultValue": {}
             },
             "tenant_id": {
               "defaultValue": "[subscription().tenantId]",
@@ -3008,6 +3010,76 @@
         "sourceId": "[variables('_workbook-source')]",
         "category": "sentinel"
       }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "version": "2.0.2",
+        "kind": "Solution",
+        "contentId": "[variables('_sourceId')]",
+        "parentId": "[variables('_sourceId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "IronNet IronDefense",
+          "sourceId": "[variables('_sourceId')]"
+        },
+        "author": {
+          "name": "Ecosystems & Integrations",
+          "email": "support@ironnet.com"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_IronNetIronDefenseConnector')]",
+              "version": "2.0.2"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_IronDefense_Detection_Query_AnalyticalRules')]",
+              "version": "2.0.2"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_playbook1-IronNet_UpdateIronDefenseAlerts')]",
+              "version": "2.0.2"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_playbook2-IronNet_UpdateSentinelIncidents')]",
+              "version": "2.0.2"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_IronDefenseAlertDashboard_workbook')]",
+              "version": "2.0.2"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_IronDefenseAlertDetails_workbook')]",
+              "version": "2.0.2"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-10-18",
+        "providers": [
+          "IronNet"
+        ],
+        "categories": {
+          "domains": [
+            "Security – Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
     }
   ],
   "outputs": {}
