@@ -55,8 +55,6 @@ ParserQuery: |
       Severity_s: string,
       DeviceReceiptTime_s: string,
       LogType_s: string,
-      TimeGenerated: datetime,
-      Type: string,
       ClientIP_s: string,
       host_s: string,
       HostIP_s: string,
@@ -178,7 +176,7 @@ ParserQuery: |
           DstIpAddr = ServerIP_s,
           SrcIpAddr = ClientIP_s,
           DstBytes = tolong(BytesReceived_d),
-          DstPortNumber = toint(ServerPort_d),
+          DstPortNumber = toint(coalesce(ServerPort_d,ServicePort_d)),
           HttpCookie = Cookie_s,
           HttpReferrer = Referer_s,
           HttpRequestBodyBytes = tolong(BytesReceived_d),
@@ -205,7 +203,8 @@ ParserQuery: |
           DvcHostname = host_s,
           DvcIpAddr = HostIP_s,
           EventResultDetails = HTTPStatus_s,
-          DstUsername = AuthenticatedUser_s
+          DstUsername = AuthenticatedUser_s,
+          HttpVersion = ProtocolVersion_s
       | extend 
           SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
           DstUsernameType = iff(isnotempty(DstUsername), "Simple", "")
@@ -250,7 +249,7 @@ ParserQuery: |
       ) {
       let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
       CommonSecurityLog
-      | where not(disabled) and DeviceVendor == "Barracuda" and DeviceProduct == "WAF"
+      | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
       | where DeviceEventCategory in ("WF", "TR")
       | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime))
       | extend EventEndTime = EventStartTime
@@ -305,7 +304,7 @@ ParserQuery: |
           DstIpAddr = DestinationIP,
           SrcIpAddr = SourceIP,
           DstBytes = tolong(ReceivedBytes),
-          DstPortNumber = toint(DestinationPort),
+          DstPortNumber = toint(coalesce(DestinationPort,DeviceCustomNumber1)),
           HttpCookie = RequestCookies,
           HttpReferrer = RequestContext,
           HttpRequestBodyBytes = tolong(ReceivedBytes),
@@ -332,7 +331,8 @@ ParserQuery: |
                     ),
           DvcHostname = DeviceName,
           DvcIpAddr = DeviceAddress,
-          EventResultDetails = EventOutcome
+          EventResultDetails = EventOutcome,
+          HttpVersion = FlexString1
       | extend 
           SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
           DstUsernameType = iff(isnotempty(DstUsername), "Simple", "")

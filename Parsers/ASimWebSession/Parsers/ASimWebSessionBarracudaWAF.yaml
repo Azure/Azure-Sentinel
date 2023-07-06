@@ -31,8 +31,6 @@ ParserQuery: |
       Severity_s: string,
       DeviceReceiptTime_s: string,
       LogType_s: string,
-      TimeGenerated: datetime,
-      Type: string,
       ClientIP_s: string,
       host_s: string,
       HostIP_s: string,
@@ -122,7 +120,7 @@ ParserQuery: |
           DstIpAddr = ServerIP_s,
           SrcIpAddr = ClientIP_s,
           DstBytes = tolong(BytesReceived_d),
-          DstPortNumber = toint(ServerPort_d),
+          DstPortNumber = toint(coalesce(ServerPort_d,ServicePort_d)),
           HttpCookie = Cookie_s,
           HttpReferrer = Referer_s,
           HttpRequestBodyBytes = tolong(BytesReceived_d),
@@ -149,7 +147,8 @@ ParserQuery: |
                     ),
           DvcHostname = host_s,
           DvcIpAddr = HostIP_s,
-          EventResultDetails = HTTPStatus_s
+          EventResultDetails = HTTPStatus_s,
+          HttpVersion = ProtocolVersion_s
       | extend 
           SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
           DstUsernameType = iff(isnotempty(DstUsername), "Simple", "")
@@ -182,7 +181,7 @@ ParserQuery: |
   };
   let BarracudaCEF = (disabled: bool=false) {
       CommonSecurityLog
-      | where not(disabled) and DeviceVendor == "Barracuda" and DeviceProduct == "WAF"
+      | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
       | where DeviceEventCategory in ("WF", "TR")
       | lookup EventResultWFLookup on $left.DeviceAction == $right.Action_s
       | lookup EventTypeLookup on $left.DeviceEventCategory == $right.LogType_s
@@ -216,7 +215,7 @@ ParserQuery: |
           DstIpAddr = DestinationIP,
           SrcIpAddr = SourceIP,
           DstBytes = tolong(ReceivedBytes),
-          DstPortNumber = toint(DestinationPort),
+          DstPortNumber = toint(coalesce(DestinationPort,DeviceCustomNumber1)),
           HttpCookie = RequestCookies,
           HttpReferrer = RequestContext,
           HttpRequestBodyBytes = tolong(ReceivedBytes),
@@ -243,7 +242,8 @@ ParserQuery: |
                     ),
           DvcHostname = DeviceName,
           DvcIpAddr = DeviceAddress,
-          EventResultDetails = EventOutcome
+          EventResultDetails = EventOutcome,
+          HttpVersion = FlexString1
       | extend 
           SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
           DstUsernameType = iff(isnotempty(DstUsername), "Simple", "")
