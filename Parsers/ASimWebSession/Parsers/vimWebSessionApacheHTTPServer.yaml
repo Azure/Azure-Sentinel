@@ -16,14 +16,38 @@ References:
   Link: https://httpd.apache.org/docs/2.4/logs.html
 Description: |
   This ASIM parser supports filtering and normalizing Apache HTTP Server logs produced by the Microsoft Sentinel Apache connector to the ASIM Web Session normalized schema.
-ParserName: ASimWebSessionApacheHTTPServer
-EquivalentBuiltInParser: _ASim_NetworkSession_ApacheHTTPServer
+ParserName: vimWebSessionApacheHTTPServer
+EquivalentBuiltInParser: _vim_WebSession_ApacheHTTPServer
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let parser=(
+  let Parser=(
     starttime:datetime               = datetime(null), 
     endtime:datetime                 = datetime(null),
     srcipaddr_has_any_prefix:dynamic = dynamic([]),
@@ -42,7 +66,7 @@ ParserQuery: |
     {
         print list
         | mv-apply l = print_0 to typeof(string) on
-          ( extend l = replace_regex (tostring(l), "^(?i:.*?)://", "") )
+          ( extend l = substring(l,indexof(l,@'//')+2))
         | project l
     };
     ApacheHTTPServer_CL
@@ -53,8 +77,9 @@ ParserQuery: |
     | where (array_length(src_or_any) == 0 or RawData has_any (src_or_any))
     | where (array_length(eventresultdetails_in) == 0 or RawData has_any (eventresultdetails_in))
     | project RawData, TimeGenerated, Computer, _ResourceId, Type, _ItemId
-    | where RawData matches regex @'^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}.*\[.*\]\s\"(GET|HEAD|POST|PUT|DELETE|CONNECT|OPTIONS|TRACE|PATCH)\s\S*\s\S*"\s\d{3}\s\d+\s".*\"\s".*\"'
-    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUserName "[" Date '] "' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " ReturnedObjectSize ' "' HttpReferrer '" "' HttpUserAgent '"' *
+    | where RawData has_any ("GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH")
+    | where not (RawData startswith "[") 
+    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUserName "[" Date '] "' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
     | where (array_length(url_has_any) == 0 or Url has_any (remove_protocol_from_list(url_has_any)))
     | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any (httpuseragent_has_any))
     | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) in (eventresultdetails_in))
@@ -110,4 +135,4 @@ ParserQuery: |
         EventProduct       = "HTTP Server",
         EventSeverity      = "Informational"
   };
-  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
+  Parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
