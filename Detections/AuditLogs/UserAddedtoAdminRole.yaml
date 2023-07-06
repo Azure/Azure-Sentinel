@@ -20,28 +20,39 @@ tags:
   - AADSecOpsGuide
 query: |
   AuditLogs
-    | where OperationName in ("Add eligible member (permanent)", "Add eligible member (eligible)")
-    | extend Role = tostring(TargetResources[0].displayName)
-    | where Role contains "admin"
-    | extend AddedBy = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend AddedUser = tostring(TargetResources[2].userPrincipalName)
-    | project-reorder TimeGenerated, AddedUser, Role, AddedBy
+    | where OperationName in ("Add eligible member (permanent)", "Add eligible member (eligible)", "Add member to role")
+    | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend Target = tostring(TargetResource.userPrincipalName),
+                 props = TargetResource.modifiedProperties
+    )
+    | mv-apply Property = props on 
+    (
+        where Property.displayName =~ "Role.DisplayName"
+        | extend RoleName = trim('"',tostring(Property.newValue))
+    )
+    | where RoleName contains "admin"
+    | extend InitiatingApp = tostring(InitiatedBy.app.displayName)
+    | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))
+    | extend AddedUser = iff(OperationName=="Add member to role",tostring(TargetResources[0].userPrincipalName),tostring(TargetResources[2].userPrincipalName))
+    | project-reorder TimeGenerated, AddedUser, RoleName, Initiator
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AddedBy
+        columnName: Initiator
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AddedUser
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Pete Bryan, Wojciech Lesicki
     support:
         tier: Community
     categories:

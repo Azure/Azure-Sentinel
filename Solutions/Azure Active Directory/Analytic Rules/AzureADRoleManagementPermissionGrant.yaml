@@ -26,34 +26,43 @@ tags:
   - SimuLand
 query: |
   AuditLogs
-  | where Category == "ApplicationManagement" and LoggedByService == "Core Directory" and OperationName in ("Add delegated permission grant", "Add app role assignment to service principal")
-  | mv-expand TargetResource = TargetResources
-  //| where tostring(TargetResource["displayName"]) == "Microsoft Graph"
-  | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
-  | where tostring(modifiedProperty["displayName"]) in ("AppRole.Value", "DelegatedPermissionGrant.Scope")
-  | extend PermissionGrant = trim(@'[\"\s]+', tostring(modifiedProperty["newValue"]))
+  | where Category =~ "ApplicationManagement" and LoggedByService =~ "Core Directory" and OperationName in~ ("Add delegated permission grant", "Add app role assignment to service principal")
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "ServicePrincipal" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)
+        | extend props = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = props on 
+    (
+        where Property.displayName in~ ("AppRole.Value","DelegatedPermissionGrant.Scope")
+        | extend DisplayName = tostring(Property.displayName), PermissionGrant = trim('"',tostring(Property.newValue))
+    )
   | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
-  | mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
-      summarize modifiedProperties = make_bag(
-          pack(tostring(modifiedProperty["displayName"]),
-              pack("oldValue", trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
-                  "newValue", trim(@'[\"\s]+', tostring(modifiedProperty["newValue"])))))
-  )
-  | extend
-      //AppDisplayName for operation "Add delegated permission grant" will be in operation "Consent to application" (usually same CorrelationId)
-      AppDisplayName = tostring(modifiedProperties["ServicePrincipal.DisplayName"]["newValue"]),
-      AppServicePrincipalId = tostring(modifiedProperties["ServicePrincipal.ObjectID"]["newValue"]),
-      Initiator = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["displayName"]), tostring(InitiatedBy["user"]["userPrincipalName"])),
-      InitiatorId = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["servicePrincipalId"]), tostring(InitiatedBy["user"]["id"]))
+  | mv-apply Property = props on 
+    (
+        where Property.displayName =~ "ServicePrincipal.DisplayName"
+        | extend AppDisplayName = trim('"',tostring(Property.newValue))
+    )
+  | mv-apply Property = props on 
+    (
+        where Property.displayName =~ "ServicePrincipal.ObjectID"
+        | extend AppServicePrincipalId = trim('"',tostring(Property.newValue))
+    )
+  | extend 
+      Initiator = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.displayName), tostring(InitiatedBy.user.userPrincipalName)),
+      InitiatorId = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.servicePrincipalId), tostring(InitiatedBy.user.id))
   | project TimeGenerated, OperationName, Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, Initiator, InitiatorId, InitiatedBy, TargetResources, AdditionalDetails, CorrelationId
+  | extend Name = tostring(split(Initiator,'@',0)[0]), UPNSuffix = tostring(split(Initiator,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Initiator
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Name
         columnName: AppDisplayName
-version: 1.0.3
+version: 1.0.4
 kind: Scheduled

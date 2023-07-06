@@ -1,13 +1,16 @@
 id: f15370f4-c6fa-42c5-9be4-1d308f40284e
 name: TI map IP entity to OfficeActivity
 description: |
-  'Identifies a match in OfficeActivity from any IP IOC from TI'
+  'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in OfficeActivity.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
   - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
   - connectorId: Office365
@@ -54,7 +57,7 @@ query: |
       | where TimeGenerated >= ago(dt_lookBack)
       | where isnotempty(ClientIP)
       | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]%]+)(%\d+)?\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
-      | extend IPAddress = tostring(ClientIPValues[0])
+      | extend IPAddress = iff(array_length(ClientIPValues) > 0, tostring(ClientIPValues[0]), '')
       // renaming time column so it is clear the log this came from
       | extend OfficeActivity_TimeGenerated = TimeGenerated
   )
@@ -63,19 +66,21 @@ query: |
   | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId, IoC
   | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
   TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
-  | extend timestamp = OfficeActivity_TimeGenerated, IPCustomEntity = TI_ipEntity, AccountCustomEntity = UserId, URLCustomEntity = Url
+  | extend timestamp = OfficeActivity_TimeGenerated, Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: TI_ipEntity
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.3.3
+        columnName: Url
+version: 1.3.5
 kind: Scheduled

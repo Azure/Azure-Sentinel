@@ -48,7 +48,7 @@ Deploy this DCR:
 
 [![Deploy this DCR to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTools%2FTransformations-Library%2FFiltering%2FFilteringRowsDCR.json)
 
-## Multiple workspaces for idependent entities
+## Multiple workspaces for independent entities
 
 There are situations where you have multiple Sentinel workspaces, each owned by an independent entity. In those case, customers want each entity to see only its logs and not logs from other entities. This is ok for most data sources, but it can be a challenge for tenant-level sources like Office 365 or Azure AD.
 
@@ -56,7 +56,7 @@ For these situations, you can multi-home the data source (eg. Office365) to send
 
 ![image](../Media/AAD_multi-ws.png)
 
-In this case, you would need to apply a filtering trasnformation in the default DCR of all workspaces involved. Each transformation would look something like this (replacing country name):
+In this case, you would need to apply a filtering transformation in the default DCR of all workspaces involved. Each transformation would look something like this (replacing country name):
 
 ```kusto
 OfficeActivity | where OrganizationName == 'contoso-<country_name>.onmicrosoft.com'

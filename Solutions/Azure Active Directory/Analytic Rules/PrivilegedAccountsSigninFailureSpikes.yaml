@@ -1,7 +1,7 @@
 id: 34c5aff9-a8c2-4601-9654-c7e46342d03b
 name: Privileged Accounts - Sign in Failure Spikes
 description: |
-  ' Identifies spike in failed sign-ins from Privileged accounts. Privileged accounts list can be based on IdentityInfo UEBA table or built-in watchlist.
+  ' Identifies spike in failed sign-ins from Privileged accounts. Privileged accounts list can be based on IdentityInfo UEBA table.
   Spike is determined based on Time series anomaly which will look at historical baseline values.
   Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor'
 severity: High
@@ -33,7 +33,7 @@ query: |
       | where TimeGenerated > ago(starttime)
       | summarize arg_max(TimeGenerated, *) by AccountUPN
       | mv-expand AssignedRoles
-      | where AssignedRoles matches regex 'Admin'
+      | where AssignedRoles contains 'Admin'
       | summarize Roles = make_list(AssignedRoles) by AccountUPN = tolower(AccountUPN)
       | join kind=inner (
           table(tableName)
@@ -66,15 +66,17 @@ query: |
       | summarize PartialFailedSignins = count(), LatestAnomalyTime = arg_max(TimeGenerated, *) by bin(TimeGenerated, 1h), OperationName, Category, ResultType, ResultDescription, UserPrincipalName, Roles, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName
   ) on UserPrincipalName, $left.AnomalyHour == $right.DateHour
   | project LatestAnomalyTime, OperationName, Category, UserPrincipalName, Roles = todynamic(Roles), UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = HourlyCount, baseline, anomalies, score
-  | extend timestamp = LatestAnomalyTime, IPCustomEntity = IPAddress, AccountCustomEntity = UserPrincipalName
+  | extend timestamp = LatestAnomalyTime, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name      
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.2
+        columnName: IPAddress
+version: 1.0.3
 kind: Scheduled

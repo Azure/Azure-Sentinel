@@ -1,7 +1,7 @@
 id: a5b3429d-f1da-42b9-883c-327ecb7b91ff
-name: Workspace deletion attempt from an infected device
+name: Workspace deletion activity from an infected device
 description: |
-  'This query will alert on any sign-ins from devices infected with malware in correlation with potential workspace deletion activity. 
+  'This query will alert on any sign-ins from devices infected with malware in correlation with  workspace deletion activity. 
   Attackers may attempt to delete  workspaces containing  compute instances  after successful compromise to cause service unavailability to regular business operation.'
 severity: Medium
 requiredDataConnectors:
@@ -29,11 +29,16 @@ query: |
     | where TimeGenerated > ago(1d)
     | where ProductName == "Azure Active Directory Identity Protection"
     | where AlertName == "Sign-in from an infected device"
-    | mv-expand Entity = todynamic(Entities)
-    | where Entity.Type == "account"
-    | extend AadTenantId = tostring(Entity.AadTenantId)
-    | extend AadUserId = tostring(Entity.AadUserId)
-    | extend IpAddress = tostring(parse_json(Entities)[2].Address)
+    | mv-apply EntityAccount=todynamic(Entities) on
+    (
+    where EntityAccount.Type == "account"
+    | extend AadTenantId = tostring(EntityAccount.AadTenantId), AadUserId = tostring(EntityAccount.AadUserId)
+    )
+    | mv-apply EntityIp=todynamic(Entities) on
+    (
+    where EntityIp.Type == "ip"
+    | extend IpAddress = tostring(EntityIp.Address)
+    )
     | join kind=inner (
     IdentityInfo
     | distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName
@@ -46,13 +51,13 @@ query: |
     $left.AadTenantId == $right.AccountTenantId,
     $left.AadUserId == $right.AccountObjectId
     | extend CompromisedEntity = iff(CompromisedEntity == "N/A" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)
-    | project  AlertName, AlertSeverity, CompromisedEntity, UserAccount, IpAddress,TimeGenerated, UserName
+    | project  AlertName, AlertSeverity, CompromisedEntity, UserAccount, IpAddress, TimeGenerated, UserName
     | join kind=inner 
     (
     AzureActivity
-    | where OperationNameValue hassuffix ("/workspaces/computes/delete")
+    | where OperationNameValue has_any ("/workspaces/computes/delete", "workspaces/delete") 
     | where ActivityStatusValue has_any ("Succeeded", "Success")
-    | project TimeGenerated, _ResourceId, SubscriptionId, UserAccount=Caller, IpAddress=CallerIpAddress, CorrelationId, OperationId, ResourceGroup, TenantId
+    | project TimeGenerated, ResourceProviderValue, _ResourceId, SubscriptionId, UserAccount=Caller, IpAddress=CallerIpAddress, CorrelationId, OperationId, ResourceGroup, TenantId
     ) on IpAddress, UserAccount
     | extend timestamp = TimeGenerated, AccountCustomEntity = UserAccount, IPCustomEntity = IpAddress
 entityMappings:
@@ -64,7 +69,11 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.4
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: _ResourceId
+version: 1.0.6
 kind: Scheduled
 metadata:
     source:

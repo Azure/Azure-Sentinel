@@ -13,6 +13,9 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -25,7 +28,9 @@ query: |
   let IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True);
   //Create a list of TLDs in our threat feed for later validation
   let list_tlds = ThreatIntelligenceIndicator
-  | where TimeGenerated > ago(ioc_lookBack)
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true  
   | where isnotempty(DomainName)
   | extend parts = split(DomainName, '.')
   | extend tld = parts[(array_length(parts)-1)]
@@ -66,19 +71,22 @@ query: |
   | where DNS_TimeGenerated < ExpirationDateTime
   | summarize DNS_TimeGenerated  = arg_max(DNS_TimeGenerated , *) by IndicatorId, Name, IoC
   | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, Computer, ClientIP, Name, QueryType, Type, IoC, TI_DomainEntity
-  | extend timestamp = DNS_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = ClientIP, URLCustomEntity = Url
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend timestamp = DNS_TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain 
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: ClientIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.3.2
+        columnName: Url
+version: 1.3.4
 kind: Scheduled

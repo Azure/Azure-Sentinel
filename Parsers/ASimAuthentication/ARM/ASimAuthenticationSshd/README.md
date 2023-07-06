@@ -1,8 +1,8 @@
-# Syslog sshd ASIM Authentication Normalization Parser
+# OpenSSH ASIM Authentication Normalization Parser
 
-ARM template for ASIM Authentication schema parser for sshd (via Syslog).
+ARM template for ASIM Authentication schema parser for OpenSSH.
 
-This ASIM parser supports filtering and normalizing sshd sign in logs to the ASIM Authentication schema.
+This ASIM parser supports normalizing OpenSSH server (sshd) sign in logs, collected using Syslog to the ASIM Authentication schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

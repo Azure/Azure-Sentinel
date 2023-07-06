@@ -1,8 +1,8 @@
 id: 410da56d-4a63-4d22-b68c-9fb1a303be6d
-name: Preview - TI map File entity to OfficeActivity Event
+name: TI Map File Entity to OfficeActivity Event
 description: |
-  'Identifies a match in OfficeActivity Event data from any FileName IOC from TI.
-  As File name matches can create noise, this is best as hunting query'
+  'This query identifies any matches in the OfficeActivity Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. 
+  Since file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection.'
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
@@ -13,15 +13,18 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
 tactics:
   - Impact
 query: |
-
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   | where isnotempty(FileName)
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
@@ -35,17 +38,24 @@ query: |
   | where OfficeActivity_TimeGenerated < ExpirationDateTime
   | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId, SourceFileName
   | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, FileName, UserId, ClientIP, OfficeObjectId
-  | extend timestamp = OfficeActivity_TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIP, URLCustomEntity = Url
+  | extend timestamp = OfficeActivity_TimeGenerated, Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = ClientIP
+  | extend URL_0_Url = Url
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: ClientIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
+        columnName: Url
+version: 1.0.2

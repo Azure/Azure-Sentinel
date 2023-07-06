@@ -21,30 +21,35 @@ tags:
   - Solorigate
   - NOBELIUM
 query: |
-
   // Adjust the timeframe to change the window events need to occur within to alert
   let timeframe = 1h;
   SecurityEvent
   | where EventID == 4688
   | where Process in~ ("powershell.exe", "cmd.exe")
-  | where CommandLine contains 'New-MailboxExportRequest'
+  | where CommandLine has 'New-MailboxExportRequest'
   | summarize by Computer, timekey = bin(TimeGenerated, timeframe), CommandLine, SubjectUserName
   | join kind=inner (SecurityEvent
   | where EventID == 4688
   | where Process in~ ("powershell.exe", "cmd.exe")
-  | where CommandLine contains 'Remove-MailboxExportRequest'
+  | where CommandLine has 'Remove-MailboxExportRequest'
   | summarize by Computer, timekey = bin(TimeGenerated, timeframe), CommandLine, SubjectUserName) on Computer, timekey, SubjectUserName
   | extend commands = pack_array(CommandLine1, CommandLine)
   | summarize by timekey, Computer, tostring(commands), SubjectUserName
   | project-reorder timekey, Computer, SubjectUserName, ['commands']
   | extend HostCustomEntity = Computer, AccountCustomEntity = SubjectUserName
-
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = SubjectUserName
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: SubjectUserName
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain        
+version: 2.0.1

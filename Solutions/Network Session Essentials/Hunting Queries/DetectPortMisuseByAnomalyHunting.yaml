@@ -1,0 +1,168 @@
+id: 906c20c6-b62c-4af7-be91-d7300e3bded2
+name: Detect port misuse by anomaly (ASIM Network Session schema)
+description: |
+  'This hunting query detect anomalous pattern in port usage. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM Network Session schema. To tune the query to your environment configure it using the 'NetworkSession_Monitor_Configuration' watchlist. Note that to enhance performance, the query uses summarized data generated from the summarization logic App.'
+
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSVPCFlow
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight_CL
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoMeraki
+    dataTypes:
+      - Syslog
+      - CiscoMerakiNativePoller
+
+tactics:
+  - CommandAndControl
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1905
+  - T1190
+  - T1059
+  - T1203
+
+query: |
+  let lookback = 14d;
+  let mapping = _GetWatchlist('NetworkSession_Monitor_Configuration')
+  | where Type == "Hunting" and ThresholdType == "Anomaly" and Severity != "Disabled"  
+  | extend Ports = split(Ports,","),
+          App = split(App,","),
+          Protocol = split(Protocol,","),
+          Direction = split(Direction,","),
+          Action = split(Action,",")
+  | project Ports, App, Protocol, Direction, Action, Type, ThresholdType, Threshold, Severity, Tactic, Name, Description
+  | mv-expand Ports
+  | mv-expand App
+  | mv-expand Protocol
+  | mv-expand Direction
+  | mv-expand Action
+  | extend Ports = tostring(Ports), App = tostring(App), Protocol = tostring(Protocol), Direction = tostring(Direction), Action = tostring(Action), Threshold = toint(Threshold)
+  ;
+  let AnomalyThreshold = 2.5;
+  let eps = materialize (_Im_NetworkSession | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
+  let maxSummarizedTime = toscalar (
+      union isfuzzy=true 
+          (
+              NetworkCustomAnalytics_protocol_CL
+                  | where EventTime_t > ago(lookback)
+                  | summarize max_TimeGenerated=max(EventTime_t)
+                  | extend max_TimeGenerated = datetime_add('minute',10,max_TimeGenerated)
+          ),
+          (
+              print(ago(lookback))
+              | project max_TimeGenerated = print_0
+          )
+        | summarize maxTimeGenerated = max(max_TimeGenerated) 
+      );
+  let nosummary = materialize(
+                union isfuzzy=true 
+                  (
+                      NetworkCustomAnalytics_protocol_CL
+                      | where EventTime_t > ago(1d) 
+                      | project v = int(2)
+                  ),
+                  (
+                      print int(1) 
+                      | project v = print_0
+                  )
+                  | summarize maxv = max(v)
+                  | extend nosum = (maxv > 1)
+                );
+  let allData = union isfuzzy=true 
+      (
+          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) > 1000 | join (nosummary) on nosum) | join (
+          _Im_NetworkSession(starttime=todatetime(ago(2d)), endtime=now())
+          | where TimeGenerated > maxSummarizedTime
+          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
+          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+          ) on exists
+          | project-away exists, maxv, nosum*
+      ),
+      (
+          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (nosummary) on nosum) | join (
+          _Im_NetworkSession(starttime=todatetime(ago(3d)), endtime=now())
+          | where TimeGenerated > maxSummarizedTime
+          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
+          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+          ) on exists
+          | project-away exists, maxv, nosum*
+      ),
+      (
+          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) <= 500 | join (nosummary) on nosum) | join (
+          _Im_NetworkSession(starttime=todatetime(ago(4d)), endtime=now())
+          | where TimeGenerated > maxSummarizedTime
+          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
+          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+          ) on exists
+          | project-away exists, maxv, nosum*
+      ),
+      (
+          NetworkCustomAnalytics_protocol_CL
+          | where EventTime_t > ago(lookback)
+          | project-rename NetworkProtocol=NetworkProtocol_s, DstPortNumber=DstPortNumber_d, DstAppName=DstAppName_s, NetworkDirection=NetworkDirection_s, DvcAction=DvcAction_s, Count=count__d, EventTime=EventTime_t
+          | extend Count = toint(Count),DstPortNumber = toint(DstPortNumber) 
+      )
+  ;
+  allData
+  | where isnotempty(DstPortNumber)
+  | make-series Total=count() on EventTime from ago(lookback) to now() step 1d by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, AnomalyThreshold, -1, 'linefit')
+  | mv-expand anomalies, score, baseline, EventTime, Total
+  | extend anomalies = toint(anomalies), score = toint(score), baseline = toint(baseline), EventTime = todatetime(EventTime), Total = tolong(Total)
+  | where EventTime >= ago(1d)
+  | extend DstPortNumber = trim_end(".0",tostring(DstPortNumber))
+  | where score > 2*AnomalyThreshold
+  | join kind=inner ['mapping'] where Ports == DstPortNumber
+  | where (Protocol == "*" or Protocol has NetworkProtocol)
+                  and (Direction == "*" or Direction has NetworkDirection)
+                  and (Action == "*" or Action has DvcAction)  
+  | project Name, Description, NetworkProtocol, DstPortNumber, NetworkDirection, DvcAction, Severity, Tactic
+  | summarize NetworkProtocols=make_set_if(NetworkProtocol,isnotempty(NetworkProtocol),20), 
+                      NetworkDirections=make_set_if(NetworkDirection,isnotempty(NetworkDirection),5), 
+                      DvcActions=make_set_if(DvcAction,isnotempty(DvcAction),10) by Name, Severity, Tactic, DstPortNumber, Description

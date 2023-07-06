@@ -1,5 +1,5 @@
 id: d7424fd9-abb3-4ded-a723-eebe023aaa0b
-name: New External User Granted Admin
+name: New External User Granted Admin Role
 description: |
   'This query will detect instances where a newly invited external user is granted an administrative role. By default this query
   will alert on any granted administrative role, however this can be modified using the roles variable if false positives occur
@@ -45,10 +45,10 @@ query: |
   | order by TimeGenerated
   | project TimeGenerated, Target, InviteInitiator, OperationName, TenantId
   | evaluate sequence_detect(TimeGenerated, maxTimeBetweenInviteAccept, maxTimeBetweenInviteAccept, invite=(OperationName has "Invite external user"), redeem=(OperationName has "Redeem external user invite"), Target)
-  | join (
+  | join kind=innerunique (
   AuditLogs
   | where Category =~ "RoleManagement"
-  | where AADOperationType in ("Assign", "AssignEligibleRole")
+  | where AADOperationType in~ ("Assign", "AssignEligibleRole")
   | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
   | mv-expand TargetResources
   // Limit to external accounts
@@ -69,14 +69,20 @@ query: |
   | extend delta = datetime_diff("minute", TimeGenerated, invite_TimeGenerated)
   | where delta <= deltaBetweenInviteEscalation
   | project InvitationTime=invite_TimeGenerated, RedeemTime=redeem_TimeGenerated, GrantTime=TimeGenerated, ExternalUser=Target, RoleGranted=RoleName, AdminInitiator=Initiator, MinsBetweenInviteAndEscalation=delta
+  | extend ExternalUserName = tostring(split(ExternalUser, '@', 0)[0]), ExternalUserUPNSuffix = tostring(split(ExternalUser, '@', 1)[0])
+  | extend AdminInitiatorName = tostring(split(AdminInitiator, '@', 0)[0]), AdminInitiatorUPNSuffix = tostring(split(AdminInitiator, '@', 1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: ExternalUser
+      - identifier: Name
+        columnName: ExternalUserName
+      - identifier: UPNSuffix
+        columnName: ExternalUserUPNSuffix
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AdminInitiator
-version: 1.0.0
+      - identifier: Name
+        columnName: AdminInitiatorName
+      - identifier: UPNSuffix
+        columnName: AdminInitiatorUPNSuffix
+version: 1.0.1
 kind: Scheduled

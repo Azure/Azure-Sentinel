@@ -3,10 +3,7 @@ name: Anomalous sign-in location by user account and authenticating application
 description: |
   'This query over Azure Active Directory sign-in considers all user sign-ins for each Azure Active
   Directory application and picks out the most anomalous change in location profile for a user within an
-  individual application. An alert is generated for recent sign-ins that have location counts that are anomalous
-  over last day but also over the last 3-day and 7-day periods.
-  Please note that on workspaces with larger volume of Signin data (~10M+ events a day) may timeout when using this default query time period.
-  It is recommended that you test and tune this appropriately for the workspace.'
+  individual application.
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -16,7 +13,7 @@ requiredDataConnectors:
     dataTypes:
       - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
-queryPeriod: 14d
+queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 status: Available
@@ -25,58 +22,45 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-  let lookBack_long = 7d;
-  let lookBack_med = 3d;
-  let lookBack = 1d;
-  let aadFunc = (tableName:string){
-  table(tableName)
-  | where TimeGenerated >= startofday(ago(lookBack_long))
-  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
-  | extend locationString = strcat(tostring(LocationDetails.countryOrRegion), "/", tostring(LocationDetails.state), "/", tostring(LocationDetails.city), ";")
-  | project TimeGenerated, AppDisplayName , UserPrincipalName, locationString
-  // Create time series
-  | make-series dLocationCount = dcount(locationString) on TimeGenerated in range(startofday(ago(lookBack_long)),now(), 1d)
-  by UserPrincipalName, AppDisplayName
-  // Compute best fit line for each entry
-  | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dLocationCount)
-  // Chart the 3 most interesting lines
-  // A 0-value slope corresponds to an account being completely stable over time for a given Azure Active Directory application
-  | where Slope > 0.3
-  | top 50 by Slope desc
-  | join kind = leftsemi (
-  table(tableName)
-  | where TimeGenerated >= startofday(ago(lookBack_med))
-  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
-  | extend locationString = strcat(tostring(LocationDetails.countryOrRegion), "/", tostring(LocationDetails.state), "/", tostring(LocationDetails.city), ";")
-  | project TimeGenerated, AppDisplayName , UserPrincipalName, locationString
-  | make-series dLocationCount = dcount(locationString) on TimeGenerated in range(startofday(ago(lookBack_med)) ,now(), 1d)
-  by UserPrincipalName, AppDisplayName
-  | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dLocationCount)
-  | where Slope > 0.3
-  | top 50 by Slope desc
-  ) on UserPrincipalName, AppDisplayName
-  | join kind = leftsemi (
-  table(tableName)
-  | where TimeGenerated >= startofday(ago(lookBack))
-  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
-  | extend locationString = strcat(tostring(LocationDetails.countryOrRegion), "/", tostring(LocationDetails.state), "/", tostring(LocationDetails.city), ";")
-  | project TimeGenerated, AppDisplayName , UserPrincipalName, locationString
-  | make-series dLocationCount = dcount(locationString) on TimeGenerated in range(startofday(ago(lookBack)) ,now(), 1d)
-  by UserPrincipalName, AppDisplayName
-  | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dLocationCount)
-  | where Slope > 5
-  | top 50 by Slope desc
-  // Higher threshold requirement on last day anomaly
-  ) on UserPrincipalName, AppDisplayName
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName
-  };
-  let aadSignin = aadFunc("SigninLogs");
-  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-  union isfuzzy=true aadSignin, aadNonInt
+  // Adjust this figure to adjust how sensitive this detection is
+  let sensitivity = 2.5;
+  let AuthEvents = materialize(
+  union isfuzzy=True SigninLogs, AADNonInteractiveUserSignInLogs
+  | where TimeGenerated > ago(7d)
+  | where ResultType == 0
+  | extend LocationDetails = LocationDetails_dynamic
+  | extend Location = strcat(LocationDetails.countryOrRegion, "-", LocationDetails.state,"-", LocationDetails.city)
+  | where Location != "--");
+  AuthEvents
+  | summarize dcount(Location) by AppDisplayName, AppId, UserPrincipalName, UserId, bin(startofday(TimeGenerated), 1d)
+  | where dcount_Location > 2
+  | summarize CountOfLocations = make_list(dcount_Location, 10000), TimeStamp = make_list(TimeGenerated, 10000) by AppId, UserId
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfLocations, sensitivity, -1, 'linefit')
+  | mv-expand CountOfLocations to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)
+  | where Anomalies > 0
+  | join kind=inner( AuthEvents | extend TimeStamp = startofday(TimeGenerated)) on UserId, AppId
+  | extend SignInDetails = bag_pack("TimeGenerated", TimeGenerated, "Location", Location, "Source", IPAddress, "Device", DeviceDetail_dynamic)
+  | summarize SignInDetailsSet=make_set(SignInDetails, 1000) by UserId, UserPrincipalName, CountOfLocations, TimeStamp, AppId, AppDisplayName
+  | extend Name = split(UserPrincipalName, "@")[0], UPNSuffix = split(UserPrincipalName, "@")[1]
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.1
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: UserId   
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  Application: AppDisplayName
+alertDetailsOverride:
+  alertDisplayNameFormat: Anomalous sign-in location by {{UserPrincipalName}} to {{AppDisplayName}}
+  alertDescriptionFormat: |
+    This query over Azure Active Directory sign-in considers all user sign-ins for each Azure Active
+    Directory application and picks out the most anomalous change in location profile for a user within an
+    individual application. This has detected {{UserPrincipalName}} signing into {{AppDisplayName}} from {{CountOfLocations}} 
+    different locations.
+version: 2.0.0
 kind: Scheduled

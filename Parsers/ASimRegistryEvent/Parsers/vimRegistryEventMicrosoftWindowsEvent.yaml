@@ -1,7 +1,7 @@
 Parser:
   Title: Registry Event ASIM parser for Microsoft Windows Events (registry creation event)
-  Version: '0.1.1'
-  LastUpdated: Dec 12th, 2022
+  Version: '0.2'
+  LastUpdated: May 1st 2023
 Product:
   Name: Security Events
 Normalization:
@@ -19,13 +19,6 @@ Description: |
 ParserName: vimRegistryEventMicrosoftWindowsEvent
 ParserQuery: | 
     let RegistryEvents=(){
-        let ASIM_GetWindowsUserType = (username:string, sid:string) { 
-            case ( 
-                username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine"
-                , isempty(username) or sid == "S-1-0-0", ""
-                , "Regular"
-            )
-        };
         let ASIM_GetAccountType = (sid:string) { 
             iif ( 
                 sid in ("S-1-0-0","S-1-5-18", "S-1-5-19", "S-1-5-20"), "Simple"
@@ -131,12 +124,15 @@ ParserQuery: |
             | project-away NewValueType, OldValueType, EventOriginalSubType, OldValue, NewValue, RegistryValue
         )
         | invoke _ASIM_ResolveFQDN ("Computer")
+        | extend
+             ActorUserIdType = iff (ActorUserId <> "S-1-0-0", "SID", ""),
+             ActorUserId = iff (ActorUserId <> "S-1-0-0", ActorUserId, "")
         | project-rename DvcDomainType = DomainType
             , DvcHostname = ExtractedHostname
         | extend DvcFQDN = iif(DvcDomainType == "FQDN", FQDN, "")
             , DvcDomain = iif(isnotempty(Domain), Domain, "")
             , Dvc = iif(DvcDomainType == "FQDN", FQDN, "DvcHostname")
-        | extend ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
+        | extend ActorUserType = _ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
             , ActorUsernameType = ASIM_GetAccountType(ActorUserId)
         | extend EventType = iif(isempty(EventType), "Other",EventType)
         | extend User = ActorUsername
@@ -154,5 +150,4 @@ ParserQuery: |
             , EventVendor = "Microsoft"
             , EventProduct = "Security Events" 
             , DvcOs = "Windows"
-            , ActorUserIdType = "SID"
     }; RegistryEvents

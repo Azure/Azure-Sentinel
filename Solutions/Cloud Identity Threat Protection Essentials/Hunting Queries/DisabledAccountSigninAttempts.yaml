@@ -1,7 +1,7 @@
 id: b00f127c-46fa-40bd-9ab6-b266974d29cc
-name: Attempts to sign in to disabled accounts by account name
+name: Detect Disabled Account Sign-in Attempts by Account Name
 description: |
-  'Failed attempts to sign in to disabled accounts summarized by account name'
+  'This query searches for failed attempts to sign-in to disabled accounts summarized by account name.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -11,26 +11,20 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-
   SigninLogs 
   | where ResultType == "50057" 
-  | where ResultDescription == "User account is disabled. The account has been disabled by an administrator." 
+  | where ResultDescription =~ "User account is disabled. The account has been disabled by an administrator." 
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by AppDisplayName, UserPrincipalName
-  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName
+  | extend timestamp = StartTime, UserName = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
   | order by count_ desc
+  | extend Account_0_Name = UserName
+  | extend Account_0_UPNSuffix = UPNSuffix
 
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
-metadata:
-    source:
-        kind: Community
-    author:
-        name: Shain
-    support:
-        tier: Community
-    categories:
-        domains: [ "Security - Other", "Identity" ]
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.2

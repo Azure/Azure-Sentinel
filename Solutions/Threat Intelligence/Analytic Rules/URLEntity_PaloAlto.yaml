@@ -1,7 +1,7 @@
 id: 106813db-679e-4382-a51b-1bfc463befc3
-name: TI map URL entity to PaloAlto data
+name: TI Map URL Entity to PaloAlto Data
 description: |
-  'Identifies a match in PaloAlto data from any URL IOC from TI'
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in PaloAlto Data.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: PaloAltoNetworks
@@ -11,6 +11,9 @@ requiredDataConnectors:
     dataTypes:
       - ThreatIntelligenceIndicator
   - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
 queryFrequency: 1h
@@ -39,7 +42,7 @@ query: |
     //Uncomment the line below to only alert on allowed connections
     //| where DeviceAction !~ "block-url"
     //Select logs where URL data is populated
-    | extend PA_Url = columnifexists("RequestURL", "None")
+    | extend PA_Url = column_ifexists("RequestURL", "None")
     | extend PA_Url = iif(isempty(PA_Url), extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
     | extend PA_Url = iif(PA_Url !startswith "http://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), iif(PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url))
     | where isnotempty(PA_Url)
@@ -47,20 +50,19 @@ query: |
   ) on $left.Url == $right.PA_Url
   | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
   | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, PA_Url
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, PA_Url, DeviceName
-  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, URLCustomEntity = PA_Url
+  | project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, PA_Url, DeviceName
 entityMappings:
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: DeviceName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.2.1
+        columnName: PA_Url
+version: 1.2.3
 kind: Scheduled

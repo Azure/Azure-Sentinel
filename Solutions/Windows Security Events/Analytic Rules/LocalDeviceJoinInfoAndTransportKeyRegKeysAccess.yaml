@@ -43,7 +43,7 @@ query: |
   // Access to Object Requested
   SecurityEvent
   | where EventID == '4656'
-  | where EventData contains aadJoinRoot or EventData contains aadRegisteredRoot
+  | where EventData has aadJoinRoot or EventData has aadRegisteredRoot
   | extend EventData = parse_xml(EventData).EventData.Data
   | mv-expand bagexpansion=array EventData
   | evaluate bag_unpack(EventData)
@@ -55,7 +55,7 @@ query: |
   | join kind=innerunique (
       SecurityEvent
       | where EventID == '4656'
-      | where EventData contains keyTransportKey
+      | where EventData has keyTransportKey
       | extend EventData = parse_xml(EventData).EventData.Data
       | mv-expand bagexpansion=array EventData
       | evaluate bag_unpack(EventData)
@@ -79,20 +79,25 @@ query: |
       SecurityEvent
       | where EventID == '4663'
       | where ObjectType == 'Key'
-      | where ObjectName contains keyTransportKey and SubjectLogonId != '0x3e7' //Local System
+      | where ObjectName has keyTransportKey and SubjectLogonId != '0x3e7' //Local System
       | extend Account = SubjectAccount
   ) on $left.Computer == $right.Computer and $left.SubjectLogonId == $right.SubjectLogonId and $left.ProcessId == $right.ProcessId
   | project TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, SubjectLogonId, ObjectName, Process, ProcessName, ProcessId, EventID
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
   )
   )
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Account
+      - identifier: Name
+        columnName: SubjectUserName
+      - identifier: NTDomain
+        columnName: SubjectDomainName
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: Computer
-version: 1.0.1
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.2
 kind: Scheduled

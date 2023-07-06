@@ -1,0 +1,282 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "automationAccounts_ESI_DataCollector_name": {
+            "defaultValue": "ESI-DataCollector",
+            "type": "String"
+        },
+        "automationAccounts_ESI_DataCollector_tenantName": {
+            "type": "String",
+            "metadata": {
+            "description": "Specifies the tenant that will be audited (Name of Azure AD Tenant where Automation Account is deployed)."
+          }
+        },
+        "automationAccounts_ESI_DataCollector_WorkspaceID": {
+            "type": "String",
+            "defaultValue": "<workspaceID>"
+        },
+        "automationAccounts_ESI_DataCollector_WorkspaceKey": {
+            "type": "String",
+            "defaultValue": "<workspaceKey>"
+        },
+        "location": {
+          "type": "string",
+          "defaultValue": "[resourceGroup().location]",
+          "metadata": {
+            "description": "Specifies the location in which to create the workspace."
+          }
+        },
+        "psModulesUri": {
+            "type": "string",
+            "defaultValue": "https://devopsgallerystorage.blob.core.windows.net/packages/",
+            "metadata": {
+                "description": "Default modules URI"
+            }
+        },
+        "JobSchedulerGuid": {
+            "defaultValue": "[newGuid()]",
+            "type": "String",
+            "metadata": {
+                "description": "Enter new GUID, you can generate one from Powershell using new-guid or get one from this site: <a target=new href=https://guidgenerator.com/online-guid-generator.aspx>GUID Generator</a>"
+              }
+        }
+    },
+    "variables": {
+        "psModules": {
+             "PackageManagement": {
+              "name": "PackageManagement",
+              "url": "[uri(parameters('psModulesUri'),'packagemanagement.1.4.8.1.nupkg')]"
+            },
+            "PowerShellGet": {
+              "name": "PowerShellGet",
+              "url": "[uri(parameters('psModulesUri'),'powershellget.2.2.5.nupkg')]"
+            },
+            "ExchangeOnlineManagement": {
+              "name": "ExchangeOnlineManagement",
+              "url": "[uri(parameters('psModulesUri'),'exchangeonlinemanagement.3.0.0.nupkg')]"
+            },
+            "MicrosoftGraphAuthentication": {
+              "name": "Microsoft.Graph.Authentication",
+              "url": "[uri(parameters('psModulesUri'),'microsoft.graph.authentication.1.19.0.nupkg')]"
+            },
+            "MicrosoftGraphGroups": {
+              "name": "Microsoft.Graph.Groups",
+              "url": "[uri(parameters('psModulesUri'),'microsoft.graph.groups.1.19.0.nupkg')]"
+            },
+            "MicrosoftGraphUsers": {
+              "name": "Microsoft.Graph.Users",
+              "url": "[uri(parameters('psModulesUri'),'microsoft.graph.users.1.19.0.nupkg')]"
+            }
+        },
+        "ingestionScriptUri": "https://aka.ms/ESI-ExchangeCollector-RawScript",
+        "InitialConfiguration":"\"{\\n    \\\"SolutionMetadata\\\":\\n{\\n\\\"JSonVersion\\\":\\\"2.0\\\",\\n\\\"JsonUpdateDate\\\":\\\"06/10/2022\\\",\\n\\\"Description\\\":\\\"Configuration File for CollectExchSecIns script\\\",\\n\\\"VersionInformation\\\":{\\n\\\"2.0\\\":{\\n\\\"Tracking\\\":[\\\"Adding Instance information, Add-on config files and Internet configuration\\\"],\\n\\\"MigrationMessageFromLastVersion\\\":\\\"Compare old file with new file as a lot of things changes. Especially the AuditFunctions part that is exported to external Add-Ons files.\\\"\\n},\\n\\\"1.3\\\":{\\n\\\"Tracking\\\":[\\\"Adding feature to export Domain information in Sentinel Table\\\"],\\n\\\"MigrationMessageFromLastVersion\\\":\\\"Adding entry 'ExportDomainsInformation' in Output\\\"\\n},\\n\\\"1.2\\\":{\\n\\\"Tracking\\\":[\\\"Correcting PartConfPerm in AuditFunctions : Correct Expression to avoid null error.\\\"],\\n\\\"MigrationMessageFromLastVersion\\\":\\\"Replace all the section 'AuditFunctions' with the new one\\\"\\n},\\n\\\"1.1\\\":{\\n\\\"Tracking\\\":[\\\"Correcting multiple entries in AuditFunctions : ExchangeServers, ETS, EWP, LocalAdmins,POPIMAPServicesStatus,ExchVersion\\\"],\\n\\\"MigrationMessageFromLastVersion\\\":\\\"Replace all the section 'AuditFunctions' with the new one\\\"\\n}\\n}\\n},\\n\\\"Global\\\":{\\n        \\\"ParallelTimeoutMinutes\\\":5,\\n        \\\"MaxParallelRunningJobs\\\":8,\\n        \\\"GlobalParallelProcessing\\\":\\\"false\\\",\\n        \\\"PerServerParallelProcessing\\\":\\\"false\\\",\\n        \\\"DefaultDurationTracking\\\":30,\\n\\\"ESIProcessingType\\\":\\\"Online\\\",\\n\\\"EnvironmentIdentification\\\":\\\"#EnvironmentIdentity#\\\"\\n    },\\n    \\\"Output\\\":{\\n        \\\"DefaultOutputFile\\\":\\\"C:\\\\\\\\ExchSecIns\\\\\\\\data\\\\\\\\ExchSecIns.csv\\\",\\n\\\"ExportDomainsInformation\\\":\\\"True\\\"\\n    },\\n\\\"Advanced\\\":{\\n\\\"ParralelWaitRunning\\\":10,\\n\\\"ParralelPingWaitRunning\\\":10,\\n\\\"OnlyExplicitActivation\\\":\\\"false\\\",\\n\\\"ExchangeServerBinPath\\\":\\\"c:\\\\\\\\Program Files\\\\\\\\Microsoft\\\\\\\\Exchange Server\\\\\\\\V15\\\\\\\\bin\\\",\\n\\\"BypassServerAvailabilityTest\\\": \\\"false\\\",\\n\\\"ExplicitExchangeServerList\\\": [],\\n\\\"FunctionsListInline\\\":\\\"false\\\",\\n\\\"FunctionsListWithoutInternet\\\":\\\"false\\\",\\n\\\"Beta\\\":\\\"false\\\"\\n},\\n\\\"LogCollection\\\":{\\n\\\"ActivateLogUpdloadToSentinel\\\":\\\"true\\\",\\n\\\"WorkspaceId\\\":\\\"#WorkspaceID#\\\",\\n\\\"WorkspaceKey\\\":\\\"#WorkspaceKey#\\\",\\n\\\"LogTypeName\\\":\\\"ESIExchangeOnlineConfig\\\",\\n\\\"TogetherMode\\\":\\\"false\\\"\\n},\\n\\\"MGGraphAPIConnection\\\":{\\n\\\"MGGraphAzureRMCertificate\\\":\\\"\\\",\\n\\\"MGGraphAzureRMAppId\\\":\\\"\\\"\\n},\\n\\\"InstanceConfiguration\\\":{\\n\\\"Default\\\":{\\n\\\"All\\\":\\\"true\\\",\\n\\\"Capabilities\\\":\\\"OP|OL|MGGRAPH|ADINFOS\\\"\\n},\\n\\\"IIS-IoCs\\\":{\\n\\\"All\\\":\\\"true\\\",\\n\\\"Category\\\":\\\"IIS-IoCs\\\",\\n\\\"Capabilities\\\":\\\"IIS\\\",\\n\\\"OutputName\\\":\\\"ESIIISIoCs\\\"\\n},\\n\\\"InstanceExample\\\":\\n{\\n\\\"SelectedAddons\\\":[\\\"Filename1\\\", \\\"Filename2\\\"],\\n\\\"FileteredAddons\\\":[\\\"Filename1\\\", \\\"Filename2\\\"]\\n}\\n},\\n\\\"AuditFunctionsFiles\\\":[\\n{\\n\\\"Filename\\\":\\\"FiletoIgnore\\\",\\n\\\"Deactivated\\\":\\\"false\\\"\\n}\\n],\\n\\\"AuditFunctionProtectedArea\\\":\\n{\\n\\\"ContentCheckSum\\\":\\\"\\\"\\n},\\n\\\"AuditFunctions\\\":[\\n]\\n}\"",
+        "DestinationConfiguration":"[replace(replace(replace(variables('InitialConfiguration'),'#WorkspaceKey#',parameters('automationAccounts_ESI_DataCollector_WorkspaceKey')),'#WorkspaceID#',parameters('automationAccounts_ESI_DataCollector_WorkspaceID')),'#EnvironmentIdentity#',parameters('automationAccounts_ESI_DataCollector_tenantName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Automation/automationAccounts",
+            "apiVersion": "2021-06-22",
+            "name": "[parameters('automationAccounts_ESI_DataCollector_name')]",
+            "location": "[parameters('location')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "publicNetworkAccess": false,
+                "disableLocalAuth": false,
+                "sku": {
+                    "name": "Basic"
+                },
+                "encryption": {
+                    "keySource": "Microsoft.Automation",
+                    "identity": {}
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/PackageManagement')]",
+            "type": "Microsoft.Automation/automationAccounts/modules",
+            "apiVersion": "2015-10-31",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "tags": {},
+            "copy":{
+                "name": "Level1ModulesInstall",
+                "count": 1,
+                "mode": "Serial",
+                "batchSize": 1
+            },
+            "properties":{
+                "contentLink": {
+                "uri": "[variables('psModules').PackageManagement.url]"
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/PowerShellGet')]",
+            "type": "Microsoft.Automation/automationAccounts/modules",
+            "apiVersion": "2015-10-31",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "Level1ModulesInstall"
+            ],
+            "tags": {},
+            "copy": {
+                "name": "Level0ModulesInstall",
+                "count": 1,
+                "mode": "Serial",
+                "batchSize": 1
+            },
+            "properties": {
+                "contentLink": {
+                "uri": "[variables('psModules').PowerShellGet.url]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/modules",
+            "apiVersion": "2020-01-13-preview",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/ExchangeOnlineManagement')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "properties": {
+                "contentLink": {
+                    "uri": "[variables('psModules').ExchangeOnlineManagement.url]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/modules",
+            "apiVersion": "2020-01-13-preview",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/Microsoft.Graph.Authentication')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "properties": {
+                "contentLink": {
+                    "uri": "[variables('psModules').MicrosoftGraphAuthentication.url]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/modules",
+            "apiVersion": "2020-01-13-preview",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/Microsoft.Graph.Groups')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]",
+                "[resourceId('Microsoft.Automation/automationAccounts/modules', parameters('automationAccounts_ESI_DataCollector_name'), 'Microsoft.Graph.Authentication')]"
+            ],
+            "properties": {
+                "contentLink": {
+                    "uri": "[variables('psModules').MicrosoftGraphGroups.url]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/modules",
+            "apiVersion": "2020-01-13-preview",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/Microsoft.Graph.Users')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]",
+                "[resourceId('Microsoft.Automation/automationAccounts/modules', parameters('automationAccounts_ESI_DataCollector_name'), 'Microsoft.Graph.Authentication')]"
+            ],
+            "properties": {
+                "contentLink": {
+                    "uri": "[variables('psModules').MicrosoftGraphUsers.url]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/runbooks",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/Start-ESICollector')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "properties": {
+                "runbookType": "PowerShell",
+                "logVerbose": true,
+                "logProgress": true,
+                "logActivityTrace": 9,
+                "publishContentLink": {
+                    "uri": "[variables('ingestionScriptUri')]",
+                    "version": "1.0"
+                  }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/schedules",
+            "apiVersion": "2020-01-13-preview",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/ESIConfig-Each-day')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts/runbooks/', parameters('automationAccounts_ESI_DataCollector_name'), 'Start-ESICollector')]",
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "properties": {
+                "interval": 1,
+                "isEnabled": "true",
+                "frequency": "Day"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/jobSchedules",
+            "apiVersion": "2021-04-01",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/', parameters('JobSchedulerGuid'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts/runbooks/', parameters('automationAccounts_ESI_DataCollector_name'), 'Start-ESICollector')]",
+                "[resourceId('Microsoft.Automation/automationAccounts/schedules/', parameters('automationAccounts_ESI_DataCollector_name'), 'ESIConfig-Each-day')]",
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "properties": {
+                "runbook": {
+                    "name": "Start-ESICollector"
+                },
+                "schedule": {
+                    "name": "ESIConfig-Each-day"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2020-01-13-preview",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/GlobalConfiguration')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[variables('DestinationConfiguration')]"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2020-01-13-preview",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/TenantName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[concat('\"',parameters('automationAccounts_ESI_DataCollector_tenantName'),'\"')]"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2020-01-13-preview",
+            "name": "[concat(parameters('automationAccounts_ESI_DataCollector_name'), '/LastDateTracking')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccounts_ESI_DataCollector_name'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "\"Never\""
+            }
+        }
+    ]
+}

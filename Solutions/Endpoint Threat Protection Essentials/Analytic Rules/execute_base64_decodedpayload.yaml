@@ -32,8 +32,7 @@ relevantTechniques:
   - T1027
   - T1140
 query: |
-  let ProcessCreationEvents=() {
-  let processEvents=(union isfuzzy=true
+  let ProcessCreationEvents=(union isfuzzy=true
   (SecurityEvent
   | where EventID==4688
   | where isnotempty(CommandLine)
@@ -51,23 +50,22 @@ query: |
   | extend ParentProcessName = tostring(EventData.ParentProcessName)
   | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, CommandLine, ParentProcessName
   ));
-  processEvents;
-  };
   ProcessCreationEvents 
   | where CommandLine contains ".decode('base64')"
           or CommandLine contains "base64 --decode"
           or CommandLine contains ".decode64(" 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CountToday = count() by Computer, Account, AccountDomain, FileName, CommandLine, ParentProcessName 
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
-
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CountToday = count() by Computer, Account, AccountDomain, FileName, CommandLine, ParentProcessName
+  | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Account
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.1.1
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.1.2
 kind: Scheduled
