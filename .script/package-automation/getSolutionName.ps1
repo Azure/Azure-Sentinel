@@ -14,7 +14,7 @@ try
     $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
     Write-Host "List of files in PR: $diff"
 
-    $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"}
+    $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"}
     Write-Host "Filtered Files $filteredFiles"
 
     if ($filteredFiles.Count -gt 0)
@@ -61,18 +61,18 @@ try
     }
     else
     {
-        Write-Output "Skipping Github workflow as changes are not in Solutions folder."
-        Write-Output "solutionName=$solutionName" >> $env:GITHUB_OUTPUT
+        Write-Output "Skipping Github workflow as changes are not in Solutions folder or changes are in .md file or images folder inside of Solutions!"
+        Write-Output "solutionName=''" >> $env:GITHUB_OUTPUT
 
         if ($instrumentationKey -ne '')
         {
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Skipping as changes are not in solutions folder for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'FilesChanged'="$filteredFiles"; "EventName"="GetSolutionName"}
+            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Skipping as changes are not in solutions folder or changes are in .md file or images folder inside of Solutions for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'FilesChanged'="$filteredFiles"; "EventName"="GetSolutionName"}
         }
     }
 }
 catch
 {
-    Write-Output "solutionName=$solutionName" >> $env:GITHUB_OUTPUT
+    Write-Output "solutionName=''" >> $env:GITHUB_OUTPUT
     Write-Host "Skipping as exception occured: Unable to identify Solution name. Error Details: $_"
 
     if ($instrumentationKey -ne '')
