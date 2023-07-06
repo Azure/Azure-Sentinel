@@ -12,8 +12,10 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
 queryFrequency: 1h
-queryPeriod: 1h
+queryPeriod: 8d
 triggerOperator: gt
 triggerThreshold: 1
 tactics:
@@ -26,30 +28,56 @@ query: |
   let RunTime = 1d;
   let StartLearningPeriod = LearningPeriod + RunTime;
   let EndRunTime = RunTime - 1d;
-  let LearningPortToProtocol = (AzureDiagnostics
+  let LearningPortToProtocol1 =  (AzureDiagnostics
   | where OperationName == "AzureFirewallApplicationRuleLog"
-  | parse msg_s with protocol " request from " srcip ":" srcport " to " dsturl ":" dstport "." *
-  | where isnotempty(dstport)
   | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
-  | summarize LearningTimeCount = count() by LearningTimeDstPort = dstport, LearningTimeProtocol = protocol, srcip, dsturl);
-  let AlertTimePortToProtocol = (AzureDiagnostics
-  | where OperationName == "AzureFirewallApplicationRuleLog"
-  | parse msg_s with protocol " request from " srcip ":" srcport " to " dsturl ":" dstport "." *
-  | where isnotempty(dstport)
+  | extend msg_s= column_ifexists('msg_s',Message)
+  | parse msg_s with Protocol " request from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int "." *
+  | where isnotempty(DestinationPort)
+  | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+  let LearningPortToProtocol2 = (AZFWNetworkRule
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | where isnotempty(DestinationPort)
+  | extend Fqdn = DestinationIp
+  | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+  let LearningPortToProtocol3 = (AZFWApplicationRule
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | where isnotempty(DestinationPort)
+  | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+  let AlertTimePortToProtocol1 = (AzureDiagnostics
   | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
-  | summarize AlertTimeCount = count() by AlertTimeDstPort = dstport, AlertTimeProtocol = protocol);
-  AlertTimePortToProtocol 
-  | join kind=leftouter (LearningPortToProtocol) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
-  | where LearningTimeProtocol != AlertTimeProtocol
-  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
+  | where OperationName == "AzureFirewallApplicationRuleLog"
+  | extend msg_s= column_ifexists('msg_s',Message)
+  | parse msg_s with Protocol " request from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort:int "." *
+  | where isnotempty(DestinationPort)
+  | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
+  let AlertTimePortToProtocol2 = (AZFWNetworkRule
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | where isnotempty(DestinationPort)
+  | extend Fqdn = DestinationIp
+  | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
+  let AlertTimePortToProtocol3 = (AZFWApplicationRule
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | where isnotempty(DestinationPort)
+  | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
+  (union isfuzzy=true 
+  (AlertTimePortToProtocol1 
+  | join kind=leftouter (LearningPortToProtocol1) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
+  | where LearningTimeProtocol != AlertTimeProtocol),
+  (AlertTimePortToProtocol2 
+  | join kind=leftouter (LearningPortToProtocol2) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
+  | where LearningTimeProtocol != AlertTimeProtocol),
+  (AlertTimePortToProtocol3 
+  | join kind=leftouter (LearningPortToProtocol3) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
+  | where LearningTimeProtocol != AlertTimeProtocol))
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIp
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.0.0
+        columnName: Fqdn
+version: 1.1.1
 kind: Scheduled

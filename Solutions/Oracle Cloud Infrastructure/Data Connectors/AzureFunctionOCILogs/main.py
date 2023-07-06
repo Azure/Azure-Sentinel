@@ -18,8 +18,11 @@ StreamOcid = os.environ['StreamOcid']
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
 LOG_TYPE = 'OCI_Logs'
-
+CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
+PARTITIONS = os.getenv('Partition',"0")
+Message_Limit = os.getenv('Message_Limit',250)
+limit = int(Message_Limit)
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -42,10 +45,13 @@ def main(mytimer: func.TimerRequest):
 
     stream_client = oci.streaming.StreamClient(config, service_endpoint=MessageEndpoint)
 
-    cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
-    process_events(stream_client, StreamOcid, cursor, sentinel_connector, start_ts)
+    if CURSOR_TYPE.lower() == 'group' :
+        cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
+    else :
+        cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
+    
+    process_events(stream_client, StreamOcid, cursor, limit, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
-
 
 def parse_key(key_input):
     try:
@@ -95,17 +101,43 @@ def get_cursor_by_group(sc, sid, group_name, instance_name):
     response = sc.create_group_cursor(sid, cursor_details)
     return response.data.value
 
+def get_cursor_by_partition(client, stream_id, partition):
+    print("Creating a cursor for partition {}".format(partition))
+    cursor_details = oci.streaming.models.CreateCursorDetails(
+        partition=partition,
+        type=oci.streaming.models.CreateCursorDetails.TYPE_TRIM_HORIZON)
+    response = client.create_cursor(stream_id, cursor_details)
+    cursor = response.data.value
+    return cursor
 
-def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, sentinel: AzureSentinelConnector, start_ts):
+
+def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, limit, sentinel: AzureSentinelConnector, start_ts):
     cursor = initial_cursor
     while True:
-        get_response = client.get_messages(stream_id, cursor, limit=1000)
+        get_response = client.get_messages(stream_id, cursor, limit, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
         if not get_response.data:
             return
 
         for message in get_response.data:
             event = b64decode(message.value.encode()).decode()
             event = json.loads(event)
+            if "data" in event:
+                if "request" in event["data"]:
+                    if "headers" in event["data"]["request"]:
+                        event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
+                    if "parameters" in event["data"]["request"]:
+                        event["data"]["request"]["parameters"] = json.dumps(
+                            event["data"]["request"]["parameters"])
+                if "response" in event["data"]:
+                    if "headers" in event["data"]["response"]:
+                        event["data"]["response"]["headers"] = json.dumps(event["data"]["response"]["headers"])
+                if "additionalDetails" in event["data"]:
+                    event["data"]["additionalDetails"] = json.dumps(event["data"]["additionalDetails"])
+                if "stateChange" in event["data"]:
+                    logging.info("In data.stateChange : {}".format(event["data"]["stateChange"]))
+                    if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
+                        event["data"]["stateChange"]["current"] = json.dumps(
+                            event["data"]["stateChange"]["current"])
             sentinel.send(event)
 
         sentinel.flush()
