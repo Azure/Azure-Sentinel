@@ -33,14 +33,14 @@
 				"description": "IronDefense URL used to authenticate to IronAPI"
 			}
 		},
-		"ClientId": {
+		"AzureClientId": {
 			"type": "string",
 			"metadata": {
 				"label": "Client ID",
 				"description": "Azure Active Directory ClientId used to connect to the Microsoft Sentinel API to fetch Incidents"
 			}
 		},
-		"ClientSecret": {
+		"AzureClientSecret": {
 			"type": "securestring",
 			"metadata": {
 				"label": {
@@ -57,14 +57,14 @@
 				"description": "Check this flag to share the comments within the incident with IronDome"
 			}
 		},
-		"param_recurrence_interval": {
-			"type": "int",
+		"RecurrenceInterval": {
+			"type": "string",
 			"metadata": {
 				"label": "Playback Recurrence Interval",
 				"description": "Polling Interval for the Playbook to execute (This must be an Integer value)"
 			}
 		},
-		"param_recurrence_frequency": {
+		"RecurrenceFrequency": {
 			"type": "string",
 			"defaultValue": "Minute",
 			"allowedValues": [
@@ -93,7 +93,7 @@
 		{
 			"type": "Microsoft.Logic/workflows",
 			"apiVersion": "2019-05-01",
-			"name": "[parameters('PlaybookName')]",
+			"name": "[parameters('playbook1-PlaybookName')]",
 			"location": "[resourceGroup().location]",
 			"properties": {
 				"state": "Enabled",
@@ -105,81 +105,81 @@
 							"defaultValue": {},
 							"type": "Object"
 						},
-						"IronNetUrl": {
-							"defaultValue": "[parameters('IronDefenseUrl')]",
-							"type": "String"
-						},
-						"Password": {
-							"defaultValue": "[parameters('IronApiPassword')]",
-							"type": "SecureString"
-						},
-						"TenantId": {
+						"tenant_id": {
 							"defaultValue": "[subscription().tenantId]",
 							"type": "String"
 						},
-						"Username": {
-							"defaultValue": "[parameters('IronApiUsername')]",
+						"irondefense_url": {
+							"defaultValue": "[parameters('playbook1-IronDefenseUrl')]",
 							"type": "String"
 						},
+						"user_name": {
+							"defaultValue": "[parameters('playbook1-IronApiUsername')]",
+							"type": "String"
+						},
+						"password": {
+							"defaultValue": "[parameters('playbook1-IronApiPassword')]",
+							"type": "SecureString"
+						},
 						"client_id": {
-							"defaultValue": "[parameters('ClientId')]",
+							"defaultValue": "[parameters('playbook1-AzureClientId')]",
 							"type": "String"
 						},
 						"client_secret": {
-							"defaultValue": "[parameters('ClientSecret')]",
+							"defaultValue": "[parameters('playbook1-AzureClientSecret')]",
 							"type": "SecureString"
 						},
-						"ResourceGroupId": {
+						"resource_group_id": {
 							"defaultValue": "[resourceGroup().id]",
 							"type": "String"
 						},
-						"ResourceGroup": {
+						"resource_group": {
 							"defaultValue": "[resourceGroup().name]",
 							"type": "String"
 						},
-						"SubscriptionId": {
+						"subscription_id": {
 							"defaultValue": "[subscription().subscriptionId]",
 							"type": "String"
 						},
 						"workspace_name": {
-							"defaultValue": "[basics('workspace')]",
+							"defaultValue": "[parameters('workspace')]",
 							"type": "String"
 						},
-						"Pollingtime": {
-							"defaultValue": "[parameters('param_recurrence_interval')]",
-							"type": "Int"
+						"polling_interval": {
+							"defaultValue": "[parameters('playbook1-RecurrenceInterval')]",
+							"type": "String"
 						},
-						"PollingtimeFrequency": {
-							"defaultValue": "[parameters('param_recurrence_frequency')]",
+						"polling_frequency": {
+							"defaultValue": "[parameters('playbook1-RecurrenceFrequency')]",
 							"type": "SecureString"
 						},
-						"ShareCommentWithIronDome": {
-							"defaultValue": false,
+						"share_comment_with_irondome": {
+							"defaultValue": "[parameters('playbook1-ShareCommentWithIrondome')]",
 							"type": "Bool"
 						},
 						"microsoft_login_uri": {
 							"type": "string",
-							"defaultValue": "environment().authentication.loginEndpoint"
+							"defaultValue": "[concat('login.microsoft','online.com')]"
 						},
 						"microsoft_management_uri": {
 							"type": "string",
-							"defaultValue": "environment().resourceManager"
+              				"defaultValue": "[concat('management.','azure.com')]"
 						}
 					},
 					"triggers": {
 						"Generate_the_token_for_Azure_Sentinel_Incident": {
 							"recurrence": {
-								"frequency": "@{parameters('PollingtimeFrequency')}",
-								"interval": "@{parameters('Pollingtime')}"
+								"frequency": "@{parameters('polling_frequency')}",
+								"interval": "@{int(parameters('polling_interval'))}"
 							},
 							"type": "Http",
 							"inputs": {
-								"body": "grant_type=client_credentials&client_id=@{parameters('client_id')}&client_secret=@{parameters('client_secret')}&resource=https://management.azure.com",
+								"body": "grant_type=client_credentials&client_id=@{parameters('client_id')}&client_secret=@{parameters('client_secret')}&resource=https://@{parameters('microsoft_management_uri')}",
 								"headers": {
 									"Content-Type": "application/x-www-form-urlencoded"
 								},
 								"method": "POST",
-								"uri": "@{parameters('microsoft_login_uri')}@{parameters('TenantId')}/oauth2/token"
+								"uri": "https://@{parameters('microsoft_login_uri')}/@{parameters('tenant_id')}/oauth2/token"
 							}
 						}
 					},
@@ -278,7 +278,7 @@
 									{
 										"name": "Next Link",
 										"type": "string",
-										"value": "@{parameters('microsoft_management_uri')}subscriptions/@{parameters('SubscriptionId')}/resourceGroups/@{parameters('ResourceGroupId')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/incidents?api-version=2020-01-01&$orderby=properties/lastModifiedTimeUtc desc&$filter=(properties/lastModifiedTimeUtc ne properties/createdTimeUtc) and (properties/lastModifiedTimeUtc le @{utcNow()})  and (properties/lastModifiedTimeUtc gt @{variables('Interval Frequency')})"
+										"value": "https://@{parameters('microsoft_management_uri')}@{parameters('resource_group_id')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/incidents?api-version=2020-01-01&$orderby=properties/lastModifiedTimeUtc desc&$filter=(properties/lastModifiedTimeUtc ne properties/createdTimeUtc) and (properties/lastModifiedTimeUtc le @{utcNow()})  and (properties/lastModifiedTimeUtc gt @{variables('Interval Frequency')})"
 									}
 								]
 							}
@@ -311,7 +311,7 @@
 									{
 										"name": "Interval",
 										"type": "string",
-										"value": "-@{parameters('Pollingtime')}"
+										"value": "-@{int(parameters('polling_interval'))}"
 									}
 								]
 							}
@@ -388,16 +388,16 @@
 									"type": "Http",
 									"inputs": {
 										"authentication": {
-											"password": "@parameters('Password')",
+											"password": "@parameters('password')",
 											"type": "Basic",
-											"username": "@parameters('Username')"
+											"username": "@parameters('user_name')"
 										},
-										"body": {},
+										"body": "{}",
 										"headers": {
 											"Content-Type": "application/json"
 										},
 										"method": "POST",
-										"uri": "@{parameters('IronNetUrl')}/IronApi/Login"
+										"uri": "@{parameters('irondefense_url')}/IronApi/Login"
 									}
 								},
 								"Loop_through_each_Incident": {
@@ -412,7 +412,7 @@
 													"content-type": "application/json"
 												},
 												"method": "GET",
-												"uri": "@{parameters('microsoft_management_uri')}subscriptions/@{parameters('SubscriptionId')}/resourceGroups/@{parameters('ResourceGroupId')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/incidents/@{items('Loop_through_each_Incident')?['name']}/relations?api-version=2019-01-01-preview"
+												"uri": "https://@{parameters('microsoft_management_uri')}@{parameters('resource_group_id')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/incidents/@{items('Loop_through_each_Incident')?['name']}/relations?api-version=2019-01-01-preview"
 											}
 										},
 										"Incidents_Updated": {
@@ -446,14 +446,14 @@
 																					"analyst_expectation": "@variables('Expectation')",
 																					"analyst_severity": "@variables('Severity')",
 																					"comment": "@items('For_each')?['properties']?['message']",
-																					"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')"
+																					"share_comment_with_irondome": "@parameters('share_comment_with_irondome')"
 																				},
 																				"headers": {
 																					"Authorization": "Bearer @{body('Parse_IronNet_Token')?['token']}",
 																					"Content-Type": "application/json"
 																				},
 																				"method": "POST",
-																				"uri": "@{parameters('IronNetUrl')}/IronApi/RateAlert"
+																				"uri": "@{parameters('irondefense_url')}/IronApi/RateAlert"
 																			}
 																		}
 																	},
@@ -477,14 +477,14 @@
 																				"analyst_expectation": "@variables('Expectation')",
 																				"analyst_severity": "@variables('Severity')",
 																				"comment": "The Incident has been closed",
-																				"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')"
+																				"share_comment_with_irondome": "@parameters('share_comment_with_irondome')"
 																			},
 																			"headers": {
 																				"Authorization": "Bearer @{body('Parse_IronNet_Token')?['token']}",
 																				"Content-Type": "application/json"
 																			},
 																			"method": "POST",
-																			"uri": "@{parameters('IronNetUrl')}/IronApi/RateAlert"
+																			"uri": "@{parameters('irondefense_url')}/IronApi/RateAlert"
 																		}
 																	}
 																}
@@ -649,14 +649,14 @@
 																			"analyst_expectation": "@variables('Expectation')",
 																			"analyst_severity": "@variables('Severity')",
 																			"comment": "@items('Loop_through_each_Incident')?['properties']?['classificationComment']",
-																			"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')"
+																			"share_comment_with_irondome": "@parameters('share_comment_with_irondome')"
 																		},
 																		"headers": {
 																			"Authorization": "Bearer @{body('Parse_IronNet_Token')?['token']}",
 																			"Content-Type": "application/json"
 																		},
 																		"method": "POST",
-																		"uri": "@{parameters('IronNetUrl')}/IronApi/RateAlert"
+																		"uri": "@{parameters('irondefense_url')}/IronApi/RateAlert"
 																	}
 																}
 															},
@@ -709,7 +709,7 @@
 																		"body": {
 																			"alert_id": "@variables('Custom Details')",
 																			"comment": "@items('Loop_through_Comments')?['properties']?['message']",
-																			"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')",
+																			"share_comment_with_irondome": "@parameters('share_comment_with_irondome')",
 																			"status": "@variables('Status')"
 																		},
 																		"headers": {
@@ -717,7 +717,7 @@
 																			"Content-Type": "application/json"
 																		},
 																		"method": "POST",
-																		"uri": "@{parameters('IronNetUrl')}/IronApi/SetAlertStatus"
+																		"uri": "@{parameters('irondefense_url')}/IronApi/SetAlertStatus"
 																	}
 																}
 															},
@@ -739,7 +739,7 @@
 																	"body": {
 																		"alert_id": "@variables('Custom Details')",
 																		"comment": "The Incident has been changed to status @{items('Loop_through_each_Incident')?['properties']?['status']}",
-																		"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')",
+																		"share_comment_with_irondome": "@parameters('share_comment_with_irondome')",
 																		"status": "@variables('Status')"
 																	},
 																	"headers": {
@@ -747,7 +747,7 @@
 																		"Content-Type": "application/json"
 																	},
 																	"method": "POST",
-																	"uri": "@{parameters('IronNetUrl')}/IronApi/SetAlertStatus"
+																	"uri": "@{parameters('irondefense_url')}/IronApi/SetAlertStatus"
 																}
 															}
 														}
@@ -804,7 +804,7 @@
 															"content-type": "application/json"
 														},
 														"method": "GET",
-														"uri": "https://management.azure.com@{parameters('ResourceGroupId')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/Entities/@{items('Loop_through_Alerts')?['properties']?['relatedResourceName']}?api-version=2019-01-01-preview"
+														"uri": "https://@{parameters('microsoft_management_uri')}@{parameters('resource_group_id')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/Entities/@{items('Loop_through_Alerts')?['properties']?['relatedResourceName']}?api-version=2019-01-01-preview"
 													}
 												},
 												"Get_Incident_latest_Comments": {
@@ -820,7 +820,7 @@
 															"content-type": "application/json"
 														},
 														"method": "GET",
-														"uri": "https://management.azure.com@{items('Loop_through_each_Incident')?['id']}/comments?api-version=2020-01-01"
+														"uri": "https://@{parameters('microsoft_management_uri')}@{items('Loop_through_each_Incident')?['id']}/comments?api-version=2020-01-01"
 													}
 												},
 												"Map_Azure_Sentinel_Status_to_IronNet_Status_": {
@@ -1461,7 +1461,7 @@
 							"default": {
 								"actions": {}
 							},
-							"expression": "@parameters('PollingtimeFrequency')",
+							"expression": "@parameters('polling_frequency')",
 							"type": "Switch"
 						},
 						"Parse_Token": {
@@ -1501,7 +1501,7 @@
 					"outputs": {
 						"checkInts": {
 							"type": "bool",
-							"value": "[greater(parameters('param_recurrence_interval'), 0 )]"
+							"value": "[greater(int(parameters('playbook1-RecurrenceInterval')), 0 )]"
 						}
 					}
 				},

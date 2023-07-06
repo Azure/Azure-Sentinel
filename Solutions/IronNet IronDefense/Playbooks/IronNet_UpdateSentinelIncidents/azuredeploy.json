@@ -6,52 +6,6 @@
     "author": "IronNet"
   },
   "parameters": {
-    "IronApiUsername": {
-      "type": "string",
-      "repeat": "true",
-      "metadata": {
-				"label": "IronDefense Username",
-				"description": "IronVue username to connect to IronDefense API"
-			}
-    },
-    "IronApiPassword": {
-      "type": "securestring",
-      "repeat": "true",
-      "metadata": {
-				"label": {
-					"password": "IronDefense Password",
-					"confirmPassword": "Confirm Password"
-				},
-				"description": "IronVue password to connect to IronDefense API"
-    }
-    },
-    "IronDefenseUrl": {
-      "type": "string",
-      "repeat": "true",
-      "metadata": {
-				"label": "IronDefense URL",
-				"description": "IronDefense URL used to authenticate to IronAPI"
-			}
-    },
-    "ClientId": {
-      "type": "string",
-      "repeat": "true",
-      "metadata": {
-				"label": "Client ID",
-				"description": "Azure Active Directory ClientId used to connect to the Microsoft Sentinel API to fetch Incidents"
-			}
-    },
-    "ClientSecret": {
-      "type": "securestring",
-      "repeat": "true",
-      "metadata": {
-				"label": {
-					"password": "Client Secret",
-					"confirmPassword": "Confirm Client Secret"
-				},
-				"description": "Azure Active Directory ClientSecret used to connect to the Microsoft Sentinel API to fetch Incidents"
-			}
-    },
     "PlaybookName": {
       "type": "string",
       "repeat": "false",
@@ -69,7 +23,7 @@
     {
       "type": "Microsoft.Web/connections",
       "apiVersion": "2016-06-01",
-      "name": "[variables('azuresentinelConnectionName')]",
+      "name": "[variables('playbook2-azuresentinelConnectionName')]",
       "location": "[resourceGroup().location]",
       "properties": {
         "displayName": "IronDefenseAPIConnection",
@@ -82,10 +36,10 @@
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2019-05-01",
-      "name": "[parameters('PlaybookName')]",
+      "name": "[parameters('playbook2-PlaybookName')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+        "[resourceId('Microsoft.Web/connections', variables('playbook2-azuresentinelConnectionName'))]"
       ],
       "properties": {
         "state": "Enabled",
@@ -94,52 +48,52 @@
           "contentVersion": "1.0.0.0",
           "parameters": {
             "$connections": {
-              "defaultValue": {},
+              "defaultValue": [],
               "type": "Object"
             },
-            "IronNetUrl": {
-              "defaultValue": "[parameters('IronDefenseUrl')]",
-              "type": "String"
-            },
-            "Password": {
-              "defaultValue": "[parameters('IronApiPassword')]",
-              "type": "SecureString"
-            },
-            "TenantId": {
+            "irondefense_url": {
+							"defaultValue": "[parameters('playbook1-IronDefenseUrl')]",
+							"type": "String"
+						},
+            "tenant_id": {
               "defaultValue": "[subscription().tenantId]",
               "type": "String"
             },
-            "Username": {
-              "defaultValue": "[parameters('IronApiUsername')]",
+            "user_name": {
+              "defaultValue": "[parameters('playbook1-IronApiUsername')]",
               "type": "String"
             },
+            "password": {
+							"defaultValue": "[parameters('playbook1-IronApiPassword')]",
+							"type": "SecureString"
+						},
             "client_id": {
-              "defaultValue": "[parameters('ClientId')]",
+              "defaultValue": "[parameters('playbook1-AzureClientId')]",
               "type": "String"
             },
             "client_secret": {
-              "defaultValue": "[parameters('ClientSecret')]",
+              "defaultValue": "[parameters('playbook1-AzureClientSecret')]",
               "type": "SecureString"
             },
-            "ResourceGroupId": {
+            "resource_group_id": {
               "defaultValue": "[resourceGroup().id]",
               "type": "String"
             },
-            "ResourceGroup": {
+            "resource_group": {
               "defaultValue": "[resourceGroup().name]",
               "type": "String"
             },
             "workspace_name": {
-              "defaultValue": "[basics('workspace')]",
+              "defaultValue": "[parameters('workspace')]",
               "type": "String"
             },
             "microsoft_login_uri": {
 							"type": "string",
-							"defaultValue": "environment().authentication.loginEndpoint"
+							"defaultValue": "[concat('login.microsoft','online.com')]"
 						},
 						"microsoft_management_uri": {
 							"type": "string",
-							"defaultValue": "environment().resourceManager"
+              "defaultValue": "[concat('management.','azure.com')]"
 						}
           },
           "triggers": {
@@ -525,9 +479,9 @@
                               "type": "Http",
                               "inputs": {
                                 "authentication": {
-                                  "password": "@parameters('Password')",
+                                  "password": "@parameters('password')",
                                   "type": "Basic",
-                                  "username": "@parameters('Username')"
+                                  "username": "@parameters('user_name')"
                                 },
                                 "body": {
                                   "alert_id": "@variables('IronNet Alert Id')"
@@ -536,7 +490,7 @@
                                   "Content-Type": "application/json"
                                 },
                                 "method": "POST",
-                                "uri": "@{parameters('IronNetUrl')}/IronApi/GetAlertIronDomeInformation"
+                                "uri": "@{parameters('irondefense_url')}/IronApi/GetAlertIronDomeInformation"
                               }
                             },
                             "Parse_Get_Alert_IronDome_Information": {
@@ -781,12 +735,12 @@
                       },
                       "type": "Http",
                       "inputs": {
-                        "body": "grant_type=client_credentials&client_id=@{parameters('client_id')}&client_secret=@{parameters('client_secret')}&resource=https://management.azure.com",
+                        "body": "grant_type=client_credentials&client_id=@{parameters('client_id')}&client_secret=@{parameters('client_secret')}&resource=https://@{parameters('microsoft_management_uri')}",
                         "headers": {
                           "Content-Type": "application/x-www-form-urlencoded"
                         },
                         "method": "POST",
-                        "uri": "@{parameters('microsoft_login_uri')}@{parameters('TenantId')}/oauth2/token"
+                        "uri": "https://@{parameters('microsoft_login_uri')}/@{parameters('tenant_id')}/oauth2/token"
                       }
                     },
                     "Get_Sentinel_Incident": {
@@ -802,7 +756,7 @@
                           "Content-Type": "application/json"
                         },
                         "method": "GET",
-                        "uri": "@{parameters('microsoft_management_uri')}{parameters('ResourceGroupId')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/incidents?api-version=2020-01-01&$filter=endsWith(properties/title,'(@{variables('IronNet Alert Id')})')"
+                        "uri": "https://@{parameters('microsoft_management_uri')}{parameters('resource_group_id')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/incidents?api-version=2020-01-01&$filter=endsWith(properties/title,'(@{variables('IronNet Alert Id')})')"
                       }
                     },
                     "Parse_Sentinel_Incident": {
@@ -1297,8 +1251,8 @@
           "$connections": {
             "value": {
               "azuresentinel": {
-                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
-                "connectionName": "[variables('azuresentinelConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('playbook2-azuresentinelConnectionName'))]",
+                "connectionName": "[variables('playbook2-azuresentinelConnectionName')]",
                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
               }
             }
