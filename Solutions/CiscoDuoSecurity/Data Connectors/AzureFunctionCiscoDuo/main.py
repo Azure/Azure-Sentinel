@@ -95,7 +95,7 @@ def process_trust_monitor_events(admin_api: duo_client.Admin, state_manager: Sta
     maxtime = int(time.time() - 120) * 1000
     diff = maxtime - mintime
     if(diff > 3600000):
-        maxtime = (int(mintime) + 3600) * 1000
+        maxtime = (int(mintime/1000) + 3600) * 1000
 
     logging.info('Making trust_monitor logs request: mintime={}, maxtime={}'.format(mintime, maxtime))
     for event in admin_api.get_trust_monitor_events_iterator(mintime=mintime, maxtime=maxtime):

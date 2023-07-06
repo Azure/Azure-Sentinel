@@ -1,14 +1,15 @@
-param($instrumentationKey, $runId, $pullRequestNumber)
-
+param($runId, $pullRequestNumber, $instrumentationKey)
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 
 $solutionName = ''
-
 try 
 {
-    Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "GetSolutionName" -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; "EventName"="GetSolutionName"; }
+    if ($instrumentationKey -ne '')
+    {
+        Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "GetSolutionName" -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; "EventName"="GetSolutionName"; }
 
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for getSolutionName started, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; "EventName"="GetSolutionName"; }
+        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for getSolutionName started, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; "EventName"="GetSolutionName"; }
+    }
 
     $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
     Write-Host "List of files in PR: $diff"
@@ -18,7 +19,10 @@ try
 
     if ($filteredFiles.Count -gt 0)
     {
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName and inside of Filtered Files, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'FilesChanged'="$filteredFiles"; "EventName"="GetSolutionName";}
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName and inside of Filtered Files, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'FilesChanged'="$filteredFiles"; "EventName"="GetSolutionName";}
+        }
 
         foreach ($currentFile in $filteredFiles)
         {
@@ -40,32 +44,47 @@ try
         {
             Write-Host "Skipping Github workflow as Solution name cannot be blank."
             Write-Output "solutionName=''" >> $env:GITHUB_OUTPUT
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Unable to identify solution name for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; "EventName"="GetSolutionName";}
+
+            if ($instrumentationKey -ne '')
+            {
+                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Unable to identify solution name for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; "EventName"="GetSolutionName";}
+            }
         }
         else
         {
             Write-Output "solutionName=$solutionName" >> $env:GITHUB_OUTPUT
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Identified Solution Name : $solutionName for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; "EventName"="GetSolutionName";}
+            if ($instrumentationKey -ne '')
+            {
+                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Identified Solution Name : $solutionName for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; "EventName"="GetSolutionName";}
+            }
         }
     }
     else
     {
         Write-Output "Skipping Github workflow as changes are not in Solutions folder."
         Write-Output "solutionName=$solutionName" >> $env:GITHUB_OUTPUT
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Skipping as changes are not in solutions folder for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'FilesChanged'="$filteredFiles"; "EventName"="GetSolutionName"}
+
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Skipping as changes are not in solutions folder for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'FilesChanged'="$filteredFiles"; "EventName"="GetSolutionName"}
+        }
     }
 }
 catch
 {
     Write-Output "solutionName=$solutionName" >> $env:GITHUB_OUTPUT
     Write-Host "Skipping as exception occured: Unable to identify Solution name. Error Details: $_"
-    if ($solutionName -eq '')
+
+    if ($instrumentationKey -ne '')
     {
-        Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; 'ErrorDetails'="getSolutionName : Error occured in catch block: $_"; "EventName"="GetSolutionName"}
-    }
-    else
-    {
-        Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'= "$pullRequestNumber"; 'ErrorDetails'="getSolutionName : Error occured in catch block: $_"; "EventName"="GetSolutionName"}
+        if ($solutionName -eq '')
+        {
+            Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; 'ErrorDetails'="getSolutionName : Error occured in catch block: $_"; "EventName"="GetSolutionName"}
+        }
+        else
+        {
+            Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'= "$pullRequestNumber"; 'ErrorDetails'="getSolutionName : Error occured in catch block: $_"; "EventName"="GetSolutionName"}
+        }
     }
     exit 1
 }
