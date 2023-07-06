@@ -3,8 +3,9 @@ import * as logger from "./../utils/logger";
 import { ExitCode } from "./../utils/exitCode";
 import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals";
 import { IsValidSupportObject } from "./validSupportObject";
-//import { IsValidBrandingContent } from "./validMSBranding";
-import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError } from "../utils/validationError";
+import { IsValidBrandingContent } from "./validMSBranding";
+import { IsValidSolutionID } from "./validSolutionID";
+import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, InvalidSolutionIDValidationError } from "../utils/validationError";
 
 
 
@@ -12,7 +13,8 @@ import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectVal
 export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     IsValidSolutionDomainsVerticals(filePath);
     IsValidSupportObject(filePath);
-    //IsValidBrandingContent(filePath);
+    IsValidBrandingContent(filePath);
+    IsValidSolutionID(filePath);
     return ExitCode.SUCCESS;
 }
 
@@ -42,6 +44,9 @@ let CheckOptions = {
         }
         else if (e instanceof InvalidFileContentError) {
             logger.logError("Validation for Microsoft Sentinel Branding Failed.");
+        }
+        else if (e instanceof InvalidSolutionIDValidationError) {
+            logger.logError("Validation for Solution ID Failed.");
         }
     },
     // Callback function to handle final failure
