@@ -152,7 +152,7 @@ try {
                             GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails
                         }
                         elseif ($objectKeyLowercase -eq "savedsearches") {
-                            GenerateSavedSearches -json $json
+                            GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails
                         }
                         elseif ($objectKeyLowercase -eq "watchlists") {
                             GenerateWatchList -json $json -isPipelineRun $isPipelineRun
