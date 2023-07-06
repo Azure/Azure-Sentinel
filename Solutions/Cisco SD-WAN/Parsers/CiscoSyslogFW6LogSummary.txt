@@ -1,0 +1,45 @@
+// Usage Instruction :
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. CiscoSyslogFW6LogSummary).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. CiscoSyslogFW6LogSummary | take 10).
+// References :
+// Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Tech Community Blog on KQL Functions : https://techcommunity.microsoft.com/t5/Azure-Sentinel/Using-KQL-functions-to-speed-up-analysis-in-Azure-Sentinel/ba-p/712381
+//
+let CiscoSyslogFW6LogSummary_view = view() {
+    Syslog
+    | where SyslogMessage has "%FW-6-LOG_SUMMARY:"
+    | extend FieldList = extract_all(@"\S{3}\s+\d{1,2}\s[^\s]+\s%(?P<type>[^:\s]+).*TS:\d+\s%(?P<sub_type>[^:\s]+)[^\d]+(?P<packets>\d+)\s(?P<protocol>\w+).*\s(?P<action>\w+)\sfrom\s[^\s]+\s(?P<src_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<src_port>\d{1,5})[^\d]+(?P<dest_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<dest_port>\d{1,5}).*\(target:class\)-\((?P<target>[^\s\)\(:]+)\:(?P<class>[^\s\:\)]+)", dynamic(['type', 'sub_type', 'packets', 'protocol', 'action', 'src_ip', 'src_port', 'dest_ip', 'dest_port', 'target', 'class']), SyslogMessage)
+    | extend
+        SyslogType = tostring(FieldList[0][0]),
+        SyslogSubType = tostring(FieldList[0][1]),
+        Packets = tostring(FieldList[0][2]),
+        Protocol = tostring(FieldList[0][3]),
+        Action = tostring(FieldList[0][4]),
+        SourceIP = tostring(FieldList[0][5]),
+        SourcePort = tostring(FieldList[0][6]),
+        DestinationIP = tostring(FieldList[0][7]),
+        DestinationPort = tostring(FieldList[0][8]),
+        SyslogTarget = tostring(FieldList[0][9]),
+        SyslogClass = tostring(FieldList[0][10])
+    | extend 
+        EventVendor="CiscoSD-WAN",
+        EventProduct="Syslog_FW-6-LOG_SUMMARY"
+    | project 
+        EventVendor,
+        EventProduct,
+        Host = HostName,
+        TimeGenerated=EventTime,
+        SyslogType,
+        SyslogSubType,
+        Packets,
+        Protocol,
+        Action,
+        SourceIP,
+        SourcePort,
+        DestinationIP,
+        DestinationPort,
+        SyslogTarget,
+        SyslogClass,
+        SyslogMessage
+};
+CiscoSyslogFW6LogSummary_view
