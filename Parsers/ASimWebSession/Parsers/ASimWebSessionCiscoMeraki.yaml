@@ -23,13 +23,13 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let ActionLookup = datatable (action: string, DvcAction: string, EventResult: string)  [
-    'allow', 'Allow', 'Success',
-    'log', 'Allow', 'Success',
-    'accept', 'Allow', 'Success',
-    'block', 'Deny', 'Failure',
-    'deny', 'Deny', 'Failure',
-    'quarantine', 'Deny', 'Failure'
+  let ActionLookup = datatable (action: string, DvcAction: string, EventResult: string, EventSeverity: string)  [
+    'allow', 'Allow', 'Success', 'Informational',
+    'log', 'Allow', 'Success', 'Informational',
+    'accept', 'Allow', 'Success', 'Informational',
+    'block', 'Deny', 'Failure', 'Low',
+    'deny', 'Deny', 'Failure', 'Low',
+    'quarantine', 'Deny', 'Failure', 'Low'
     ];
     let parser=(disabled: bool=false) {
         let allData = union isfuzzy=true
@@ -91,15 +91,13 @@ ParserQuery: |
                             EventResult                        
                         ),
             EventSeverity=case(
-                    action in~("block", "deny", "quarantine") and disposition == "malicious",
+                    DvcAction == "Deny" and disposition == "malicious",
                     "Medium",
-                    action in~("allow", "log", "accept") and disposition == "malicious",
+                    DvcAction == "Allow" and disposition == "malicious",
                     "High",
-                    action in~("block", "deny", "quarantine") and disposition != "malicious",
-                    "Low",
+                    isnotempty(EventSeverity), EventSeverity,
                     "Informational"
-                ),
-            Ip=extract("(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", 1, Url)
+                )
         | extend SrcIpAddr = iff(
                                 src has ".",
                                 split(src, ":")[0], 
@@ -132,21 +130,22 @@ ParserQuery: |
             FileName = name,
             DvcMacAddr = mac,
             EventOriginalType = LogType,
-            EventOriginalSubType = LogSubType
+            EventOriginalSubType = LogSubType,
+            EventUid = _ResourceId 
         | invoke _ASIM_ResolveDvcFQDN('Device')
         | extend
-            Dst=DstIpAddr,
-            Src=SrcIpAddr,
-            Dvc=DvcHostname,
-            IpAddr=SrcIpAddr,
-            UserAgent=HttpUserAgent,
-            EventEndTime=EventStartTime
+            Dst = DstIpAddr,
+            Src = SrcIpAddr,
+            Dvc = DvcHostname,
+            IpAddr = SrcIpAddr,
+            UserAgent = HttpUserAgent,
+            EventEndTime = EventStartTime
         | extend
-            EventCount=int(1),
-            EventProduct="Meraki",
-            EventVendor="Cisco",
-            EventSchema="WebSession",
-            EventSchemaVersion="0.2.6"
+            EventCount = int(1),
+            EventProduct = "Meraki",
+            EventVendor = "Cisco",
+            EventSchema = "WebSession",
+            EventSchemaVersion = "0.2.6"
         | project-away
             LogMessage,
             Parser,
@@ -154,7 +153,6 @@ ParserQuery: |
             LogSubType,
             Epoch,
             Device,
-            Ip,
             src,
             dst,
             mac,
