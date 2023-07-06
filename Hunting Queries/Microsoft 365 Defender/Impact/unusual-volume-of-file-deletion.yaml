@@ -43,12 +43,17 @@ query: |
     ;   
    //
   deleteEvents  
-  | join kind=leftsemi suspUsers on AccountObjectId, SessionId
+  | join kind=leftsemi riskyUsers on AccountObjectId, SessionId
   | summarize Count=count() , (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId, ActionType, Time=bin(Timestamp, 5m)
   // look for only those scoped users who have generated an increase in file deletion activity.
   | summarize TotalCount= countif(Count > 50), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId 
   | where TotalCount >= 3
   | project AccountObjectId, AccountDisplayName, ApplicationId, TotalCount, ReportId, Timestamp
+  | extend NTDomain = tostring(split(AccountDisplayName,'\\',0)[0]), Name = tostring(split(AccountDisplayName,'\\',1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Account_0_AadUserId = AccountObjectId
+  | extend CloudApplication_0_AppId = ApplicationId
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -56,11 +61,14 @@ entityMappings:
         columnName: AccountObjectId
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountDisplayName
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
   - entityType: CloudApplication
     fieldMappings:
       - identifier: AppId
         columnName: ApplicationId
 customDetails:
   Count: TotalCount
+version: 1.0.0
