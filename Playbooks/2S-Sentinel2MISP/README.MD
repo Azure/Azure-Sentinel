@@ -1,6 +1,6 @@
 # MISP to Sentinel
 
-This is a short introduction to the MISP to Sentinel project. Keep in mind, this is a proof of concept and would require modification for production use. The solution consist of two parts, a forwarder called `MISP-Forwarder` and an orchestrator called `MISP-Orchestrator`. The purpose of having two parts is to allow you to deploy the forwarder to multiple Microsoft Sentinel workspaces to feed more data into MISP. When it comes to the fidelity of the data, for this PoC we only support filenames and hashes.
+This is a short introduction to the MISP to Sentinel project. The solution consist of two parts, a forwarder called `MISP-Forwarder` and an orchestrator called `MISP-Orchestrator`. The purpose of having two parts is to allow you to deploy the forwarder to multiple Microsoft Sentinel workspaces to feed more data into MISP. When it comes to the fidelity of the data, for this PoC we only support filenames and hashes.
 
 ## Design
 
@@ -64,6 +64,8 @@ flowchart LR
 
 
 ### Add keyvault for MISPKEY secret
+
+This is recommended for production workloads.
 
 1. Create new keyvault
 2. Give the managed identity of the `MISP-Orchestrator` read access on the KV, and add it to `Get, List` on the access policies
