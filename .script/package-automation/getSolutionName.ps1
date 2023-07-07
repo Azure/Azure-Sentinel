@@ -43,7 +43,7 @@ try
         if ($solutionName -eq '')
         {
             Write-Host "Skipping Github workflow as Solution name cannot be blank."
-            Write-Output "solutionName=''" >> $env:GITHUB_OUTPUT
+            Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
 
             if ($instrumentationKey -ne '')
             {
@@ -62,7 +62,7 @@ try
     else
     {
         Write-Output "Skipping Github workflow as changes are not in Solutions folder or changes are in .md file or images folder inside of Solutions!"
-        Write-Output "solutionName=''" >> $env:GITHUB_OUTPUT
+        Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
 
         if ($instrumentationKey -ne '')
         {
@@ -72,7 +72,7 @@ try
 }
 catch
 {
-    Write-Output "solutionName=''" >> $env:GITHUB_OUTPUT
+    Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
     Write-Host "Skipping as exception occured: Unable to identify Solution name. Error Details: $_"
 
     if ($instrumentationKey -ne '')
