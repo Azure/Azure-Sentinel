@@ -87,10 +87,10 @@ class DataMinrPulseThreatIntelligence:
             async with aiohttp.ClientSession(connector=conn) as session:
                 for data in dataminr_data:
                     mapped_data = map_indicator_fields(data)
-                    for data in mapped_data:
+                    for indicator_data in mapped_data:
                         tasks.append(
                             asyncio.create_task(
-                                microsoft_sentinel_obj.create_indicator(data, session)
+                                microsoft_sentinel_obj.create_indicator(indicator_data, session)
                             )
                         )
                 results = await asyncio.gather(*tasks, return_exceptions=True)
