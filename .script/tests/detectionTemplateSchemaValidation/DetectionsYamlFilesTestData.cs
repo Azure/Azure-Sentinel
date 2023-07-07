@@ -1,7 +1,9 @@
-﻿using System;
+﻿using Octokit;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
 
@@ -67,8 +69,34 @@ namespace Kqlvalidations.Tests
 
         private static List<string> GetDetectionFiles(List<string> detectionPaths)
         {
-            var files = Directory.GetFiles(detectionPaths[0], "*.yaml", SearchOption.AllDirectories).ToList();
-            files.AddRange(Directory.GetFiles(detectionPaths[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
+            int prNumber = 0;
+            int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
+            if (prNumber == 0)
+            {
+                prNumber = 8414;
+            }
+
+            var client = new GitHubClient(new Octokit.ProductHeaderValue("MicrosoftSentinelValidationApp"));
+            var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
+            var prFilesListModified = new List<string>();
+            var basePath = GetRootPath();
+            foreach (var file in prFiles)
+            {
+                var modifiedFile = Path.Combine(basePath, file.FileName);
+                prFilesListModified.Add(modifiedFile);
+                //prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
+            }
+
+            var files = Directory.GetFiles(detectionPaths[0], "*.yaml", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(detectionPaths[1], "*.yaml", SearchOption.AllDirectories)
+                .Where(s => s.Contains("Analytic Rules")))
+                .Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)))
+                .ToList();
+
+            if (files.Count == 0)
+            {
+                files.Add("NoFile.yaml");
+            }
 
             return files;
         }
