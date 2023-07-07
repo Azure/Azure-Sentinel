@@ -2,7 +2,6 @@ name: Slash Command Dispatch - Publish To Partner Center
 env:
     REPO_OWNER: "${{ vars.REPO_OWNER }}"
     REPO_NAME: "${{ vars.REPO_NAME }}"
-    GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 on:
   issue_comment:
     types: [created]
@@ -11,26 +10,25 @@ on:
 
 jobs:
   checkAutomatedPR:
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/partnercenter')
+    if: ${{ !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && contains(github.event.comment.body, '/partnercenter') }} 
     uses: ./.github/workflows/checkAutomatedPR.yaml
 
   isWorkflowRunAllowedToUser:
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/partnercenter')
+    if: ${{ !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && contains(github.event.comment.body, '/partnercenter') }}
     uses: ./.github/workflows/allowedWorkflowRun.yaml
 
   pullRequestStatus:
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/partnercenter')
+    if: ${{ !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && contains(github.event.comment.body, '/partnercenter') }}
     uses: ./.github/workflows/pullRequestStatus.yaml
 
   slashCommandDispatchPartnerCenterPublish:
     runs-on: ubuntu-latest
     needs: [isWorkflowRunAllowedToUser, pullRequestStatus, checkAutomatedPR]
-    if: ${{ success() && needs.isWorkflowRunAllowedToUser.outputs.isWorkflowRunAllowed == 'True' && needs.pullRequestStatus.outputs.isPullRequestMerged == 'True' && needs.checkAutomatedPR.outputs.isAutomatedPR == 'False'}}
+    if: ${{ success() && needs.isWorkflowRunAllowedToUser.outputs.isWorkflowRunAllowed == 'True' && needs.pullRequestStatus.outputs.isPullRequestMerged == 'True' && needs.checkAutomatedPR.outputs.isAutomatedPR == 'False' && !github.event.pull_request.head.repo.fork}}
     steps:
       - name: Slash Command Dispatch
         uses: peter-evans/slash-command-dispatch@67dfeb76529b35541a7c536976cba367cd2d364b
         with:
-          token: ${{ env.GITHUB_TOKEN }}
           commands: partnercenter
           repository: ${{env.REPO_OWNER}}/${{env.REPO_NAME}}
           issue-type: pull-request
