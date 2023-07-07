@@ -18,6 +18,8 @@ References:
     Link: https://community.fortinet.com/t5/FortiGate/Technical-Tip-Integrate-FortiGate-with-Microsoft-Sentinel/ta-p/199709
   - Title: Fortinet FortiGate syslogd documentation
     Link: https://docs.fortinet.com/document/fortigate/7.2.0/cli-reference/450620/config-log-syslogd-setting
+  - Title: Fortinet FortiGate extended logging for user agent, http method and x-forwarded-for
+    Link: https://docs.fortinet.com/document/fortigate/7.4.0/fortios-log-message-reference/496081/enabling-extended-logging
 Description: |
   This ASIM parser supports filtering and normalizing Fortinet FortiGate logs produced by the Microsoft Sentinel Fortinet connector to the ASIM Web Session normalized schema.
 ParserName: vimWebSessionFortinetFortiGate                                  
@@ -70,7 +72,7 @@ ParserQuery: |
     {
         print list
         | mv-apply l = print_0 to typeof(string) on
-          ( extend l = replace_regex (tostring(l), "^(?i:.*?)://", "") )
+          ( extend l = substring(l,indexof(l,@'//')+2))
         | project l
     };
     let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string)
@@ -81,14 +83,14 @@ ParserQuery: |
     // -- See https://docs.fortinet.com/document/fortigate/7.2.4/fortios-log-message-reference/671442/cef-priority-levels
     let SeverityLookup = datatable (EventOriginalSeverity:string, EventSeverity:string)
     [
-        "1", "Informational", // Debug
-        "2", "Informational", // Information
-        "3", "Informational", // Notification
-        "4", "Low", // Warning
-        "5", "Low", // Error
-        "6", "Critical", // High
-        "7", "Alert", // Medium
-        "8", "High" // Emergency
+      "1", "Informational", // Debug
+      "2", "Informational", // Information
+      "3", "Informational", // Notification
+      "4", "Low", // Warning
+      "5", "Low", // Error
+      "6", "High", // Critical
+      "7", "Medium", // Alert
+      "8", "High" // Emergency
     ];     
     CommonSecurityLog
     | where not(disabled)
@@ -98,7 +100,7 @@ ParserQuery: |
       and (Activity == "webfilter utm passthrough"
           or Activity == "webfilter utm blocked")
     | where (array_length(url_has_any) == 0 or RequestURL has_any (remove_protocol_from_list(url_has_any)))
-    | where array_length(httpuseragent_has_any) == 0
+    | where (array_length(httpuseragent_has_any) == 0 or AdditionalExtensions has_any(httpuseragent_has_any))
     | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any)
     | extend temp_DstMatch = has_any_ipv4_prefix(DestinationIP,ipaddr_has_any_prefix)
     | extend ASimMatchingIpAddr = case(
@@ -113,12 +115,11 @@ ParserQuery: |
     | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) has_any(eventresultdetails_in)) 
     | lookup EventLookup on DeviceAction 
     | where (eventresult == '*' or EventResult =~ eventresult)
-    | parse AdditionalExtensions with * "referralurl=" referralurl:string ";" *
-    | project-rename Url = RequestURL,
-      UrlCategory = RequestContext,
-      HttpReferrer = referralurl 
-    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, Url, UrlCategory, HttpReferrer, ASimMatchingIpAddr
-    | project-rename DstBytes = ReceivedBytes
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext
+    | project-rename 
+      Url = RequestURL
+      ,UrlCategory = RequestContext
+      , DstBytes = ReceivedBytes
       , DstInterfaceName = DeviceOutboundInterface
       , DstIpAddr = DestinationIP
       , DstPortNumber = DestinationPort
@@ -136,6 +137,12 @@ ParserQuery: |
     | invoke _ASIM_ResolveNetworkProtocol ('Protocol')
     | project-rename DvcOriginalAction = DeviceAction
     | parse-kv AdditionalExtensions as (
+            httpmethod:string,
+            agent:string
+        ) with (pair_delimiter=';', kv_delimiter='=', quote='"')
+    | where (array_length(httpuseragent_has_any) == 0 or agent has_any(httpuseragent_has_any))
+    | parse-kv AdditionalExtensions as (
+            referralurl:string,
             FortinetFortiGatestart:datetime,
             FortinetFortiGatesrcintfrole:string,
             FortinetFortiGatedstintfrole:string,
@@ -146,9 +153,13 @@ ParserQuery: |
             FortinetFortiGatecrscore:string,
             FortinetFortiGateduration:int,
             FortinetFortiGatesentpkt:long,
-            FortinetFortiGatercvdpkt:long
+            FortinetFortiGatercvdpkt:long,
         ) with (pair_delimiter=';', kv_delimiter='=')
+    | parse AdditionalExtensions with * "x-forwarded-for=" HttpRequestXff:string ";" *
     | project-rename
+        HttpRequestMethod       = httpmethod,
+        HttpUserAgent           = agent,
+        HttpReferrer            = referralurl,
         EventStartTime          = FortinetFortiGatestart,
         SrcZone                 = FortinetFortiGatesrcintfrole,
         DstZone                 = FortinetFortiGatedstintfrole,
@@ -173,14 +184,15 @@ ParserQuery: |
           , DstIpAddr contains ":", "IPv6"
           , "")
       , NetworkPackets = DstPackets + SrcPackets
-      | lookup SeverityLookup on EventOriginalSeverity
-      | extend 
-          Src = SrcIpAddr,
-          Dst = DstIpAddr,
-          SessionId = NetworkSessionId,
-          IpAddr = SrcIpAddr,
-          Duration = NetworkDuration,
-          Rule = tostring(RuleNumber)
+      , UserAgent = HttpUserAgent
+    | lookup SeverityLookup on EventOriginalSeverity
+    | extend 
+        Src = SrcIpAddr,
+        Dst = DstIpAddr,
+        SessionId = NetworkSessionId,
+        IpAddr = SrcIpAddr,
+        Duration = NetworkDuration,
+        Rule = tostring(RuleNumber)
     | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber
   };
   parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
