@@ -327,7 +327,7 @@ class BaseCollector:
         checkpoint_value,
         table_name,
         fields=None,
-        params={},
+        params=dict(),
     ):
         """To pull the data from vectra and push into sentinel."""
         __method_name = inspect.currentframe().f_code.co_name
