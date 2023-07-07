@@ -49,3 +49,4 @@ The following sample can be used as reference for writing and publishing release
 | 2.0.0       | 10-12-2022                     | Initial solution release |
 
 A markdown-formatted sample is available [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ReleaseNotesSample.md) that can be copied to your solution's folder. Ensure the file is renamed to ***ReleaseNotes.md***.
+ 
