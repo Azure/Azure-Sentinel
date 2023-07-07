@@ -71,34 +71,35 @@ namespace Kqlvalidations.Tests
         {
             int prNumber = 0;
             int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
-            if (prNumber == 0)
-            {
-                prNumber = 8414;
-            }
-
-            var client = new GitHubClient(new Octokit.ProductHeaderValue("MicrosoftSentinelValidationApp"));
-            var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
-            var prFilesListModified = new List<string>();
-            var basePath = GetRootPath();
-            foreach (var file in prFiles)
-            {
-                var modifiedFile = Path.Combine(basePath, file.FileName);
-                prFilesListModified.Add(modifiedFile);
-                //prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
-            }
 
             var files = Directory.GetFiles(detectionPaths[0], "*.yaml", SearchOption.AllDirectories)
                 .Concat(Directory.GetFiles(detectionPaths[1], "*.yaml", SearchOption.AllDirectories)
-                .Where(s => s.Contains("Analytic Rules")))
-                .Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)))
-                .ToList();
+                .Where(s => s.Contains("Analytic Rules")));
 
-            if (files.Count == 0)
+            if (prNumber != 0)
             {
-                files.Add("NoFile.yaml");
+                var client = new GitHubClient(new Octokit.ProductHeaderValue("MicrosoftSentinelValidationApp"));
+                var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
+                var prFilesListModified = new List<string>();
+                var basePath = GetRootPath();
+                foreach (var file in prFiles)
+                {
+                    var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
+                    prFilesListModified.Add(modifiedFile);
+                }
+
+                files = files.Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)));
             }
 
-            return files;
+            var fileList = files.ToList();
+
+            if (fileList.Count == 0)
+            {
+                fileList.Add("NoFile.yaml");
+            }
+
+            return fileList;
         }
+
     }
 }

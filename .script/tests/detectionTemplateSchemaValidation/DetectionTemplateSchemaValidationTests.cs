@@ -22,6 +22,11 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionTemplates_HasValidTemplateStructure(string detectionsYamlFileName)
         {
+            if (detectionsYamlFileName == "NoFile.yaml")
+            {
+                Assert.True(true);
+                return;
+            }
             var yaml = GetYamlFileAsString(detectionsYamlFileName);
 
             //we ignore known issues (in progress)
@@ -51,6 +56,11 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionTemplates_HasValidConnectorIds(string detectionsYamlFileName)
         {
+            if (detectionsYamlFileName == "NoFile.yaml")
+            {
+                Assert.True(true);
+                return;
+            }
             var yaml = GetYamlFileAsString(detectionsYamlFileName);
             var deserializer = new DeserializerBuilder().Build();
             Dictionary<object, object> res = deserializer.Deserialize<dynamic>(yaml);
@@ -76,6 +86,11 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionTemplates_TemplatesThatAreInTheWhiteListShouldNotPassTheValidation(string detectionsYamlFileName)
         {
+            if (detectionsYamlFileName == "NoFile.yaml")
+            {
+                Assert.True(true);
+                return;
+            }
             var yaml = GetYamlFileAsString(detectionsYamlFileName);
 
             //we ignore known issues (in progress)

@@ -27,40 +27,61 @@ namespace Kqlvalidations.Tests
             try
             {
                 var directoryPaths = GetDirectoryPaths();
-                var prFiles = GetPRFiles();
+                int prNumber = 0;
+                int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
 
-                var filteredFiles = directoryPaths
-                    .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories))
-                    .Where(file => prFiles.Contains(file))
-                    .ToList();
+                var basePath = Utils.GetTestDirectory(TestFolderDepth);
+                var prFilesListModified = new List<string>();
 
-                filteredFiles.ForEach(filePath =>
+                if (prNumber != 0)
                 {
-                    try
-                    {
-                        JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
+                    var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
+                    var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
 
-                        var jsonString = File.ReadAllText(filePath);
-                        JObject dataConnectorJsonObject = JObject.Parse(jsonString);
+                    foreach (var file in prFiles)
+                    {
+                        var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
+                        prFilesListModified.Add(modifiedFile);
+                    }
+                }
 
-                        if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
-                        {
-                            validFiles.Add(filePath);
-                        }
-                        else
-                        {
-                            throw new Exception("Invalid JSON schema for file: " + filePath);
-                        }
-                    }
-                    catch (JsonReaderException ex)
+                directoryPaths.ForEach(directoryPath =>
+                {
+                    var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories);
+
+                    if (prNumber != 0)
                     {
-                        Console.WriteLine("Invalid JSON file: " + filePath);
-                        Console.WriteLine("Error message: " + ex.Message);
+                        files = files.Where(file => prFilesListModified.Contains(file)).ToArray();
                     }
-                    catch (Exception ex)
+
+                    foreach (var filePath in files)
                     {
-                        Console.WriteLine("An error occurred while processing file: " + filePath);
-                        Console.WriteLine("Error message: " + ex.Message);
+                        try
+                        {
+                            JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
+
+                            var jsonString = File.ReadAllText(filePath);
+                            JObject dataConnectorJsonObject = JObject.Parse(jsonString);
+
+                            if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
+                            {
+                                validFiles.Add(filePath);
+                            }
+                            else
+                            {
+                                throw new Exception("Invalid JSON schema for file: " + filePath);
+                            }
+                        }
+                        catch (JsonReaderException ex)
+                        {
+                            Console.WriteLine("Invalid JSON file: " + filePath);
+                            Console.WriteLine("Error message: " + ex.Message);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("An error occurred while processing file: " + filePath);
+                            Console.WriteLine("Error message: " + ex.Message);
+                        }
                     }
                 });
 
@@ -79,31 +100,5 @@ namespace Kqlvalidations.Tests
 
             return validFiles;
         }
-
-
-        private List<string> GetPRFiles()
-        {
-            int prNumber;
-            int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
-            if (prNumber ==0)
-            {
-                prNumber = 8414;
-            }
-            var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
-            var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
-            var prFilesListModified = new List<string>();
-            var basePath = Utils.GetTestDirectory(TestFolderDepth);
-
-            foreach (var file in prFiles)
-            {
-                var modifiedFile = Path.Combine(basePath, file.FileName);
-                prFilesListModified.Add(modifiedFile);
-                //prFilesListModified.Add(modifiedFile.Replace("/", "\\"));
-            }
-
-            return prFilesListModified;
-        }
-
-
     }
 }
