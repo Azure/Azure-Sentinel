@@ -1,0 +1,40 @@
+# ADD P0 LABEL IF THE PULL REQUEST IS FROM EXTERNAL PUBLISHER I.E ISV'S
+name: "Pull Request Labeler"
+
+on:  
+  pull_request:
+    branches:
+      - master
+    paths:
+      - Solutions/**
+
+jobs:
+  solutionNameDetails:
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    uses: ./.github/workflows/getSolutionName.yaml
+    secrets: inherit
+
+  solutionPublisherDetail:
+    needs: solutionNameDetails
+    uses: ./.github/workflows/neworexistingsolution.yaml
+    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && !github.event.pull_request.head.repo.fork }} 
+    with: 
+      solutionName: ${{ needs.solutionNameDetails.outputs.solutionName }}
+    secrets: inherit
+
+  Labeler:
+    runs-on: ubuntu-latest
+    needs: solutionPublisherDetail
+    if: ${{ !contains(fromJson(vars.INTERNAL_PUBLISHERS),needs.solutionPublisherDetail.outputs.solutionPublisherId) && needs.solutionPublisherDetail.outputs.solutionPublisherId != ''}}
+    steps:
+      - name: Add Label Notification
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['P0']
+            })
+            
