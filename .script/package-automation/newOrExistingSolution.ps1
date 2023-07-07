@@ -46,9 +46,9 @@ else {
         {
             Write-Host 'Skipping as changes not in Solutions folder!'
             Write-Output "isNewSolution=$isNewSolution" >> $env:GITHUB_OUTPUT
-            Write-Output "solutionSupportedBy=''" >> $env:GITHUB_OUTPUT
-            Write-Output "solutionOfferId=''" >> $env:GITHUB_OUTPUT
-            Write-Output "solutionPublisherId=''" >> $env:GITHUB_OUTPUT
+            Write-Output "solutionSupportedBy=" >> $env:GITHUB_OUTPUT
+            Write-Output "solutionOfferId=" >> $env:GITHUB_OUTPUT
+            Write-Output "solutionPublisherId=" >> $env:GITHUB_OUTPUT
         }
         else 
         {
@@ -155,9 +155,9 @@ else {
         Write-Host "isNewSolution : $isNewSolution, solutionSupportedBy is ''"
         Write-Host "Error occured in catch NewOrExistingSolution : Error details $_"
         Write-Output "isNewSolution=$isNewSolution" >> $env:GITHUB_OUTPUT
-        Write-Output "solutionSupportedBy=''" >> $env:GITHUB_OUTPUT
-        Write-Output "solutionOfferId=''" >> $env:GITHUB_OUTPUT
-        Write-Output "solutionPublisherId=''" >> $env:GITHUB_OUTPUT
+        Write-Output "solutionSupportedBy=" >> $env:GITHUB_OUTPUT
+        Write-Output "solutionOfferId=" >> $env:GITHUB_OUTPUT
+        Write-Output "solutionPublisherId=" >> $env:GITHUB_OUTPUT
 
         if ($instrumentationKey -ne '')
         {
