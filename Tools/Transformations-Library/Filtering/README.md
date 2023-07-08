@@ -63,3 +63,45 @@ OfficeActivity | where OrganizationName == 'contoso-<country_name>.onmicrosoft.c
 ```
 
 This will of course vary for each implementation and data type, but this gives an idea on how to do it.
+
+## Limitations
+
+* Microsoft.Insights/dataCollectionRules must be deployed in same location than their target Azure Logs Analytics.
+* From a syntax perspective
+  * transformKql seems to always start with "source", not the targeted table name
+  * Targeted table name is defined by streams value (Microsoft-Table-AWSVPCFlow, Microsoft-Syslog...). See documentation for supported values.
+
+## Deployment
+
+To be deployed through Sentinel Repository feature, you must add to pipeline a deployment for Microsoft.Insights/dataCollectionRules inside `.sentinel/azure*sentinel-deploy*.ps1`
+
+```
+$contentTypeMapping = @{
+[...]
+    "Watchlist" = @("Microsoft.OperationalInsights/workspaces/providers/Watchlists");
+    "DCR" = @("Microsoft.Insights/dataCollectionRules");
+    "Metadata"=@("Microsoft.OperationalInsights/workspaces/providers/metadata");
+```
+
+IsValidTemplate should validate json file with parameters:
+```
+function IsValidTemplate($path, $templateObject) {
+[...]
+        } ElseIf (($path -like "*DCR*") -and (Test-Path -Path $parameterFile)) {
+            Write-Host "[Debug] IsValidTemplate() DCR path + params: $path, $parameterFile"
+            Test-AzResourceGroupDeployment -ResourceGroupName $ResourceGroupName -TemplateFile $path -TemplateParameterFile $parameterFile -workspace $WorkspaceName
+        }
+```
+
+The corresponding service principal "Azure Sentinel Content Deployment App (GUID)" should have following extra permissions:
+* Microsoft.Insights/dataCollectionRules/write
+* Microsoft.OperationalInsights/workspaces/sharedKeys/action
+
+## References
+
+* https://learn.microsoft.com/en-us/azure/sentinel/data-transformation
+* https://learn.microsoft.com/en-us/azure/sentinel/configure-data-transformation
+* https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-workspace-transformations-portal
+* https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/microsoft-sentinel-support-for-ingestion-time-data/ba-p/3244531
+* https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Transformations-Library
+* https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Transformations-Library/Filtering/FilteringRowsDCR.json
