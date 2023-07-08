@@ -122,7 +122,7 @@ def get_stream_pos_and_date_from(marker, max_period_minutes, script_execution_in
             last_token, last_event_date = marker.split(' ',1)
             last_event_date = parse_date(last_event_date)
             
-            minutes_from_last_ingested_event = (datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - last_event_date).seconds / 60
+            minutes_from_last_ingested_event = (datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - last_event_date).total_seconds() / 60
             if minutes_from_last_ingested_event < max_period_minutes:
                 token = last_token
         except Exception:
