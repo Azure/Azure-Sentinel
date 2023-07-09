@@ -10,12 +10,12 @@ Select your own
 - Resource Type
 - Resource Name
 
-![screenshot](.images/subscription.png)
+![screenshot](./images/subscription.png)
 
 
 ##Edit *Send an Email* Action
 Replace <email-id@domain.com> to your own choice of email address.
-![screenshot](.images/email.png)
+![screenshot](./images/email.png)
 
 
 # Deploy to Azure
