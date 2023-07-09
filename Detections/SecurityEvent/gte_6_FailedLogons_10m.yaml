@@ -23,69 +23,86 @@ relevantTechniques:
   - T1110
 query: |
   let threshold = 20;
-  let ReasontoSubStatus = datatable(SubStatus:string,Reason:string) [
-  "0xC000005E", "There are currently no logon servers available to service the logon request.",
-  "0xC0000064", "User logon with misspelled or bad user account", 
-  "0xC000006A", "User logon with misspelled or bad password",
-  "0xC000006D", "Bad user name or password",
-  "0xC000006E", "Unknown user name or bad password",
-  "0xC000006F", "User logon outside authorized hours",
-  "0xC0000070", "User logon from unauthorized workstation",
-  "0xC0000071", "User logon with expired password",
-  "0xC0000072", "User logon to account disabled by administrator",
-  "0xC00000DC", "Indicates the Sam Server was in the wrong state to perform the desired operation",
-  "0xC0000133", "Clocks between DC and other computer too far out of sync",
-  "0xC000015B", "The user has not been granted the requested logon type (aka logon right) at this machine",
-  "0xC000018C", "The logon request failed because the trust relationship between the primary domain and the trusted domain failed",
-  "0xC0000192", "An attempt was made to logon, but the Netlogon service was not started",
-  "0xC0000193", "User logon with expired account",
-  "0xC0000224", "User is required to change password at next logon",
-  "0xC0000225", "Evidently a bug in Windows and not a risk",
-  "0xC0000234", "User logon with account locked",
-  "0xC00002EE", "Failure Reason: An Error occurred during Logon",
-  "0xC0000413", "Logon Failure: The machine you are logging onto is protected by an authentication firewall. The specified account is not allowed to authenticate to the machine"
+  let ReasontoSubStatus = datatable(SubStatus: string, Reason: string) [
+      "0xc000005e", "There are currently no logon servers available to service the logon request.",
+      "0xc0000064", "User logon with misspelled or bad user account",
+      "0xc000006a", "User logon with misspelled or bad password",
+      "0xc000006d", "Bad user name or password",
+      "0xc000006e", "Unknown user name or bad password",
+      "0xc000006f", "User logon outside authorized hours",
+      "0xc0000070", "User logon from unauthorized workstation",
+      "0xc0000071", "User logon with expired password",
+      "0xc0000072", "User logon to account disabled by administrator",
+      "0xc00000dc", "Indicates the Sam Server was in the wrong state to perform the desired operation",
+      "0xc0000133", "Clocks between DC and other computer too far out of sync",
+      "0xc000015b", "The user has not been granted the requested logon type (aka logon right) at this machine",
+      "0xc000018c", "The logon request failed because the trust relationship between the primary domain and the trusted domain failed",
+      "0xc0000192", "An attempt was made to logon, but the Netlogon service was not started",
+      "0xc0000193", "User logon with expired account",
+      "0xc0000224", "User is required to change password at next logon",
+      "0xc0000225", "Evidently a bug in Windows and not a risk",
+      "0xc0000234", "User logon with account locked",
+      "0xc00002ee", "Failure Reason: An Error occurred during Logon",
+      "0xc0000413", "Logon Failure: The machine you are logging onto is protected by an authentication firewall. The specified account is not allowed to authenticate to the machine"
   ];
   (union isfuzzy=true
-  (SecurityEvent 
-  | where EventID == 4625
-  | where AccountType =~ "User"
-  | where SubStatus !='0xc0000064' and Account !in ('\\', '-\\-')
-  // SubStatus '0xc0000064' signifies 'Account name does not exist'
-  | extend ResourceId = column_ifexists("_ResourceId", _ResourceId), SourceComputerId = column_ifexists("SourceComputerId", SourceComputerId)
-  | lookup ReasontoSubStatus on SubStatus
-  | extend coalesce(Reason, strcat('Unknown reason substatus: ', SubStatus))
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by bin(TimeGenerated,10m), EventID, 
-  Activity, Computer, Account, TargetAccount, TargetUserName, TargetDomainName, 
-  LogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress
-  | where FailedLogonCount >= threshold
-  ),
-  (
-  (WindowsEvent 
-  | where EventID == 4625 and not(EventData has '0xc0000064')
-  | extend TargetAccount = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
-  | extend TargetUserSid = tostring(EventData.TargetUserSid)
-  | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
-  | where AccountType =~ "User"
-  | extend SubStatus = tostring(EventData.SubStatus)
-  | where SubStatus !='0xc0000064' and TargetAccount !in ('\\', '-\\-')
-  // SubStatus '0xc0000064' signifies 'Account name does not exist'
-  | extend ResourceId = column_ifexists("_ResourceId", _ResourceId), SourceComputerId = column_ifexists("SourceComputerId", "")
-  | lookup ReasontoSubStatus on SubStatus
-  | extend coalesce(Reason, strcat('Unknown reason substatus: ', SubStatus))
-  | extend Activity="4625 - An account failed to log on."
-  | extend TargetUserName = tostring(EventData.TargetUserName)
-  | extend TargetDomainName = tostring(EventData.TargetDomainName)
-  | extend LogonType = tostring(EventData.LogonType)
-  | extend Status= tostring(EventData.Status)
-  | extend LogonProcessName = tostring(EventData.LogonProcessName)
-  | extend WorkstationName = tostring(EventData.WorkstationName)
-  | extend IpAddress = tostring(EventData.IpAddress)
-  | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by bin(TimeGenerated,10m), EventID, 
-  Activity, Computer, TargetAccount, TargetUserName, TargetDomainName, 
-  LogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress
-  | where FailedLogonCount >= threshold
-  )))
+      (SecurityEvent
+      | where EventID == 4625
+      | where AccountType =~ "User"
+      | where SubStatus !~ '0xc0000064' and Account !in ('\\', '-\\-')
+      // SubStatus '0xc0000064' signifies 'Account name does not exist'
+      | extend
+          ResourceId = column_ifexists("_ResourceId", _ResourceId),
+          SourceComputerId = column_ifexists("SourceComputerId", SourceComputerId),
+          SubStatus = tolower(SubStatus)
+      | lookup ReasontoSubStatus on SubStatus
+      | extend coalesce(Reason, strcat('Unknown reason substatus: ', SubStatus))
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by bin(TimeGenerated,10m), EventID,
+          Activity, Computer, Account, TargetAccount, TargetUserName, TargetDomainName,
+          LogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress
+      | where FailedLogonCount >= threshold
+      ),
+      (
+      (WindowsEvent
+      | where EventID == 4625 and not(EventData has '0xc0000064')
+      | extend TargetAccount = strcat(tostring(EventData.TargetDomainName), "\\", tostring(EventData.TargetUserName))
+      | extend TargetUserSid = tostring(EventData.TargetUserSid)
+      | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+      | where AccountType =~ "User"
+      | extend SubStatus = tostring(EventData.SubStatus)
+      | where SubStatus !~ '0xc0000064' and TargetAccount !in ('\\', '-\\-')
+      // SubStatus '0xc0000064' signifies 'Account name does not exist'
+      | extend
+          ResourceId = column_ifexists("_ResourceId", _ResourceId),
+          SourceComputerId = column_ifexists("SourceComputerId", ""),
+          SubStatus = tolower(SubStatus)
+      | lookup ReasontoSubStatus on SubStatus
+      | extend coalesce(Reason, strcat('Unknown reason substatus: ', SubStatus))
+      | extend Activity="4625 - An account failed to log on."
+      | extend TargetUserName = tostring(EventData.TargetUserName)
+      | extend TargetDomainName = tostring(EventData.TargetDomainName)
+      | extend LogonType = tostring(EventData.LogonType)
+      | extend Status= tostring(EventData.Status)
+      | extend LogonProcessName = tostring(EventData.LogonProcessName)
+      | extend WorkstationName = tostring(EventData.WorkstationName)
+      | extend IpAddress = tostring(EventData.IpAddress)
+      | extend LogonTypeName=case(
+        LogonType == 2, "2 - Interactive",
+        LogonType == 3, "3 - Network",
+        LogonType == 4, "4 - Batch",
+        LogonType == 5, "5 - Service",
+        LogonType == 7, "7 - Unlock",
+        LogonType == 8, "8 - NetworkCleartext",
+        LogonType == 9, "9 - NewCredentials",
+        LogonType == 10, "10 - RemoteInteractive",
+        LogonType == 11, "11 - CachedInteractive",
+        tostring(LogonType)
+      )
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by bin(TimeGenerated,10m), EventID,
+          Activity, Computer, TargetAccount, TargetUserName, TargetDomainName,
+          LogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress
+      | where FailedLogonCount >= threshold
+      )))
   | summarize arg_max(TimeGenerated, *) by Computer, TargetUserName, TargetDomainName
 entityMappings:
   - entityType: Account
@@ -102,7 +119,7 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IpAddress
-version: 1.2.2
+version: 1.2.3
 kind: Scheduled
 metadata:
     source:
