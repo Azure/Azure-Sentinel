@@ -26,16 +26,6 @@ query: |
   // Define the lookback periods for time-based filters
   let dt_lookBack = 1h; // Look back 1 hour for DNS events
   let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
-  // Create a list of TLDs in our threat feed for later validation
-  let list_tlds = ThreatIntelligenceIndicator
-    | where TimeGenerated >= ago(ioc_lookBack) 
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true and ExpirationDateTime > now()
-    | where isnotempty(DomainName)
-    | extend parts = split(DomainName, '.')
-    | extend tld = parts[(array_length(parts)-1)]
-    | summarize count() by tostring(tld)
-    | summarize make_list(tld);
   // Fetch threat intelligence indicators related to domains
   let Domain_Indicators = ThreatIntelligenceIndicator
     | where TimeGenerated >= ago(ioc_lookBack)
@@ -44,6 +34,14 @@ query: |
     // Filter out indicators without domain names
     | where isnotempty(DomainName)
     | extend TI_DomainEntity = DomainName;
+  // Create a list of TLDs in our threat feed for later validation
+  let maxListSize = 100000; // Define the maximum allowed size for each list
+  let list_tlds = Domain_Indicators
+    | extend parts = split(DomainName, '.')
+    | extend tld = parts[(array_length(parts)-1)]
+    | summarize count() by tostring(tld)
+    | project tld
+    | summarize make_list(tld, maxListSize);
   // Perform a join between domain indicators and DNS events to identify potential malicious activity
   Domain_Indicators
     // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
