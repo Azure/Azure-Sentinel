@@ -24,24 +24,35 @@ namespace Kqlvalidations.Tests
         public override List<string> GetFilesNames()
         {
             List<string> validFiles = new List<string>();
+
             try
             {
                 var directoryPaths = GetDirectoryPaths();
                 int prNumber = 0;
                 int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
-
+                //assign pr number to debug with a pr
+                //prNumber=8414;
                 var basePath = Utils.GetTestDirectory(TestFolderDepth);
                 var prFilesListModified = new List<string>();
 
                 if (prNumber != 0)
                 {
-                    var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
-                    var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
-
-                    foreach (var file in prFiles)
+                    try
                     {
-                        var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
-                        prFilesListModified.Add(modifiedFile);
+                        var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
+                        var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
+
+                        foreach (var file in prFiles)
+                        {
+                            var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
+                            prFilesListModified.Add(modifiedFile);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Exception occurred during PR file retrieval, set prFilesListModified to null
+                        Console.WriteLine("Error occured while getting the files from PR. Error message: " + ex.Message + " Stack trace: " + ex.StackTrace);
+                        prFilesListModified = null;
                     }
                 }
 
@@ -49,7 +60,7 @@ namespace Kqlvalidations.Tests
                 {
                     var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories);
 
-                    if (prNumber != 0)
+                    if (prNumber != 0 && prFilesListModified != null)
                     {
                         files = files.Where(file => prFilesListModified.Contains(file)).ToArray();
                     }

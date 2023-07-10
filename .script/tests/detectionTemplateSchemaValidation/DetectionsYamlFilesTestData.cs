@@ -3,9 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http.Headers;
 using System.Reflection;
-using System.Text;
 
 namespace Kqlvalidations.Tests
 {
@@ -70,7 +68,8 @@ namespace Kqlvalidations.Tests
         private static List<string> GetDetectionFiles(List<string> detectionPaths)
         {
             int prNumber = 0;
-            int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
+            int.TryParse(Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
+            //assign pr number to debug with a pr
             //prNumber=8414;
             var files = Directory.GetFiles(detectionPaths[0], "*.yaml", SearchOption.AllDirectories)
                 .Concat(Directory.GetFiles(detectionPaths[1], "*.yaml", SearchOption.AllDirectories)
@@ -78,17 +77,24 @@ namespace Kqlvalidations.Tests
 
             if (prNumber != 0)
             {
-                var client = new GitHubClient(new Octokit.ProductHeaderValue("MicrosoftSentinelValidationApp"));
-                var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
-                var prFilesListModified = new List<string>();
-                var basePath = GetRootPath();
-                foreach (var file in prFiles)
+                try
                 {
-                    var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
-                    prFilesListModified.Add(modifiedFile);
-                }
+                    var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
+                    var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
+                    var prFilesListModified = new List<string>();
+                    var basePath = GetRootPath();
+                    foreach (var file in prFiles)
+                    {
+                        var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
+                        prFilesListModified.Add(modifiedFile);
+                    }
 
-                files = files.Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)));
+                    files = files.Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error occured while getting the files from PR. Error message: " + ex.Message + " Stack trace: " + ex.StackTrace);
+                }
             }
 
             var fileList = files.ToList();
