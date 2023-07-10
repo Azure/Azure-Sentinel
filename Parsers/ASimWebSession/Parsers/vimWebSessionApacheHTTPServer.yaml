@@ -1,5 +1,5 @@
 Parser:
-  Title: Web Session ASIM parser for Apache HTTP Server
+  Title: Web Session ASIM Filtering parser for Apache HTTP Server
   Version: '0.1'
   LastUpdated: Jun 19, 2023
 Product:
@@ -79,7 +79,7 @@ ParserQuery: |
     | project RawData, TimeGenerated, Computer, _ResourceId, Type, _ItemId
     | where RawData has_any ("GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH")
     | where not (RawData startswith "[") 
-    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUserName "[" Date '] "' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
+    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUsername " [" Date '] "' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
     | where (array_length(url_has_any) == 0 or Url has_any (remove_protocol_from_list(url_has_any)))
     | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any (httpuseragent_has_any))
     | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) in (eventresultdetails_in))
@@ -90,12 +90,16 @@ ParserQuery: |
         temp_SrcMatch , "SrcIpAddr",
         "No match") 
     | where ASimMatchingIpAddr != "No match" 
-    | project-away RawData, temp_*
+    | project-away RawData, temp_*, Date, ClientIdentity
     | extend EventResult    = iff (
           toint(EventResultDetails) < 400, "Success", 
           "Failure"
         )
     | where (eventresult == '*' or EventResult =~ eventresult)
+    | extend SrcUsername    = case(SrcUsername == "-", "", SrcUsername),
+        HttpReferrer        = case(HttpReferrer == "-", "", HttpReferrer),
+        HttpUserAgent       = case(HttpUserAgent == "-", "", HttpUserAgent)    
+    | extend SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
     | parse _ResourceId with * "/subscriptions/" DvcScopeId "/" *
     | project-rename 
         DvcHostname    = Computer,
@@ -105,27 +109,14 @@ ParserQuery: |
         HttpVersion    = tostring(split(Protocol,"/")[1]),
         EventStartTime = TimeGenerated,
         EventEndTime   = TimeGenerated,
-        Dates          = split(replace_string(tostring(split(Date, " ")[0]), @"/", " "), ":"),
         DvcIdType      = iff (DvcId == "", "", "AzureResourceID")
-    | extend 
-        EventTimeGenerated = todatetime(
-            strcat(
-                Dates[0], 
-                " ", 
-                Dates[1],
-                ":", 
-                Dates[2],
-                ":",
-                Dates[3]
-            )
-        )
     | extend 
         HttpStatusCode = EventResultDetails,
         UserAgent      = HttpUserAgent,
         IpAddr         = SrcIpAddr,
         Dvc            = DvcHostname,
-        User           = SrcUserName
-    | project-away Dates, Protocol
+        User           = SrcUsername
+    | project-away Protocol
     | extend
         EventType          = "WebServerSession", 
         EventSchema        = "WebSession",
