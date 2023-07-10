@@ -34,7 +34,7 @@ The following items are required under the template settings during deployment:
 
 A GitHub App with read and write permissions on Users is needed in order to perform the required 'Block User' action on your GitHub Organization's behalf. Additionally, read and write permissions on Members are also required, as Users that are also Members cannot be blocked until after their membership is revoked. Accelerynt has developed a GitHub App with the aforementioned access, which you can install in your GitHub Organization.
 
-Sign in to a GitHub account that has owner access to your Organization, then navigate to the following page:
+Sign into a GitHub account that has owner access to your Organization, then navigate to the following page:
 
 https://github.com/apps/as-github-block-user
 
