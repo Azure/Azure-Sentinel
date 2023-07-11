@@ -13,7 +13,7 @@
 <a name="overview">
 
 ## Overview
-The SpyCloud Enterprise API is able to provide breach data for an IP or set of IP addresses associated with an incident. When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
+The SpyCloud Enterprise Protection API is able to provide breach data for an IP or set of IP addresses associated with an incident. When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
 
 - It fetches all the IP entities in the incident.
 - Iterates through the IP objects and fetches the breach data from SpyCloud Enterprise for each IP.
@@ -25,8 +25,8 @@ The SpyCloud Enterprise API is able to provide breach data for an IP or set of I
 <a name="prerequisites">
 
 ## Prerequisites
-- A SpyCloud Enterprise API Key.
-- SpyCloud Enterprise custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the connector doc page.
+- A SpyCloud Protection Enterprise API Key.
+- SpyCloud Protection Enterprise custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the connector doc page.
 
 <a name="deployment">
 
