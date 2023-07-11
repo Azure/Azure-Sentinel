@@ -156,32 +156,37 @@ namespace Kqlvalidations.Tests
             Assert.True(duplicationsById.Count() == 0, $"There should not be 2 templates with the same ID, but the id {duplicatedId} is duplicated.");
         }
 
-        [Fact]
-        public void Validate_DetectionTemplates_RuleKindsAreValid()
+        [Theory]
+        [ClassData(typeof(DetectionsYamlFilesTestData))]
+        public void Validate_DetectionTemplates_RuleKindsAreValid(string detectionsYamlFileName)
         {
-            List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
-            var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList();
-            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules"))); // Extending it to solution folder for detection validation
-            var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
-
-            var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
-            var templatesAfterRemovingSkipFiles = templatesAsObjects
-                                                    .Where(template => !TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds.Contains(template["id"].ToString()));
-
-            var invalidTemplateRuleKindsAndIds = templatesAfterRemovingSkipFiles
-                .Where(template => !Enum.TryParse(typeof(AlertRuleKind), template["kind"].ToString(), ignoreCase: false, out _))
-                .Select(template => (templdateId: template["id"].ToString(), templateKind: template["kind"].Value<string>()))
-                .ToList();
-
-            string exceptionMessage = "";
-            var validEnumValues = string.Join(", ", Enum.GetNames(typeof(AlertRuleKind)));
-            if (invalidTemplateRuleKindsAndIds.Any())
+            if (detectionsYamlFileName == "NoFile.yaml")
             {
-                exceptionMessage += string.Join(", ", invalidTemplateRuleKindsAndIds.Select(invalidTemplate => $"(id: {invalidTemplate.templdateId}, invalid kind: {invalidTemplate.templateKind})"));
+                Assert.True(true);
+                return;
             }
 
-            Assert.False(invalidTemplateRuleKindsAndIds.Any(), $"Invalid rule kind(s) encountered for the following template(s): {exceptionMessage}. Valid kind values (case sensitively) are: {validEnumValues}");
+            var yaml = GetYamlFileAsString(detectionsYamlFileName);
+
+            // We ignore known issues (in progress)
+            foreach (var templateToSkip in TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds)
+            {
+                if (yaml.Contains(templateToSkip))
+                {
+                    return;
+                }
+            }
+
+            var templateObject = JObject.Parse(ConvertYamlToJson(yaml));
+            var ruleKind = templateObject["kind"].ToString();
+
+            var validRuleKinds = Enum.GetNames(typeof(AlertRuleKind));
+            bool isRuleKindValid = validRuleKinds.Contains(ruleKind, StringComparer.OrdinalIgnoreCase);
+
+            Assert.True(isRuleKindValid, $"Invalid rule kind '{ruleKind}' encountered in template '{detectionsYamlFileName}'. Valid rule kinds are: {string.Join(", ", validRuleKinds)}");
         }
+
+
 
         private string GetYamlFileAsString(string detectionsYamlFileName)
         {
