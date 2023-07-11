@@ -1,0 +1,50 @@
+name: Check For PR Content And Add Label
+
+on:  
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "Solutions/**"
+
+env:
+  BRANCH_NAME: "${{ github.event.client_payload.pull_request.head.ref }}"
+
+jobs:
+  solutionNameDetails:
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    uses: ./.github/workflows/getSolutionName.yaml
+    secrets: inherit
+
+  checkPRContent:
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    name: Check PR Content And Add Label
+    runs-on: ubuntu-latest
+    needs: solutionNameDetails
+    env:
+      SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+    outputs:
+      hasContentPackageChange: ${{ steps.changesInPR.outputs.hasContentPackageChange }}
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        with:
+          fetch-depth: 0
+          ref: "${{ env.BRANCH_NAME }}"
+      - name: Identify Changes in PR
+        shell: pwsh
+        id: changesInPR
+        run: |
+          $instrumentationKey = "${{ vars.APPINSIGHTS }}"
+          $runId = "${{ github.run_id }}"
+          $solutionName = "${{ needs.solutionNameDetails.outputs.solutionName }}"
+          $pullRequestNumber = "${{ github.event.number }}"
+          Write-Host "PR Number $pullRequestNumber"
+          ./.script/package-automation/checkPRContentChange.ps1 $solutionName $pullRequestNumber $runId $instrumentationKey
+
+  addLabelWhenContentPackage:
+    name: Add Label of Content Package
+    needs: checkPRContent
+    if: ${{ needs.checkPRContent.outputs.hasContentPackageChange == 'True' && !github.event.pull_request.head.repo.fork }} 
+    uses: ./.github/workflows/addLabelOnPr.yaml
+    with:
+      labelName: "Content-Package"
