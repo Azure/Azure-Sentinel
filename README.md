@@ -201,7 +201,7 @@ In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog
 ### Complete the Logic App
 * Go to "Logic Apps" -> "Commvault-Logic-App" -> "Logic App Designer" (under "Development Tools")
   * Click "+ New Step"
-    * Secret "Get Secret"
+    * Search "Get Secret"
     * From the results in the "Actions" tab, click "Get Secret Azure Key Vault"
       * Connection Name: 
         * Commvault-KeyVault-Connection
@@ -219,18 +219,18 @@ In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog
     * Search "Get Secret"
     * From the results in the "Actions" tab, click "Get Secret Azure Key Vault"
       * Name of Secret:
-        * enviornment-endpoint-url
+        * environment-endpoint-url
     * In this Action Box, click the three dots in the top right corner
       * Rename:
-        * Enviornment Endpoint URL
+        * Environment Endpoint URL
   * Click "+ New Step"
     * Switch to the "Built-in" tab (located under the search bar)
     * Under "Actions", click "Condition Control"
     * Rename this grey Action Box (currently named "Condition") to "Disable Data Aging" by clicking the three dots (located in the top right corner of the Action Box) and then clicking "Rename"
     * In the grey "Disable Data Aging" Action Box, click in the box where it says "Chose a value". A search window will appear
       * Search for "Incident Description" and select "Incident Description" from the search results
-    * Click on where it says "is equal to" and select "contains"
-    * Click where it says "Chose a value" and type "Data Compromised"
+    * Click on where it says "is equal to" and select "starts with"
+    * Click where it says "Chose a value" and type "Data"
   * In the green "True" Action Box, click "Add an action"
     * In the search box, type "Create Job"
       * In the "Actions" tab, select "Create job"
@@ -278,8 +278,8 @@ In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog
     * In the grey "Disable IDP" Action Box, click in the box where it says "Choose a value". A search window will appear
       * Search for "Incident Description" and select "Incident Description" from the search results
       * Click in the whitespace outside of the Action Box to confirm the selection
-    * Click on where it says "is equal to" and select "contains"
-    * Click where it says "Choose a value" and type "IDP Compromised"
+    * Click on where it says "is equal to" and select "starts with"
+    * Click where it says "Choose a value" and type "IDP"
   * In the green "True" Action Box, click "Add an Action"
     * In the search box, type "Create Job"
       * In the "Actions" tab, select "Create job"
@@ -316,6 +316,8 @@ In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog
       * In the grey "Disable User" action box, click in the box where it says "Choose a value". A search window will appear
         * Search for "Incident Description" and select "Incident Description" from the search results
         * Click in the whitespace outside of the Action Box to confirm the selection
+	  * Click on where it says "is equal to" and select "starts with"
+      * Click where it says "Choose a value" and type "User"
     * In the green "True" Action Box, click "Add an action"
       * In the search box, type "Create Job"
         * In the "Actions" tab, select "Create job"
@@ -689,12 +691,14 @@ In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog
           * (The value of the "Access Token" block)
         * Runbook Parameter EnvironmentEndpointURL:
           * (The value of the "Endpoint URL" block)
-        * Runbook Parameter KeyVaultTenantID:
+        * Runbook Parameter KeyVaultClientID:
           * (The value of the "KeyVault Client ID" block)
+        * Runbook Parameter KeyVaultTenantID:
+          * (The value of the "KeyVault Tenant ID" block)
         * Runbook Parameter KeyVaultClientSecret:
           * (The value of the "KeyVault Client Secret" block)
       * Rename this block to be "Cycle Token Job" by clicking the three dots in the top right corner and selecting "Rename"
-    * In the center of the screen (under the "KeyVault Client ID" block), click "+ New Step"
+    * In the center of the screen (under the "cycle token job" block), click "+ New Step"
       * Search for "get job output"
       * Under All -> Actions, select "Get Job Output - Azure KeyVault"
         * Subscription:
