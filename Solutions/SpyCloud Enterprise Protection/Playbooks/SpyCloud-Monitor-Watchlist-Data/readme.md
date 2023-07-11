@@ -21,8 +21,8 @@ This playbook gets triggered on a daily basis and performs the following actions
 <a name="prerequisites">
 
 ## Prerequisites
-- A SpyCloud Enterprise API Key
-- SpyCloud Enterprise custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the connector documentation page.
+- A SpyCloud Enterprise Protection API Key
+- SpyCloud Enterprise Protection custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the connector documentation page.
 
 <a name="deployment">
 
