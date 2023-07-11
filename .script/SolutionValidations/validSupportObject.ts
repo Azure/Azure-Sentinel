@@ -19,8 +19,9 @@ export function IsValidSupportObject(filePath: string): ExitCode {
         let resources = jsonFile.resources;
 
         // filter resources that have type "Microsoft.OperationalInsights/workspaces/providers/metadata"
-        const filteredResource = resources.filter(function (resource: { type: string; }) {
-            return resource.type === "Microsoft.OperationalInsights/workspaces/providers/metadata";
+        const filteredResource = resources.filter(function (resource: { type: string }) {
+            return resource.type === "Microsoft.OperationalInsights/workspaces/providers/metadata" ||
+                resource.type === "Microsoft.OperationalInsights/workspaces/providers/contentPackages";
         });
 
         if (filteredResource.length > 0) {

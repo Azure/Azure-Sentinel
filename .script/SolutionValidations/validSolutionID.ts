@@ -20,13 +20,18 @@ export function IsValidSolutionID(filePath: string): ExitCode {
 
         // Validate if the solution ID is empty
         if (!solutionId) {
-            throw new InvalidSolutionIDValidationError(`Empty solution ID. Expected format: publisherID.solutionID and Solution ID must be in lowercase. Found empty value.`);
+            throw new InvalidSolutionIDValidationError(`Empty solution ID. Expected format: publisherID.offerID. and it must be in lowercase. Found empty value.`);
         }
 
         // Validate the solution ID format
-        const regex = /^[a-z0-9]+\.[a-z0-9_]+$/;
+        const regex = /^[^.]+\.[^.]+$/;
         if (!regex.test(solutionId)) {
-            throw new InvalidSolutionIDValidationError(`Invalid solution ID format. Expected format: publisherID.solutionID and  Solution ID must be in lowercase. Found: ${solutionId}`);
+            throw new InvalidSolutionIDValidationError(`Invalid solution ID format. Expected format: publisherID.offerID. and it must be in lowercase. Found: ${solutionId}`);
+        }
+
+        // Validate the solution ID case (lowercase)
+        if (solutionId !== solutionId.toLowerCase()) {
+            throw new InvalidSolutionIDValidationError(`Invalid solution ID format. Expected format: publisherID.offerID. and it must be in lowercase. Found: ${solutionId}`);
         }
     } else {
         throw new InvalidSolutionIDValidationError(`Missing 'solutionId' attribute in the file. File path: ${filePath}`);
