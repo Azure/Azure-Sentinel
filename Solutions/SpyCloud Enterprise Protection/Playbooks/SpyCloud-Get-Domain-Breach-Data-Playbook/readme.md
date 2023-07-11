@@ -12,7 +12,7 @@
 <a name="overview">
 
 ## Overview
-The SpyCloud Enterprise API provides breach data for a domain or set of domains associated with an incident. When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
+The SpyCloud Enterprise Protection API provides breach data for a domain or set of domains associated with an incident. When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
 
 - It fetches all the DNS entities from the incident.
 - Iterates through the domain objects and fetches the breach data from SpyCloud Enterprise for each domain.
@@ -23,8 +23,8 @@ The SpyCloud Enterprise API provides breach data for a domain or set of domains 
 <a name="prerequisites">
 
 ## Prerequisites
-- A SpyCloud Enterprise API Key.
-- SpyCloud Enterprise custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the connector doc page.
+- A SpyCloud Enterprise Protection API Key.
+- SpyCloud Enterprise Protection custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the connector doc page.
 
 <a name="deployment">
 
