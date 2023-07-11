@@ -13,7 +13,7 @@
 <a name="overview">
 
 ## Overview
-The SpyCloud Enterprise API provides breach data for the provided password.
+The SpyCloud Enterprise Protection API provides breach data for the provided password.
 
 When this playbook gets triggered, it performs the following actions:
 - It takes the password input provided in the "Provide Password to Search" variable of the logic app and gets all the breach data from SpyCloud Enterprise for that password, and the response will be added in a tabular format that can be used for further investigation.
@@ -22,8 +22,8 @@ When this playbook gets triggered, it performs the following actions:
 <a name="prerequisites">
 
 ## Prerequisites
-- A SpyCloud Enterprise API Key
-- SpyCloud Enterprise custom connector needs to be deployed prior to the deployment of this playbook in the same resource group and region. Relevant instructions can be found on the connector documentation page.
+- A SpyCloud Enterprise Protection API Key
+- SpyCloud Enterprise Protection custom connector needs to be deployed prior to the deployment of this playbook in the same resource group and region. Relevant instructions can be found on the connector documentation page.
 
 <a name="deployment">
 
