@@ -420,11 +420,6 @@ Configure the following SAP Log change requests to enable support for ingesting 
 Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
 This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
 
-SAP notes required for versions earlier than SAP Basis 7.5 SP13:
-- SAP Note 2641084, named *Standardized read access for the Security Audit log data*
-- SAP Note 2173545, named *CHANGEDOCUMENT_READ_ALL*
-- SAP Note 2502336, named *RSSCD100 - read only from archive, not from database*
-
 Note: The required SAP log change requests expose custom RFC FMs that are required for the connector, and do not change any standard or custom objects.
 
 For more information see the SAP documentation.

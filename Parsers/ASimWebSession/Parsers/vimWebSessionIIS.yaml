@@ -1,6 +1,6 @@
 Parser:
   Title: Web Session ASIM filtering parser for Windows IIS logs
-  Version: '0.1'
+  Version: '0.1.1'
   LastUpdated: Apr 19, 2023
 Product:
   Name: Internet Information Services (IIS)
@@ -28,9 +28,6 @@ ParserParams:
   - Name: srcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
-  - Name: dstipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])    
   - Name: ipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
@@ -54,7 +51,6 @@ ParserQuery: |
     starttime:datetime=datetime(null), 
     endtime:datetime=datetime(null),
     srcipaddr_has_any_prefix:dynamic=dynamic([]),
-    dstipaddr_has_any_prefix:dynamic=dynamic([]),
     ipaddr_has_any_prefix:dynamic=dynamic([]), 
     url_has_any:dynamic=dynamic([]),
     httpuseragent_has_any:dynamic=dynamic([]),
@@ -64,7 +60,6 @@ ParserQuery: |
   )
   {
         let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-        let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
         W3CIISLog
         | where not(disabled)
         | where (isnull(starttime) or TimeGenerated >= starttime)
@@ -76,12 +71,10 @@ ParserQuery: |
         | where (array_length(httpuseragent_has_any) == 0 or csUserAgent has_any(httpuseragent_has_any))
         | where (array_length(eventresultdetails_in) == 0 or scStatus has_any (eventresultdetails_in))
         | extend temp_SrcMatch=has_any_ipv4_prefix(cIP,src_or_any)
-            , temp_DstMatch=has_any_ipv4_prefix(csHost,dst_or_any)
         | extend ASimMatchingIpAddr=case(
-            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
-            temp_SrcMatch and temp_DstMatch, "Both",
+            array_length(src_or_any) == 0 ,"-",
+            temp_SrcMatch, "Both",
             temp_SrcMatch, "SrcIpAddr",
-            temp_DstMatch, "DstIpAddr",
             "No match"
         )
         | where ASimMatchingIpAddr != "No match" 
@@ -179,4 +172,4 @@ ParserQuery: |
                 sc*,
                 StorageAccount
   };
-  parser (starttime=starttime, endtime=endtime, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)

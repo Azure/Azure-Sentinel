@@ -50,122 +50,241 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-   let parser=  (
+  let parser = (
         starttime:datetime=datetime(null), 
         endtime:datetime=datetime(null),
         srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        eventtype_in:dynamic=dynamic([]),
         eventresult:string='*',
         actorusername_has_any:dynamic=dynamic([]),
-        eventtype_in:dynamic=dynamic([]),
         operation_has_any:dynamic=dynamic([]),
         object_has_any:dynamic=dynamic([]),
         newvalue_has_any:dynamic=dynamic([]),
         disabled:bool = false
-    ) {    
-    union 
-    (
-        union 
-        (
+    ) {
+    // Parsed Events Ids
+    let ParsedEventIds = dynamic([1102,4698,4699,4700,4701,4702,4929,5025,5027,5028,5029,5030,5034,5035,5037,7035,7036,7040,7045,2009,5136]);
+    // Eventlog Event Ids
+    let EventlogEventIds = dynamic([1102]);
+    // Scheduled Task Event Ids
+    let ScheduledTaskEventIds = dynamic([4698,4699,4700,4701,4702]);
+    // Active Directory Replica Source Naming Context Event Ids
+    let ActiveDirectoryReplicaIds = dynamic([4929]);
+    // Firewall Event Ids
+    let FirewallEventIds = dynamic([5025,5027,5028,5029,5030,5034,5035,5037]);
+    // Service Event Ids
+    let ServiceEventIds = dynamic([7035,7036,7040,7045,2009]);   
+    // EventID Lookup
+    // Directory Service Object Ids
+    let DirectoryServiceIds = dynamic([5136]);
+    let EventIDLookup = datatable(EventID:int, Operation:string, EventType:string, Object:string, ObjectType:string, EventResult:string)
+    [   
+        1102, "Delete Logs", "Delete", "Security Logs", "Event Log", "Success",
+        4698, "Create Scheduled Task", "Create", "", "Scheduled Task", "Success",
+        4699, "Delete Scheduled Task", "Delete", "", "Scheduled Task", "Success",
+        4700, "Enable Scheduled Task", "Enable", "", "Scheduled Task", "Success",
+        4701, "Disable Scheduled Task ", "Disable", "", "Scheduled Task", "Success",
+        4702, "Update Scheduled Task", "Set", "", "Scheduled Task", "Success",
+        4929, "Remove Active Directory Replica Source Naming Context", "Delete", "", "Other", "Success",
+        5025, "Stop Firewall Service", "Disable", "Firewall Service", "Service", "Success",
+        5027, "Retrieve the Security Policy From The Local Storage", "Read", "Firewall Service", "Service", "Failure",
+        5028, "Parse the new Security Policy", "Set", "Firewall Service", "Service", "Failure",
+        5029, "Initialize the Firewall Driver", "Initialize", "Firewall Service", "Service", "Failure",
+        5030, "Start the Firewall Service", "Start", "Firewall Service", "Service", "Failure",
+        5034, "Stop Firewall Driver", "Stop", "Firewall Driver", "Driver", "Failure",
+        5035, "Start Firewall Driver", "Start", "Firewall Driver", "Driver", "Failure",
+        5037, "Terminating Firewall Driver", "Terminate", "Firewall Driver", "Driver", "Failure",
+        7035, "Start Control Sent", "Execute", "Service", "Service", "Success",
+        7036, "Enter Stop State", "Stop", "Service", "Service", "Success",
+        7040, "Changed Service Settings", "Set", "Service", "Service", "Success",
+        7045, "Install Service", "Install", "Service", "Service", "Success",
+        2009, "Load Group Policy", "Other", "Service", "Service", "Failure",
+        5136, "Modified Directory Services Object", "Set", "", "Directory Service Object", "Success"
+    ];
+    let FilteredEventIds = toscalar(EventIDLookup 
+        | where (array_length(eventtype_in) == 0 or EventType in (eventtype_in))
+            and (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+            and (strlen(eventresult) == 0 or EventResult =~ eventresult)
+        | summarize make_set(EventID)
+    );
+    let FilteredParsedEventIds = iif(array_length(FilteredEventIds) >0, FilteredEventIds, ParsedEventIds);
+    let ParsedEvents =
+    union (
+        union (
+        // SecurityEvents
             SecurityEvent
-            | where 
-                (isnull(starttime) or TimeGenerated >= starttime) 
+            | where not(disabled)
+            | where (isnull(starttime) or TimeGenerated >= starttime) 
                 and (isnull(endtime) or TimeGenerated <= endtime)
-                and not(disabled)
-            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
-            | where EventID == 1102
+                and EventID in(FilteredParsedEventIds)
+            | where (array_length(srcipaddr_has_any_prefix) == 0)
+                and (array_length(actorusername_has_any) == 0 or EventData has_any (actorusername_has_any))
+                and (array_length(newvalue_has_any) == 0 or EventData has_any (newvalue_has_any))         
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
         ),
         (
+        // Event
             Event
-            | where 
-                (isnull(starttime) or TimeGenerated >= starttime) 
+            | where not(disabled)
+            | where (isnull(starttime) or TimeGenerated >= starttime) 
                 and (isnull(endtime) or TimeGenerated <= endtime)
-                and not(disabled)
-            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
-            | where EventID == 1102
+                and EventID in(FilteredParsedEventIds)
+            | where (array_length(srcipaddr_has_any_prefix) == 0)
+                and (array_length(actorusername_has_any) == 0 or EventData has_any (actorusername_has_any))
+                and (array_length(newvalue_has_any) == 0 or EventData has_any (newvalue_has_any))
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
         )
-        | where
-           (array_length(srcipaddr_has_any_prefix) == 0)
-           and (array_length(newvalue_has_any) == 0)
-           and (array_length(object_has_any) == 0 or "Logs" in (object_has_any))
-           and (array_length(operation_has_any) == 0 or "Delete Logs" has_any (operation_has_any))
-           and (array_length(eventtype_in) == 0 or "Delete" in (eventtype_in))
-           and (array_length(actorusername_has_any) == 0 or EventData has_any (actorusername_has_any))
         | parse-kv EventData as 
             (
                 SubjectUserSid:string,
                 SubjectUserName:string,
                 SubjectDomainName:string,
-                SubjectLogonId:string
+                SubjectLogonId:string,
+                TaskName:string,
+                TaskContent:string,
+                TaskContentNew:string,
+                ClientProcessId:string,
+                DestinationDRA:string,
+                SourceDRA:string,
+                SourceAddr:string,
+                ObjectDN:string,
+                AttributeValue:string
             ) 
-            with (regex=@'<(\w+)>([^<]*)<')
+        with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
         | where 
             array_length(actorusername_has_any) == 0 
             or SubjectUserName has_any (actorusername_has_any) 
             or SubjectDomainName has_any (actorusername_has_any)
         | project-away EventData
     ),
+    // WindowsEvents
     (
-        WindowsEvent 
-        | where 
-            (isnull(starttime) or TimeGenerated >= starttime) 
+        WindowsEvent
+        | where not(disabled)
+        | where (isnull(starttime) or TimeGenerated >= starttime) 
             and (isnull(endtime) or TimeGenerated <= endtime)
-            and not(disabled)
-        | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
-        | where EventID == 1102
+            and EventID in(FilteredParsedEventIds)
         | where (array_length(srcipaddr_has_any_prefix) == 0)
-           and (array_length(newvalue_has_any) == 0)
-           and (array_length(object_has_any) == 0 or "Logs" in (object_has_any))
-           and (array_length(operation_has_any) == 0 or "Delete Logs" has_any (operation_has_any))
-           and (array_length(eventtype_in) == 0 or "Delete" in (eventtype_in))
+            and (array_length(actorusername_has_any) == 0 or EventData has_any (actorusername_has_any))   
+            and (array_length(newvalue_has_any) == 0 or EventData has_any (newvalue_has_any))
+        | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
         | extend
             SubjectUserSid = tostring(EventData.SubjectUserSid),
             SubjectUserName = tostring(EventData.SubjectUserName),
             SubjectDomainName = tostring(EventData.SubjectDomainName),
-            SubjectLogonId = tostring(EventData.SubjectLogonId)
+            SubjectLogonId = tostring(EventData.SubjectLogonId),
+            TaskName = tostring(EventData.TaskName),
+            TaskContent = tostring(EventData.TaskContent),
+            TaskContentNew = tostring(EventData.TaskContentNew),
+            ClientProcessId = tostring(EventData.ClientProcessId),
+            DestinationDRA = tostring(EventData.DestinationDRA),
+            SourceDRA = tostring(EventData.SourceDRA),
+            SourceAddr = tostring(EventData.SourceAddr),
+            ObjectDN = tostring(EventData.ObjectDN),
+            AttributeValue = tostring(EventData.AttributeValue)
         | where 
             array_length(actorusername_has_any) == 0 
             or SubjectUserName has_any (actorusername_has_any) 
-            or SubjectUserName has_any (actorusername_has_any)
+            or SubjectUserName has_any (actorusername_has_any)        
         | project-away EventData
     )
-    | project-rename
-        ActorUserId = SubjectUserSid,
-        DvcHostname = Computer,
-        ActorSessionId = SubjectLogonId,
-        DvcId = _ResourceId
-    | extend
-        EventCount = int(1),
-        EventType = "Delete",
-        Operation = "Delete Logs",
-        Object = "Logs",
-        EventResult = "Success",
-        EventStartTime = TimeGenerated, 
-        EventEndTime= TimeGenerated,
-        EventProduct = 'Windows',
-        EventVendor = 'Microsoft',
-        EventSchemaVersion = '0.1.0',
-        EventSchema = 'AuditEvent',
-        ActorUserIdType = 'SID',
-        ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
-        ActorUsernameType = iff (SubjectDomainName == "", 'Simple', 'Windows'),
-        DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
-        EventOriginalType = tostring(EventID)
-    // Aliases
+    | lookup EventIDLookup on EventID
+    ;
+    // Parse EventLog
+    let EventLog = ParsedEvents
+    | where EventID in(EventlogEventIds)
+        and (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue;
+    // Parse Scheduled Task
+    let ScheduledTask = ParsedEvents
+    | where EventID in(ScheduledTaskEventIds)
+    | where (array_length(object_has_any) == 0 or TaskName has_any (object_has_any))
     | extend 
-        User=ActorUsername,
-        ActorUserSid = ActorUserId,
-        Dvc = DvcHostname
-    | project-away Subject*, EventID
-   };
-   parser (
-      starttime = starttime,
-      endtime = endtime,
-      srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
-      actorusername_has_any = actorusername_has_any,
-      eventtype_in = eventtype_in,
-      eventresult = eventresult,
-      operation_has_any = operation_has_any,
-      object_has_any=object_has_any,
-      newvalue_has_any=newvalue_has_any,
-      disabled=disabled
-   )
+        Object = TaskName,
+        NewValue = coalesce(
+            TaskContent,
+            TaskContentNew
+        )
+    | where (array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any))
+    | extend 
+        Value = NewValue
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse ADR
+    let ActiveDirectoryReplica = ParsedEvents
+    | where EventID in(ActiveDirectoryReplicaIds)
+    | where (array_length(object_has_any) == 0 or DestinationDRA has_any (object_has_any))
+    | extend 
+        NewValue = SourceDRA,
+        OldValue = DestinationDRA,
+        SrcFQDN = SourceAddr
+    | where (array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any))
+    | extend 
+        Value = NewValue,
+        Object = OldValue
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse WindowsFirewall
+    let WindowsFirewall = ParsedEvents
+    | where EventID in(FirewallEventIds)
+        and (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse ServiceEvent
+    let ServiceEvent = ParsedEvents
+    | where EventID in(ServiceEventIds)
+        and (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse DirectoryService
+    let DirectoryService = ParsedEvents
+    | where EventID in(DirectoryServiceIds)
+        and (array_length(object_has_any) == 0 or ObjectDN has_any (object_has_any))
+    | extend
+        Object = ObjectDN
+    | project-rename 
+        NewValue = AttributeValue
+    | extend
+        Value = NewValue
+    | project-away Task*, *DRA, SourceAddr, ObjectDN
+    ;
+    // Union Events
+    union EventLog, ScheduledTask, ActiveDirectoryReplica, WindowsFirewall, ServiceEvent, DirectoryService
+        | invoke _ASIM_ResolveDvcFQDN("Computer")
+        | project-rename 
+            ActorUserId = SubjectUserSid,
+            ActorSessionId = SubjectLogonId,
+            DvcId = _ResourceId,
+            ActingAppId = ClientProcessId,
+            EventUid = _ItemId
+        | extend
+            EventCount = int(1),
+            EventStartTime = TimeGenerated, 
+            EventEndTime= TimeGenerated,
+            EventProduct = 'Windows',
+            EventVendor = 'Microsoft',
+            EventSchemaVersion = '0.1.0',
+            EventSchema = 'AuditEvent',
+            EventOriginalType = tostring(EventID),
+            DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
+            ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
+            ActorUsernameType = iff (SubjectDomainName == "", 'Simple', 'Windows'),
+            ActorUserIdType = iff (ActorUserId == "","", "SID"),
+            ActingAppType = "Process"
+        | extend
+            User = ActorUsername,
+            Dvc = DvcFQDN
+        | project-away Subject*, EventID, Computer
+    };
+    parser (
+        starttime = starttime,
+        endtime = endtime,
+        srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+        actorusername_has_any = actorusername_has_any,
+        eventtype_in = eventtype_in,
+        eventresult = eventresult,
+        operation_has_any = operation_has_any,
+        object_has_any=object_has_any,
+        newvalue_has_any=newvalue_has_any,
+        disabled=disabled
+    )

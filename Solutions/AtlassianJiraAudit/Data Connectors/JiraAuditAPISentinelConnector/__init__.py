@@ -30,6 +30,8 @@ match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
+logging.info("Jira Audit Uri: {}".format(jira_uri_audit))
+
 def generate_date():
     current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
     state = StateManager(connection_string=connection_string)
@@ -61,6 +63,7 @@ def get_result_request(offset,limit,from_time,to_time):
         elif r.status_code == 403:
             logging.error("The user does not have the required permissions or Jira products are on free plans. Audit logs are available when at least one Jira product is on a paid plan. Error code: {}".format(r.status_code))
         else:
+            logging.info("Jira Audit Uri: {}".format(jira_uri_audit))
             logging.error("Something wrong. Error code: {}".format(r.status_code))
     except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
@@ -77,6 +80,8 @@ def get_result(time_range):
         result = get_result_request(offset,limit,from_time,to_time)
         if result is not None:
             element_count = len(result)
+        else:
+            element_count = 0
         if offset == 0 and element_count == 0:
             logging.info("Logs not founded. Time period: from {} to {}.".format(from_time,to_time))
         elif offset != 0 and element_count != 0:
