@@ -6,10 +6,12 @@ try
     Write-Host "adoBaseUrl $adoBaseUrl, adoAreaPath $adoAreaPath, adoTeamProject $adoTeamProject, prNumber $prNumber, prTitle $prTitle, dataFileLink $dataFileLink, adoParentLink $adoParentLink"
 
     $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$prNumber"; 'EventName'="CreateADOItem"; 'dataFileLink'="$dataFileLink"; 'prTitle'="$prTitle"; } 
-    Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CreateADOItem" -CustomProperties $customProperties
+    if ($instrumentationKey -ne '')
+    {
+        Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CreateADOItem" -CustomProperties $customProperties
 
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CreateADOItem started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
-
+        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CreateADOItem started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+    }
     $pair = "$(''):$($adoToken)"
     $encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
     $basicAuthValue = "Basic $encodedCreds"
@@ -32,8 +34,10 @@ try
     {
         $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$prNumber"; 'EventName'="CreateADOItem"; 'dataFileLink'="$dataFileLink"; 'prTitle'="$prTitle"; 'ADOQueryResponse'="$resultQueryResponse"; } 
 
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : There are no workitems created in ADO which matches title $adoTitle for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
-
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : There are no workitems created in ADO which matches title $adoTitle for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+        }
         # create ado item
         $pullRequestLink = "https://github.com/Azure/Azure-Sentinel/pull/$prNumber"
         Write-Host "pullRequestLink $pullRequestLink"
@@ -82,30 +86,46 @@ try
 
         $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$prNumber"; 'EventName'="CreateADOItem"; 'dataFileLink'="$dataFileLink"; 'prTitle'="$prTitle"; 'ADOCreateResponse'="$createResponseJson" } 
 
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : There are no workitems created in ADO which matches title $adoTitle for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : There are no workitems created in ADO which matches title $adoTitle for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+        }
 
         if ($null -eq $createResponse -or $createResponse -eq '')
         {
             Write-Host "ADO Create Response is empty"
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : Failed to create ADO item for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+            if ($instrumentationKey -ne '')
+            {
+                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : Failed to create ADO item for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+            }
         }
         else
         {
             Write-Host "Created ADO item with Id $newAdoId Successfully"
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : Created ADO item with title '$adoTitle' Successfully for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+            if ($instrumentationKey -ne '')
+            {
+                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : Created ADO item with title '$adoTitle' Successfully for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+            }
         }
     }
     else 
     {
         Write-Host "ADO item already created!"
         $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$prNumber"; 'EventName'="CreateADOItem"; 'dataFileLink'="$dataFileLink"; 'prTitle'="$prTitle"; 'CreateADOResponse'="$resultQueryResponse"; }
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : ADO item already exist with title '$adoTitle' for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+        
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateADOItem : ADO item already exist with title '$adoTitle' for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+        }
     }
 }
 catch
 {
     $errorInfo = $_.Exception
     Write-Host "CreateADOItem: Error occured in catch block. Error Info $errorInfo"
-    Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'ErrorDetails'="CreateADOItem : Error occured in catch block: $_"; 'EventName'="CreateADOItem"; 'SolutionOfferId'="$solutionOfferId";}
+    if ($instrumentationKey -ne '')
+    {
+        Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'ErrorDetails'="CreateADOItem : Error occured in catch block: $_"; 'EventName'="CreateADOItem"; 'SolutionOfferId'="$solutionOfferId";}
+    }
     exit 1
 }

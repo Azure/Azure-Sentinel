@@ -117,7 +117,6 @@ class CofenseToSentinelMapping:
                     data = {}
                     continue
                 indicator_id = indicator.get("id", "")
-                data["properties"]["externalId"] = indicator_id
                 data["properties"]["displayName"] = "Cofense Triage : {}".format(
                     indicator_id
                 )
@@ -181,7 +180,8 @@ class CofenseToSentinelMapping:
                             LOGS_STARTS_WITH, __method_name, COFENSE_TO_SENTINEL
                         )
                     )
-                self.microsoft_obj.create_indicator(data)
+                indicator_response = self.microsoft_obj.create_indicator(data)
+                indicator_externalId = indicator_response.get("properties", {}).get("externalId", "")
                 applogger.debug(
                     "{}(method={}) : {}: indicator created successfully.".format(
                         LOGS_STARTS_WITH, __method_name, COFENSE_TO_SENTINEL
@@ -190,6 +190,7 @@ class CofenseToSentinelMapping:
                 updated_at = indicator.get("attributes", {}).get("updated_at", "")
                 reportdata = {
                     "indicator_id": indicator_id,
+                    "external_id": "{}-{}".format(indicator_externalId, source_cofence),
                     "report_link": report_link,
                     "updated_at": updated_at
                 }
