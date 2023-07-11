@@ -1,0 +1,77 @@
+id: 40f300b1-58e0-40e8-b648-fe0d045fa0de
+name: Azure Database Delete operation executed during suspicious login window
+description: |
+  'Identifies when the Database Delete operation is executed by a UserPrincipalName and IP Address during recent user entity behaviour alert window.'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  -  DataDestruction
+  -  InhibitSystemRecovery
+relevantTechniques:
+  - T1485
+  - T1490
+query: |
+    AzureActivity
+    | where OperationNameValue == "MICROSOFT.SQL/SERVERS/DATABASES/DELETE"
+    | extend role_ = tostring(parse_json(tostring(parse_json(Authorization).evidence)).role)
+    | where ActivityStatusValue == "Success"
+    // Extract data from the Authorization field
+    | extend Authorization_d = parse_json(Authorization)
+    | extend Scope = Authorization_d.scope
+    | extend Scope_s = split(Scope, "/")
+    | extend Subscription = tostring(Scope_s[2])
+    | extend ResourceName = tostring(Scope_s[-1])
+    | extend ResourceType = tostring(parse_json(Scope_s)[9])
+    | project  TimeGenerated, CallerIpAddress, OperationNameValue, role_, CorrelationId, Authorization, Caller, ResourceGroup, ResourceProviderValue, ActivityStatusValue, Scope_s, ResourceName, ResourceType, Subscription
+    //| extend CallerIpAddress=max_CallerIpAddress
+    // Create a join key using  the Caller (UPN)
+    | extend joinkey = tolower(Caller)
+    // Join the Run Command actions to UEBA data
+    | join kind = inner (
+    BehaviorAnalytics
+    // We are specifically interested in unusual logins
+    | where EventSource == "Azure AD" and ActivityInsights.ActionUncommonlyPerformedByUser == "True"
+    | extend
+        UEBAEventTime=TimeGenerated,
+        UEBAActionType=ActionType,
+        UEBASourceIPLocation=SourceIPLocation,
+        UEBAActivityInsights=ActivityInsights,
+        UEBAUsersInsights=UsersInsights
+    | where isnotempty(UserPrincipalName) and isnotempty(UEBASourceIPLocation)
+    | extend joinkey = tolower(UserPrincipalName)
+    )
+    on joinkey
+    // Create a window around the UEBA event times, check to see if the Run Command action was performed within them
+    | extend UEBAWindowStart = UEBAEventTime - 1h, UEBAWindowEnd = UEBAEventTime + 0h
+    | where TimeGenerated  between (UEBAWindowStart .. UEBAWindowEnd)
+    | extend
+    timestamp = TimeGenerated,
+    AccountCustomEntity=Caller,
+    IPCustomEntity=CallerIpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Laraib Khan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Platform" ]
