@@ -2,7 +2,7 @@
 
  ## Summary
 
-This playbook allows the SOC users to automatically response to Microsoft Sentinel incidents which includes IPs, by adding/removing the IPs to the Sentinel IP blocked group.
+This playbook allows the SOC users to automatically response to Microsoft Sentinel incidents which includes IPs, by adding/removing the IPs to the Microsoft Sentinel IP blocked group.
  [Learn more about Threat Intelligence in Fortinet policy](https://www.fortinet.com/fortiguard/threat-intelligence/threat-research)
 
 ![Fortinet](./DesginerIPResponse.png)<br>
