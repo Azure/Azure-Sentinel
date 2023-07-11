@@ -287,9 +287,7 @@ class FileHelper:
             self.__eventToDict = json.loads(response.text)
         except Exception as e:
             logging.warn("Error in fetching file from {}. {}".format(self.__filePath,e))
-            if not (200 <= response.status_code <= 299):
-                logging.warn("Could not fetch the file path at {}. Retrieving the local copy {}".format(self.__filePath,self.__fileName))
-                with open(os.path.join(self.__location__, self.__fileName)) as json_file:
+            with open(os.path.join(self.__location__, self.__fileName)) as json_file:
                     self.__eventToDict = json.load(json_file)
 
     # Get Dictionary populated with required values
