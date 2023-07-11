@@ -5,8 +5,8 @@ param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $defaultP
 function ErrorOutput {
     Write-Host "Package creation process failed!"
     Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
-    Write-Output "packageCreationPath=''" >> $env:GITHUB_OUTPUT
-    Write-Output "blobName=''" >> $env:GITHUB_OUTPUT
+    Write-Output "packageCreationPath=" >> $env:GITHUB_OUTPUT
+    Write-Output "blobName=" >> $env:GITHUB_OUTPUT
     exit 1
 }
 

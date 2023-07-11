@@ -51,7 +51,7 @@ try
             {
                 # WE NEED PACKAGING
                 $isPackagingRequired = $true
-                $customProperties['isPackagingRequired'] =
+                $customProperties['isPackagingRequired'] = $true
                 Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
             }
 
