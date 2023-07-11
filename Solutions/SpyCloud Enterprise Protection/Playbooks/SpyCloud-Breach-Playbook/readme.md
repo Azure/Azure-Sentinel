@@ -24,8 +24,8 @@ This playbook gets triggered when an incident is created from the "SpyCloud Brea
 <a name="prerequisites">
 
 ## Prerequisites
-- A SpyCloud Enterprise API Key.
-- SpyCloud Enterprise custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the connector doc page.
+- A SpyCloud Enterprise Protection API Key.
+- SpyCloud Enterprise Protection custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the connector doc page.
 - SpyCloud-Monitor-Watchlist-Data-Playbook needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found on the playbook doc page.
 
 <a name="deployment">
