@@ -28,6 +28,10 @@ def main(trigger: azure.functions.TimerRequest) -> None:
     data_fetcher = AWSDataFetcher(*get_aws_configuration())
 
     file_keys_and_dates = data_fetcher.get_recent_file_keys_and_dates()
+    
+    if len(file_keys_and_dates) == 0:
+        return
+    
     logging.info("Got all recent file keys in bucket")
 
 
@@ -105,28 +109,32 @@ def get_log_analytics_configuration() -> Tuple[str, str]:
     return workspace_id, shared_key
 
 
-def get_aws_configuration() -> Tuple[str, str, str, str, str]:
-    bucket_arn = os.environ['S3BucketName']
+def get_aws_configuration() -> Tuple[str, str, str, str, str, str]:
+    bucket_arn = os.environ.get('S3BucketName', None)
     if not bucket_arn:
         raise ValueError("S3BucketName is not set")
 
-    bucket_region = os.environ['S3BucketRegion']
+    bucket_region = os.environ.get('S3BucketRegion', None)
     if not bucket_region:
         raise ValueError("S3BucketRegion is not set")
 
-    client_prefix = os.environ['S3ClientPrefix']
+    client_prefix = os.environ.get('S3ClientPrefix', None)
     if not client_prefix:
         raise ValueError("S3ClientPrefix is not set")
-
-    key_id = os.environ['AWSKeyID']
-    if not key_id:
+    
+    aws_key_id = os.environ.get("AWSKeyID", None)
+    if not aws_key_id:
         raise ValueError("AWSKeyID is not set")
-
-    secret_key = os.environ['AWSSecretKey']
-    if not secret_key:
+    
+    aws_secret_key = os.environ.get("AWSSecretKey", None)
+    if not aws_secret_key:
         raise ValueError("AWSSecretKey is not set")
+    
+    role_arn = os.environ.get('RoleARN')
+    if not role_arn:
+        raise ValueError("RoleARN is not set")
 
-    return (bucket_arn, bucket_region, client_prefix, key_id, secret_key)
+    return (bucket_arn, bucket_region, client_prefix, aws_key_id, aws_secret_key, role_arn)
 
 
 def flatten(l):

@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Any, Dict, List, Tuple
 import boto3
+from botocore.client import Config
 from .state_manager import StateManager
 
 
@@ -20,12 +21,35 @@ def inclusive_datetime_range(start_datetime, end_datetime):
 
 class AWSDataFetcher:
 
-    def __init__(self, bucket_arn : str, region_name : str, client_prefix : str, key_id : str, secret_key : str):
+    def __init__(self, bucket_arn : str, region_name : str, client_prefix : str, aws_key_id: str, aws_secret_key: str, role_arn: str):
+        
+        # swap to the below implementation to run against local stack
+        # (local stack requires setting the endpoint_url parameter)
+        # self.s3_client = boto3.client(
+        #     "s3",
+        #     region_name=region_name,
+        #     endpoint_url="http://localhost:4566",
+        #     aws_access_key_id=key_id,
+        #     aws_secret_access_key=secret_key
+        # )
+        
+        session = boto3.Session(
+            aws_access_key_id=aws_key_id,
+            aws_secret_access_key=aws_secret_key
+        )
+        sts = session.client("sts")
+        
+        assumed_role_object = sts.assume_role(
+            RoleArn=role_arn,
+            RoleSessionName=client_prefix
+        )
+        
         self.s3_client = boto3.client(
                 "s3",
                 region_name=region_name,
-                aws_access_key_id=key_id,
-                aws_secret_access_key=secret_key
+                aws_access_key_id=assumed_role_object["Credentials"]["AccessKeyId"],
+                aws_secret_access_key=assumed_role_object["Credentials"]["SecretAccessKey"],
+                aws_session_token=assumed_role_object["Credentials"]["SessionToken"]
             )
         self.state_manager = StateManager(FILE_SHARE_CONNECTION_STRING)
         self.bucket_arn = bucket_arn
@@ -46,6 +70,7 @@ class AWSDataFetcher:
 
         keys_and_dates = []
         for datetime_to_hour in inclusive_datetime_range(utc_last_read, utc_now):
+            print(f"{self.client_prefix}/blocks-{datetime_to_hour.strftime(DATE_FORMAT)}")
             response = self.s3_client.list_objects_v2(
                 Bucket=self.bucket_arn,
                 Prefix=f"{self.client_prefix}/blocks-{datetime_to_hour.strftime(DATE_FORMAT)}",
@@ -53,6 +78,9 @@ class AWSDataFetcher:
             )
             if 'Contents' in response: 
                 keys_and_dates += [(file_object['Key'], file_object['LastModified']) for file_object in response['Contents']]            
+        
+        if len(keys_and_dates) == 0:
+            logging.info(f"No recent file keys with given prefix ({self.client_prefix}) found in bucket")
 
         return keys_and_dates
 
