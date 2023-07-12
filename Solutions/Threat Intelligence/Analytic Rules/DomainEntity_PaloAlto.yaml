@@ -56,10 +56,11 @@ query: |
           // Uncomment the line below to only alert on allowed connections
           // | where DeviceAction !~ "block-url"
           // Extract domain from RequestURL, if not present, extract it from AdditionalExtensions
-          | extend PA_Url = column_ifexists("RequestURL", "None")
+          | extend PA_Url = coalesce(RequestURL, "None")
           | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith "PanOS", extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
-          | extend PA_Url = iif(PA_Url !startswith "http://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), iif(PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url))
-          | extend Domain = trim(@"""",tostring(parse_url(PA_Url).Host))
+          | extend PA_Url = iif(PA_Url !in~ ('None', 'http://None', 'https://None') and PA_Url !startswith "http://" and PA_Url !startswith "https://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), PA_Url)
+          | extend PA_Url = iif(PA_Url !in~ ('None', 'http://None', 'https://None') and PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url)
+          | extend Domain = trim(@"""", tostring(parse_url(PA_Url).Host))
           | where isnotempty(Domain)
           | extend Domain = tolower(Domain)
           | extend parts = split(Domain, '.')
@@ -77,18 +78,15 @@ query: |
       // Add a new field 'timestamp' for convenience, using the CommonSecurityLog_TimeGenerated as its value
       | extend timestamp = CommonSecurityLog_TimeGenerated
 entityMappings:
-  - |
-    entityType: Host
+  - entityType: Host
     fieldMappings:
       - identifier: HostName
         columnName: DeviceName
-  - |
-    entityType: IP
+  - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: SourceIP
-  - |
-    entityType: URL
+  - entityType: URL
     fieldMappings:
       - identifier: Url
         columnName: PA_Url
