@@ -48,39 +48,19 @@ query: |
     | extend Entities = parse_json(Entities)
     | mv-apply Entity = Entities on
         (
-        where Entity.Type == 'account'
-        | extend EntityUPN = iff(isempty(Entity.UserPrincipalName), tostring(strcat(Entity.Name, "@", tostring (Entity.UPNSuffix[0]))), tostring(Entity.UserPrincipalName))
-        )
-    | mv-apply Entity = Entities on
-        (
-        where Entity.Type == 'ip'
-        | extend EntityIp = tostring(Entity.Address)
-        )
-    | mv-apply Entity = Entities on
-        (
-        where Entity.Type == 'host'
-        | extend EntityHost = tostring(Entity.HostName)
-        )
-    | mv-apply Entity = Entities on
-        (
         where Entity.Type == 'url'
         | extend EntityUrl = tostring(Entity.Url)
         )
-    | where not(ipv4_is_private(EntityIp))
     | summarize
-        AccountUpn=take_any(EntityUPN),
-        IPAddress=take_any(EntityIp),
-        HostName=take_any(EntityHost),
         Url=tostring(tolower(take_any(EntityUrl))),
         AlertTime= min(TimeGenerated),
-        make_set(SystemAlertId)
+        make_set(SystemAlertId, 100)
         by ProductName, AlertName
     // matching with 3rd party network logs and 3p Alerts 
     | join kind= inner (CommonSecurityLog
         | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
         | where DeviceProduct startswith "FortiGate" or DeviceProduct startswith  "PAN" or DeviceProduct startswith  "VPN" or DeviceProduct startswith "FireWall" or DeviceProduct startswith  "NSSWeblog" or DeviceProduct startswith "URL"        
         | where DeviceAction != "Block"
-        | where isnotempty(DestinationHostName) 
         | where isnotempty(RequestURL)
         | project
             3plogTime=TimeGenerated,
@@ -143,6 +123,5 @@ entityMappings:
       fieldMappings:
       - identifier: Url
         columnName: RequestURL
-version: 1.0.0
 kind: Scheduled
-
+version: 1.0.1
