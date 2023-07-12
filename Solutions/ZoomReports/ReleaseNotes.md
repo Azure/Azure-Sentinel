@@ -1,4 +1,4 @@
-| **Version** | **Date Modiefied (DD-MM-YYY)** | **Change History**                          |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.0       | 04-07-2023                     | **Data Connector** Updating UI for fix broken links | v 1.0.0.0  | 
-
+| 3.0.0       | 04-07-2023                     | Fixed broken links for **Data Connector**   | 
+|             |                                | Added **Workbook** in solution content      | 
