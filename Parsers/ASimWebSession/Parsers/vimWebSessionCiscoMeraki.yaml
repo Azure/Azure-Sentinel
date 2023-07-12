@@ -78,15 +78,15 @@ ParserQuery: |
               | project-rename LogMessage =  SyslogMessage
               );
       let PreFilteredData = allData
-          | where not(disabled) and (LogMessage has "urls" or LogMessage has_all("security_event", "security_filtering_file_scanned")) and (array_length(eventresultdetails_in) == 0)
+          | where not(disabled) and (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
+              and (LogMessage has "urls" or LogMessage has_all("security_event", "security_filtering_file_scanned")) and (array_length(eventresultdetails_in) == 0)
           | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
           | extend
               Epoch = tostring(Parser[0]),
               LogType = tostring(Parser[2]),
               Substring = tostring(Parser[3])
           | extend EventStartTime = unixtime_seconds_todatetime(tolong(split(Epoch, ".")[0]))
-          | where (isnull(starttime) or EventStartTime >= starttime) and (isnull(endtime) or EventStartTime <= endtime)
-              and (array_length(url_has_any) == 0 or LogMessage has_any (url_has_any))
+          | where (array_length(url_has_any) == 0 or LogMessage has_any (url_has_any))
               and (array_length(httpuseragent_has_any) == 0 or LogMessage has_any(httpuseragent_has_any))
           | where LogType in ("security_event", "urls");
       let SecurityEventData = PreFilteredData
@@ -233,7 +233,8 @@ ParserQuery: |
           SeverityLevel,
           ProcessID,
           HostIP,
-          ProcessName
+          ProcessName,
+          CollectorHostName
   };
   parser(
       starttime=starttime, 
