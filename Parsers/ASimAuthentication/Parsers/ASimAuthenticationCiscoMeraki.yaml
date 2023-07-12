@@ -24,6 +24,7 @@ ParserParams:
     Default: false
 
 ParserQuery: |
+  let LogSubTypeList = dynamic(["8021x_auth", "wpa_auth", "splash_auth", "8021x_deauth", "8021x_client_deauth", "wpa_deauth", "8021x_eap_failure", "8021x_eap_success"]);
   let EventResultDetailsLookup = datatable (reason: string, EventResultDetails: string)
       [
       "0", "Other",
@@ -53,7 +54,7 @@ ParserQuery: |
       "24", "Logon violates policy",
   ];
   let EventFieldsLookup = datatable (
-      LogSubtype: string,
+      LogSubType: string,
       EventResult: string,
       EventType: string,
       EventSeverity: string
@@ -82,7 +83,7 @@ ParserQuery: |
           )
       | where not(disabled)
           and LogMessage has "events"
-          and (LogMessage has_any ("8021x_auth", "wpa_auth", "splash_auth", "8021x_deauth", "8021x_client_deauth", "wpa_deauth", "8021x_eap_failure", "8021x_eap_success") or (LogMessage has "disassociation" and LogMessage has "auth_neg_failed"))
+          and (LogMessage has_any (LogSubTypeList) or LogMessage has_all("disassociation","auth_neg_failed"))
       | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
       | extend
           Epoch = tostring(Parser[0]),
@@ -91,7 +92,7 @@ ParserQuery: |
           Substring = tostring(Parser[3])
       | where LogType == "events"
       | parse Substring with * "type=" LogSubType:string " " restOfMessage:string
-      | where LogSubType in ("8021x_auth", "wpa_auth", "splash_auth", "8021x_deauth", "8021x_client_deauth", "wpa_deauth", "8021x_eap_failure", "8021x_eap_success") or (LogSubType == "disassociation" and Substring has "auth_neg_failed")
+      | where LogSubType in (LogSubTypeList) or (LogSubType == "disassociation" and Substring has "auth_neg_failed")
       | extend EpochTimestamp = split(Epoch, ".")
       | extend EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
       | extend EventEndTime = EventStartTime
@@ -111,7 +112,7 @@ ParserQuery: |
           DvcMacAddr = trim('"', DvcMacAddr),
           User = trim('"', User),
           reason = trim('"', reason)
-      | lookup EventFieldsLookup on $left.LogSubType == $right.LogSubtype
+      | lookup EventFieldsLookup on LogSubType
       | lookup EventResultDetailsLookup on reason
       | extend EventResultDetails = iff(tolong(reason) between (25 .. 65535), "Other", EventResultDetails)
       | extend
@@ -150,6 +151,7 @@ ParserQuery: |
           SeverityLevel,
           ProcessID,
           HostIP,
-          ProcessName
+          ProcessName,
+          CollectorHostName
   };
   parser(disabled=disabled)
