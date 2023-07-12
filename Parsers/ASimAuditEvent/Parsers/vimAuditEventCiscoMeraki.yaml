@@ -78,6 +78,8 @@ ParserQuery: |
       );
   let PreFilteredData = allData
       | where not(disabled)
+          and (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime) 
           and LogMessage has "events"
           and (LogMessage has_any ("vpn_connectivity_change", "status changed", "VRRP active", "VRRP passive") or LogMessage has_cs "Site-to-site" or LogMessage has_cs "Port")
       | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
@@ -85,8 +87,6 @@ ParserQuery: |
       Epoch = tostring(Parser[0])
       | extend EpochTimestamp = split(Epoch, ".")
       | extend EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
-      | where (isnull(starttime) or EventStartTime >= starttime)
-          and (isnull(endtime) or EventStartTime <= endtime) 
       | extend LogType = tostring(Parser[2]),
           Substring = tostring(Parser[3])
       | where LogType == "events"
@@ -254,6 +254,7 @@ ParserQuery: |
           SeverityLevel,
           ProcessID,
           HostIP,
-          ProcessName
+          ProcessName,
+          CollectorHostName
   };
   parser(disabled=disabled, starttime=starttime, endtime=endtime, eventresult=eventresult, operation_has_any=operation_has_any, eventtype_in=eventtype_in, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix)
