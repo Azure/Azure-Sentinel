@@ -22,12 +22,12 @@ Once deployment is complete, authorize each connection.
 
 1. Open playbook which has been deployed
 2. Click API connection on left side blade
-3. Click the Azure Sentinel connection resource
+3. Click the Microsoft Sentinel connection resource
 4. Click edit API connection
 5. Click Authorize
 6. Sign in
 7. Click Save
 8. Repeat steps for AbuseIPDBAPI connector API Connection
 #### b. Configurations in Sentinel
-1. In Azure sentinel, analytical rules should be configured to trigger an incident. 
+1. In Microsoft Sentinel, analytical rules should be configured to trigger an incident. 
 2. Configure the automation rules to trigger the playbook.

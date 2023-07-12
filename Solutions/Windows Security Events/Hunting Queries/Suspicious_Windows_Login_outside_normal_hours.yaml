@@ -1,0 +1,123 @@
+id: e7bfbc3f-98c7-4aaa-a64c-de9c058b86b2
+name: Suspicious Windows Login Outside Normal Hours
+description: |
+  This query searches for suspiciopus interactive logon events which are outside normal logon hours for the user. Current day logon events are comapred with last 14 days activity
+  and filtered for events which are above or below of historical logon hour range seen for the user.
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - InitialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1078
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let AllLogonEvents = materialize(
+  SecurityEvent
+  | where TimeGenerated between (lookback..starttime)
+  | where EventID in (4624, 4625)
+  | where LogonTypeName in~ ('2 - Interactive','10 - RemoteInteractive')
+  | where AccountType =~ 'User'
+  | extend HourOfLogin = hourofday(TimeGenerated), DayNumberofWeek = dayofweek(TimeGenerated)
+  | extend DayofWeek = case(
+  DayNumberofWeek == "00:00:00", "Sunday",
+  DayNumberofWeek == "1.00:00:00", "Monday",
+  DayNumberofWeek == "2.00:00:00", "Tuesday",
+  DayNumberofWeek == "3.00:00:00", "Wednesday",
+  DayNumberofWeek == "4.00:00:00", "Thursday",
+  DayNumberofWeek == "5.00:00:00", "Friday",
+  DayNumberofWeek == "6.00:00:00", "Saturday","InvalidTimeStamp")
+  // map the most common ntstatus codes
+  | extend StatusDesc = case(
+  Status =~ "0x80090302", "SEC_E_UNSUPPORTED_FUNCTION",
+  Status =~ "0x80090308", "SEC_E_INVALID_TOKEN",
+  Status =~ "0x8009030E", "SEC_E_NO_CREDENTIALS",
+  Status =~ "0xC0000008", "STATUS_INVALID_HANDLE",
+  Status =~ "0xC0000017", "STATUS_NO_MEMORY",
+  Status =~ "0xC0000022", "STATUS_ACCESS_DENIED",
+  Status =~ "0xC0000034", "STATUS_OBJECT_NAME_NOT_FOUND",
+  Status =~ "0xC000005E", "STATUS_NO_LOGON_SERVERS",
+  Status =~ "0xC000006A", "STATUS_WRONG_PASSWORD",
+  Status =~ "0xC000006D", "STATUS_LOGON_FAILURE",
+  Status =~ "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+  Status =~ "0xC0000073", "STATUS_NONE_MAPPED",
+  Status =~ "0xC00000FE", "STATUS_NO_SUCH_PACKAGE",
+  Status =~ "0xC000009A", "STATUS_INSUFFICIENT_RESOURCES",
+  Status =~ "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+  Status =~ "0xC0000106", "STATUS_NAME_TOO_LONG",
+  Status =~ "0xC000010B", "STATUS_INVALID_LOGON_TYPE",
+  Status =~ "0xC000015B", "STATUS_LOGON_TYPE_NOT_GRANTED",
+  Status =~ "0xC000018B", "STATUS_NO_TRUST_SAM_ACCOUNT",
+  Status =~ "0xC0000224", "STATUS_PASSWORD_MUST_CHANGE",
+  Status =~ "0xC0000234", "STATUS_ACCOUNT_LOCKED_OUT",
+  Status =~ "0xC00002EE", "STATUS_UNFINISHED_CONTEXT_DELETED",
+  EventID == 4624, "Success",
+  "See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
+  )
+  | extend SubStatusDesc = case(
+  SubStatus =~ "0x80090325", "SEC_E_UNTRUSTED_ROOT",
+  SubStatus =~ "0xC0000008", "STATUS_INVALID_HANDLE",
+  SubStatus =~ "0xC0000022", "STATUS_ACCESS_DENIED",
+  SubStatus =~ "0xC0000064", "STATUS_NO_SUCH_USER",
+  SubStatus =~ "0xC000006A", "STATUS_WRONG_PASSWORD",
+  SubStatus =~ "0xC000006D", "STATUS_LOGON_FAILURE",
+  SubStatus =~ "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+  SubStatus =~ "0xC000006F", "STATUS_INVALID_LOGON_HOURS",
+  SubStatus =~ "0xC0000070", "STATUS_INVALID_WORKSTATION",
+  SubStatus =~ "0xC0000071", "STATUS_PASSWORD_EXPIRED",
+  SubStatus =~ "0xC0000072", "STATUS_ACCOUNT_DISABLED",
+  SubStatus =~ "0xC0000073", "STATUS_NONE_MAPPED",
+  SubStatus =~ "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+  SubStatus =~ "0xC0000133", "STATUS_TIME_DIFFERENCE_AT_DC",
+  SubStatus =~ "0xC000018D", "STATUS_TRUSTED_RELATIONSHIP_FAILURE",
+  SubStatus =~ "0xC0000193", "STATUS_ACCOUNT_EXPIRED",
+  SubStatus =~ "0xC0000380", "STATUS_SMARTCARD_WRONG_PIN",
+  SubStatus =~ "0xC0000381", "STATUS_SMARTCARD_CARD_BLOCKED",
+  SubStatus =~ "0xC0000382", "STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED",
+  SubStatus =~ "0xC0000383", "STATUS_SMARTCARD_NO_CARD",
+  SubStatus =~ "0xC0000384", "STATUS_SMARTCARD_NO_KEY_CONTAINER",
+  SubStatus =~ "0xC0000385", "STATUS_SMARTCARD_NO_CERTIFICATE",
+  SubStatus =~ "0xC0000386", "STATUS_SMARTCARD_NO_KEYSET",
+  SubStatus =~ "0xC0000387", "STATUS_SMARTCARD_IO_ERROR",
+  SubStatus =~ "0xC0000388", "STATUS_DOWNGRADE_DETECTED",
+  SubStatus =~ "0xC0000389", "STATUS_SMARTCARD_CERT_REVOKED",
+  EventID == 4624, "Success",
+  "See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
+  )
+  | project StartTime = TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, StatusDesc, SubStatusDesc
+  );
+  AllLogonEvents
+  | where TargetDomainName !in ("Window Manager","Font Driver Host")
+  | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek, 10) by TargetUserName
+  | join kind= inner
+  (
+      AllLogonEvents
+      | where StartTime between(starttime..endtime)
+  )
+  on TargetUserName
+  // Filtering for logon events based on range of max and min of historical logon hour values seen
+  | where HourOfLogin > max_HourOfLogin or HourOfLogin < min_HourOfLogin
+  // Also populating additional column showing historical days of week when logon was seen
+  | extend historical_DayofWeek = tostring(historical_DayofWeek)
+  | summarize Total= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek, 10), StartTime=max(StartTime), EndTime = min(StartTime), SourceIP = make_set(IpAddress, 10000), SourceHost = make_set(WorkstationName, 10000), SubjectUserName = make_set(SubjectUserName, 10000), HostLoggedOn = make_set(Computer, 10000) by EventID, Activity, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek
+  | extend historical_DayofWeek = todynamic(historical_DayofWeek)
+  | extend timestamp = StartTime, NTDomain = split(TargetUserName, '\\', 0)[0], Name = split(TargetUserName, '\\', 1)[0]
+  | extend Account_0_NTDomain = NTDomain 
+  | extend Account_0_Name = Name
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+version: 1.0.1
+

@@ -1,0 +1,63 @@
+id: 18f7de84-de55-4983-aca3-a18bc846b4e0
+name: TI Map File Entity to Syslog Event
+description: |
+  'This query identifies any matches in the Syslog Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. 
+  Since file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection.'
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - Impact
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  | where isnotempty(FileName)
+  | extend TI_ProcessEntity = tostring(split(FileName, ".")[-2])
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+    Syslog
+    | where TimeGenerated between(starttime..endtime)
+    | where isnotempty(ProcessName)
+    | extend Syslog_TimeGenerated = TimeGenerated
+  )
+  on $left.TI_ProcessEntity == $right.ProcessName
+  | where Syslog_TimeGenerated < ExpirationDateTime
+  | summarize Syslog_TimeGenerated = arg_max(Syslog_TimeGenerated, *) by IndicatorId, ProcessName
+  | project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  FileName, Computer, HostIP, SyslogMessage
+  | extend timestamp = Syslog_TimeGenerated, HostName = split(Computer, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend IP_0_Address = HostIP
+  | extend URL_0_Url = Url
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: HostIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.2

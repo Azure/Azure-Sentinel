@@ -1,0 +1,376 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "EnrichIP-GeoInfo-Neustar",
+        "description":  "When a new sentinel incident is created, this playbook gets triggered and performs the following actions: \n 1. Gets IP Addresses from incident. \n 2. Gets Geographical location information from Neustart IP GeoPoint API. \n 3. Summarize the details and add as a comment to the incident.",
+        "prerequisites": ["1. Prior to the deployment of this playbook, Neustar IP GeoPoint API Function App Connector needs to be deployed under the same subscription. \n Use https://aka.ms/sentinel-neustar-functionapp-connector to deploy (for public cloud) \n Use https://aka.ms/sentinel-neustar-functionapp-connector-gov to deploy (for FFX env)",
+         "2. Refer to Neustar IP GeoPoint API Function App Connector documentation to obtain Neustar IP GeoPoint API Key and Shared Secret."],
+        "postDeployment":  ["None"
+        ],
+        "prerequisitesDeployTemplateFile":  "../NeustarIPGeoPoint_FunctionAppConnector/azuredeploy.json",
+        "lastUpdateTime":  "2022-08-29T05:32:46Z",
+        "entities":  [
+            "IP"
+        ],
+        "tags":  [
+            "Neustar",
+            "GeoPoint",
+            "Enrichment"
+        ],
+        "support":  {
+            "tier":  "Microsoft"
+        },
+        "author":  {
+            "name":  "Microsoft"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "EnrichIP-GeoInfo-Neustar",
+            "type":  "string"
+        },
+        "FunctionAppName":  {
+            "defaultValue":  "neuipgp",
+            "type":  "string"
+        }
+    },
+    "variables":  {
+        "functionAppName": "[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]",
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "NeustarIPGeoPointFuntionAppId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionAppName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{body('Create_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Create_HTML_table": {
+                            "runAfter": {
+                                "For_each_IP_Address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('GeoData')"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_IP_Address": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Append_to_GeoData_Array": {
+                                    "runAfter": {
+                                        "Compose": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "GeoData",
+                                        "value": "@outputs('Compose')"
+                                    }
+                                },
+                                "Compose": {
+                                    "runAfter": {
+                                        "Parse_Geo_Info_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "City": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Location']?['CityData']?['city']",
+                                        "Country": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Location']?['CountryData']?['country']",
+                                        "IPAddress": "@items('For_each_IP_Address')?['Address']",
+                                        "IPRoutingType": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Network']?['ip_routing_type']",
+                                        "Orgnization": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Network']?['organization']",
+                                        "PostalCode": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Location']?['CityData']?['postal_code']",
+                                        "State": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Location']?['StateData']?['state']"
+                                    }
+                                },
+                                "GetIPGeoInfo": {
+                                    "runAfter": {},
+                                    "type": "Function",
+                                    "inputs": {
+                                        "function": {
+                                            "id": "[concat(variables('NeustarIPGeoPointFuntionAppId'), '/functions/GetIPGeoInfo')]"
+                                        },
+                                        "method": "GET",
+                                        "queries": {
+                                            "IPAddress": "@items('For_each_IP_Address')?['Address']"
+                                        },
+                                        "retryPolicy": {
+                                            "type": "none"
+                                        }
+                                    }
+                                },
+                                "Parse_Geo_Info_JSON": {
+                                    "runAfter": {
+                                        "GetIPGeoInfo": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('GetIPGeoInfo')",
+                                        "schema": {
+                                            "properties": {
+                                                "ipinfo": {
+                                                    "properties": {
+                                                        "Location": {
+                                                            "properties": {
+                                                                "CityData": {
+                                                                    "properties": {
+                                                                        "city": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "postal_code": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "CountryData": {
+                                                                    "properties": {
+                                                                        "country": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        }
+                                                                    },
+                                                                    "type": [
+                                                                        "object",
+                                                                        "null"
+                                                                    ]
+                                                                },
+                                                                "StateData": {
+                                                                    "properties": {
+                                                                        "state": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        }
+                                                                    },
+                                                                    "type": [
+                                                                        "object",
+                                                                        "null"
+                                                                    ]
+                                                                }
+                                                            },
+                                                            "type": [
+                                                                "object",
+                                                                "null"
+                                                            ]
+                                                        },
+                                                        "Network": {
+                                                            "properties": {
+                                                                "ip_routing_type": {
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
+                                                                },
+                                                                "organization": {
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
+                                                                }
+                                                            },
+                                                            "type": [
+                                                                "object",
+                                                                "null"
+                                                            ]
+                                                        },
+                                                        "ip_address": {
+                                                            "type": [
+                                                                "string",
+                                                                "null"
+                                                            ]
+                                                        },
+                                                        "ip_type": {
+                                                            "type": [
+                                                                "string",
+                                                                "null"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "type": [
+                                                        "object",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Sleep_for_2_seconds_to_avoid_throttling_": {
+                                    "runAfter": {
+                                        "Append_to_GeoData_Array": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Wait",
+                                    "inputs": {
+                                        "interval": {
+                                            "count": 2,
+                                            "unit": "Second"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Array_-_GeoData": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Initialize_Array_-_GeoData": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GeoData",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Neustar-GetIPGeoInfo",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "apiVersion":  "2019-05-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

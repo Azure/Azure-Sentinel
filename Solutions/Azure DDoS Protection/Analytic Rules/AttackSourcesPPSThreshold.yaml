@@ -1,0 +1,34 @@
+id: 6e76fd9d-8104-41eb-bad3-26054a3ad5f0
+kind: Scheduled
+name: DDoS Attack IP Addresses - PPS Threshold
+description: Identifies IP addresses that generates maximal traffic rate over 10k PPS during DDoS attack mitigation
+severity: Medium
+status : Available
+requiredDataConnectors:
+  - connectorId: DDOS
+    dataTypes:
+      - AzureDiagnostics
+queryPeriod: 2h
+queryFrequency: 2h
+triggerOperator: gt
+triggerThreshold: 0
+query: |
+  AzureDiagnostics 
+  | where ResourceType == 'PUBLICIPADDRESSES' and Category == "DDoSMitigationFlowLogs"
+  //sample rate of mitigation device 1:1000 so the PPS of the source is estimated to be x1000.
+  | summarize PPS = 1000 * count() by destPublicIpAddress_s, sec = bin(TimeGenerated, 1s), sourcePublicIpAddress_s
+  | summarize maxPPS = max(PPS) by destPublicIpAddress_s, sourcePublicIpAddress_s
+  | order by destPublicIpAddress_s, maxPPS desc
+  | where maxPPS > 10000
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: sourcePublicIpAddress_s
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+version: 1.0.1

@@ -1,0 +1,422 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+     "metadata": {
+        "title": "AD4IoT-AutoTriageIncident", 
+        "description": "SOC and OT engineers can stream their workflows using the playbook, which automatically updates the incident severity based on the devices involved in the incident and their importance.",
+        "prerequisites": ["None"],
+        "lastUpdateTime": "2022-08-14T00:00:00.000Z",
+        "entities": [], 
+        "tags": [], 
+        "support": {
+            "tier": "microsoft" 
+        },
+        "author": {
+            "name": "Amit Cohen"
+        },
+        "releaseNotes": [
+        {
+            "version": "1.0.0",
+            "title": "AD4IoT-AutoTriageIncident",
+            "notes": [
+                "Initial version"
+            ]
+        }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AD4IoT-AutoTriageIncident",
+            "type": "String"
+        }
+    },
+    "variables": {
+	"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+	"AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+	"AzureSentinel1ConnectionName": "[concat('azuresentinel1-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+	{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+               			"parameterValueType": "Alternative",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureMonitorLogsConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('AzureMonitorLogsConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinel1ConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('AzureSentinel1ConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+		"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinel1ConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_IoT_Device": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                            "actions": {
+                                "Condition_if_IoT_Device": {
+                                    "actions": {
+                                        "For_each_Alert": {
+                                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                                            "actions": {
+                                                "If_High_Importance_Device_exists": {
+                                                    "actions": {
+                                                        "Add_comment_to_incident_(V3)": {
+                                                            "runAfter": {
+                                                                "Update_incident": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@body('Update_incident')?['id']",
+                                                                    "message": "<p>As a result of detecting a high-priority IoT device, the incident will be automatically triaged as High<br>\n<br>\nDevice Name: @{variables('HighImportanceDevice')}<br>\nSensor Name:@{body('Run_query_and_list_results')?['value']?[0]?['sensorName']}</p>"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "Finalize_loop": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "continuteLoop",
+                                                                "value": false
+                                                            }
+                                                        },
+                                                        "Update_incident": {
+                                                            "runAfter": {
+                                                                "Finalize_loop": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "owner": "@triggerBody()?['object']?['properties']?['owner']?['objectId']",
+                                                                    "severity": "High",
+                                                                    "status": "Active",
+                                                                    "tagsToAdd": {
+                                                                        "TagsToAdd": [
+                                                                            {
+                                                                                "Tag": "High Importance Device Auto Update"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_HighImportanceDevice_variable": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@variables('HighImportanceDevice')",
+                                                                        ""
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Run_query_and_list_results": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": "SecurityAlert | summarize arg_max(TimeGenerated, *) by SystemAlertId | where SystemAlertId == \"@{items('For_each_Alert')?['properties']?['systemAlertId']}\" |  mv-expand Entity=parse_json(Entities) | where isnotempty(\"@{body('Parse_JSON')?['deviceName']}\") and Entity.DeviceName ==\"@{body('Parse_JSON')?['deviceName']}\" | extend IoTowner = trim(@'^\\[\"|\"]$', tostring(Entity.Owners[0])) | extend deviceName = \"@{body('Parse_JSON')?['deviceName']}\" | extend sensorName = tostring(Entity.Sensor) | extend siteName = tostring(Entity.Site) | extend zoneName = tostring(Entity.Zone)",
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/queryData",
+                                                        "queries": {
+                                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                                            "resourcetype": "Log Analytics Workspace",
+                                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                                            "timerange": "Last 30 days"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_HighImportanceDevice_variable": {
+                                                    "runAfter": {
+                                                        "Run_query_and_list_results": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "HighImportanceDevice",
+                                                        "value": "@{body('Run_query_and_list_results')?['value']?[0]?['deviceName']}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each_IOT_Device')?['kind']",
+                                                    "IoTDevice"
+                                                ]
+                                            },
+                                            {
+                                                "equals": [
+                                                    "@variables('continuteLoop')",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each_IOT_Device')['properties']",
+                                        "schema": {
+                                            "properties": {
+                                                "additionalData": {
+                                                    "properties": {
+                                                        "DevicePageLink": {
+                                                            "type": "string"
+                                                        },
+                                                        "DeviceSubType": {
+                                                            "type": "string"
+                                                        },
+                                                        "Vendor": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "deviceId": {
+                                                    "type": "string"
+                                                },
+                                                "deviceName": {
+                                                    "type": "string"
+                                                },
+                                                "deviceType": {
+                                                    "type": "string"
+                                                },
+                                                "firmwareVersion": {
+                                                    "type": "string"
+                                                },
+                                                "friendlyName": {
+                                                    "type": "string"
+                                                },
+                                                "iotSecurityAgentId": {
+                                                    "type": "string"
+                                                },
+                                                "model": {
+                                                    "type": "string"
+                                                },
+                                                "operatingSystem": {
+                                                    "type": "string"
+                                                },
+                                                "protocols": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "serialNumber": {
+                                                    "type": "string"
+                                                },
+                                                "source": {
+                                                    "type": "string"
+                                                },
+                                                "vendor": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_continuteLoop_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_HighImportanceDevice_variable": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "HighImportanceDevice",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_continuteLoop_variable": {
+                            "runAfter": {
+                                "Initialize_HighImportanceDevice_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "continuteLoop",
+                                        "type": "boolean",
+                                        "value": true
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+				"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+				"connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+				"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+				"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+				"connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+				"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "azuresentinel_1": {
+				"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinel1ConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinel1ConnectionName')]",
+				"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

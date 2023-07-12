@@ -1,0 +1,40 @@
+id: f055e82b-5ef6-4395-bc9e-99f7e451343a
+name: First Time Source IP to Destination
+description: |
+  'Identifies the first time a source IP communicates with a destination based on a configurable learning period.
+  Configurable Parameters: - Learning period time - learning period for threshold calculation in days. Default is set to 7.'
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  let LearningPeriod = 7d;
+  let RunTime = 1h;
+  let StartLearningPeriod = LearningPeriod + RunTime;
+  let EndRunTime = RunTime - 1d;
+  let TrafficLogs = (union isfuzzy=true
+  (AzureDiagnostics
+    | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
+    | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int "." *
+    | where isnotempty(Fqdn) and isnotempty(SourceIp)),
+  (AZFWApplicationRule),
+  (AZFWNetworkRule
+  | extend Fqdn = DestinationIp));
+  let LearningSrcIpToDstIpPort = (TrafficLogs
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | summarize LearningSrcToDsts = make_set(Fqdn,10000) by SourceIp, DestinationPort);
+  let AlertTimeSrcIpToDstIpPort = (TrafficLogs
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | extend AlertTimeDst = Fqdn
+  | distinct AlertTimeDst ,SourceIp, DestinationPort);
+  AlertTimeSrcIpToDstIpPort
+  | join kind=leftouter (LearningSrcIpToDstIpPort) on SourceIp, DestinationPort
+  | mv-expand LearningSrcToDsts
+  | where AlertTimeDst != LearningSrcToDsts
+  | summarize LearningSrcToDsts = make_set(LearningSrcToDsts,10000) by SourceIp, AlertTimeDst

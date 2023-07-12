@@ -1,0 +1,760 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Island - support@island.io",
+    "comments": "Solution template for Island"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "islandtechnologyinc1679434413850.island-sentinel-solution",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@island.io",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "Island_Admin_Polling",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Island_Admin_Polling",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "uiConfigId2": "Island_User_Polling",
+    "_uiConfigId2": "[variables('uiConfigId2')]",
+    "dataConnectorContentId2": "Island_User_Polling",
+    "_dataConnectorContentId2": "[variables('dataConnectorContentId2')]",
+    "dataConnectorId2": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+    "_dataConnectorId2": "[variables('dataConnectorId2')]",
+    "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2')))]",
+    "dataConnectorVersion2": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Island data connector with template",
+        "displayName": "Island template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Island data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "APIPolling",
+              "properties": {
+                "connectorUiConfig": {
+                  "title": "Island Enterprise Browser Admin Audit (Polling CCP)",
+                  "id": "[variables('_uiConfigId1')]",
+                  "publisher": "Island",
+                  "descriptionMarkdown": "The [Island](https://www.island.io) Admin connector provides the capability to ingest Island Admin Audit logs into Microsoft Sentinel.",
+                  "graphQueriesTableName": "Island_Admin_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Island Events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Grab 10 Island log entries",
+                      "query": "{{graphQueriesTableName}}\n | sort by TimeGenerated\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "SentinelKindsV2",
+                      "value": []
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true,
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Island API Key",
+                        "description": "An Island API key is required."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Provide the Island API Key.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "enable": "true",
+                            "userRequestPlaceHoldersInput": [
+                              {
+                                "displayText": "Organization Name",
+                                "requestObjectKey": "apiEndpoint",
+                                "placeHolderName": "{{placeHolder1}}",
+                                "placeHolderValue": ""
+                              }
+                            ]
+                          },
+                          "type": "APIKey"
+                        }
+                      ],
+                      "title": "Connect Island to Microsoft Sentinel"
+                    }
+                  ]
+                },
+                "pollingConfig": {
+                  "auth": {
+                    "authType": "APIKey",
+                    "APIKeyName": "Api-Key",
+                    "IsAPIKeyInPostPayload": "False"
+                  },
+                  "request": {
+                    "apiEndpoint": "https://management.island.io/api/external/v1/adminActions",
+                    "httpMethod": "Get",
+                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                    "startTimeAttributeName": "start",
+                    "endTimeAttributeName": "end",
+                    "queryWindowInMin": 5
+                  },
+                  "paging": {
+                    "pagingType": "Offset",
+                    "offsetParaName": "offset",
+                    "pageSizeParaName": "limit",
+                    "pageSize": 100
+                  },
+                  "response": {
+                    "eventsJsonPaths": [
+                      "$.adminActions[*]"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Island",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Island",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Island",
+                  "email": "support@island.io",
+                  "tier": "Partner",
+                  "link": "https://www.island.io"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Island",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Island",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Island",
+          "email": "support@island.io",
+          "tier": "Partner",
+          "link": "https://www.island.io"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "APIPolling",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Island Enterprise Browser Admin Audit (Polling CCP)",
+          "id": "[variables('_uiConfigId1')]",
+          "publisher": "Island",
+          "descriptionMarkdown": "The [Island](https://www.island.io) Admin connector provides the capability to ingest Island Admin Audit logs into Microsoft Sentinel.",
+          "graphQueriesTableName": "Island_Admin_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Island Events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Grab 10 Island log entries",
+              "query": "{{graphQueriesTableName}}\n | sort by TimeGenerated\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "SentinelKindsV2",
+              "value": []
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true,
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Island API Key",
+                "description": "An Island API key is required."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Provide the Island API Key.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "enable": "true",
+                    "userRequestPlaceHoldersInput": [
+                      {
+                        "displayText": "Organization Name",
+                        "requestObjectKey": "apiEndpoint",
+                        "placeHolderName": "{{placeHolder1}}",
+                        "placeHolderValue": ""
+                      }
+                    ]
+                  },
+                  "type": "APIKey"
+                }
+              ],
+              "title": "Connect Island to Microsoft Sentinel"
+            }
+          ]
+        },
+        "pollingConfig": {
+          "auth": {
+            "authType": "APIKey",
+            "APIKeyName": "Api-Key",
+            "IsAPIKeyInPostPayload": "False"
+          },
+          "request": {
+            "apiEndpoint": "https://management.island.io/api/external/v1/adminActions",
+            "httpMethod": "Get",
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+            "startTimeAttributeName": "start",
+            "endTimeAttributeName": "end",
+            "queryWindowInMin": 5
+          },
+          "paging": {
+            "pagingType": "Offset",
+            "offsetParaName": "offset",
+            "pageSizeParaName": "limit",
+            "pageSize": 100
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.adminActions[*]"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('dataConnectorTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Island data connector with template",
+        "displayName": "Island template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName2'),'/',variables('dataConnectorVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName2'))]"
+      ],
+      "properties": {
+        "description": "Island data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion2')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId2'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "APIPolling",
+              "properties": {
+                "connectorUiConfig": {
+                  "title": "Island Enterprise Browser User Activity (Polling CCP)",
+                  "id": "[variables('_uiConfigId2')]",
+                  "publisher": "Island",
+                  "descriptionMarkdown": "The [Island](https://www.island.io) connector provides the capability to ingest Island User Activity logs into Microsoft Sentinel.",
+                  "graphQueriesTableName": "Island_User_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Island Events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Grab 10 Island log entries",
+                      "query": "{{graphQueriesTableName}}\n | sort by TimeGenerated\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "SentinelKindsV2",
+                      "value": []
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true,
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Island API Key",
+                        "description": "An Island API key is required."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Provide the Island API Key.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "enable": "true",
+                            "userRequestPlaceHoldersInput": [
+                              {
+                                "displayText": "Organization Name",
+                                "requestObjectKey": "apiEndpoint",
+                                "placeHolderName": "{{placeHolder1}}",
+                                "placeHolderValue": ""
+                              }
+                            ]
+                          },
+                          "type": "APIKey"
+                        }
+                      ],
+                      "title": "Connect Island to Microsoft Sentinel"
+                    }
+                  ]
+                },
+                "pollingConfig": {
+                  "auth": {
+                    "authType": "APIKey",
+                    "APIKeyName": "Api-Key",
+                    "IsAPIKeyInPostPayload": "False"
+                  },
+                  "request": {
+                    "apiEndpoint": "https://management.island.io/api/external/v1/timeline",
+                    "httpMethod": "Get",
+                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                    "startTimeAttributeName": "start",
+                    "endTimeAttributeName": "end",
+                    "queryWindowInMin": 5
+                  },
+                  "paging": {
+                    "pagingType": "Offset",
+                    "offsetParaName": "offset",
+                    "pageSizeParaName": "limit",
+                    "pageSize": 100
+                  },
+                  "response": {
+                    "eventsJsonPaths": [
+                      "$.events[*]"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+                "contentId": "[variables('_dataConnectorContentId2')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Island",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Island",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Island",
+                  "email": "support@island.io",
+                  "tier": "Partner",
+                  "link": "https://www.island.io"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId2')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+        "contentId": "[variables('_dataConnectorContentId2')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion2')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Island",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Island",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Island",
+          "email": "support@island.io",
+          "tier": "Partner",
+          "link": "https://www.island.io"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId2'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "APIPolling",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Island Enterprise Browser User Activity (Polling CCP)",
+          "id": "[variables('_uiConfigId2')]",
+          "publisher": "Island",
+          "descriptionMarkdown": "The [Island](https://www.island.io) connector provides the capability to ingest Island User Activity logs into Microsoft Sentinel.",
+          "graphQueriesTableName": "Island_User_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Island Events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Grab 10 Island log entries",
+              "query": "{{graphQueriesTableName}}\n | sort by TimeGenerated\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "SentinelKindsV2",
+              "value": []
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true,
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Island API Key",
+                "description": "An Island API key is required."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Provide the Island API Key.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "enable": "true",
+                    "userRequestPlaceHoldersInput": [
+                      {
+                        "displayText": "Organization Name",
+                        "requestObjectKey": "apiEndpoint",
+                        "placeHolderName": "{{placeHolder1}}",
+                        "placeHolderValue": ""
+                      }
+                    ]
+                  },
+                  "type": "APIKey"
+                }
+              ],
+              "title": "Connect Island to Microsoft Sentinel"
+            }
+          ]
+        },
+        "pollingConfig": {
+          "auth": {
+            "authType": "APIKey",
+            "APIKeyName": "Api-Key",
+            "IsAPIKeyInPostPayload": "False"
+          },
+          "request": {
+            "apiEndpoint": "https://management.island.io/api/external/v1/timeline",
+            "httpMethod": "Get",
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+            "startTimeAttributeName": "start",
+            "endTimeAttributeName": "end",
+            "queryWindowInMin": 5
+          },
+          "paging": {
+            "pagingType": "Offset",
+            "offsetParaName": "offset",
+            "pageSizeParaName": "limit",
+            "pageSize": 100
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.events[*]"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Island",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Island",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Island",
+          "email": "support@island.io",
+          "tier": "Partner",
+          "link": "https://www.island.io"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId2')]",
+              "version": "[variables('dataConnectorVersion2')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-05-02",
+        "lastPublishDate": "2023-05-02",
+        "providers": [
+          "Island"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Information Protection",
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

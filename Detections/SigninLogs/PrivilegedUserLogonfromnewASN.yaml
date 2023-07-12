@@ -1,0 +1,59 @@
+id: 55073036-bb86-47d3-a85a-b113ac3d9396
+name: Privileged User Logon from new ASN
+description: |
+  'Detects a successful logon by a privileged account from an ASN not logged in from in the last 14 days.
+    Monitor these logons to ensure they are legitimate and identify if there are any similar sign ins.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let admins=(IdentityInfo
+    | where AssignedRoles contains "admin"
+    | summarize by tolower(AccountUPN));
+    let known_asns = (
+    SigninLogs
+    | where TimeGenerated between(ago(14d)..ago(1d))
+    | where ResultType == 0
+    | summarize by AutonomousSystemNumber);
+    SigninLogs
+    | where TimeGenerated > ago(1d)
+    | where ResultType == 0
+    | where tolower(UserPrincipalName) in (admins)
+    | where AutonomousSystemNumber !in (known_asns)
+    | project-reorder TimeGenerated, UserPrincipalName, UserAgent, IPAddress, AutonomousSystemNumber
+    | extend AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.4
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: petebryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Identity", "Security - Others" ]

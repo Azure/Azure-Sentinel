@@ -1,0 +1,55 @@
+id: 2e2fab4b-83dd-4cf8-b2dd-063d0fd15513
+name: Host Exporting Mailbox and Removing Export
+description: |
+  'This hunting query looks for hosts exporting a mailbox from an on-prem Exchange server, followed by
+  that same host removing the export within a short time window. This pattern has been observed by attackers 
+  when exfiltrating emails from a target environment. A Mailbox export is unlikely to be a common command run so look for
+  activity from unexpected hosts and accounts.
+  Reference: https://www.volexity.com/blog/2020/12/14/dark-halo-leverages-solarwinds-compromise-to-breach-organizations/'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Collection
+relevantTechniques:
+  - T1114
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  // Adjust the timeframe to change the window events need to occur within to alert
+  let timeframe = 1h;
+  SecurityEvent
+  | where EventID == 4688
+  | where Process in~ ("powershell.exe", "cmd.exe")
+  | where CommandLine has 'New-MailboxExportRequest'
+  | summarize by Computer, timekey = bin(TimeGenerated, timeframe), CommandLine, SubjectUserName
+  | join kind=inner (SecurityEvent
+  | where EventID == 4688
+  | where Process in~ ("powershell.exe", "cmd.exe")
+  | where CommandLine has 'Remove-MailboxExportRequest'
+  | summarize by Computer, timekey = bin(TimeGenerated, timeframe), CommandLine, SubjectUserName) on Computer, timekey, SubjectUserName
+  | extend commands = pack_array(CommandLine1, CommandLine)
+  | summarize by timekey, Computer, tostring(commands), SubjectUserName
+  | project-reorder timekey, Computer, SubjectUserName, ['commands']
+  | extend HostCustomEntity = Computer, AccountCustomEntity = SubjectUserName
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = SubjectUserName
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SubjectUserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain        
+version: 2.0.1

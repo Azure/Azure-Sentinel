@@ -1,0 +1,35 @@
+id: 005d6e3c-7453-46f6-aef3-f59695594545
+name: Suspicious crytocurrency mining related threat activity detected
+description: |
+  'This hunting query will help detect number of suspicious cryptocurrency mining payloads and processes being removed or terminated.Attackers will often attempt to stop other cryptocurrency mining processes to gain more resources on compromised system to run and deploy their mining payload.
+  Find more details on collecting EXECVE data into Microsoft Sentinel - https://techcommunity.microsoft.com/t5/azure-sentinel/hunting-threats-on-linux-with-azure-sentinel/ba-p/1344431'
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes: 
+      - Syslog
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1489
+query: |
+  Syslog
+  | where Facility == 'user'
+  | where SyslogMessage has "AUOMS_EXECVE"
+  | parse SyslogMessage with "type=" EventType " audit(" * "): " EventData
+  | where EventType =~ "AUOMS_EXECVE"
+  | parse EventData with * "syscall=" syscall " syscall_r=" * " success=" success " exit=" exit " a0" * " ppid=" ppid " pid=" pid " audit_user=" audit_user " auid=" auid " user=" user " uid=" uid " group=" group " gid=" gid "effective_user=" effective_user " euid=" euid " set_user=" set_user " suid=" suid " filesystem_user=" filesystem_user " fsuid=" fsuid " effective_group=" effective_group " egid=" egid " set_group=" set_group " sgid=" sgid " filesystem_group=" filesystem_group " fsgid=" fsgid " tty=" tty " ses=" ses " comm=\"" comm "\" exe=\"" exe "\"" * "cwd=\"" cwd "\"" * "name=\"" name "\"" * "cmdline=\"" cmdline "\" containerid=" containerid
+  | where exe has_any ("pkill","kill","killall")
+  | where cmdline has_any ("minerd","minergate","kworkerds","xmr","watchbug","cryptonight","stratum","miner","watchbog")
+  | project TimeGenerated, Computer, audit_user, user, cmdline
+  | extend AccountCustomEntity = user, HostCustomEntity = Computer, timestamp = TimeGenerated
+  | sort by TimeGenerated desc
+entityMappings: 
+- entityType: Host
+  fieldMappings:
+    - identifier: FullName
+      columnName: HostCustomEntity
+- entityType: Account
+  fieldMappings:
+    - identifier: FullName
+      columnName: AccountCustomEntity
+version: 1.0.0

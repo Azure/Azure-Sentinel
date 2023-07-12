@@ -1,0 +1,32 @@
+Function:
+  Title: An ASIM function to get multiple watchlists in raw format
+  Version: '0.1'
+  LastUpdated: Apr 27th 2022
+References:
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM function reads multiple watchlists in raw format. The primary use case is giving an option for using multiple watchlist names for the same watchlist. It is more performant than using the general _GetWatchlist function.
+FunctionName: ASIM_GetWatchlistsRaw
+EquivalentBuiltInFunction: _ASIM_GetWatchlistsRaw
+IgnoreTimespanOnDimensionTables: true
+
+FunctionParams:
+  - Name: watchlists
+    Type: dynamic
+  - Name: keys
+    Type: dynamic
+    Default: dynamic([])
+
+FunctionQuery: |
+  let function = (watchlists:dynamic, keys:dynamic = dynamic([])) {
+    Watchlist
+    | where TimeGenerated < now() 
+    | where _DTItemType == 'watchlist-item' 
+    | where WatchlistAlias in (watchlists)
+    | where array_length(keys) == 0 or SearchKey in (keys)
+    | summarize hint.shufflekey=_DTItemId arg_max(_DTTimestamp, _DTItemStatus, LastUpdatedTimeUTC, SearchKey, WatchlistItem) by _DTItemId 
+    | where _DTItemStatus != 'Delete' 
+    | project-away _DTTimestamp, _DTItemStatus
+  };
+  function (watchlists,keys)

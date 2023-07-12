@@ -1,0 +1,60 @@
+id: b9d2eebc-5dcb-4888-8165-900db44443ab
+name: Non Domain Controller Active Directory Replication
+description: |
+  'This query detects potential attempts by non-computer accounts (non domain controllers) to retrieve/synchronize an active directory object leveraging directory replication services (DRS).
+  A Domain Controller (computer account) would usually be performing these actions in a domain environment. Another detection rule can be created to cover domain controllers accounts doing at rare times.
+  A domain user with privileged permissions to use directory replication services is rare. Ref: https://threathunterplaybook.com/notebooks/windows/06_credential_access/WIN-180815210510.html'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1003
+query: |
+  // Enter a reference list of hostnames for your DC servers
+  //let DCServersList = dynamic (["DC01.simulandlabs.com","DC02.simulandlabs.com"]);
+  SecurityEvent
+  //| where Computer in (DCServersList)
+  | where EventID == 4662 and ObjectServer == 'DS'
+  | where AccountType != 'Machine'
+  | where Properties has '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes
+      or Properties has '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes-All
+      or Properties has '89e95b76-444d-4c62-991a-0facbeda640c' //DS-Replication-Get-Changes-In-Filtered-Set
+  | project TimeGenerated, Account, Activity, Properties, SubjectLogonId, Computer
+  | join kind=leftouter
+  (
+      SecurityEvent
+      //| where Computer in (DCServersList)
+      | where EventID == 4624 and LogonType == 3
+      | where AccountType != 'Machine'
+      | project TargetLogonId, IpAddress
+  )
+  on $left.SubjectLogonId == $right.TargetLogonId
+  | project-reorder TimeGenerated, Computer, Account, IpAddress
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, SourceAddress = IpAddress 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceAddress
+version: 1.0.1
+kind: Scheduled

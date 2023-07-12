@@ -1,0 +1,61 @@
+id: 36a9c9e5-3dc1-4ed9-afaa-1d13617bfc2b
+name: TI Map URL Entity to OfficeActivity Data
+description: |
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in OfficeActivity data.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+     - OfficeActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+     - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(Url)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+    OfficeActivity
+    | where TimeGenerated >= ago(dt_lookBack)
+    //Extract the Url from a number of potential fields
+    | extend Url = iif(OfficeWorkload == "AzureActiveDirectory",extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,ModifiedProperties),tostring(parse_json(ModifiedProperties)[12].NewValue))
+    | where isnotempty(Url)
+    // Ensure we get a clean URL
+    | extend Url = tostring(split(Url, ';')[0])
+    | extend OfficeActivity_TimeGenerated = TimeGenerated
+    // Project a single user identity that we can use for entity mapping
+    | extend User = iif(isnotempty(UserId), UserId, iif(isnotempty(Actor), tostring(parse_json(Actor)[0].ID), tostring(parse_json(Parameters)[0].Value)))
+  ) on Url
+  | where OfficeActivity_TimeGenerated < ExpirationDateTime
+  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId, Url
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation,
+  UserType, OfficeWorkload, Parameters, Url, User
+  | extend timestamp = OfficeActivity_TimeGenerated, Name = tostring(split(User, '@', 0)[0]), UPNSuffix = tostring(split(User, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.2.5
+kind: Scheduled

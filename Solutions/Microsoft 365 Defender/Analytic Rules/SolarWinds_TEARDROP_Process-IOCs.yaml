@@ -1,0 +1,54 @@
+id: 738702fd-0a66-42c7-8586-e30f0583f8fe
+name: TEARDROP memory-only dropper
+description: |
+  Identifies SolarWinds TEARDROP memory-only dropper IOCs in Window's defender Exploit Guard activity
+  References:
+  - https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html
+  - https://gist.github.com/olafhartong/71ffdd4cab4b6acd5cbcd1a0691ff82f
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1543
+  - T1059
+  - T1027
+tags:
+  - Sunburst
+  - Solorigate
+  - NOBELIUM
+query:  |
+  DeviceEvents
+  | where ActionType has "ExploitGuardNonMicrosoftSignedBlocked"
+  | where InitiatingProcessFileName has "svchost.exe" and FileName has "NetSetupSvc.dll"
+  | extend timestamp = TimeGenerated, AccountEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),FileHashType = "SHA1"
+  | extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: FileHashType
+      - identifier: Value
+        columnName: InitiatingProcessSHA1
+version: 1.0.5
+kind: Scheduled

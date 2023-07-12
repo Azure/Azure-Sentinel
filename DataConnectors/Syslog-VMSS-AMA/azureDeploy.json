@@ -1,0 +1,597 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"Base_Name": {
+			"type": "String"
+		},
+		"Autoscale_Min": {
+			"defaultValue": 1,
+			"type": "Int"
+		},
+		"Autoscale_Max": {
+			"type": "Int"
+		},
+		"AdminUserName": {
+			"type": "String"
+		},
+		"AdminPassword": {
+			"type": "SecureString"
+		},
+		"cloudinit": {
+			"defaultValue": "#cloud-config\nruncmd:\n   - sudo wget -O Forwarder_AMA_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Syslog/Forwarder_AMA_installer.py&&sudo python3 Forwarder_AMA_installer.py",
+			"type": "String"
+		},
+		"workspaceSubscriptionId": {
+			"type": "String"
+		},
+		"workspaceResourceGroupName": {
+			"type": "String"
+		},
+		"WorkspaceName": {
+			"type": "String",
+			"metadata": {
+				"description": "The workspace and the DCR must be in the same region"
+			}
+		},
+		"workspaceId": {
+			"type": "String"
+		},
+		"facilityNames": {
+			"type": "Array",
+			"defaultValue": [
+                		"auth",
+                		"authpriv",
+                		"cron",
+                		"daemon",
+                		"mark",
+                		"kern",
+				"local0",
+                		"local1",
+                		"local2",
+                		"local3",
+                		"local4",
+                		"local5",
+                		"local6",
+                		"local7",
+                		"lpr",
+                		"mail",
+                		"news",
+                		"syslog",
+                		"user",
+                		"uucp"
+            ],
+			"metadata": {
+				"description": "Include the facilities you would like to collect"
+			}
+		},
+		"logLevels": {
+			"type": "Array",
+			"defaultValue": [
+                		"Debug",
+                		"Info",
+                		"Notice",
+                		"Warning",
+                		"Error",
+                		"Critical",
+                		"Alert",
+                		"Emergency"
+            ],
+			"metadata": {
+				"description": "Include the log levels you would like to collect"
+			}
+		},
+		"dataCollectionRuleName": {
+			"type": "String",
+			"metadata": {
+				"description": "Choose a name for the DCR you are about to create"
+			},
+			"defaultValue": "Default"
+		}
+
+	},
+	"variables": {
+		"vmss_Name": "[concat(parameters('Base_Name'), '-vmss')]",
+		"nsg_Name": "[concat(parameters('Base_Name'),'-nsg')]",
+		"vnet_Name": "[concat(parameters('Base_Name'), '-vnet')]",
+		"pip_Name": "[concat(parameters('Base_Name'),'-pip')]",
+		"autoscale_Name": "[concat(parameters('Base_Name'),'-autoscale')]",
+		"loadbalancer_Name": "[concat(parameters('Base_Name'),'-lb')]",
+		"maxPortRange": "[if(lessOrEquals(parameters('Autoscale_Max'), 9), '5000', '500')]"
+
+
+
+	},
+	"resources": [{
+			"type": "Microsoft.Network/networkSecurityGroups",
+			"apiVersion": "2019-09-01",
+			"name": "[variables('NSG_Name')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"securityRules": [{
+						"name": "Allow-Syslog",
+						"properties": {
+							"protocol": "*",
+							"sourcePortRange": "*",
+							"destinationPortRange": "514",
+							"sourceAddressPrefix": "*",
+							"destinationAddressPrefix": "*",
+							"access": "Allow",
+							"priority": 1000,
+							"direction": "Inbound",
+							"sourcePortRanges": [],
+							"destinationPortRanges": [],
+							"sourceAddressPrefixes": [],
+							"destinationAddressPrefixes": []
+						}
+					},
+					{
+						"name": "Allow-SSH",
+						"properties": {
+							"protocol": "*",
+							"sourcePortRange": "*",
+							"destinationPortRange": "22",
+							"sourceAddressPrefix": "*",
+							"destinationAddressPrefix": "*",
+							"access": "Allow",
+							"priority": 1001,
+							"direction": "Inbound",
+							"sourcePortRanges": [],
+							"destinationPortRanges": [],
+							"sourceAddressPrefixes": [],
+							"destinationAddressPrefixes": []
+						}
+					}
+				]
+			}
+		},
+		{
+			"type": "Microsoft.Network/networkSecurityGroups/securityRules",
+			"apiVersion": "2019-09-01",
+			"name": "[concat(variables('nsg_Name'), '/Allow-Syslog')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg_Name'))]"
+			],
+			"properties": {
+				"protocol": "UDP",
+				"sourcePortRange": "*",
+				"destinationPortRange": "514",
+				"sourceAddressPrefix": "*",
+				"destinationAddressPrefix": "*",
+				"access": "Allow",
+				"priority": 1000,
+				"direction": "Inbound",
+				"sourcePortRanges": [],
+				"destinationPortRanges": [],
+				"sourceAddressPrefixes": [],
+				"destinationAddressPrefixes": []
+			}
+		},
+		{
+			"type": "Microsoft.Network/networkSecurityGroups/securityRules",
+			"apiVersion": "2019-09-01",
+			"name": "[concat(variables('nsg_Name'), '/Allow-SSH')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg_Name'))]"
+			],
+			"properties": {
+				"protocol": "UDP",
+				"sourcePortRange": "*",
+				"destinationPortRange": "22",
+				"sourceAddressPrefix": "*",
+				"destinationAddressPrefix": "*",
+				"access": "Allow",
+				"priority": 1001,
+				"direction": "Inbound",
+				"sourcePortRanges": [],
+				"destinationPortRanges": [],
+				"sourceAddressPrefixes": [],
+				"destinationAddressPrefixes": []
+			}
+		},
+		{
+			"type": "Microsoft.Network/virtualNetworks",
+			"apiVersion": "2019-11-01",
+			"name": "[variables('vnet_Name')]",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg_Name'))]"
+			],
+			"properties": {
+				"addressSpace": {
+					"addressPrefixes": [
+						"10.0.0.0/16"
+					]
+				},
+				"subnets": [{
+					"name": "default",
+					"properties": {
+						"addressPrefix": "10.0.0.0/24",
+						"networkSecurityGroup": {
+							"id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg_Name'))]"
+						},
+						"serviceEndpoints": [],
+						"delegations": [],
+						"privateEndpointNetworkPolicies": "Enabled",
+						"privateLinkServiceNetworkPolicies": "Enabled"
+					}
+				}],
+				"virtualNetworkPeerings": [],
+				"enableDdosProtection": false,
+				"enableVmProtection": false
+			}
+		},
+		{
+			"type": "Microsoft.Network/virtualNetworks/subnets",
+			"apiVersion": "2019-11-01",
+			"name": "[concat(variables('vnet_Name'), '/default')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Network/virtualNetworks', variables('vnet_Name'))]"
+			],
+			"properties": {
+				"addressPrefix": "10.0.0.0/24",
+				"networkSecurityGroup": {
+					"id": "[resourceId('Microsoft.Networks/networkSecurityGroups', variables('nsg_Name'))]"
+				},
+				"serviceEndpoints": [],
+				"delegations": [],
+				"privateEndpointNetworkPolicies": "Enabled",
+				"privateLinkServiceNetworkPolicies": "Enabled"
+			}
+		},
+		{
+			"type": "Microsoft.Network/publicIPAddresses",
+			"apiVersion": "2019-09-01",
+			"name": "[variables('PIP_Name')]",
+			"location": "[resourceGroup().location]",
+			"sku": {
+				"name": "Standard"
+			},
+			"properties": {
+				"publicIPAddressVersion": "IPv4",
+				"publicIPAllocationMethod": "Static",
+				"dnsSettings": {
+					"domainNameLabel": "[tolower(concat(parameters('Base_Name'), 'vmss'))]",
+					"fqdn": "[tolower(concat(parameters('Base_Name'), 'vmss','.',resourceGroup().location,'.cloudapp.azure.com'))]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Network/loadBalancers",
+			"apiVersion": "2019-09-01",
+			"name": "[variables('loadbalancer_Name')]",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Network/publicIPAddresses', variables('pip_Name'))]"
+			],
+			"sku": {
+				"name": "Standard"
+			},
+			"properties": {
+				"frontendIPConfigurations": [{
+					"name": "LoadBalancerFrontEnd",
+					"properties": {
+						"privateIPAllocationMethod": "Dynamic",
+						"publicIPAddress": {
+							"id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('pip_Name'))]"
+						},
+						"privateIPAddressVersion": "IPv4"
+					}
+				}],
+				"backendAddressPools": [{
+					"name": "bepool",
+					"properties": {}
+				}],
+				"loadBalancingRules": [{
+						"name": "LBSyslogTCPRule",
+						"properties": {
+							"frontendIPConfiguration": {
+								"id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+							},
+							"frontendPort": 514,
+							"backendPort": 514,
+							"enableFloatingIP": false,
+							"idleTimeoutInMinutes": 5,
+							"protocol": "TCP",
+							"enableTcpReset": false,
+							"loadDistribution": "Default",
+							"disableOutboundSnat": false,
+							"backendAddressPool": {
+								"id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/backendAddressPools/bepool')]"
+							},
+							"probe": {
+								"id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/probes/tcpProbe')]"
+							}
+						}
+					},
+					{
+						"name": "LBSyslogUDPRule",
+						"properties": {
+							"frontendIPConfiguration": {
+								"id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+							},
+							"frontendPort": 514,
+							"backendPort": 514,
+							"enableFloatingIP": false,
+							"idleTimeoutInMinutes": 5,
+							"protocol": "Udp",
+							"enableTcpReset": false,
+							"loadDistribution": "Default",
+							"disableOutboundSnat": false,
+							"backendAddressPool": {
+								"id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/backendAddressPools/bepool')]"
+							},
+							"probe": {
+								"id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/probes/tcpProbe')]"
+							}
+						}
+					}
+				],
+				"probes": [{
+					"name": "tcpProbe",
+					"properties": {
+						"protocol": "Tcp",
+						"port": 514,
+						"intervalInSeconds": 5,
+						"numberOfProbes": 2
+					}
+				}],
+				"inboundNatRules": [],
+				"outboundRules": [],
+				"inboundNatPools": [{
+					"name": "natPool",
+					"properties": {
+						"frontendPortRangeStart": 50000,
+						"frontendPortRangeEnd": "[concat(variables('maxPortRange'), parameters('Autoscale_Max'))]",
+						"backendPort": 22,
+						"protocol": "Tcp",
+						"idleTimeoutInMinutes": 4,
+						"enableFloatingIP": false,
+						"enableTcpReset": false,
+						"frontendIPConfiguration": {
+							"id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+						}
+					}
+				}]
+			}
+		},
+		{
+			"type": "Microsoft.Compute/virtualMachineScaleSets",
+			"apiVersion": "2019-03-01",
+			"name": "[variables('vmss_Name')]",
+			"location": "[resourceGroup().location]",
+			"identity": {
+				"type": "UserAssigned",
+				"userAssignedIdentities": {
+					"[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'managedIdentity')]": {}
+				}
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsg_Name'))]",
+				"[resourceId('Microsoft.Network/virtualNetworks', variables('vnet_Name'))]",
+				"[resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name'))]",
+				"default",
+				"[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'managedIdentity')]"
+			],
+			"sku": {
+				"name": "Standard_F4s_v2",
+				"tier": "Standard",
+				"capacity": "[parameters('Autoscale_Min')]"
+			},
+			"properties": {
+				"singlePlacementGroup": true,
+				"upgradePolicy": {
+					"mode": "Manual"
+				},
+				"virtualMachineProfile": {
+					"osProfile": {
+						"computerNamePrefix": "[concat(parameters('Base_Name'), 'vm')]",
+						"customData": "[base64(parameters('cloudinit'))]",
+						"adminUsername": "[parameters('AdminUserName')]",
+						"adminPassword": "[parameters('AdminPassword')]",
+						"linuxConfiguration": {
+							"disablePasswordAuthentication": false,
+							"provisionVMAgent": true
+						},
+						"secrets": []
+					},
+					"extensionProfile": {
+						"extensions": [{
+							"name": "AMA",
+							"properties": {
+								"publisher": "Microsoft.Azure.Monitor",
+								"typeHandlerVersion": "1.22",
+								"autoUpgradeMinorVersion": true,
+								"enableAutomaticUpgrade": true,
+								"type": "AzureMonitorLinuxAgent"
+
+							}
+
+
+						}]
+					},
+
+					"storageProfile": {
+						"osDisk": {
+							"createOption": "FromImage",
+							"caching": "ReadWrite",
+							"managedDisk": {
+								"storageAccountType": "Premium_LRS"
+							},
+							"diskSizeGB": 32
+						},
+						"imageReference": {
+							"publisher": "Canonical",
+							"offer": "UbuntuServer",
+							"sku": "18.04-LTS",
+							"version": "latest"
+						}
+					},
+					"networkProfile": {
+						"networkInterfaceConfigurations": [{
+							"name": "[concat(parameters('Base_Name'), '-nic')]",
+							"properties": {
+								"primary": true,
+								"enableAcceleratedNetworking": false,
+								"dnsSettings": {
+									"dnsServers": []
+								},
+								"enableIPForwarding": false,
+								"ipConfigurations": [{
+									"name": "[concat(parameters('Base_Name'), '-ipConfig')]",
+									"properties": {
+										"subnet": {
+											"id": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('vnet_Name')), '/subnets/default')]"
+										},
+										"privateIPAddressVersion": "IPv4",
+										"loadBalancerBackendAddressPools": [{
+											"id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/backendAddressPools/bepool')]"
+										}],
+										"loadBalancerInboundNatPools": [{
+											"id": "[concat(resourceId('Microsoft.Network/loadBalancers/', variables('loadbalancer_Name')), '/inboundNatPools/natPool')]"
+										}]
+									}
+								}]
+							}
+						}]
+					}
+				},
+				"overprovision": true,
+				"doNotRunExtensionsOnOverprovisionedVMs": false,
+				"platformFaultDomainCount": 5
+			}
+		},
+		{
+			"type": "Microsoft.Insights/autoscalesettings",
+			"apiVersion": "2014-04-01",
+			"name": "[variables('autoscale_Name')]",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmss_Name'))]"
+			],
+			"properties": {
+				"profiles": [{
+					"name": "Profile1",
+					"capacity": {
+						"minimum": "[parameters('Autoscale_Min')]",
+						"maximum": "[parameters('Autoscale_Max')]",
+						"default": "[parameters('Autoscale_Min')]"
+					},
+					"rules": [{
+							"metricTrigger": {
+								"metricName": "Percentage CPU",
+								"metricNamespace": "",
+								"metricResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmss_Name'))]",
+								"timeGrain": "PT1M",
+								"statistic": "Average",
+								"timeWindow": "PT5M",
+								"timeAggregation": "Average",
+								"operator": "GreaterThan",
+								"threshold": 75,
+								"dimensions": [],
+								"dividePerInstance": false
+							},
+							"scaleAction": {
+								"direction": "Increase",
+								"type": "ChangeCount",
+								"value": "1",
+								"cooldown": "PT1M"
+							}
+						},
+						{
+							"metricTrigger": {
+								"metricName": "Percentage CPU",
+								"metricNamespace": "",
+								"metricResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmss_Name'))]",
+								"timeGrain": "PT1M",
+								"statistic": "Average",
+								"timeWindow": "PT5M",
+								"timeAggregation": "Average",
+								"operator": "LessThan",
+								"threshold": 25,
+								"dimensions": [],
+								"dividePerInstance": false
+							},
+							"scaleAction": {
+								"direction": "Decrease",
+								"type": "ChangeCount",
+								"value": "1",
+								"cooldown": "PT1M"
+							}
+						}
+					]
+				}],
+				"enabled": true,
+				"name": "[concat(parameters('Base_Name'), '-autoscale')]",
+				"targetResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmss_Name'))]"
+			}
+		},
+		{
+			"type": "Microsoft.Insights/dataCollectionRules",
+			"apiVersion": "2021-09-01-preview",
+			"name": "default",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [],
+			"tags": {},
+			"kind": "Linux",
+			"properties": {
+				"dataFlows": [{
+					"destinations": [
+						"[parameters('workspaceName')]"
+					],
+					"outputStream": "Microsoft-Syslog",
+					"streams": [
+						"Microsoft-Syslog"
+					]
+				}],
+				"dataSources": {
+					"syslog": [{
+						"streams": [
+							"Microsoft-Syslog"
+						],
+						"facilityNames": "[parameters('facilityNames')]",
+						"logLevels": "[parameters('logLevels')]",
+						"name": "[concat(parameters('dataCollectionRuleName'),'_stream')]"
+					}]
+				},
+				"description": "string",
+				"destinations": {
+					"logAnalytics": [{
+						"name": "[parameters('workspaceName')]",
+						"workspaceResourceId": "[concat('/subscriptions/', parameters('workspaceSubscriptionId'), '/resourceGroups/', parameters('workspaceResourceGroupName'), '/providers/microsoft.operationalinsights/workspaces/', parameters('WorkspaceName'))]",
+						"workspaceId": "[parameters('workspaceId')]"
+					}]
+				},
+				"streamDeclarations": {}
+			}
+		},
+
+		{
+			"type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+			"apiVersion": "2018-11-30",
+			"name": "managedIdentity",
+			"location": "[resourceGroup().location]"
+
+		},
+		{
+			"type": "Microsoft.Insights/dataCollectionRuleAssociations",
+			"apiVersion": "2021-09-01-preview",
+			"dependsOn": [
+				"[resourceId('Microsoft.Insights/dataCollectionRules', 'default')]",
+				"[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmss_Name'))]"
+			],
+			"name": "DCRa",
+			"scope": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmss_Name'))]",
+			"properties": {
+				"dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', 'default')]",
+				"description": "string"
+			}
+		}
+
+
+
+	],
+	"outputs": {
+
+	}
+}

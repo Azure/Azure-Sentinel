@@ -1,0 +1,49 @@
+id: a22740ec-fc1e-4c91-8de6-c29c6450ad00
+name: Explicit MFA Deny
+description: |
+  'User explicitly denies MFA push, indicating that login was not expected and the account's password may be compromised.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let aadFunc = (tableName:string){
+  table(tableName)
+  | where ResultType == 500121
+  | where Status has "MFA Denied; user declined the authentication" or Status has "MFA denied; Phone App Reported Fraud"
+  | extend Type = Type
+  | extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ClientAppUsed
+version: 1.0.2
+kind: Scheduled

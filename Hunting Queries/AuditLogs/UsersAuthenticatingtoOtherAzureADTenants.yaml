@@ -1,0 +1,30 @@
+id: 9b4a1f38-2fae-44dd-9e85-685a2e4b9bb5
+name: Users Authenticating to Other Azure AD Tenants
+description: |
+  'Detects when a user has successfully authenticated to another Azure AD tenant with an identity in your organization's tenant.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  SigninLogs
+    | where TimeGenerated between(ago(14d)..ago(1d))
+    | where ResultType == 0
+    | where HomeTenantId != ResourceTenantId
+    | summarize by UserPrincipalName, ResourceTenantId
+    | join kind=rightanti (SigninLogs
+    | where TimeGenerated > ago(1d)
+    | where ResultType == 0
+    | where HomeTenantId != ResourceTenantId
+    | where isnotempty(HomeTenantId) and isnotempty(ResourceTenantId)) on UserPrincipalName, ResourceTenantId
+    | where RiskLevelAggregated != "none"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName

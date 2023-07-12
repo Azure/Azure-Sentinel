@@ -1,0 +1,107 @@
+Parser:
+  Title: Authentication ASIM parser for Syslog sudo
+  Version: '0.1.1'
+  LastUpdated: November 21, 2022
+Product:
+  Name: sudo
+Normalization:
+  Schema: Authentication
+  Version: '0.1.1'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Syslog sudo sign in logs to the ASIM Authentication schema.
+ParserName: ASimAuthenticationSudo
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SudoSignInAuthorized=(disabled:bool=false){
+  Syslog | where not(disabled)
+    | where ProcessName == "sudo" and SyslogMessage has 'TTY=' and SyslogMessage has 'USER='and SyslogMessage has 'COMMAND='
+    | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with (pair_delimiter=' ', kv_delimiter='=')
+    | project-rename TargetUsername = USER
+    | extend
+    EventVendor = 'sudo'
+    , EventProduct = 'sudo'
+    , EventCount = int(1)
+    , EventSchema = 'Authentication'
+    , EventSchemaVersion = '0.1.1'
+    , EventResult = 'Success'
+    , EventStartTime = TimeGenerated
+    , EventEndTime = TimeGenerated
+    , EventType = 'Logon'
+    , DvcHostname = Computer
+    , ActorUsernameType = 'Simple'
+    , ActorUsername = extract(@'^(.*?):', 1, SyslogMessage)
+    , TargetUsernameType = 'Simple'
+    , EventResultDetails = 'Other'
+    , EventOriginalRestultDetails = 'Connection authorized'
+  // ************************
+  //      <Aliases>
+  // ************************
+  | extend
+          User=TargetUsername
+        , Dvc=Computer
+  // ************************
+  //      </Aliases>
+  // ************************
+    | project-away Computer, MG, SourceSystem, TenantId
+    };
+  let SudoAuthFailure1=(disabled:bool=false){
+  Syslog | where not(disabled)
+    | where ProcessName == "sudo" and (SyslogMessage has 'user NOT in sudoers' or SyslogMessage has 'incorrect password attempts')
+    | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with  (pair_delimiter=' ', kv_delimiter='=')
+    | project-rename TargetUsername = USER
+    | extend
+    EventVendor = 'sudo'
+    , EventProduct = 'sudo'
+    , EventCount = int(1)
+    , EventSchema = 'Authentication'
+    , EventSchemaVersion = '0.1.1'
+    , EventResult = 'Failure'
+    , EventStartTime = TimeGenerated
+    , EventEndTime = TimeGenerated
+    , EventType = 'Logon'
+    , DvcHostname = Computer
+    , ActorUsernameType = 'Simple'
+    , ActorUsername = extract(@'^(.*?):', 1, SyslogMessage)
+    , TargetUsernameType = 'Simple'
+    , EventResultDetails = 'No such user or password'
+    , EventOriginalRestultDetails = 'User authentication failed'
+    | project-away Computer, MG, SourceSystem, TenantId
+    };
+  let SudoDisconnect=(disabled:bool=false){
+  Syslog | where not(disabled)
+    | where ProcessName == "sudo" and SyslogMessage has 'session closed for user '
+    | parse SyslogMessage with * "for user " TargetUsername:string
+    | extend
+    EventVendor = 'sudo'
+    , EventProduct = 'sudo'
+    , EventCount = int(1)
+    , EventSchema = 'Authentication'
+    , EventSchemaVersion = '0.1.1'
+    , EventResult = 'Success'
+    , EventStartTime = TimeGenerated
+    , EventEndTime = TimeGenerated
+    , EventType = 'Logoff'
+    , DvcHostname = Computer
+    , TargetUsernameType = 'Simple'
+    , EventResultDetails = 'Other'
+    , EventOriginalRestultDetails = 'User session closed'
+  // ************************
+  //      <Aliases>
+  // ************************
+  | extend
+          User=TargetUsername
+        , Dvc=Computer
+  // ************************
+  //      </Aliases>
+  // ************************
+    | project-away Computer, MG, SourceSystem, TenantId
+    };
+  union isfuzzy=false SudoSignInAuthorized(disabled), SudoAuthFailure1(disabled), SudoDisconnect(disabled)

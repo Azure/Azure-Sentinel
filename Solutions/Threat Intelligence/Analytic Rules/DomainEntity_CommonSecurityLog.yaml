@@ -1,0 +1,92 @@
+id: dd0a6029-ecef-4507-89c4-fc355ac52111
+name: TI map Domain entity to CommonSecurityLog
+description: |
+  Identifies a match in CommonSecurityLog table from any Domain IOC from TI
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h; // Look back 1 hour
+  let ioc_lookBack = 14d; // Look back 14 days
+  // Create a list of top-level domains (TLDs) from the threat feed data for later validation
+  let list_tlds =
+      ThreatIntelligenceIndicator
+      // Filter indicators based on the specified time range and active indicators
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true and ExpirationDateTime > now()
+      | where isnotempty(DomainName)
+      // Convert domain names to lowercase for consistency
+      | extend DomainName = tolower(DomainName)
+      // Split domain names into parts and extract the TLD
+      | extend parts = split(DomainName, '.')
+      | extend tld = parts[(array_length(parts) - 1)]
+      // Count the occurrences of each TLD
+      | summarize count() by tostring(tld)
+      // Create a list of TLDs
+      | summarize make_list(tld);
+  // Retrieve threat intelligence indicators within the specified time range
+  let Domain_Indicators =
+      ThreatIntelligenceIndicator
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true and ExpirationDateTime > now()
+      // Filter indicators that have a non-empty domain name
+      | where isnotempty(DomainName)
+      | extend TI_DomainEntity = DomainName;
+  // Join threat intelligence indicators with common security logs
+  Domain_Indicators
+  | join kind=innerunique (
+      CommonSecurityLog
+      // Filter common security logs based on the specified time range
+      | extend IngestionTime = ingestion_time()
+      | where IngestionTime > ago(dt_lookBack)
+      | where DeviceEventClassID =~ 'url'
+      // Uncomment the line below to only alert on allowed connections
+      //| where DeviceAction !~ "block-url"
+      // Extract the domain from RequestURL, if not present, extract it from AdditionalExtensions
+      | extend PA_Url = column_ifexists("RequestURL", "None")
+      | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith "PanOS", extract("([^\\\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
+      | extend PA_Url = iif(PA_Url !startswith "http://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), iif(PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url))
+      | extend Domain = trim('"', tostring(parse_url(PA_Url).Host))
+      | where isnotempty(Domain)
+      | extend Domain = tolower(Domain)
+      | extend parts = split(Domain, '.')
+      | extend tld = parts[(array_length(parts) - 1)]
+      // Validate parsed domain by checking if the TLD is in the threat feed's TLD list
+      | where tld in~ (list_tlds)
+      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  ) on $left.TI_DomainEntity == $right.Domain
+  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
+  | extend timestamp = CommonSecurityLog_TimeGenerated
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: PA_Url
+version: 1.4.0
+kind: Scheduled

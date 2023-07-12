@@ -1,0 +1,84 @@
+name: Arm-ttk Validations
+
+on: [pull_request]
+
+jobs:
+  run-arm-ttk:
+    runs-on: ubuntu-latest
+    outputs:
+      solutionName: ${{ steps.step1.outputs.solutionName }}
+      mainTemplateChanged: ${{ steps.step1.outputs.mainTemplateChanged }}
+      createUiChanged: ${{ steps.step1.outputs.createUiChanged }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - shell: pwsh
+        id: step1
+        name: Identify Changes in PR
+        run: |
+          $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+          Write-Host "List of files in PR: $diff"
+          
+          $hasmainTemplateChanged = $false
+          $hasCreateUiDefinitionTemplateChanged = $false
+          
+          $isChangeInSolutionsFolder = [bool]($diff | Where-Object {$_ -like 'Solutions/*'})
+          if (!$isChangeInSolutionsFolder)
+          {
+            Write-Host "Skipping as change is not in Solutions folder!"
+            exit 0
+          }
+
+          $requiredFiles = @("mainTemplate.json", "createUiDefinition.json")
+          $filteredFiles = $diff | Where-Object {$_ -match ($requiredFiles -Join "|")}
+          Write-Host "Filtered Files $filteredFiles"
+
+          if ($filteredFiles.Count -gt 0)
+          {
+            $mainTemplateValue = $filteredFiles -match "mainTemplate.json" 
+            $createUiValue = $filteredFiles -match "createUiDefinition.json"
+
+            if ($mainTemplateValue)
+            {
+              $hasmainTemplateChanged = $true
+            }
+
+            if ($createUiValue)
+            {
+              $hasCreateUiDefinitionTemplateChanged = $true
+            }
+            
+            if ($filteredFiles.Count -eq 1)
+            {
+              $packageIndex = $filteredFiles.IndexOf("/Package")
+              $sName = $filteredFiles.SubString(10, $packageIndex - 10)
+            }
+            else
+            {
+              $packageIndex = $filteredFiles[0].IndexOf("/Package")
+              $sName = $filteredFiles[0].SubString(10, $packageIndex - 10)
+            }
+            Write-Host "SolutionName: $sName"
+          }
+
+          Write-Output "::set-output name=solutionName::$sName"
+          Write-Output "::set-output name=mainTemplateChanged::$hasmainTemplateChanged"
+          Write-Output "::set-output name=createUiChanged::$hasCreateUiDefinitionTemplateChanged"
+
+      - uses: docker/build-push-action@v2
+        id: publishGithubPackage
+        name: Run ARM-TTK
+        if: ${{ success() && steps.step1.outcome == 'success' && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.mainTemplateChanged == 'true' || steps.step1.outputs.createUiChanged == 'true') }}
+        env: 
+          SolutionName: ${{ steps.step1.outputs.solutionName }}
+          mainTemplateChanged: ${{ steps.step1.outputs.mainTemplateChanged }}
+          createUiChanged: ${{ steps.step1.outputs.createUiChanged }}
+        with:
+          context: .
+          file: ./.github/actions/Dockerfile
+          push: false
+          build-args: |
+            SolutionName
+            mainTemplateChanged
+            createUiChanged

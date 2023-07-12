@@ -1,0 +1,72 @@
+id: b1832f60-6c3d-4722-a0a5-3d564ee61a63
+name: (Preview) TI map Domain entity to Web Session Events (ASIM Web Session schema)
+description: |
+  'This rule identifies Web Sessions for which the target URL hostname is a known IoC. <br><br>This rule uses the [Advanced Security Information Model (ASIM)](https:/aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+    let HAS_ANY_MAX = 10000;
+    let dt_lookBack = 1h;
+    let ioc_lookBack = 14d;
+    //Create a list of TLDs in our threat feed for later validation
+    let DOMAIN_TI=ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true
+    // Picking up only IOC's that contain the entities we want
+    | where isnotempty(DomainName);
+    let DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) 
+      | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));
+    DOMAIN_TI
+    // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+    | join kind=innerunique (
+        _Im_WebSession(starttime=ago(dt_lookBack), url_has_any= DOMAIN_TI_list )
+        //Extract domain patterns from syslog message
+        | extend domain = tostring(parse_url(Url)["Host"])
+        | where isnotempty(domain)
+        | extend tld = tostring(split(domain, '.')[-1])
+        | extend Event_TimeGenerated = TimeGenerated
+    ) on $left.DomainName==$right.domain
+    | where Event_TimeGenerated < ExpirationDateTime
+    | summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain
+    | project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, domain, SrcIpAddr, Url   
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+customDetails:
+  EventTime: Event_TimeGenerated
+  IoCDescription: Description
+  ActivityGroupNames: ActivityGroupNames
+  IndicatorId: IndicatorId
+  ThreatType: ThreatType
+  IoCExpirationTime: ExpirationDateTime
+  IoCConfidenceScore: ConfidenceScore
+alertDetailsOverride:
+  alertDisplayNameFormat: A web request from {{SrcIpAddr}} to hostname  {{domain}} matched an IoC
+  alertDescriptionFormat: A client with address {{SrcIpAddr}} requested the URL {{Url}}, whose hostname is a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blead for more information on the indicator.
+version: 1.0.2
+kind: Scheduled

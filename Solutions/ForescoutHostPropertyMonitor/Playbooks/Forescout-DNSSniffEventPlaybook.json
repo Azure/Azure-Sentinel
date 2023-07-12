@@ -1,0 +1,385 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Forescout-DNS_Sniff_Event_Playbook",
+        "description": "This playbook will update incident with action to perform on endpoint",
+        "prerequisites": "Forescout Sentinel plugin is installed and running",
+        "lastUpdateTime": "2022-10-26T00:00:00.000Z",
+        "entities": ["host"],
+        "tags": ["Incident management"],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Forescout Technologies"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Forescout-DNS_Sniff_Event_Playbook",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.@{variables('azureManagementUrl')}/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    }
+                },
+                "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                        "type": "ApiConnectionWebhook",
+                        "inputs": {
+                            "body": {
+                                "callback_url": "@{listCallbackUrl()}"
+                            },
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "path": "/incident-creation"
+                        }
+                    }
+                },
+                "actions": {
+                    "For_each": {
+                        "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                        "actions": {
+                            "Condition": {
+                                "actions": {
+                                    "Set_variable_4": {
+                                        "runAfter": {
+                                            "Set_variable_6": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "Info",
+                                            "value": "\"block network access\""
+                                        }
+                                    },
+                                    "Set_variable_6": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Action_group",
+                                        "value": "\"restrict\""
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_variable_5": {
+                                        "runAfter": {
+                                            "Set_variable_7": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "Info",
+                                            "value": "\"Unauthorized app detected\""
+                                        }
+                                    },
+                                    "Set_variable_7": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Action_group",
+                                        "value": "\"notify\""
+                                    }
+                                }
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "greaterOrEquals": [
+                                        "@variables('CurNumEventVar')",
+                                        5
+                                    ]
+                                }
+                            ]
+                        },
+                        "type": "If"
+                    },
+                    "For_each_5": {
+                        "foreach": "@variables('NumEventsVar')",
+                        "actions": {
+                            "Set_variable": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "CurNumEventVar",
+                                "value": "@int(items('For_each_5'))"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Set_variable_2": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach"
+                },
+                "Parse_JSON": {
+                "runAfter": {},
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@items('For_each')?['properties']?['additionalData']?['Custom Details']",
+                    "schema": {
+                        "properties": {
+                            "EmIp": {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            "Ip": {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            "NumEvents": {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            }
+                        },
+                        "type": "object"
+                    }
+                }
+            },
+            "Set_variable_2": {
+                "runAfter": {
+                    "Set_variable_8": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "SetVariable",
+                "inputs": {
+                    "name": "NumEventsVar",
+                    "value": "@body('Parse_JSON')?['NumEvents']"
+                }
+            },
+            "Set_variable_3": {
+                "runAfter": {
+                    "Parse_JSON": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "SetVariable",
+                "inputs": {
+                    "name": "HostIpVar",
+                    "value": "@body('Parse_JSON')?['Ip']"
+                }
+            },
+            "Set_variable_8": {
+                "runAfter": {
+                    "Set_variable_3": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "SetVariable",
+                "inputs": {
+                    "name": "EmIpVar",
+                    "value": "@body('Parse_JSON')?['EmIp']"
+                }
+            },
+            "Update_incident": {
+                "runAfter": {
+                    "Condition": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "body": {
+                        "description": "action_group=@{variables('Action_group')};endpoint_ip=@{body('Parse_JSON')?['Ip']};em_ip=@{body('Parse_JSON')?['EmIp']};info=@{variables('Info')}",
+                        "incidentArmId": "@triggerBody()?['object']?['id']"
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                    },
+                    "method": "put",
+                    "path": "/Incidents"
+                }
+            }
+        },
+        "runAfter": {
+            "Initialize_variable_4": [
+                "Succeeded"
+            ]
+        },
+        "type": "Foreach",
+        "runtimeConfiguration": {
+            "concurrency": {
+                "repetitions": 1
+            }
+        }
+    },
+    "Initialize_variable": {
+    "runAfter": {},
+    "type": "InitializeVariable",
+    "inputs": {
+        "variables": [
+            {
+                "name": "EmIpVar",
+                "type": "array"
+            }
+        ]
+    }
+},
+"Initialize_variable_2": {
+    "runAfter": {
+        "Initialize_variable": [
+            "Succeeded"
+        ]
+    },
+    "type": "InitializeVariable",
+    "inputs": {
+        "variables": [
+            {
+                "name": "HostIpVar",
+                "type": "array"
+            }
+        ]
+    }
+},
+"Initialize_variable_3": {
+    "runAfter": {
+        "Initialize_variable_2": [
+            "Succeeded"
+        ]
+    },
+    "type": "InitializeVariable",
+    "inputs": {
+        "variables": [
+            {
+                "name": "NumEventsVar",
+                "type": "array"
+            }
+        ]
+    }
+},
+"Initialize_variable_4": {
+    "runAfter": {
+        "Initialize_variable_6": [
+            "Succeeded"
+        ]
+    },
+    "type": "InitializeVariable",
+    "inputs": {
+        "variables": [
+            {
+                "name": "Info",
+                "type": "string",
+                "value": "\"\""
+            }
+        ]
+    }
+},
+"Initialize_variable_5": {
+    "runAfter": {
+        "Initialize_variable_3": [
+            "Succeeded"
+        ]
+    },
+    "type": "InitializeVariable",
+    "inputs": {
+        "variables": [
+            {
+                "name": "Action_group",
+                "type": "string",
+                "value": "\"notify\""
+            }
+        ]
+    }
+},
+"Initialize_variable_6": {
+    "runAfter": {
+        "Initialize_variable_5": [
+            "Succeeded"
+        ]
+    },
+    "type": "InitializeVariable",
+    "inputs": {
+        "variables": [
+            {
+                "name": "CurNumEventVar",
+                "type": "integer",
+                "value": 0
+            }
+        ]
+    }
+}
+}
+},
+"parameters": {
+"$connections": {
+"value": {
+    "azuresentinel": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+        "connectionProperties": {
+            "authentication": {
+                "type": "ManagedServiceIdentity"
+            }
+        }
+    }
+}
+}
+}
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"identity": {
+"type": "SystemAssigned"
+},
+"apiVersion": "2019-05-01",
+"dependsOn": [
+"[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+]
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('MicrosoftSentinelConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('MicrosoftSentinelConnectionName')]",
+"customParameterValues": {},
+"parameterValueType": "Alternative",
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+}
+}
+}
+]
+}

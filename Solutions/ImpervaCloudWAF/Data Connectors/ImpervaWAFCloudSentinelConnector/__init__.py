@@ -134,7 +134,13 @@ class ImpervaFilesHandler:
         file_encryption_flag = file_header.find("key:")
         events_arr = []
         if file_encryption_flag == -1:
-            events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
+            try:
+                events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
+            except Exception as err:
+                if 'while decompressing data: incorrect header check' in err.args[0]:
+                    events_data = file_data.decode("utf-8")
+                else:
+                    logging.error("Error during decompressing and decoding the file with error message {}.".format(err))                   
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
@@ -146,6 +152,11 @@ class ImpervaFilesHandler:
     def parse_cef(self,cef_raw):
         rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
         parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
+        header_array = cef_raw.split('|')
+        parsed_cef["Device Version"]=header_array[3]
+        parsed_cef["Signature"]=header_array[4]
+        parsed_cef["Attack Name"]=header_array[5]
+        parsed_cef["Attack Severity"]=header_array[6]
         for key,val in re.findall(rx, cef_raw):
             if val.startswith('"') and val.endswith('"'):
                 val = val[1:-1]
@@ -156,6 +167,16 @@ class ImpervaFilesHandler:
                 parsed_cef[(parsed_cef[f'{elem}Label']).replace(" ", "")] = parsed_cef[elem]
                 parsed_cef.pop(f'{elem}Label')
                 parsed_cef.pop(elem)
+
+        if 'start' in parsed_cef.keys() and parsed_cef['start'] is not None and parsed_cef['start']!="":
+            try:
+                timestamp = datetime.datetime.utcfromtimestamp(int(parsed_cef['start'])/1000.0).isoformat()
+                parsed_cef['EventGeneratedTime'] = timestamp
+            except:
+                parsed_cef['EventGeneratedTime'] = ""
+        else:
+            parsed_cef['EventGeneratedTime'] = ""
+
         return parsed_cef
                 
     def gen_chunks_to_object(self, object, chunksize=100):
@@ -195,7 +216,8 @@ class ProcessToSentinel:
             'content-type': content_type,
             'Authorization': signature,
             'Log-Type': 'ImpervaWAFCloud',
-            'x-ms-date': rfc1123date
+            'x-ms-date': rfc1123date,
+            'time-generated-field':'EventGeneratedTime'
         }
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):

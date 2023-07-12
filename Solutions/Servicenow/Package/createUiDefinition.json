@@ -1,0 +1,89 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\"width=\"75px\"height=\"75px\">\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\nThe ServiceNow ITSM solution for Microsoft Sentinel makes it easy to synchronize incidents between Microsoft Sentinel and [ServiceNow IT Service Management (ITSM)](https://www.servicenow.com/products/itsm.html). This can be achieved by either one of the following two options - \n\n**Option 1 (Recommended)**: Bi-directional incident sync using app hosted on ServiceNow store. This option includes the following key features:\n\n•\t\tRetrieve Microsoft Sentinel incidents and automate the creation of incidents in ServiceNow.\n\n•\tBi-directional sync of Status, Severity, Owner, Comments/Work notes, Entities and alerts.\n\n•\tDetails of alerts and entities added to Work Notes, to improve analyst experience.\n\n•\tFiltering of Microsoft Sentinel incidents, based on tags or custom filters.\n\n•\tSupport of multiple workspaces, with different incidents filters.\n\n•\tSupport any incident  custom table, status or severity fields.\n\nPlease note that this option doesn't require installation of content hub solution and will need to be installed and managed from ServiceNow store. Refer to [ServiceNow Store](https://aka.ms/sentinel-servicenow-appstore) for details on how to use this option.\n\n**Option 2**: Unidirectional sync from Microsoft Sentinel to ServiceNow. Install this solution that includes Microsoft Sentinel playbooks to help create, update (incident comments) and close incidents in ServiceNow when a corresponding incident is created, updated or closed in Microsoft Sentinel.\n\n**Playbooks:** 3\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "playbooks",
+        "label": "Playbooks",
+        "subLabel": {
+          "preValidation": "Configure the playbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Playbooks",
+        "elements": [
+          {
+            "name": "playbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the Playbook templates to help implement your Security Orchestration, Automation and Response (SOAR) operations. After installing the solution, these will be deployed under Playbook Templates in the Automation blade in Microsoft Sentinel. They can be configured and managed from the Manage solution view in Content Hub."
+            }
+          },
+          {
+            "name": "playbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

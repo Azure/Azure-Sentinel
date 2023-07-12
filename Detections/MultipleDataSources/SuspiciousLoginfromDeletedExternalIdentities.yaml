@@ -1,0 +1,71 @@
+id: defe4855-0d33-4362-9557-009237623976
+name: Suspicious Login from deleted guest account
+description: |
+  ' This query will detect logins from guest account which was recently deleted. 
+  For any successful logins from deleted identities should be investigated further if any existing user accounts have been altered or linked to such identity prior deletion'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+tags:
+  - GuestorExternalIdentities
+query: |
+  let query_frequency = 1h;
+  let query_period = 1d;
+  AuditLogs
+  | where TimeGenerated > ago(query_frequency)
+  | where Category =~ "UserManagement" and OperationName =~ "Delete user"
+  | mv-expand TargetResource = TargetResources
+  | where TargetResource["type"] == "User" and TargetResource["userPrincipalName"] has "#EXT#"
+  | extend ParsedDeletedUserPrincipalName = extract(@"^[0-9a-f]{32}([^\#]+)\#EXT\#", 1, tostring(TargetResource["userPrincipalName"]))
+  | extend
+      Initiator = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["displayName"]), tostring(InitiatedBy["user"]["userPrincipalName"])),
+      InitiatorId = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["servicePrincipalId"]), tostring(InitiatedBy["user"]["id"])),
+      Delete_IPAddress = tostring(InitiatedBy[tostring(bag_keys(InitiatedBy)[0])]["ipAddress"])
+  | project Delete_TimeGenerated = TimeGenerated, Category, Identity, Initiator, Delete_IPAddress, OperationName, Result, ParsedDeletedUserPrincipalName, InitiatedBy, AdditionalDetails, TargetResources, InitiatorId, CorrelationId
+  | join kind=inner (
+      SigninLogs
+      | where TimeGenerated > ago(query_period)
+      | summarize take_any(*) by UserPrincipalName
+      | extend ParsedUserPrincipalName = translate("@", "_", UserPrincipalName)
+      | project SigninLogs_TimeGenerated = TimeGenerated, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, IPAddress, LocationDetails, AppDisplayName, ResourceDisplayName, ClientAppUsed, UserAgent, DeviceDetail, UserId, UserType, OriginalRequestId, ParsedUserPrincipalName
+      ) on $left.ParsedDeletedUserPrincipalName == $right.ParsedUserPrincipalName
+  | where Delete_TimeGenerated > SigninLogs_TimeGenerated
+  | project-away ParsedDeletedUserPrincipalName, ParsedUserPrincipalName
+  | extend
+      AccountName = tostring(split(UserPrincipalName, "@")[0]),
+      AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ashwin Patil
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

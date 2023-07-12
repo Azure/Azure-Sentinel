@@ -1,0 +1,48 @@
+id: 6d7214d9-4a28-44df-aafb-0910b9e6ae3e
+name: New CloudShell User
+description: |
+  'Identifies when a user creates an Azure CloudShell for the first time.
+  Monitor this activity to ensure only the expected users are using CloudShell.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059
+query: |
+  let match_window = 3m;
+  AzureActivity
+  | where ResourceGroup has "cloud-shell"
+  | where (OperationNameValue =~ "Microsoft.Storage/storageAccounts/listKeys/action")
+  | where ActivityStatusValue =~ "Success"
+  | extend TimeKey = bin(TimeGenerated, match_window), AzureIP = CallerIpAddress
+  | join kind = inner
+  (AzureActivity
+  | where ResourceGroup has "cloud-shell"
+  | where (OperationNameValue =~ "Microsoft.Storage/storageAccounts/write")
+  | extend TimeKey = bin(TimeGenerated, match_window), UserIP = CallerIpAddress
+  ) on Caller, TimeKey
+  | summarize count() by TimeKey, Caller, ResourceGroup, SubscriptionId, TenantId, AzureIP, UserIP, HTTPRequest, Type, Properties, CategoryValue, OperationList = strcat(OperationNameValue, ' , ', OperationNameValue1)
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: UserIP
+version: 2.0.2
+kind: Scheduled

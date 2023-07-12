@@ -1,0 +1,67 @@
+Parser:
+  Title: Network Session ASIM parser for Microsoft Defender for IoT sensor logs
+  Version: '0.1'
+  LastUpdated: Oct 30, 2022
+Product:
+  Name: Microsoft Defender for IoT
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.4'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Microsoft Defender for IoT sensor logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionMD4IoTSensor
+EquivalentBuiltInParser: _ASim_NetworkSession_MD4IoTSensor
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false) 
+  {
+    DefenderIoTRawEvent
+    | where RawEventName == "NetworkConnectionData"
+    | project-rename 
+        DvcSubscriptionId = AzureSubscriptionId
+    | extend 
+        Dvc = tostring(EventDetails.SourceId),
+        DstDvcId = tostring(EventDetails.Destination.DeviceId),
+        DstMacAddr = tostring(EventDetails.Destination.MacAddress),
+        DstIpAddr = tostring(EventDetails.Destination.IPAddress),
+        DstPortNumber = toint(EventDetails.Destination.Port),
+        DstDescription = tostring(EventDetails.Destination.DeviceName),
+        SrcDvcId = tostring(EventDetails.Source.DeviceId),
+        SrcMacAddr = tostring(EventDetails.Source.MacAddress),
+        SrcIpAddr = tostring(EventDetails.Source.IPAddress),
+        SrcPortNumber = toint(EventDetails.Source.Port),
+        SrcDescription = tostring(EventDetails.Source.DeviceName),
+        EventOriginalUid = tostring(EventDetails.Id),
+        EventEndTime = todatetime(EventDetails.LastSeen),
+        EventStartTime = todatetime(EventDetails.StartTime),
+        NetworkProtocol = tostring(EventDetails.TransportProtocol)
+    | extend
+        EventProduct = 'Defender for IoT',
+        EventResult = 'Success',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion='0.2.4',
+        EventCount = toint(1),
+        EventSeverity = 'Informational',
+        EventType = iff(DstIpAddr=='' and SrcIpAddr == '','L2NetworkSession','NetworkSession'),
+        NetworkDirection = iff(tobool(EventDetails.IsInternal), 'Local',''),
+        EventVendor = 'Microsoft',
+        DstDvcIdType = 'MD4IoTid',
+        SrcDvcIdType = 'MD4IoTid'
+    | extend // -- Aliases
+        Dst = coalesce(DstIpAddr,DstMacAddr),
+        Src = coalesce(SrcIpAddr,SrcMacAddr),
+        IpAddr = SrcIpAddr,
+        EventStartTime = EventEndTime
+    | project-away 
+        RawEventCategory, RawEventName, RawEventType, SourceSystem, TenantId, AgentVersion, IoTRawEventId, IsEmpty, AgentId, DeviceId, TimeStamp
+    | project-away EventDetails, AssociatedResourceId
+  };
+  parser (disabled)

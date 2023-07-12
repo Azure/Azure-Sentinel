@@ -1,0 +1,50 @@
+id: c2074fce-b5ba-4c0a-9332-d08b8fc43c53
+name: Rundll32 (LOLBins and LOLScripts)
+description: |
+  'This detection uses Sysmon telemetry to hunt Signed Binary Proxy Execution: Rundll32 activities.'
+
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1218.011
+query: |
+  Event
+  //This query uses sysmon data depending on table name used this may need updataing
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | extend RuleName = column_ifexists("RuleName", ""), TechniqueId = column_ifexists("TechniqueId", ""),  TechniqueName = column_ifexists("TechniqueName", "")
+  | parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+  | extend Image = column_ifexists("Image", "")
+  | where Image has "rundll32.exe"
+  // Uncomment the next line and add your commandLine Whitelisted/ignore terms.For example "payload.dll"
+  // | where CommandLine !contains ("payload.dll") 
+  | extend NTDomain = tostring(split(UserName, '\\', 0)[0]), Name = tostring(split(UserName, '\\', 1)[0])
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1

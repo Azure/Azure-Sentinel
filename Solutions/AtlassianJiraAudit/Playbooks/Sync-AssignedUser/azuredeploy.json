@@ -1,0 +1,1463 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Sync Jira to Sentinel - Assigned User",
+        "description": "This Playbook will sync the assigned user from JIRA to Microsoft Sentinel.",
+        "prerequisites": [
+            "1. Create service principal with User.Read.All application permissions to perform get users call on Microsoft Graph.",
+            "2. Configure JIRA with for custom fields and automation rule.",
+            "3. Deploy Azure Key Vault and add secrets for: AAD service prncipal (to communicate with Microsoft Graph), Jira account (to perform calls on Jira).",
+            "4. After playbook is deployed, grant the playbook permissions on the Key Vault (Secret - Get) and on Microsoft Sentinel workspace (Microsoft Sentinel responder)",
+            "5. [Full documentation](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Sync-IncidentsWithJIRA/readme.md)"
+        ],
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
+        "entities": [ "Account" ],
+        "tags": [ "Sync" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Thijs Lecomte"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Sync Jira to Sentinel - Assigned User",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Sync-AssignedUser",
+            "type": "string"
+        },
+        "Tenant ID": {
+            "type": "String",
+            "metadata" : {
+                "description" : "Tenant ID for used service principals"
+            }
+        },
+        "Keyvault Name": {
+            "type": "String",
+            "metadata" : {
+                "description" : "Name of the Key Vault which stores the client secrets"
+            }
+        },
+        "SecretName AAD SP": {
+            "type": "String",
+            "metadata" : {
+                "description" : "name of the Key Vault Secret that contains the Azure Active Directory SP Client Secret"
+            }
+        },
+        "ClientID AAD SP": {
+            "type": "String",
+            "metadata" : {
+                "description" : "Client ID for AAD Authentication"
+            }
+        }
+    },
+    "variables": {
+        "AzureKeyVaultConnectionName" : "[concat('azurekeyvault-', parameters('PlaybookName'))]",
+        "SentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureKeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureKeyVaultConnectionName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('Keyvault Name')]"
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "SyncJIRAAssignedUser",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "changelog": {
+                                            "properties": {
+                                                "histories": {},
+                                                "maxResults": {
+                                                    "type": "integer"
+                                                },
+                                                "startAt": {
+                                                    "type": "integer"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "fields": {
+                                            "properties": {
+                                                "aggregateprogress": {
+                                                    "properties": {
+                                                        "progress": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "aggregatetimeestimate": {},
+                                                "aggregatetimeoriginalestimate": {},
+                                                "aggregatetimespent": {},
+                                                "assignee": {
+                                                    "properties": {
+                                                        "accountId": {
+                                                            "type": "string"
+                                                        },
+                                                        "accountType": {
+                                                            "type": "string"
+                                                        },
+                                                        "active": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "avatarUrls": {
+                                                            "properties": {
+                                                                "16x16": {
+                                                                    "type": "string"
+                                                                },
+                                                                "24x24": {
+                                                                    "type": "string"
+                                                                },
+                                                                "32x32": {
+                                                                    "type": "string"
+                                                                },
+                                                                "48x48": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "emailAddress": {},
+                                                        "groups": {},
+                                                        "key": {},
+                                                        "locale": {},
+                                                        "name": {},
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "timeZone": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "attachment": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "author": {
+                                                                "properties": {
+                                                                    "accountId": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "accountType": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "active": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "avatarUrls": {
+                                                                        "properties": {
+                                                                            "16x16": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "24x24": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "32x32": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "48x48": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "displayName": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "emailAddress": {},
+                                                                    "groups": {},
+                                                                    "key": {},
+                                                                    "locale": {},
+                                                                    "name": {},
+                                                                    "self": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "timeZone": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "content": {
+                                                                "type": "string"
+                                                            },
+                                                            "created": {
+                                                                "type": "integer"
+                                                            },
+                                                            "filename": {
+                                                                "type": "string"
+                                                            },
+                                                            "id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "mimeType": {
+                                                                "type": "string"
+                                                            },
+                                                            "self": {
+                                                                "type": "string"
+                                                            },
+                                                            "size": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "self",
+                                                            "id",
+                                                            "filename",
+                                                            "author",
+                                                            "created",
+                                                            "size",
+                                                            "mimeType",
+                                                            "content"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "comment": {
+                                                    "properties": {
+                                                        "comments": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "author": {
+                                                                        "properties": {
+                                                                            "accountId": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "accountType": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "active": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "avatarUrls": {
+                                                                                "properties": {
+                                                                                    "16x16": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "24x24": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "32x32": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "48x48": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "displayName": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "emailAddress": {},
+                                                                            "groups": {},
+                                                                            "key": {},
+                                                                            "locale": {},
+                                                                            "name": {},
+                                                                            "self": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "timeZone": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "body": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "created": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "id": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "renderedBody": {},
+                                                                    "self": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "updateAuthor": {
+                                                                        "properties": {
+                                                                            "accountId": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "accountType": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "active": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "avatarUrls": {
+                                                                                "properties": {
+                                                                                    "16x16": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "24x24": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "32x32": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "48x48": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "displayName": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "emailAddress": {},
+                                                                            "groups": {},
+                                                                            "key": {},
+                                                                            "locale": {},
+                                                                            "name": {},
+                                                                            "self": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "timeZone": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "updated": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "visibility": {}
+                                                                },
+                                                                "required": [
+                                                                    "self",
+                                                                    "id",
+                                                                    "author",
+                                                                    "body",
+                                                                    "renderedBody",
+                                                                    "updateAuthor",
+                                                                    "created",
+                                                                    "updated",
+                                                                    "visibility"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "last": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "maxResults": {
+                                                            "type": "integer"
+                                                        },
+                                                        "startAt": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "components": {
+                                                    "type": "array"
+                                                },
+                                                "created": {
+                                                    "type": "integer"
+                                                },
+                                                "creator": {
+                                                    "properties": {
+                                                        "accountId": {
+                                                            "type": "string"
+                                                        },
+                                                        "accountType": {
+                                                            "type": "string"
+                                                        },
+                                                        "active": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "avatarUrls": {
+                                                            "properties": {
+                                                                "16x16": {
+                                                                    "type": "string"
+                                                                },
+                                                                "24x24": {
+                                                                    "type": "string"
+                                                                },
+                                                                "32x32": {
+                                                                    "type": "string"
+                                                                },
+                                                                "48x48": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "emailAddress": {},
+                                                        "groups": {},
+                                                        "key": {},
+                                                        "locale": {},
+                                                        "name": {},
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "timeZone": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "customfield_10000": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10001": {},
+                                                "customfield_10002": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "_links": {
+                                                                "properties": {
+                                                                    "self": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "name",
+                                                            "_links"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "customfield_10003": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "accountId": {
+                                                                "type": "string"
+                                                            },
+                                                            "accountType": {
+                                                                "type": "string"
+                                                            },
+                                                            "active": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "avatarUrls": {
+                                                                "properties": {
+                                                                    "16x16": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "24x24": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "32x32": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "48x48": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "displayName": {
+                                                                "type": "string"
+                                                            },
+                                                            "self": {
+                                                                "type": "string"
+                                                            },
+                                                            "timeZone": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "self",
+                                                            "accountId",
+                                                            "avatarUrls",
+                                                            "displayName",
+                                                            "active",
+                                                            "timeZone",
+                                                            "accountType"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "customfield_10004": {},
+                                                "customfield_10005": {},
+                                                "customfield_10006": {},
+                                                "customfield_10007": {},
+                                                "customfield_10008": {},
+                                                "customfield_10009": {},
+                                                "customfield_10010": {
+                                                    "properties": {
+                                                        "_links": {
+                                                            "properties": {
+                                                                "agent": {
+                                                                    "type": "string"
+                                                                },
+                                                                "jiraRest": {
+                                                                    "type": "string"
+                                                                },
+                                                                "self": {
+                                                                    "type": "string"
+                                                                },
+                                                                "web": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "currentStatus": {
+                                                            "properties": {
+                                                                "status": {
+                                                                    "type": "string"
+                                                                },
+                                                                "statusCategory": {
+                                                                    "type": "string"
+                                                                },
+                                                                "statusDate": {
+                                                                    "properties": {
+                                                                        "epochMillis": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "friendly": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "iso8601": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "jira": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "requestType": {
+                                                            "properties": {
+                                                                "_expands": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "_links": {
+                                                                    "properties": {
+                                                                        "self": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "description": {
+                                                                    "type": "string"
+                                                                },
+                                                                "groupIds": {
+                                                                    "type": "array"
+                                                                },
+                                                                "helpText": {
+                                                                    "type": "string"
+                                                                },
+                                                                "icon": {
+                                                                    "properties": {
+                                                                        "_links": {
+                                                                            "properties": {
+                                                                                "iconUrls": {
+                                                                                    "properties": {
+                                                                                        "16x16": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "24x24": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "32x32": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "48x48": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "id": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "issueTypeId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "serviceDeskId": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "customfield_10014": {},
+                                                "customfield_10015": {},
+                                                "customfield_10016": {},
+                                                "customfield_10017": {},
+                                                "customfield_10018": {
+                                                    "properties": {
+                                                        "hasEpicLinkFieldDependency": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "nonEditableReason": {
+                                                            "properties": {
+                                                                "message": {
+                                                                    "type": "string"
+                                                                },
+                                                                "reason": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "showField": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "customfield_10019": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10020": {},
+                                                "customfield_10021": {},
+                                                "customfield_10022": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10023": {},
+                                                "customfield_10024": {
+                                                    "type": "array"
+                                                },
+                                                "customfield_10025": {},
+                                                "customfield_10026": {},
+                                                "customfield_10027": {},
+                                                "customfield_10047": {},
+                                                "customfield_10048": {
+                                                    "properties": {
+                                                        "_links": {
+                                                            "properties": {
+                                                                "self": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "completedCycles": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "breached": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "elapsedTime": {
+                                                                        "properties": {
+                                                                            "friendly": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "millis": {
+                                                                                "type": "integer"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "goalDuration": {
+                                                                        "properties": {
+                                                                            "friendly": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "millis": {
+                                                                                "type": "integer"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "remainingTime": {
+                                                                        "properties": {
+                                                                            "friendly": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "millis": {
+                                                                                "type": "integer"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "startTime": {
+                                                                        "properties": {
+                                                                            "epochMillis": {
+                                                                                "type": "integer"
+                                                                            },
+                                                                            "friendly": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "iso8601": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "jira": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "stopTime": {
+                                                                        "properties": {
+                                                                            "epochMillis": {
+                                                                                "type": "integer"
+                                                                            },
+                                                                            "friendly": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "iso8601": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "jira": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "startTime",
+                                                                    "stopTime",
+                                                                    "breached",
+                                                                    "goalDuration",
+                                                                    "elapsedTime",
+                                                                    "remainingTime"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "customfield_10049": {},
+                                                "customfield_10050": {},
+                                                "customfield_10051": {
+                                                    "properties": {
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "languageCode": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "customfield_10124": {},
+                                                "customfield_10125": {},
+                                                "customfield_10126": {},
+                                                "customfield_10127": {},
+                                                "customfield_10128": {},
+                                                "customfield_10129": {},
+                                                "customfield_10130": {},
+                                                "customfield_10131": {},
+                                                "customfield_10132": {},
+                                                "customfield_10133": {},
+                                                "customfield_10134": {},
+                                                "customfield_10135": {},
+                                                "customfield_10136": {},
+                                                "customfield_10142": {},
+                                                "customfield_10143": {},
+                                                "customfield_10144": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10145": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10146": {},
+                                                "customfield_10147": {},
+                                                "customfield_10148": {},
+                                                "customfield_10149": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "value": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "customfield_10150": {},
+                                                "customfield_10151": {},
+                                                "customfield_10154": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10155": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "self": {
+                                                                "type": "string"
+                                                            },
+                                                            "value": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "self",
+                                                            "value",
+                                                            "id"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "customfield_10156": {},
+                                                "customfield_10157": {},
+                                                "customfield_10158": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10159": {},
+                                                "customfield_10160": {},
+                                                "customfield_10161": {},
+                                                "customfield_10162": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10164": {},
+                                                "customfield_10165": {},
+                                                "customfield_10167": {},
+                                                "customfield_10168": {},
+                                                "customfield_10169": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10170": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10171": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10172": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10173": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10174": {},
+                                                "customfield_10175": {
+                                                    "type": "string"
+                                                },
+                                                "customfield_10176": {},
+                                                "description": {
+                                                    "type": "string"
+                                                },
+                                                "duedate": {},
+                                                "environment": {},
+                                                "fixVersions": {
+                                                    "type": "array"
+                                                },
+                                                "issuelinks": {
+                                                    "type": "array"
+                                                },
+                                                "issuerestriction": {
+                                                    "properties": {
+                                                        "issuerestrictions": {
+                                                            "properties": {},
+                                                            "type": "object"
+                                                        },
+                                                        "shouldDisplay": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "issuetype": {
+                                                    "properties": {
+                                                        "description": {
+                                                            "type": "string"
+                                                        },
+                                                        "fields": {},
+                                                        "iconUrl": {
+                                                            "type": "string"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "namedValue": {
+                                                            "type": "string"
+                                                        },
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "statuses": {
+                                                            "type": "array"
+                                                        },
+                                                        "subtask": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "labels": {
+                                                    "type": "array"
+                                                },
+                                                "lastViewed": {},
+                                                "priority": {
+                                                    "properties": {
+                                                        "iconUrl": {
+                                                            "type": "string"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "namedValue": {
+                                                            "type": "string"
+                                                        },
+                                                        "self": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "progress": {
+                                                    "properties": {
+                                                        "progress": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "project": {
+                                                    "properties": {
+                                                        "avatarUrls": {
+                                                            "properties": {
+                                                                "16x16": {
+                                                                    "type": "string"
+                                                                },
+                                                                "24x24": {
+                                                                    "type": "string"
+                                                                },
+                                                                "32x32": {
+                                                                    "type": "string"
+                                                                },
+                                                                "48x48": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "components": {},
+                                                        "description": {},
+                                                        "email": {},
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "issuetypes": {},
+                                                        "key": {
+                                                            "type": "string"
+                                                        },
+                                                        "lead": {},
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "projectCategory": {},
+                                                        "projectTypeKey": {
+                                                            "type": "string"
+                                                        },
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "simplified": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "versions": {}
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "reporter": {
+                                                    "properties": {
+                                                        "accountId": {
+                                                            "type": "string"
+                                                        },
+                                                        "accountType": {
+                                                            "type": "string"
+                                                        },
+                                                        "active": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "avatarUrls": {
+                                                            "properties": {
+                                                                "16x16": {
+                                                                    "type": "string"
+                                                                },
+                                                                "24x24": {
+                                                                    "type": "string"
+                                                                },
+                                                                "32x32": {
+                                                                    "type": "string"
+                                                                },
+                                                                "48x48": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "emailAddress": {},
+                                                        "groups": {},
+                                                        "key": {},
+                                                        "locale": {},
+                                                        "name": {},
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "timeZone": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "resolution": {},
+                                                "resolutiondate": {},
+                                                "security": {},
+                                                "status": {
+                                                    "properties": {
+                                                        "description": {
+                                                            "type": "string"
+                                                        },
+                                                        "iconUrl": {
+                                                            "type": "string"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "statusCategory": {
+                                                            "properties": {
+                                                                "colorName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "key": {
+                                                                    "type": "string"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "self": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "untranslatedName": {},
+                                                        "untranslatedNameValue": {}
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "statuscategorychangedate": {
+                                                    "type": "string"
+                                                },
+                                                "subtasks": {
+                                                    "type": "array"
+                                                },
+                                                "summary": {
+                                                    "type": "string"
+                                                },
+                                                "timeestimate": {},
+                                                "timeoriginalestimate": {},
+                                                "timespent": {},
+                                                "timetracking": {
+                                                    "properties": {
+                                                        "originalEstimate": {},
+                                                        "originalEstimateSeconds": {
+                                                            "type": "integer"
+                                                        },
+                                                        "remainingEstimate": {},
+                                                        "remainingEstimateSeconds": {
+                                                            "type": "integer"
+                                                        },
+                                                        "timeSpent": {},
+                                                        "timeSpentSeconds": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "updated": {
+                                                    "type": "integer"
+                                                },
+                                                "versions": {
+                                                    "type": "array"
+                                                },
+                                                "votes": {
+                                                    "properties": {
+                                                        "hasVoted": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "votes": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "watches": {
+                                                    "properties": {
+                                                        "isWatching": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "watchCount": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "worklog": {
+                                                    "properties": {
+                                                        "last": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "maxResults": {
+                                                            "type": "integer"
+                                                        },
+                                                        "startAt": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total": {
+                                                            "type": "integer"
+                                                        },
+                                                        "worklogs": {
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "workratio": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "id": {
+                                            "type": "integer"
+                                        },
+                                        "key": {
+                                            "type": "string"
+                                        },
+                                        "renderedFields": {},
+                                        "self": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Update_incident": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['fields']?['customfield_10175']",
+                                            "owner": "@{first(body('Parse_JSON')?['value'])?['id']}",
+                                            "ownerAction": "Assign"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(body('Parse_JSON')?['value'])",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_secret": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName AAD SP'), ''')}/value')]"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com",
+                                    "clientId": "[parameters('ClientID AAD SP')]",
+                                    "secret": "@body('Get_secret')?['value']",
+                                    "tenant": "[parameters('Tenant ID')]",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/v1.0/users?$filter=DisplayName eq '@{concat(triggerBody()?['fields']?['assignee']?['displayName'], ' (Operator)')}'"
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "businessPhones": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "displayName": {
+                                                        "type": "string"
+                                                    },
+                                                    "givenName": {
+                                                        "type": "string"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "jobTitle": {},
+                                                    "mail": {},
+                                                    "mobilePhone": {},
+                                                    "officeLocation": {},
+                                                    "preferredLanguage": {},
+                                                    "surname": {
+                                                        "type": "string"
+                                                    },
+                                                    "userPrincipalName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "businessPhones",
+                                                    "displayName",
+                                                    "givenName",
+                                                    "jobTitle",
+                                                    "mail",
+                                                    "mobilePhone",
+                                                    "officeLocation",
+                                                    "preferredLanguage",
+                                                    "surname",
+                                                    "userPrincipalName",
+                                                    "id"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
+                                "connectionName": "[variables('SentinelConnectionName')]",
+                                "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                                "connectionName": "[variables('AzureKeyVaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

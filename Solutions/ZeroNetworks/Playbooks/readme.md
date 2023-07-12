@@ -20,11 +20,11 @@ This integration allows automated response to Microsoft Sentinel incidents. It c
 # Prerequisites
 
 ### Authentication
-The custom connector supports **api authentication**. In Zero Networks Access Orcheator create an api token. Depending on the playbook used the the token may need Admin privleges.
+The custom connector supports **api authentication**. In Zero Networks Segment create an api token. Depending on the playbook used the the token may need Admin privleges.
 
 <br><br>
-### Options to establish a connection with Zero Networks Access Orcheator
-The connector needs to be able to reach the Zero Networks Access Orcheator REST API over the internet.
+### Options to establish a connection with Zero Networks Segment
+The connector needs to be able to reach the Zero Networks Segment REST API over the internet.
 
 <a name="deployment"></a>
 
@@ -37,7 +37,7 @@ Custom connector should be deployed in the Resource Group where the playbooks th
 
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
-    * Connector name: Please enter the custom connector(ex:ZNAccessOrchestratorConnector)
+    * Connector name: Please enter the custom connector(ex:ZNSegmentConnector)
     * Uri: The URL to the REST API (you should not have to change this)
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroNetworks%2FPlaybooks%2FCustomConnector%2Fazuredeploy.json" target="_blank">
@@ -51,6 +51,6 @@ Custom connector should be deployed in the Resource Group where the playbooks th
 
 ## 2. Deploy the required playbook template (or create your own playbook from scratch)
 This integration offers 3 playbook templates. Each one has it's own documentation an quick deployment button:
-* [ZeroNetworksAcccessOrchestrator-EnrichIncident](./ZeroNetworksAcccessOrchestrator-EnrichIncident#deployment-instructions)
-* [ZeroNetworksAcccessOrchestrator-AddAssettoProtection](./ZeroNetworksAcccessOrchestrator-AddAssettoProtection#deployment-instructions)
-* [ZeroNetworksAcccessOrchestrator-AddBlockOutboundRule](./ZeroNetworksAcccessOrchestrator-AddBlockOutboundRule#deployment-instructions)
+* [ZeroNetworksSegment-EnrichIncident](./ZeroNetworksSegment-EnrichIncident#deployment-instructions)
+* [ZeroNetworksSegment-AddAssettoProtection](./ZeroNetworksSegment-AddAssettoProtection#deployment-instructions)
+* [ZeroNetworksSegment-AddBlockOutboundRule](./ZeroNetworksSegment-AddBlockOutboundRule#deployment-instructions)

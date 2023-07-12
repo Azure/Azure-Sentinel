@@ -1,0 +1,100 @@
+id: ef895ada-e8e8-4cf0-9313-b1ab67fab69f
+name: Authentication Attempt from New Country
+description: |
+  Detects when there is a login attempt from a country that has not seen a successful login in the previous 14 days.
+  Threat actors may attempt to authenticate with credentials from compromised accounts - monitoring attempts from anomalous locations may help identify these attempts.
+  Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.
+  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let CombinedSignInLogs = union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs;
+    // Combine AADNonInteractiveUserSignInLogs and SigninLogs into a single table
+    // Fetch Azure IP address ranges data from a JSON file hosted on GitHub
+    let AzureRanges = externaldata(changeNumber: string, cloud: string, values: dynamic)
+    ["https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MSFTIPRanges/ServiceTags_Public.json"] with(format='multijson')
+    // Load Azure IP address ranges from the JSON file hosted on GitHub
+    | mv-expand values
+    // Expand the values column into separate rows
+    | extend Name = values.name, AddressPrefixes = tostring(values.properties.addressPrefixes);
+    // Create additional columns for the name and address prefixes
+    // Identify known locations to be excluded from analysis
+    let ExcludedKnownLocations = CombinedSignInLogs
+    // Filter the combined logs based on the specified time range
+    | where TimeGenerated between (ago(14d)..ago(1d))
+    // Filter by specific ResultType
+    | where ResultType == 0
+    // Summarize the logs by location
+    | summarize by Location;
+    // Find sign-in locations matching specific criteria
+    let MatchedLocations = materialize(CombinedSignInLogs
+    // Filter the combined logs based on the specified time range
+    | where TimeGenerated > ago(1d)
+    // Exclude specific ResultTypes
+    | where ResultType !in (50126, 50053, 50074, 70044)
+    // Exclude known locations
+    | where Location !in (ExcludedKnownLocations));
+    // Match IP addresses of matched locations with Azure IP address ranges
+    let MatchedIPs = MatchedLocations
+    // Use the 'ipv4_lookup' function to match IP addresses with Azure IP address ranges
+    | evaluate ipv4_lookup(AzureRanges, IPAddress, AddressPrefixes)
+    // Project only the IPAddress column
+    | project IPAddress;
+    // Exclude IP addresses that are already matched with Azure IP address ranges
+    let MaxSetSize = 5; // Set the maximum size limit for make_set
+    let ExcludedIPs = MatchedLocations
+    // Filter out IP addresses that are already matched
+    | where not (IPAddress in (MatchedIPs))
+    // Exclude empty or null Location values
+    | where isnotempty(Location)
+    // Handle dynamic and string column values for LocationDetails and DeviceDetail
+    | extend LocationDetails_dynamic = column_ifexists("LocationDetails_dynamic", "")
+    | extend DeviceDetail_dynamic = column_ifexists("DeviceDetail_dynamic", "")
+    | extend LocationDetails = iif(isnotempty(LocationDetails_dynamic), LocationDetails_dynamic, parse_json(LocationDetails_string))
+    | extend DeviceDetail = iif(isnotempty(DeviceDetail_dynamic), DeviceDetail_dynamic, parse_json(DeviceDetail_string))
+    // Extract location details (city and state)
+    | extend City = tostring(LocationDetails.city)
+    | extend State = tostring(LocationDetails.state)
+    | extend Place = strcat(City, " - ", State)
+    | extend DeviceId = tostring(DeviceDetail.deviceId)
+    | extend Result = strcat(tostring(ResultType), " - ", ResultDescription)
+    // Summarize the data based on UserPrincipalName, Location, and Category
+    | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated),
+    make_set(Result, MaxSetSize), make_set(IPAddress, MaxSetSize),
+    make_set(UserAgent, MaxSetSize), make_set(Place, MaxSetSize),
+    make_set(DeviceId, MaxSetSize) by UserPrincipalName, Location, Category
+    // Extract the username prefix and suffix from UserPrincipalName
+    | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0]);
+    ExcludedIPs // Output the final result set
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.1.0
+kind: Scheduled
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Pete Bryan
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Others" ]

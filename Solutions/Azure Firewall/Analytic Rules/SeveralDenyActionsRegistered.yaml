@@ -1,0 +1,58 @@
+id: f8dad4e9-3f19-4d70-ab7f-8f19ccd43a3e
+name: Several deny actions registered
+description: |
+  'Identifies attack pattern when attacker tries to move, or scan, from resource to resource on the network and creates an incident when a source has more than 1 registered deny action in Azure Firewall.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Discovery
+  - LateralMovement
+  - CommandAndControl
+relevantTechniques:
+  - T1046
+  - T1071
+  - T1210
+query: |
+  let threshold = 1;
+  union isfuzzy=true(
+  AZFWApplicationRule
+  | where Action == "Deny"
+  | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+  | where count_ >= ["threshold"]),
+  (AZFWNetworkRule
+  | where Action == "Deny"
+  | extend Fqdn = DestinationIp
+  | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+  | where count_ >= ["threshold"]),
+  (AzureDiagnostics
+  | where OperationName in ("AzureFirewallApplicationRuleLog","AzureFirewallNetworkRuleLog")
+  | extend msg_s_replaced0 = replace(@"\s\s",@" ",msg_s)
+  | extend msg_s_replaced1 = replace(@"\.\s",@" ",msg_s_replaced0)
+  | extend msg_a = split(msg_s_replaced1," ")
+  | extend srcAddr_a = split(msg_a[3],":") , destAddr_a = split(msg_a[5],":")
+  | extend Protocol = tostring(msg_a[0]), SourceIp = tostring(srcAddr_a[0]), srcPort = tostring(srcAddr_a[1]), DestinationIp = tostring(destAddr_a[0]), destPort = tostring(destAddr_a[1]), Action = tostring(msg_a[7])
+  | where Action == "Deny"
+  | extend Fqdn = iff(DestinationIp matches regex "\\d+\\.\\d+\\.\\d+\\.\\d+","",DestinationIp)
+  | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
+  | where count_ >= ["threshold"])
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Fqdn
+version: 1.1.0
+kind: Scheduled

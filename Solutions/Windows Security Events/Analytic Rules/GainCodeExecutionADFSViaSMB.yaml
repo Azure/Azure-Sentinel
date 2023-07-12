@@ -1,0 +1,73 @@
+id: 12dcea64-bec2-41c9-9df2-9f28461b1295
+name: Gain Code Execution on ADFS Server via SMB + Remote Service or Scheduled Task
+description: |
+   'This query detects instances where an attacker has gained the ability to execute code on an ADFS Server through SMB and Remote Service or Scheduled Task.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1210
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  let timeframe = 1d;
+  // Adjust for a longer timeframe for identifying ADFS Servers
+  let lookback = 6d;
+  // Identify ADFS Servers
+  let ADFS_Servers = (
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe+lookback)
+  | where EventID == 4688 and SubjectLogonId != "0x3e4"
+  | where NewProcessName has "Microsoft.IdentityServer.ServiceHost.exe"
+  | distinct Computer
+  );
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where Computer in~ (ADFS_Servers)
+  | where Account !endswith "$"
+  // Check for scheduled task events
+  | where EventID in (4697, 4698, 4699, 4700, 4701, 4702)
+  | extend EventDataParsed = parse_xml(EventData)
+  | extend SubjectLogonId = tostring(EventDataParsed.EventData.Data[3]["#text"])
+  // Check specifically for access to IPC$ share and PIPE\svcctl and PIPE\atsvc for Service Control Services and Schedule Control Services
+  | union (
+      SecurityEvent
+      | where TimeGenerated > ago(timeframe)
+      | where Computer in~ (ADFS_Servers)
+      | where Account !endswith "$"
+      | where EventID == 5145
+      | where RelativeTargetName =~ "svcctl" or RelativeTargetName  =~ "atsvc"
+  )
+  // Check for lateral movement
+  | join kind=inner
+  (SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where Account !endswith "$"
+  | where EventID == 4624 and LogonType == 3
+  ) on $left.SubjectLogonId == $right.TargetLogonId
+  | project TimeGenerated, Account, Computer, EventID, RelativeTargetName
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.2.0
+kind: Scheduled

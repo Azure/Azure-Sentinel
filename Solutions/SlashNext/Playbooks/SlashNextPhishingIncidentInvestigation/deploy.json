@@ -1,0 +1,323 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "SlashNext Phishing Incident Investigation Playbook",
+    "description": "Enhance your security with threat hunting and incident investigation using this playbook. Scan with world’s largest, real-time phishing intelligence database for accurate, definitive binary verdicts on suspicious URLs and download phishing forensics including webpage screenshots, HTML and text. The playbook shall perform the analysis of all URL entities attached to an existing incident using SlashNext Logic Apps Connector and add threat information to each malicious incident.",
+    "prerequisites": [
+      "1.**SlashNext Logic Apps Connector** supports **Basic** authentication, while creating connection you will be asked to provide API key.",
+      "To acquire SlashNext API key, please contact us at [support@slashnext.com](mailto:support@slashnext.com) or visit [SlashNext.com](www.slashnext.com)"
+    ],
+    "postDeployment": [ "**a. Authorize Connection**", "Once deployment is complete, authorize SlashNext Logic Apps Connector connection", "1. Click on the SlashNext connection resource", "2. Click **Edit** API connection", "3. Enter API key acquired from SlashNext", "4. Click **Save**" ],
+    "lastUpdateTime": "2022-09-27T00:00:00.000Z",
+    "entities": [],
+    "tags": [],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "SlashNext"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "SlashNext Phishing Incident Investigation",
+        "notes": [ "Initial version" ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "SlashNextPhishingIncidentInvestigation",
+      "type": "string"
+    },
+    "customApis_slashnext_name": {
+      "defaultValue": "SlashNext",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the SlashNext Connector"
+      }
+    }
+  },
+  "variables": {
+    "slashnext_connection_name": "[concat('slashnext-connection-', parameters('PlaybookName'))]",
+    "MicrosoftSentinelConnectionName": "[concat('sentinel-connection-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "properties": {
+        "provisioningState": "Succeeded",
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {
+              },
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Add_comment_to_incident": {
+              "runAfter": {
+                "Sentinel_Comment_Condition": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "\u003cp\u003e@{variables('message')}\u003c/p\u003e"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/Comment"
+              }
+            },
+            "Entities_-_Get_URLs": {
+              "runAfter": {
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/url"
+              }
+            },
+            "For_each": {
+              "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+              "actions": {
+                "Condition": {
+                  "actions": {
+                    "Append_Malicious_URL": {
+                      "runAfter": {
+                      },
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "malicious_urls",
+                        "value": "@items('For_each')?['Url']"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Repute": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@body('Repute')?['total_malicious_urls']",
+                          1
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Repute": {
+                  "runAfter": {
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "urls": [
+                        "@items('For_each')?['Url']"
+                      ]
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['SlashNext']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/api/v1/urls/repute"
+                  }
+                }
+              },
+              "runAfter": {
+                "Message": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Malicious_URLs": {
+              "runAfter": {
+                "Entities_-_Get_URLs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "malicious_urls",
+                    "type": "array",
+                    "value": [
+                    ]
+                  }
+                ]
+              }
+            },
+            "Message": {
+              "runAfter": {
+                "Malicious_URLs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "message",
+                    "type": "string",
+                    "value": "''"
+                  }
+                ]
+              }
+            },
+            "Sentinel_Comment_Condition": {
+              "actions": {
+                "Message_For_Multiple_Incidents": {
+                  "runAfter": {
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "message",
+                    "value": "According to SlashNext connector below mentioned URLs are malicious\n@{variables('malicious_urls')}"
+                  }
+                }
+              },
+              "runAfter": {
+                "For_each": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Message_For_Single_Incident": {
+                    "runAfter": {
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "message",
+                      "value": "According to SlashNext connector below mentioned URL is malicious\n@{variables('malicious_urls')}"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(variables('malicious_urls'))",
+                      1
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            }
+          },
+          "outputs": {
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "SlashNext": {
+                "connectionId": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/',variables('slashnext_connection_name'))]",
+                "connectionName": "[variables('slashnext_connection_name')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', 'SlashNext')]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "incidentenrichment",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "apiVersion": "2017-07-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('slashnext_connection_name'))]",
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+      ]
+    },
+    {
+      "name": "[variables('slashnext_connection_name')]",
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('slashnext_connection_name')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_slashnext_name'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('MicrosoftSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+        "customParameterValues": {
+        },
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+        }
+      }
+    }
+  ]
+}

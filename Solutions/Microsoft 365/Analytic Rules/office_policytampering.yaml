@@ -1,0 +1,58 @@
+id: fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
+name: Office policy tampering
+description: |
+  'Identifies if any tampering is done to either auditlog, ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. 
+  An adversary may use this technique to evade detection or avoid other policy based defenses.
+  References: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.'
+severity: Medium
+status: Available 
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1098
+  - T1562
+query: |
+  let opList = OfficeActivity 
+  | summarize by Operation
+  //| where Operation startswith "Remove-" or Operation startswith "Disable-"
+  | where Operation has_any ("Remove", "Disable")
+  | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
+  | summarize make_set(Operation);
+  OfficeActivity
+  // Only admin or global-admin can disable/remove policy
+  | where RecordType =~ "ExchangeAdmin"
+  | where UserType in~ ("Admin","DcAdmin")
+  // Pass in interesting Operation list
+  | where Operation in~ (opList)
+  | extend ClientIPOnly = case( 
+  ClientIP has ".", tostring(split(ClientIP,":")[0]), 
+  ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+  ClientIP
+  )  
+  | extend Port = case(
+  ClientIP has ".", (split(ClientIP,":")[1]),
+  ClientIP has "[", tostring(split(ClientIP,"]:")[1]),
+  ClientIP
+  )
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 2.0.0
+kind: Scheduled

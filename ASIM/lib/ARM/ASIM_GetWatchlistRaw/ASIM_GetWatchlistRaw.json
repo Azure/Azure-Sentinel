@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASIM_GetWatchlistRaw",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "An ASIM function to get the ASimDisabledParsers watchlist",
+            "category": "ASIM",
+            "FunctionAlias": "ASIM_GetWatchlistRaw",
+            "query": "let function = (watchlist:string, keys:dynamic = dynamic([])) {\n  Watchlist\n  | where TimeGenerated < now() \n  | where _DTItemType == 'watchlist-item' \n  | where WatchlistAlias == watchlist\n  | where array_length(keys) == 0 or SearchKey in (keys)\n  | summarize hint.shufflekey=_DTItemId arg_max(_DTTimestamp, _DTItemStatus, LastUpdatedTimeUTC, SearchKey, WatchlistItem) by _DTItemId \n  | where _DTItemStatus != 'Delete' \n  | project-away _DTTimestamp, _DTItemStatus\n};\nfunction (watchlist,keys)",
+            "version": 1,
+            "functionParameters": "watchlist:string,keys:dynamic=dynamic([])"
+          }
+        }
+      ]
+    }
+  ]
+}

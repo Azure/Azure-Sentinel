@@ -1,0 +1,66 @@
+id: 99d589fa-7337-40d7-91a0-c96d0c4fa437
+name: Account created from non-approved sources
+description: |
+  'This query looks for account being created from a domain that is not regularly seen in a tenant.
+    Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.
+    Created accounts should be investigated to ensure they were legitimated created.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136.003
+tags:
+  - AADSecOpsGuide
+query: |
+  let core_domains = (SigninLogs
+    | where TimeGenerated > ago(7d)
+    | where ResultType == 0
+    | extend domain = tolower(split(UserPrincipalName, "@")[1])
+    | summarize by tostring(domain));
+    let alternative_domains = (SigninLogs
+    | where TimeGenerated > ago(7d)
+    | where isnotempty(AlternateSignInName)
+    | where ResultType == 0
+    | extend domain = tolower(split(AlternateSignInName, "@")[1])
+    | summarize by tostring(domain));
+    AuditLogs
+    | where TimeGenerated > ago(1d)
+    | where OperationName =~ "Add User"
+    | extend AddingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend AddingSPN = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)
+    | extend AddedBy = iif(isnotempty(AddingUser), AddingUser, AddingSPN)
+    | extend UserAdded = tostring(TargetResources[0].userPrincipalName)
+    | extend Domain = tolower(split(UserAdded, "@")[1])
+    | where Domain !in (core_domains) and Domain !in (alternative_domains)
+    | project-away AddingUser
+    | project-reorder TimeGenerated, UserAdded, Domain, AddedBy
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AddedBy
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserAdded
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

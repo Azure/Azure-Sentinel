@@ -1,0 +1,63 @@
+id: dd78a122-d377-415a-afe9-f22e08d2112c
+name: Service Principal Assigned App Role With Sensitive Access
+description: |
+  'Detects a Service Principal being assigned an app role that has sensitive access such as Mail.Read.
+    A threat actor who compromises a Service Principal may assign it an app role to allow it to access sensitive data, or to perform other actions.
+    Ensure that any assignment to a Service Principal is valid and appropriate.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#application-granted-highly-privileged-permissions'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  // Add other permissions to this list as needed
+    let permissions = dynamic(["Mail.Read", "offline_access", "Files.Read", "Notes.Read", "ChannelMessage.Read", "Chat.Read", "TeamsActivity.Read",
+    "Group.Read", "EWS.AccessAsUser.All", "EAS.AccessAsUser.All"]);
+    AuditLogs
+    | where OperationName =~ "Add app role assignment to service principal"
+    | mv-expand TargetResources[0].modifiedProperties
+    | extend TargetResources_0_modifiedProperties = column_ifexists("TargetResources_0_modifiedProperties", '')
+    | where isnotempty(TargetResources_0_modifiedProperties)
+    | where TargetResources_0_modifiedProperties.displayName =~ "AppRole.Value" or TargetResources_0_modifiedProperties.displayName =~ "DelegatedPermissionGrant.Scope"
+    | extend Permissions = split((parse_json(tostring(TargetResources_0_modifiedProperties.newValue))), " ")
+    | where Permissions has_any (permissions)
+    | summarize AddedPermissions=make_set(Permissions,200) by CorrelationId
+    | join kind=inner (AuditLogs
+    | where OperationName =~ "Add app role assignment to service principal") on CorrelationId
+    | extend InitiatedBy = tostring(iff(isnotempty(InitiatedBy.user.userPrincipalName),InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName))
+    | extend ServicePrincipal = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[4].newValue)))
+    | extend SPID = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[6].newValue)))
+    | extend InitiatedBy = pack("User", InitiatedBy, "UA", column_ifexists("UserAgent",''), "IPAddress", column_ifexists("IpAddress",''))
+    | mv-expand kind=array AddedPermissions
+    | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), make_set(InitiatedBy,200), make_set(AddedPermissions,200) by SPID, ServicePrincipal
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: ServicePrincipal
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: SPID
+version: 1.0.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

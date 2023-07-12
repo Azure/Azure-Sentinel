@@ -1,0 +1,52 @@
+id: 5f171045-88ab-4634-baae-a7b6509f483b
+name: AV detections related to Dev-0530 actors
+description: |
+  'This query looks for Microsoft Defender AV detections related to  Dev-0530 actors. In Microsoft Sentinel the SecurityAlerts table includes only the Device Name of the affected device, 
+   this query joins the DeviceInfo table to clearly connect other information such as Device group, ip, logged on users etc. This would allow the Microsoft Sentinel analyst to have more context related to the alert, if available.'
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1486
+tags:
+  -  Dev-0530 actors
+query: |
+  let Dev0530_threats = dynamic(["Trojan:Win32/SiennaPurple.A", "Ransom:Win32/SiennaBlue.A", "Ransom:Win32/SiennaBlue.B"]);
+  SecurityAlert
+  | where ProviderName == "MDATP"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)
+  | where ThreatName in~ (Dev0530_threats) or ThreatFamilyName in~ (Dev0530_threats)
+  | extend CompromisedEntity = tolower(CompromisedEntity)
+  | join kind=inner (DeviceInfo
+      | extend DeviceName = tolower(DeviceName)
+  ) on $left.CompromisedEntity == $right.DeviceName
+  | summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: CompromisedEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIP
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: aprakash13
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

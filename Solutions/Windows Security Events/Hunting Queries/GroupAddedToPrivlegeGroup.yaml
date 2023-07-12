@@ -1,0 +1,70 @@
+id: cb47a115-2616-4d56-890d-b28c14bc83e4
+name: Group added to Built in Domain Local or Global Group
+description: |
+  'A Group created in the last 7 days was added to a privileged built in domain local group or global group such as the
+  Enterprise Admins, Cert Publishers or DnsAdmins.  Be sure to verify this is an expected addition'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 7d;
+  // For AD SID mappings - https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups
+  let WellKnownLocalSID = "S-1-5-32-5[0-9][0-9]$";
+  // The SIDs for DnsAdmins and DnsUpdateProxy can be different than *-1102 and -*1103. Check these SIDs in your domain before running the query
+  let WellKnownGroupSID = "S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$";
+  let GroupAddition = SecurityEvent
+  | where TimeGenerated between(lookback..starttime)
+  // 4728 - A member was added to a security-enabled global group
+  // 4732 - A member was added to a security-enabled local group
+  // 4756 - A member was added to a security-enabled universal group
+  | where EventID in ("4728", "4732", "4756")
+  | where AccountType == "User" and MemberName == "-"
+  // Exclude Remote Desktop Users group: S-1-5-32-555
+  | where TargetSid !in ("S-1-5-32-555")
+  | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
+  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer,
+  GroupAddTargetUserName = TargetUserName, GroupAddTargetDomainName = TargetDomainName, GroupAddTargetSid = TargetSid,
+  GroupAddSubjectUserName = SubjectUserName, GroupAddSubjectUserSid = SubjectUserSid, GroupSid = MemberSid, Account, Computer
+  | extend AccountCustomEntity = Account, HostCustomEntity = Computer;
+  let GroupCreated = SecurityEvent
+  | where TimeGenerated between(starttime..endtime)
+  // 4727 - A security-enabled global group was created
+  // 4731 - A security-enabled local group was created
+  // 4754 - A security-enabled universal group was created
+  | where EventID in ("4727", "4731", "4754")
+  | where AccountType == "User"
+  | project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer,
+  GroupCreateTargetUserName = TargetUserName, GroupCreateTargetDomainName = TargetDomainName, GroupCreateSubjectUserName = SubjectUserName,
+  GroupCreateSubjectDomainName = SubjectDomainName, GroupCreateSubjectUserSid = SubjectUserSid, GroupSid = TargetSid, Account, Computer;
+  GroupCreated
+  | join (
+  GroupAddition
+  ) on GroupSid
+  | extend NTDomain = tostring(split(Account,'\\',0)[0]), Name = tostring(split(Account,'\\',1)[0])
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain  
+version: 2.0.1

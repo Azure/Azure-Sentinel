@@ -1,0 +1,83 @@
+id: d82eb796-d1eb-43c8-a813-325ce3417cef
+name: Dev-0530 File Extension Rename
+description: |
+  'Dev-0530 actors are known to encrypt the contents of the victims device as well as renaming the file extensions. This query looks for the creation of files with .h0lyenc extension or presence of ransom note.'
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1486
+tags:
+  - Dev-0530
+  - Schema: ASIMFileEvent
+    SchemaVersion: 0.1.0
+query: |
+  union isfuzzy=true
+      (DeviceFileEvents
+      | where ActionType == "FileCreated"
+      | where FileName endswith ".h0lyenc" or FolderPath == "C:\\FOR_DECRYPT.html"
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
+          by
+          AccountCustomEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),
+          HostCustomEntity = DeviceName,
+          Type,
+          InitiatingProcessId,
+          FileName,
+          FolderPath,
+          EventType = ActionType,
+          Commandline = InitiatingProcessCommandLine,
+          InitiatingProcessFileName,
+          InitiatingProcessSHA256,
+          FileHashCustomEntity = SHA256,
+          AlgorithmCustomEntity = "SHA256"
+      ),
+      (imFileEvent
+      | where EventType == "FileCreated"
+      | where TargetFilePath endswith ".h0lyenc" or TargetFilePath == "C:\\FOR_DECRYPT.html"
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
+          by
+          AccountCustomEntity = ActorUsername,
+          HostCustomEntity = DvcHostname,
+          DvcId,
+          Type,
+          EventType,
+          FileHashCustomEntity = TargetFileSHA256,
+          Hash,
+          TargetFilePath,
+          Commandline = ActingProcessCommandLine,
+          AlgorithmCustomEntity = "SHA256"
+      )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: AlgorithmCustomEntity
+      - identifier: Value
+        columnName: FileHashCustomEntity
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ashwin Patil
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

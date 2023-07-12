@@ -1,0 +1,67 @@
+id: ffa2977f-3077-4bba-b1bf-f3417699cbb0
+name: Darktrace AI Analyst 
+description: |
+  'This rule creates Microsoft Sentinel Incidents based on Darktrace AI Analyst Incidents, fetched every 5 minutes.'
+severity: High
+requiredDataConnectors:
+  - connectorId: DarktraceRESTConnector
+    dataTypes:
+      - darktrace_model_alerts_CL
+queryFrequency: 5m
+queryPeriod: 5m 
+triggerOperator: gt
+triggerThreshold: 0
+tactics: [] # no tactics are ingested for AIA events at the moment 
+relevantTechniques: []
+query: |
+  darktrace_model_alerts_CL 
+  | where dtProduct_s =="AI Analyst"
+  | project-rename  EventStartTime=startTime_s, EventEndTime = endTime_s, NetworkRuleName=title_s, DtCurrentGroup=externalId_g, ThreatCategory=dtProduct_s, ThreatRiskLevel=score_d, SrcHostname=hostname_s, SrcIpAddr=deviceIP_s, DtURL=url_s, DtSummary=summary_s, DtGroupScore=groupScore_d, DtGroupCategory=groupCategory_s, DtSrcDeviceName=bestDeviceName_s, DtIndentifier=identifier_s, ActivityID=activityId_s, DtGroupingID=groupingId_s, DtGroupByActivity=groupByActivity_b, DtSummaryFirstSentence=summaryFirstSentence_s, DtNewEvent=newEvent_b, DtCGLegacy=currentGroup_s, DtGroupPreviousGroups=groupPreviousGroups_s, DtTime=time_s, DtSeverity=Severity, DtLongitude=longitude_d, DtLatitude=latitude_d  
+  | extend EventVendor = "Darktrace", EventProduct = "Darktrace DETECT", DtSentinelCategory=DtGroupCategory
+  | extend DtSentinelCategory = case (DtGroupCategory == "compliance", "Low", 
+                                      DtGroupCategory == "suspicious", "Medium",
+                                      "High") //compliance -> low, suspcious -> medium, critical -> high
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings: 
+ - entityType: Host
+   fieldMappings:
+    - identifier: HostName
+      columnName: SrcHostname
+ - entityType: IP
+   fieldMappings:
+    - identifier: Address
+      columnName: SrcIpAddr
+customDetails:
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+  NetworkRuleName: NetworkRuleName
+  DtCurrentGroup: DtCurrentGroup
+  ThreatRiskLevel: ThreatRiskLevel
+  DtSummary: DtSummary
+  DtGroupScore: DtGroupScore
+  DtGroupCategory: DtGroupCategory
+  DtSentinelCategory: DtSentinelCategory
+  DtSrcDeviceName: DtSrcDeviceName
+  DtNewEvent: DtNewEvent
+  DtSeverity: DtSeverity
+alertDetailsOverride: 
+  alertDisplayNameFormat: 'Darktrace: {{ThreatRiskLevel}} - {{NetworkRuleName}}'
+  alertDescriptionFormat: '{{DtSummary}}'
+  alertTacticsColumnName: # leave empty
+  alertSeverityColumnName: # leave empty 
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: DtURL
+    - alertProperty: ProviderName
+      value: EventVendor
+    - alertProperty: ProductName
+      value: EventProduct
+    - alertProperty: ProductComponentName
+      value: ThreatCategory
+    - alertProperty: Severity
+      value: DtSentinelCategory
+version: 1.1.0
+kind: NRT               
+
+

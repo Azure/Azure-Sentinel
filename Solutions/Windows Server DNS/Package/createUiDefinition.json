@@ -1,0 +1,403 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/DNS.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\nThe [DNS](https://docs.microsoft.com/windows-server/networking/dns/dns-top) solution for Microsoft Sentinel allows you to ingest DNS analytic and audit logs into Microsoft Sentinel. The DNS logs are collected only from Windows agents.\n\nInstalling this solution will deploy two data connectors,\n\r\n1. DNS via AMA - This data connector helps in ingesting Windows DNS logs into your Log Analytics Workspace using the new Azure Monitor Agent. Learn more about ingesting using the new Azure Monitor Agent [here](https://learn.microsoft.com/en-us/azure/sentinel/connect-dns-ama). Microsoft recommends using this Data Connector.\r\n\n2. DNS via Legacy Agent - This data connector helps in ingesting Windows DNS logs into your Log Analytics Workspace using the legacy Log Analytics agent.\n\r\n<P style=\"color:red\">**NOTE**: Microsoft recommends Installation of DNS via AMA. Legacy connector uses the Log Analytics agent which is about to be deprecated by **Aug 31, 2024,** and thus should only be installed where AMA is not supported.</p>\n\n**Data Connectors:** 2, **Workbooks:** 1, **Analytic Rules:** 5, **Hunting Queries:** 9\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors1-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "Installing this solution will deploy two data connectors,"
+            }
+          },
+          {
+            "name": "dataconnectors2-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "1. DNS via AMA - This data connector helps in ingesting Windows DNS logs into your Log Analytics Workspace using the new Azure Monitor Agent. Learn more about ingesting using the new Azure Monitor Agent here (https://learn.microsoft.com/en-us/azure/sentinel/connect-dns-ama). Microsoft recommends using this Data Connector."
+            }
+          },
+          {
+            "name": "dataconnectors3-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "2. DNS via Legacy Agent - This data connector helps in ingesting Windows DNS logs into your Log Analytics Workspace using the legacy Log Analytics agent."
+            }
+          },
+          {
+            "name": "dataconnectors4-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "NOTE: Microsoft recommends Installation of DNS via AMA. Legacy connector uses the Log Analytics agent which is about to be deprecated by Aug 31, 2024, and thus should only be installed where AMA is not supported."
+            }
+          },
+          {
+            "name": "dataconnectors5-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "After installing the solution, configure and enable the data connector(s) by following guidance in Manage solution view."
+            }
+          },
+          {
+            "name": "dataconnectors-link2",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more about connecting data sources",
+                "uri": "https://docs.microsoft.com/azure/sentinel/connect-data-sources"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS",
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Gain extensive insight into your organization's DNS by analyzing, collecting and correlating all DNS events.\nThis workbook exposes a variety of information about suspicious queries, malicious IP addresses and domain operations."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Potential DGA detected",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies clients with a high NXDomain count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live).\nAlerts are generated when a new IP address is seen (based on not being associated with\nNXDomain records in the prior 10-day baseline period)."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Rare client observed with high reverse DNS lookup count",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies clients with a high reverse DNS counts that could be carrying out reconnaissance or discovery activity.\nAlerts are generated if the IP performing such reverse DNS lookups was not seen doing so in the preceding 7-day period."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS events related to mining pools",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies IP addresses that may be performing DNS lookups associated with common currency mining pools."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS events related to ToR proxies",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies IP addresses performing DNS lookups associated with common ToR proxies."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "NRT DNS events related to mining pools",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies IP addresses that may be performing DNS lookups associated with common currency mining pools."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS lookups for commonly abused TLDs",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Some top level domains (TLDs) are more commonly associated with malware for a range of \nreasons - including how easy domains on these TLDs are to obtain. Many of these may be undesirable \nfrom an enterprise policy perspective. You can update and extend the list of TLD's  you wish to search for.\nThe NameCount column provides an initial insight into how widespread the domain usage is across the environment. This hunting query depends on DNS data connector (DnsEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS - domain anomalous lookup increase",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Checking for a threefold increase or more of domain lookups per client IP address for the current day compared to the daily average for the previous week.\nThis can potentially identify excessive traffic to a given location that could be indicative of data transfer out of your network to a group of systems based on the same second level domain.\nFor example, if one client is sending requests for test1.badguy.com and another client is sending requests for test2.badguy.com, you may not see a high enough count to be interesting.\nHowever, a combination of the requests to badguy.com could have a high enough count to be interesting.\nThis is only Name lookups, so it would be recommended to review the firewall and web proxy logs in relation to the client IP address making the interesting requests. This hunting query depends on DNS data connector (DnsEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS Full Name anomalous lookup increase",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Checking for a threefold increase or more in Full Name lookups per Client IP for the current day as compared to the daily average for the previous week.\nThis can potentially identify excessive traffic to a given location that could be indicative of data transfer out of your network.\nThis is only for Name lookups, so it would be recommended to review the firewall and web proxy logs in relation to the ClientIP making the interesting requests. This hunting query depends on DNS data connector (DnsEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "Potential DGA detected",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Clients with a high NXDomain count could be indicative of a DGA (cycling through possible C2 domains\nwhere most C2s are not live). Based on quartile percent analysis algorithm. This hunting query depends on DNS data connector (DnsEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "High reverse DNS count by host",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Clients with a high reverse DNS count could be carrying out reconnaissance or discovery activity. This hunting query depends on DNS data connector (DnsEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Abnormally long DNS URI queries",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The length of a DNS query can often be an indicator of suspicious activity. Typical domain name lengths are short, whereas the domain name query used for data exfiltration or tunneling can often be very large in size. This is because they could be encoded using base 64/32 etc. The hunting query looks for Names that are more than 150 characters in length. Due to a lot of services using long DNS to communicate via procedurally generated long domain names,\nthis can be problematic, so a number of known services are excluded from this query. Additional items might need to be added to this exclusion, depending on your\nenvironment. This hunting query depends on DNS data connector (DnsEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery7",
+            "type": "Microsoft.Common.Section",
+            "label": "DNS Domains linked to WannaCry ransomware campaign",
+            "elements": [
+              {
+                "name": "huntingquery7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Displays the client DNS request for any of the known domains linked to WannaCry.\nThese results may indicate a Wannacry/Wannacrypt ransomware infection.\nReference: Domain listing from https://pastebin.com/cRUii32E This hunting query depends on DNS data connector (DnsEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery8",
+            "type": "Microsoft.Common.Section",
+            "label": "Solorigate DNS Pattern",
+            "elements": [
+              {
+                "name": "huntingquery8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Looks for the DGA pattern of the domain associated with Solorigate in order to find other domains with the same activity pattern. This hunting query depends on DNS data connector (DnsEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery9",
+            "type": "Microsoft.Common.Section",
+            "label": "Solorigate Encoded Domain in URL",
+            "elements": [
+              {
+                "name": "huntingquery9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Looks for a logon domain seen in Azure AD logs appearing in a DNS query encoded with the DGA encoding used in the Solorigate incident.\nReference: https://blogs.microsoft.com/on-the-issues/2020/12/13/customers-protect-nation-state-cyberattacks/ This hunting query depends on DNS AzureActiveDirectory data connector (DnsEvents SigninLogs Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

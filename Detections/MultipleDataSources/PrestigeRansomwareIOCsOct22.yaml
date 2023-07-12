@@ -1,0 +1,106 @@
+id: bca9c877-2afc-4246-a26d-087ab1cdcd5f
+name: Prestige ransomware IOCs Oct 2022
+description: |
+  'This query looks for file hashes and AV signatures associated with Prestige ransomware 
+  payload.'
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+      - DeviceFileEvents
+      - DeviceImageLoadEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvents  
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1203
+tags:
+  - Prestige
+  - Ransomware
+query: |
+  let sha256Hashes = dynamic(["5dd1ca0d471dee41eb3ea0b6ea117810f228354fc3b7b47400a812573d40d91d", "5fc44c7342b84f50f24758e39c8848b2f0991e8817ef5465844f5f2ff6085a57", "6cff0bbd62efe99f381e5cc0c4182b0fb7a9a34e4be9ce68ee6b0d0ea3eee39c"]);
+  let signames = dynamic(["Ransom:Win32/Prestige"]);
+  (union isfuzzy=true
+  (CommonSecurityLog
+  | where FileHash in (sha256Hashes)
+  | project TimeGenerated, Message, SourceUserID, FileHash, Type
+  | extend timestamp = TimeGenerated, FileHashCustomEntity = 'SHA256', Account = SourceUserID
+  ),
+  (imFileEvent
+  | where TargetFileSHA256 has_any (sha256Hashes)
+  | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256
+  | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
+  ),
+  (Event
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"])
+  | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
+  | extend Hashes = column_ifexists("Hashes", dynamic(["", ""])), CommandLine = column_ifexists("CommandLine", "")
+  | mv-expand Hashes
+  | where Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes)  
+  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
+  | extend Type = strcat(Type, ": ", Source)
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = tostring(Hashes[1])
+  ),
+  (DeviceEvents
+  | where InitiatingProcessSHA256 has_any (sha256Hashes) or SHA256 has_any (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  ),
+  (DeviceFileEvents
+  | where SHA256 has_any (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  ),
+  (DeviceImageLoadEvents
+  | where SHA256 has_any (sha256Hashes)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  ),
+  (SecurityAlert
+  | where ProductName == "Microsoft Defender Advanced Threat Protection"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | where isnotempty(ThreatName)
+  | where ThreatName has_any (signames)
+  | extend Computer = tostring(parse_json(Entities)[0].HostName)
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
+  )
+  )
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileHashCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ashwin Patil
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

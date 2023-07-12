@@ -1,0 +1,75 @@
+id: 4d94d4a9-dc96-410a-8dea-4d4d4584188b
+name: User added to Azure Active Directory Privileged Groups
+description: |
+  'This will alert when a user is added to any of the Privileged Groups.
+  For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.
+  For Administrator role permissions in Azure Active Directory please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+tags:
+  - DEV-0537
+query: |
+  let OperationList = dynamic(["Add member to role","Add member to role in PIM requested (permanent)"]);
+  let PrivilegedGroups = dynamic(["UserAccountAdmins","PrivilegedRoleAdmins","TenantAdmins"]);
+  AuditLogs
+  //| where LoggedByService =~ "Core Directory"
+  | where Category =~ "RoleManagement"
+  | where OperationName in~ (OperationList)
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),
+                 modProps = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = modProps on 
+    (
+        where Property.displayName =~ "Role.WellKnownObjectName"
+        | extend DisplayName = trim('"',tostring(Property.displayName)),
+                 GroupName = trim('"',tostring(Property.newValue))
+    )
+  | extend AppId = InitiatedBy.app.appId,
+        InitiatedByDisplayName = case(isnotempty(InitiatedBy.app.displayName), InitiatedBy.app.displayName, isnotempty(InitiatedBy.user.displayName), InitiatedBy.user.displayName, "not available"),
+        ServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),
+        ServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName),
+        UserId = InitiatedBy.user.id,
+        UserIPAddress = InitiatedBy.user.ipAddress,
+        UserRoles = InitiatedBy.user.roles,
+        UserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | where GroupName in~ (PrivilegedGroups)
+  // If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.
+  //| where InitiatedByDisplayName != "MS-PIM"
+  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName, TargetUserPrincipalName
+  | extend AccountCustomEntity = case(isnotempty(ServicePrincipalName), ServicePrincipalName, 
+                                      isnotempty(UserPrincipalName), UserPrincipalName,  
+                                      "")
+  | extend AccountName = tostring(split(AccountCustomEntity,'@',0)[0]), AccountUPNSuffix = tostring(split(AccountCustomEntity,'@',1)[0])
+  | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName      
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetName      
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
+version: 1.0.4
+kind: Scheduled

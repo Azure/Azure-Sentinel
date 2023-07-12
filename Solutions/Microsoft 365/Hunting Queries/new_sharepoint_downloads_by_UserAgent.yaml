@@ -1,0 +1,46 @@
+id: f2367171-1514-4c67-88ef-27434b6a1093
+name: SharePointFileOperation via devices with previously unseen user agents
+description: |
+  'Tracking via user agent is one way to differentiate between types of connecting device.
+  In homogeneous enterprise environments the user agent associated with an attacker device may stand out as unusual.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let MINIMUM_BLOCKS = 10;
+  let SUCCESS_THRESHOLD = 0.2;
+  let HistoricalActivity = 
+  SigninLogs
+  | where TimeGenerated > lookback
+  | where isnotempty(UserAgent)
+  | summarize SuccessfulSignins=countif(ResultType=="0"), BlockedSignins=countif(ResultType=="50053") by UserAgent
+  | extend SuccessBlockRatio = 1.00 * SuccessfulSignins / BlockedSignins
+  | where SuccessBlockRatio < SUCCESS_THRESHOLD
+  | where BlockedSignins > MINIMUM_BLOCKS 
+  ;
+  OfficeActivity
+  | where TimeGenerated between (starttime .. endtime)
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities=count() by UserAgent
+  | join (HistoricalActivity) on UserAgent
+  | project-away UserAgent1
+  | extend timestamp = StartTime, UserAgentCustomEntity = UserAgent
+entityMappings:
+  - entityType: CloudLogonSession
+    fieldMappings:
+      - identifier: UserAgent
+        columnName: UserAgent
+version: 2.0.0

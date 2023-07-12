@@ -1,0 +1,612 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for ISC Bind"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-iscbind",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "ISCBind",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "ISCBind",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "ISCBind-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "ISCBind",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "ISC Bind data connector with template",
+        "displayName": "ISC Bind template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ISC Bind data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "ISC Bind",
+                  "publisher": "ISC",
+                  "descriptionMarkdown": "The [ISC Bind](https://www.isc.org/bind/) connector allows you to easily connect your ISC Bind logs with Microsoft Sentinel. This gives you more insight into your organization's network traffic data, DNS query data, traffic statistics and improves your security operation capabilities.",
+                  "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "ISCBind",
+                      "baseQuery": "ISCBind"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Domains Queried",
+                      "query": "ISCBind \n| where EventSubType == \"request\" \n| summarize count() by DnsQuery \n| top 10 by count_"
+                    },
+                    {
+                      "description": "Top 10 clients by Source IP Address",
+                      "query": "ISCBind \n| where EventSubType == \"request\" \n| summarize count() by SrcIpAddr \n| top 10 by count_"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Syslog (ISCBind)",
+                      "lastDataReceivedQuery": "ISCBind \n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ISCBind \n      | where TimeGenerated > ago(3d)\n       |take 1\n       | project IsConnected = true"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "write permission is required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "ISC Bind",
+                        "description": "must be configured to export logs via Syslog"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias ISCBind and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ISC%20Bind/Parsers/ISCBind.txt).The function usually takes 10-15 minutes to activate after solution installation/update."
+                    },
+                    {
+                      "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux"
+                    },
+                    {
+                      "description": "Configure the facilities you want to collect and their severities.\n 1. Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n 2. Select **Apply below configuration to my machines** and select the facilities and severities.\n 3.  Click **Save**.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenSyslogSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "2. Configure the logs to be collected"
+                    },
+                    {
+                      "description": "1. Follow these instructions to configure the ISC Bind to forward syslog: \n - [DNS Logs](https://kb.isc.org/docs/aa-01526) \n2. Configure Syslog to send the Syslog traffic to Agent. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+                      "title": "3. Configure and connect the ISC Bind"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "c6571a09-375c-4482-9cf9-15bb7935f201",
+                    "version": "1.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "solution",
+                      "name": "ISCBind"
+                    },
+                    "author": {
+                      "name": "Microsoft"
+                    },
+                    "support": {
+                      "tier": "microsoft",
+                      "name": "Microsoft",
+                      "email": "support@microsoft.com"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ISC Bind",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ISC Bind",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Microsoft",
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "link": "https://support.microsoft.com/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "ISC Bind",
+          "publisher": "ISC",
+          "descriptionMarkdown": "The [ISC Bind](https://www.isc.org/bind/) connector allows you to easily connect your ISC Bind logs with Microsoft Sentinel. This gives you more insight into your organization's network traffic data, DNS query data, traffic statistics and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ISCBind",
+              "baseQuery": "ISCBind"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (ISCBind)",
+              "lastDataReceivedQuery": "ISCBind \n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ISCBind \n      | where TimeGenerated > ago(3d)\n       |take 1\n       | project IsConnected = true"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Domains Queried",
+              "query": "ISCBind \n| where EventSubType == \"request\" \n| summarize count() by DnsQuery \n| top 10 by count_"
+            },
+            {
+              "description": "Top 10 clients by Source IP Address",
+              "query": "ISCBind \n| where EventSubType == \"request\" \n| summarize count() by SrcIpAddr \n| top 10 by count_"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission is required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "ISC Bind",
+                "description": "must be configured to export logs via Syslog"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias ISCBind and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ISC%20Bind/Parsers/ISCBind.txt).The function usually takes 10-15 minutes to activate after solution installation/update."
+            },
+            {
+              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux"
+            },
+            {
+              "description": "Configure the facilities you want to collect and their severities.\n 1. Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n 2. Select **Apply below configuration to my machines** and select the facilities and severities.\n 3.  Click **Save**.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            },
+            {
+              "description": "1. Follow these instructions to configure the ISC Bind to forward syslog: \n - [DNS Logs](https://kb.isc.org/docs/aa-01526) \n2. Configure Syslog to send the Syslog traffic to Agent. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+              "title": "3. Configure and connect the ISC Bind"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "ISCBind Data Parser with template",
+        "displayName": "ISCBind Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ISCBind Data Parser with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "ISCBind",
+                "category": "Samples",
+                "functionAlias": "ISCBind",
+                "query": "\n\r\nlet request = Syslog \r\n| where SyslogMessage has_all (\"client\", \"query:\") and SyslogMessage !has \"response:\"\r\n| parse SyslogMessage with\r\n        * \"client \" * \" \"\r\n        SrcIpAddr:string \"#\" \r\n        SrcPortNumber:string \" \" *\r\n        \"query: \"\r\n        DnsQuery:string \" \"\r\n        DnsQueryClassName:string \" \"\r\n        DnsQueryTypeName:string \" \"\r\n        DnsFlags:string\r\n| extend ServerIPAddressIndex= indexof(DnsFlags, \" \")\r\n| extend ServerIPAddress = iif(ServerIPAddressIndex != \"-1\", substring(DnsFlags, ServerIPAddressIndex),\"\")\r\n| extend ServerIPAddress = replace_regex(ServerIPAddress,@\"[()]\",\"\")\r\n| extend DnsFlags =iif(ServerIPAddressIndex != \"-1\", substring(DnsFlags, 0, ServerIPAddressIndex), DnsFlags)\r\n| extend SrcPortNumber = replace_regex(SrcPortNumber,@\"[^\\d]\",\"\")\r\n| extend EventSubType = \"request\",DnsResponseCodeName = \"NA\"\r\n| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,ServerIPAddressIndex;\r\nlet requestcache = Syslog \r\n| where SyslogMessage has_all (\"client\", \"query (cache)\") and SyslogMessage !has \"response:\"\r\n| parse SyslogMessage with\r\n        * \"client \" * \" \"\r\n        SrcIpAddr:string \"#\" \r\n        SrcPortNumber:string \" \" *\r\n        \"query (cache) '\"\r\n        DnsQuery:string \"/\"\r\n        DnsQueryTypeName:string \"/\"\r\n        DnsQueryClassName:string \"' \"\r\n        Action\r\n| extend EventSubType = \"requestcache\",DnsResponseCodeName = \"NA\"\r\n| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName;\r\nlet response =Syslog \r\n| where SyslogMessage has_all (\"client\", \"query:\", \"response:\")\r\n| parse SyslogMessage with\r\n        * \"client \" * \" \"\r\n        SrcIpAddr:string \"#\" \r\n        SrcPortNumber:string \" \" * \"view \" * \": \"\r\n        NetworkProtocol:string \": query: \"\r\n        DnsQuery:string \" \"\r\n        DnsQueryClassName:string \" \"\r\n        DnsQueryTypeName:string \" \"\r\n        \"response: \" DnsResponseCodeName: string\r\n        \" \" DnsFlags: string\r\n| extend DNSResourceRecordIndex= indexof(DnsFlags, \" \")\r\n| extend DnsResponseName =iif(DNSResourceRecordIndex != \"-1\", substring(DnsFlags, DNSResourceRecordIndex), \"\")\r\n| extend DnsFlags =iif(DNSResourceRecordIndex != \"-1\", substring(DnsFlags, 0, DNSResourceRecordIndex), DnsFlags)\r\n| extend EventSubType = \"response\"\r\n| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,DNSResourceRecordIndex;\r\nunion request,requestcache,response",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "ISCBind"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "ISC Bind",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "ISCBind",
+        "category": "Samples",
+        "functionAlias": "ISCBind",
+        "query": "\n\r\nlet request = Syslog \r\n| where SyslogMessage has_all (\"client\", \"query:\") and SyslogMessage !has \"response:\"\r\n| parse SyslogMessage with\r\n        * \"client \" * \" \"\r\n        SrcIpAddr:string \"#\" \r\n        SrcPortNumber:string \" \" *\r\n        \"query: \"\r\n        DnsQuery:string \" \"\r\n        DnsQueryClassName:string \" \"\r\n        DnsQueryTypeName:string \" \"\r\n        DnsFlags:string\r\n| extend ServerIPAddressIndex= indexof(DnsFlags, \" \")\r\n| extend ServerIPAddress = iif(ServerIPAddressIndex != \"-1\", substring(DnsFlags, ServerIPAddressIndex),\"\")\r\n| extend ServerIPAddress = replace_regex(ServerIPAddress,@\"[()]\",\"\")\r\n| extend DnsFlags =iif(ServerIPAddressIndex != \"-1\", substring(DnsFlags, 0, ServerIPAddressIndex), DnsFlags)\r\n| extend SrcPortNumber = replace_regex(SrcPortNumber,@\"[^\\d]\",\"\")\r\n| extend EventSubType = \"request\",DnsResponseCodeName = \"NA\"\r\n| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,ServerIPAddressIndex;\r\nlet requestcache = Syslog \r\n| where SyslogMessage has_all (\"client\", \"query (cache)\") and SyslogMessage !has \"response:\"\r\n| parse SyslogMessage with\r\n        * \"client \" * \" \"\r\n        SrcIpAddr:string \"#\" \r\n        SrcPortNumber:string \" \" *\r\n        \"query (cache) '\"\r\n        DnsQuery:string \"/\"\r\n        DnsQueryTypeName:string \"/\"\r\n        DnsQueryClassName:string \"' \"\r\n        Action\r\n| extend EventSubType = \"requestcache\",DnsResponseCodeName = \"NA\"\r\n| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName;\r\nlet response =Syslog \r\n| where SyslogMessage has_all (\"client\", \"query:\", \"response:\")\r\n| parse SyslogMessage with\r\n        * \"client \" * \" \"\r\n        SrcIpAddr:string \"#\" \r\n        SrcPortNumber:string \" \" * \"view \" * \": \"\r\n        NetworkProtocol:string \": query: \"\r\n        DnsQuery:string \" \"\r\n        DnsQueryClassName:string \" \"\r\n        DnsQueryTypeName:string \" \"\r\n        \"response: \" DnsResponseCodeName: string\r\n        \" \" DnsFlags: string\r\n| extend DNSResourceRecordIndex= indexof(DnsFlags, \" \")\r\n| extend DnsResponseName =iif(DNSResourceRecordIndex != \"-1\", substring(DnsFlags, DNSResourceRecordIndex), \"\")\r\n| extend DnsFlags =iif(DNSResourceRecordIndex != \"-1\", substring(DnsFlags, 0, DNSResourceRecordIndex), DnsFlags)\r\n| extend EventSubType = \"response\"\r\n| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,DNSResourceRecordIndex;\r\nunion request,requestcache,response",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ISC Bind",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Microsoft",
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "link": "https://support.microsoft.com/"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ISC Bind",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-09-20",
+        "providers": [
+          "ISC"
+        ],
+        "categories": {
+          "domains": [
+            "Networking"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -1,0 +1,60 @@
+id: bf094505-fd2e-484f-b72a-acd79ee00ce8
+name: Network Connection to New External LDAP Server
+description: |
+  'This hunting query looks for outbound network connections using the LDAP protocol to external IP addresses, where that IP address has not had an LDAP network connection to it in the 14 days preceding the query timeframe. This could indicate someone exploiting a vulnerability such as CVE-2021-44228 to trigger the connection to a malicious LDAP server.
+  For more details on Apache Log4j Remote Code Execution Vulnerability - https://community.riskiq.com/article/505098fc/description
+  Find more details on collecting EXECVE data into Microsoft Sentinel - https://techcommunity.microsoft.com/t5/azure-sentinel/hunting-threats-on-linux-with-azure-sentinel/ba-p/1344431'
+requiredDataConnectors:
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog (CheckPoint)
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog (Cisco)
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog (PaloAlto)
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - CVE-2021-44228
+  - Log4j
+  - Log4Shell
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let legacy_ldap = (
+  CommonSecurityLog
+  | where TimeGenerated between(lookback..starttime)
+  // Filter to LDAP connections only
+  | where ApplicationProtocol =~ "ldap"
+  // Check LDAP server is external
+  | extend private =  ipv4_is_private(DestinationIP)
+  | where private == false
+  // Filter out events where network connection was blocked - change this to expand hunt
+  | where DeviceAction has_any ("allow", "accept", "allowed")
+  | summarize by DestinationIP);
+  CommonSecurityLog
+  | where TimeGenerated between(starttime..endtime)
+  | where ApplicationProtocol =~ "ldap"
+  | extend private =  ipv4_is_private(DestinationIP)
+  | where private == false
+  | where DestinationIP !in (legacy_ldap)
+  | where DeviceAction has_any ("allow", "accept", "allowed")
+  | project-reorder TimeGenerated, SourceIP, DestinationIP, ApplicationProtocol, DestinationPort, SentBytes, ReceivedBytes, DeviceAction
+  | extend timestamp = TimeGenerated
+  | extend IP_0_Address = SourceIP
+  | extend IP_1_Address = DestinationIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+version: 1.0.1

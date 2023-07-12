@@ -1,0 +1,68 @@
+id: 1ff56009-db01-4615-8211-d4fda21da02d
+name: Azure AD Role Management Permission Grant
+description: |
+  'Identifies when the Microsoft Graph RoleManagement.ReadWrite.Directory (Delegated or Application) permission is granted to a service principal.
+  This permission allows an application to read and manage the role-based access control (RBAC) settings for your company's directory.
+  An adversary could use this permission to add an Azure AD object to an Admin directory role and escalate privileges.
+  Ref : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions
+  Ref : https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+  - Impact
+relevantTechniques:
+  - T1098.003
+  - T1078.004
+tags:
+  - SimuLand
+query: |
+  AuditLogs
+  | where Category =~ "ApplicationManagement" and LoggedByService =~ "Core Directory" and OperationName in~ ("Add delegated permission grant", "Add app role assignment to service principal")
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "ServicePrincipal" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)
+        | extend props = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = props on 
+    (
+        where Property.displayName in~ ("AppRole.Value","DelegatedPermissionGrant.Scope")
+        | extend DisplayName = tostring(Property.displayName), PermissionGrant = trim('"',tostring(Property.newValue))
+    )
+  | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
+  | mv-apply Property = props on 
+    (
+        where Property.displayName =~ "ServicePrincipal.DisplayName"
+        | extend AppDisplayName = trim('"',tostring(Property.newValue))
+    )
+  | mv-apply Property = props on 
+    (
+        where Property.displayName =~ "ServicePrincipal.ObjectID"
+        | extend AppServicePrincipalId = trim('"',tostring(Property.newValue))
+    )
+  | extend 
+      Initiator = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.displayName), tostring(InitiatedBy.user.userPrincipalName)),
+      InitiatorId = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.servicePrincipalId), tostring(InitiatedBy.user.id))
+  | project TimeGenerated, OperationName, Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, Initiator, InitiatorId, InitiatedBy, TargetResources, AdditionalDetails, CorrelationId
+  | extend Name = tostring(split(Initiator,'@',0)[0]), UPNSuffix = tostring(split(Initiator,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AppDisplayName
+version: 1.0.4
+kind: Scheduled

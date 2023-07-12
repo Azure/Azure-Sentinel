@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimNetworkSessionCorelightZeek",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM filtering parser for Corelight Zeek",
+            "category": "ASIM",
+            "FunctionAlias": "vimNetworkSessionCorelightZeek",
+            "query": "let NetworkDirectionLookup = datatable(local_orig: bool, local_resp: bool, NetworkDirection: string)\n[\n  false, true, 'Inbound',\n  true, false, 'Outbound',\n  true, true, 'Local',\n  false, false, 'Local'\n];\nlet ResultLookup = datatable (conn_state:string, EventResult:string, EventResultDetails:string, EventOriginalResultDetails:string, EventSeverity:string)\n[ \n   'S0', 'Success', '', 'Connection attempt seen, no reply', 'Informational',\n   'S1', 'Success', '', 'Connection established, not terminated', 'Informational',\n   'SF', 'Success', 'Terminated', 'Normal establishment and termination', 'Informational', // Note that this is the same symbol as for state S1. You can tell the two apart because for S1 there will not be any byte counts in the summary, while for SF there will be.\n   'REJ', 'Failure', 'Rejeced', 'Connection attempt rejected', 'Low',\n   'S2', 'Failure', 'Terminated', 'Connection established and close attempt by originator seen (but no reply from responder)', 'Low',\n   'S3', 'Failure', 'Terminated', 'Connection established and close attempt by responder seen (but no reply from originator)', 'Low',\n   'RSTO', 'Failure', 'Reset', 'Connection established, originator aborted (sent a RST)', 'Low',\n   'RSTR', 'Failure', 'Reset', 'Responder sent a RST', 'Low',\n   'RSTOS0', 'Failure', 'Reset', 'Originator sent a SYN followed by a RST, no SYN-ACK from the responder','Low',\n   'RSTRH', 'Failure', 'Reset', 'Responder sent a SYN ACK followed by a RST, no SYN from the originator','Low',\n   'SH', 'Failure', 'Timeout', 'Originator sent a SYN followed by a FIN, no SYN ACK from the responder', 'Low',\n   'SHR', 'Failure', 'Timeout', 'Responder sent a SYN ACK followed by a FIN, no SYN from the originator', 'Low',\n   'OTH', 'Success', '', 'No SYN seen, just midstream traffic', 'Informational'\n];\nlet parser = (\n  starttime:datetime=datetime(null), \n  endtime:datetime=datetime(null), \n  srcipaddr_has_any_prefix:dynamic=dynamic([]), \n  dstipaddr_has_any_prefix:dynamic=dynamic([]), \n  ipaddr_has_any_prefix:dynamic=dynamic([]),\n  dstportnumber:int=int(null), \n  hostname_has_any:dynamic=dynamic([]), \n  dvcaction:dynamic=dynamic([]), \n  eventresult:string='*', \n  disabled:bool=false\n) \n{\n  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); \n  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); \n  let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);    \n  Corelight_CL \n  | where (isnull(starttime) or TimeGenerated>=starttime) \n      and (isnull(endtime) or TimeGenerated<=endtime) \n      and not(disabled)\n      and (array_length(hostname_has_any) == 0)\n      and (array_length(dvcaction) == 0)\n      and (Message has '\"_path\":\"conn\"' or Message has '\"conn_red\"')\n      and (array_length(ip_any)==0 or has_any_ipv4_prefix(Message,ip_any)) \n      and (isnull(dstportnumber) or Message has (strcat('\"id.resp_p\":', tostring(dstportnumber)))) \n  | project Message\n  | parse Message with * '\"conn_state\":\"' conn_state '\",' *\n  | lookup ResultLookup on conn_state\n  | where (eventresult == \"*\" or eventresult == EventResult)\n  | parse-kv Message as (\n      ['\"_system_name\"']:string,\n      ['\"_write_ts\"']:datetime,\n      ['\"ts\"']:datetime,\n      ['\"uid\"']:string,\n      ['\"id.orig_h\"']:string,\n      ['\"id.orig_p\"']:int,\n      ['\"id.resp_h\"']:string,\n      ['\"id.resp_p\"']:int,\n      ['\"proto\"']:string,\n      ['\"service\"']:string,\n      ['\"duration\"']:int,\n      ['\"orig_bytes\"']:long,\n      ['\"resp_bytes\"']:long,\n      ['\"local_orig\"']:bool,\n      ['\"local_resp\"']:bool,\n      ['\"missed_bytes\"']:long,\n      ['\"history\"']:string,\n      ['\"orig_pkts\"']:long,\n      ['\"resp_pkts\"']:long,\n      ['\"orig_l2_addr\"']:string,\n      ['\"resp_l2_addr\"']:string,\n      ['\"community_id']:string,\n      ['\"vlan\"']:string,\n      ['\"inner_vlan\"']:string\n  ) \n  with (quote = '\"')\n  | extend \n      EventCount=int(1),\n      EventProduct=\"Zeek\",\n      EventVendor=\"Corelight\",\n      EventSchema = \"NetworkSession\",\n      EventSchemaVersion=\"0.2.4\",\n      EventType=\"Flow\"\n  | project-rename\n      EventStartTime= ['\"ts\"'],\n      EventEndTime = ['\"_write_ts\"'],\n      EventOriginalUid = ['\"uid\"'],\n      SrcIpAddr = ['\"id.orig_h\"'],\n      SrcPortNumber = ['\"id.orig_p\"'],\n      DstIpAddr = ['\"id.resp_h\"'],\n      DstPortNumber = ['\"id.resp_p\"'],\n      NetworkProtocol = ['\"proto\"'],\n      NetworkApplicationProtocol = ['\"service\"'],\n      NetworkDuration = ['\"duration\"'],\n      SrcBytes = ['\"orig_bytes\"'],\n      DstBytes = ['\"resp_bytes\"'],\n      local_orig = ['\"local_orig\"'],\n      local_resp = ['\"local_resp\"'],\n      FlowMissedBytes = ['\"missed_bytes\"'],\n      SrcPackets = ['\"orig_pkts\"'],\n      DstPackets = ['\"resp_pkts\"'],\n      SrcMacAddr = ['\"orig_l2_addr\"'],\n      DstMacAddr = ['\"resp_l2_addr\"'],\n      DstVlanId = ['\"vlan\"'],\n      SrcVlanId = ['\"inner_vlan\"'],\n      FlowHistory = ['\"history\"'],\n      NetworkSessionId = ['\"community_id'],\n      Dvc = ['\"_system_name\"']\n  | extend \n    temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any), \n    temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)\n  | extend ASimMatchingIpAddr = case(\n          array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, \"-\" // match not requested: probably most common case\n          , (temp_isSrcMatch and temp_isDstMatch), \"Both\" // has to be checked before the individual \n          , temp_isSrcMatch, \"SrcIpAddr\"\n          , temp_isDstMatch, \"DstIpAddr\"\n          , \"No match\"\n  )\n  | project-away temp*\n  | where ASimMatchingIpAddr != \"No match\"\n  | lookup NetworkDirectionLookup on local_orig, local_resp\n  | extend\n      NetworkBytes = SrcBytes + DstBytes,\n      NetworkPackets = SrcPackets + DstPackets,\n      NetworkProtocol = toupper(NetworkProtocol)\n  // Aliases\n  | extend \n      IpAddr=SrcIpAddr,\n      Src=SrcIpAddr,\n      Duration=NetworkDuration,\n      SessionId = NetworkSessionId,\n      InnerVlanId = SrcVlanId,\n      OuterVlanId = DstVlanId,\n      Dst=DstIpAddr\n  | project-away Message, local_orig, local_resp, conn_state\n};\nparser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=dstipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled) ",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),dstipaddr_has_any_prefix:dynamic=dynamic([]),ipaddr_has_any_prefix:dynamic=dynamic([]),dstportnumber:int=int(null),hostname_has_any:dynamic=dynamic([]),dvcaction:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

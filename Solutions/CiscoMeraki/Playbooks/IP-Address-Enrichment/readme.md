@@ -3,7 +3,7 @@
 ![meraki](../../Connector/MerakiConnector/logo.jpg)
 
 ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious IP addresses.
  2. For each IP address in the list, checks if the IP address is blocked by L3 firewall rule or L7 firewall rule in MX network.
   - If IP address is part of both L3 firewall rule and L7 firewall rule but not blocked by either of the rules, then Incident Comment is created saying IP address allowed by firewall.
@@ -24,8 +24,8 @@
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FPlaybooks%2FIP-Address-Enrichment%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FPlaybooks%2FIP-Address-Enrichment%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoMeraki%2FPlaybooks%2FIP-Address-Enrichment%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoMeraki%2FPlaybooks%2FIP-Address-Enrichment%2Fazuredeploy.json)
 
 
  2. Fill in the required parameters for deploying the playbook.
@@ -46,12 +46,12 @@
 4.  Click Save
 
 ## b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses. 
+- In Microsoft sentinel analytical rules should be configured to trigger an incident with IP addresses. 
 - Configure the automation rules to trigger the playbook.
 
 
 # Playbook steps explained
-## When Azure Sentinel incident creation rule is triggered
+## When Microsoft Sentinel incident creation rule is triggered
 Captures potentially malicious or malware IP addresses incident information.
 
 ## Entities - Get IPs

@@ -1,0 +1,63 @@
+id: 6e95aef3-a1e0-4063-8e74-cd59aa59f245
+name: Azure Diagnostic settings removed from a resource
+description: |
+  'This query looks for diagnostic settings that are removed from a resource.
+  This could indicate an attacker or malicious internal trying to evade detection before malicious act is performed.
+  If the diagnostic settings are being deleted as part of a parent resource deletion, the event is ignores.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.008
+query: |
+  AzureActivity
+  | where OperationNameValue =~ "MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE"
+  | summarize
+      TimeGenerated = arg_max(TimeGenerated, Properties),
+      ActivityStatusValue = make_set(ActivityStatusValue, 5),
+      take_any(Caller, CallerIpAddress, OperationName, ResourceGroup, Resource)
+      by CorrelationId, _ResourceId, OperationNameValue
+  | extend ResourceHierarchy = split(_ResourceId, "/")
+  | extend MonitoredResourcePath = strcat_array(array_slice(ResourceHierarchy, 0, array_length(ResourceHierarchy)-5), "/")
+  | join kind=leftanti (
+      AzureActivity
+      | where OperationNameValue !~ "MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE" and OperationNameValue endswith "/DELETE" and ActivityStatusValue has_any ("Success", "Succeeded")
+      | project _ResourceId
+  ) on $left.MonitoredResourcePath == $right._ResourceId
+  | extend
+      Name = iif(Caller has "@", tostring(split(Caller, "@")[0]), ""),
+      UPNSuffix = iif(Caller has "@", tostring(split(Caller, "@")[1]), ""),
+      AadUserId = iif(Caller has "@", "", Caller)
+  | project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, OperationName, ActivityStatusValue, ResourceGroup, MonitoredResourcePath, Resource, Properties, Name, UPNSuffix, AadUserId, _ResourceId, CorrelationId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: AadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: KennethMLdk
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Platform" ]

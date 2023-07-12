@@ -1,0 +1,48 @@
+id: 1785d372-b9fe-4283-96a6-3a1d83cabfd1
+name: AV detections related to Tarrask malware
+description: |
+  'This query looks for Microsoft Defender AV detections related to Tarrask malware. In Microsoft Sentinel, the SecurityAlerts table 
+   includes only the Device Name of the affected device, this query joins the DeviceInfo table to clearly connect other information such as Device group, ip, logged-on users etc. 
+   This would allow the Microsoft Sentinel analyst to have more context related to the alert, if available.
+   Reference: https://www.microsoft.com/security/blog/2022/04/12/tarrask-malware-uses-scheduled-tasks-for-defense-evasion/'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1053
+query: |
+  let Tarrask_threats = dynamic(["HackTool:Win64/Tarrask!MS", "HackTool:Win64/Ligolo!MSR", "Behavior:Win32/ScheduledTaskHide.A", "Tarrask"]);
+  DeviceInfo
+  | extend DeviceName = tolower(DeviceName)
+  | join kind=rightouter ( SecurityAlert
+  | where ProviderName =~ "MDATP"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)
+  | where ThreatName in~ (Tarrask_threats) or ThreatFamilyName in~ (Tarrask_threats)
+  | extend CompromisedEntity = tolower(CompromisedEntity)
+  ) on $left.DeviceName == $right.CompromisedEntity
+  | summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities
+  | extend HostName = iff(CompromisedEntity has '.', substring(CompromisedEntity,0,indexof(CompromisedEntity,'.')),CompromisedEntity)
+  | extend DnsDomain = iff(CompromisedEntity has '.', substring(CompromisedEntity,indexof(CompromisedEntity,'.')+1),"")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIP
+version: 1.0.2
+kind: Scheduled

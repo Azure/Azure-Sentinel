@@ -1,0 +1,47 @@
+id: 35ce9aff-1708-45b8-a295-5e9a307f5f17
+name: New PA, PCA, or PCAS added to Azure DevOps
+description: |
+  'In order for an attacker to be able to conduct many potential attacks against Azure DevOps they will need to gain elevated permissions. 
+  This detection looks for users being granted key administrative permissions. If the principal of least privilege is applied, the number of 
+  users granted these permissions should be small. Note that permissions can also be granted via Azure AD groups and monitoring of these 
+  should also be conducted.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  AzureDevOpsAuditing
+  | where OperationName =~ "Group.UpdateGroupMembership.Add"
+  | where Details has_any ("Project Administrators", "Project Collection Administrators", "Project Collection Service Accounts", "Build Administrator")
+  | project-reorder TimeGenerated, Details, ActorUPN, IpAddress, UserAgent, AuthenticationMechanism, ScopeDisplayName
+  | extend timekey = bin(TimeGenerated, 1h)
+  | extend ActorUserId = tostring(Data.MemberId)
+  | project timekey, ActorUserId, AddingUser=ActorUPN, TimeAdded=TimeGenerated, PermissionGrantDetails = Details
+  // Get details of operations conducted by user soon after elevation of permissions
+  | join (AzureDevOpsAuditing
+  | extend ActorUserId = tostring(Data.MemberId)
+  | extend timekey = bin(TimeGenerated, 1h)) on timekey, ActorUserId
+  | summarize ActionsWhenAdded = make_set(OperationName) by ActorUPN, AddingUser, TimeAdded, PermissionGrantDetails, IpAddress, UserAgent
+  | extend timestamp = TimeAdded, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AddingUser
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

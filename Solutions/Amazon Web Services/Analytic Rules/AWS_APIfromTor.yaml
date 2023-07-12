@@ -1,0 +1,38 @@
+id: 0adab960-5565-4978-ba6d-044553e4acc4
+name: Successful API executed from a Tor exit node
+description: |
+  'A successful API execution was detected from an IP address categorized as a TOR exit node by Threat Intelligence.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+    let TorNodes = (
+    externaldata (TorIP:string)
+    [h@'https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip']
+    with (ignoreFirstRecord=true));
+    AWSCloudTrail
+    | where SourceIpAddress in (TorNodes) and isempty(ErrorCode) and isempty(ErrorMessage)
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

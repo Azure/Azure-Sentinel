@@ -1,0 +1,67 @@
+id: 689a9475-440b-4e69-8ab1-a5e241685f39
+name: TI Map File Entity to WireData Event
+description: |
+  'This query identifies any matches in the WireData Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. 
+  Since file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor(WireData)
+    dataTypes:
+      - WireData
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - Impact
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(FileName)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+    WireData 
+    | where TimeGenerated between(starttime..endtime)
+    | where isnotempty(ProcessName)
+    | extend Process =reverse(substring(reverse(ProcessName), 0, indexof(reverse(ProcessName), "\\")))
+    | extend WireData_TimeGenerated = TimeGenerated
+  )
+  on $left.FileName == $right.Process
+  | where WireData_TimeGenerated < ExpirationDateTime
+  | summarize WireData_TimeGenerated = arg_max(WireData_TimeGenerated, *) by IndicatorId, Process
+  | project WireData_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  FileName, Computer, Direction, LocalIP, RemoteIP, LocalPortNumber, RemotePortNumber
+  | extend timestamp = WireData_TimeGenerated, HostName = split(Computer, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend IP_0_Address = RemoteIP
+  | extend IP_1_Address = LocalIP
+  | extend URL_0_Url = Url
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: LocalIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.2
