@@ -1,0 +1,175 @@
+{
+    "id": "ESI-ExchangeOnPremisesCollector",
+    "title": "Exchange Security Insights On-Premise Collector",
+    "publisher": "Microsoft",
+    "descriptionMarkdown": "Connector used to push Exchange On-Premises Security configuration for Microsoft Sentinel Analysis",
+    "graphQueries": [
+        {
+            "metricName": "Total data received",
+            "legend": "ESIExchangeConfig_CL",
+            "baseQuery": "ESIExchangeConfig_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description" : "View how many Configuration entries exist on the table",
+            "query": "ESIExchangeConfig_CL | summarize by GenerationInstanceID_g, EntryDate_s, ESIEnvironment_s"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "ESIExchangeConfig_CL",
+            "lastDataReceivedQuery": "ESIExchangeConfig_CL\n            | summarize Time = max(EntryDate_s) by GenerationInstanceID_g, ESIEnvironment_s\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "ESIExchangeConfig_CL\n            | summarize LastLogReceived = max(EntryDate_s) by GenerationInstanceID_g, ESIEnvironment_s\n |take 1\n  | project IsConnected = true"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Service Account with Organization Management role",
+                "description": "The service Account that launch the script as scheduled task needs to be Organization Management to be able to retrieve all the needed security Information."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "Parser deployment (When using Microsoft Exchange Security Solution, Parsers are automatically deployed)", 
+            "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected. Follow the steps for each Parser to create the Kusto Functions alias : [**ExchangeConfiguration**](https://aka.ms/sentinel-ESI-ExchangeConfiguration-OnPrem-parser) and [**ESI_ExchConfigAvailableEnvironments**](https://aka.ms/sentinel-ESI-ExchangeEnvironmentList-OnPrem-parser)",
+            "instructions": [ 
+                {
+                    "parameters": {
+                        "title": "Parsers deployment",
+                        "instructionSteps": [
+                            {
+                                "title": "1. Download the Parser files",
+                                "description": "The latest version of the 2 files [**ExchangeConfiguration.txt**](https://aka.ms/sentinel-ESI-ExchangeConfiguration-OnPrem-parser) and [**ExchangeEnvironmentList.txt**](https://aka.ms/sentinel-ESI-ExchangeEnvironmentList-OnPrem-parser)"
+                            },
+                            {
+                                "title": "2. Create Parser **ExchangeConfiguration** function",
+                                "description": "In 'Logs' explorer of your Microsoft Sentinel's log analytics, copy the content of the file to Log explorer"
+                            },
+                            {
+                                "title": "3. Save Parser **ExchangeConfiguration** function",
+                                "description": "Click on save button.\n Define the parameters as asked on the header of the parser file.\nClick save again."
+                            },
+                            {
+                                "title": "4. Reproduce the same steps for Parser **ESI_ExchConfigAvailableEnvironments**",
+                                "description": "Reproduce the step 2 and 3 with the content of 'ExchangeEnvironmentList.txt' file"
+                            }
+                        ]
+                    },
+                    "type": "InstructionStepsGroup"
+                }
+            ]    
+        }, 
+        {
+            "title": "1. Install the ESI Collector Script on a server with Exchange Admin PowerShell console",
+            "description": "This is the script that will collect Exchange Information to push content in Microsoft Sentinel.\n ",
+            "instructions": [
+                {
+                    "parameters": {
+                        "title": "Script Deployment",
+                        "instructionSteps": [
+                            {
+                                "title": "Download the latest version of ESI Collector",
+                                "description": "The latest version can be found here : https://aka.ms/ESI-ExchangeCollector-Script"
+                            },
+                            {
+                                "title": "Copy the script folder",
+                                "description": "Unzip the content and copy the script folder on a server where Exchange PowerShell Cmdlets are present."
+                            },
+                            {
+                                "title": "Unlock the PS1 Scripts",
+                                "description": "Click right on each PS1 Script and go to Properties tab.\n If the script is marked as locked, unlock it."
+                            },
+                            {
+                                "title": "Configure Network Access ",
+                                "description": "Ensure that the script can contact Azure Analytics (*.ods.opinsights.azure.com)."
+                            }
+                        ]
+                    },
+                    "type": "InstructionStepsGroup"
+                }
+            ]
+        },
+        {
+            "title": "2. Configure the ESI Collector Script",
+            "description": "Be sure to be local administrator of the server.\nIn 'Run as Administrator' mode, launch the 'setup.ps1' script to configure the collector.\n Fill the Log Analytics (Sentinel) Workspace information.\n Fill the Environment name or leave empty.",
+            "instructions": [
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Workspace ID"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "PrimaryKey"
+                        ],
+                        "label": "Primary Key"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "3. Schedule the ESI Collector Script (If not done by the Install Script due to lack of permission or ignored during installation)",
+            "description": "The script needs to be scheduled to send Exchange configuration to Sentinel.\n We recommend to schedule the script once a day.\n The account used to launch the Script needs the be Exchange Organization Administrator"
+        }
+    ],
+    "metadata": {
+        "id": "ed950fd7-e457-4a59-88f0-b9c949aa280d",
+        "version": "1.1.0",
+        "kind": "dataConnector",
+        "source": {
+            "kind": "solution",
+            "name": "ESI - Exchange Security Configuration Analyzer"
+        },
+        "support": {
+            "tier": "Microsoft",
+            "name": "Microsoft Corporation",
+            "email": "support@microsoft.com",
+            "link": "https://support.microsoft.com/"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    }
+}

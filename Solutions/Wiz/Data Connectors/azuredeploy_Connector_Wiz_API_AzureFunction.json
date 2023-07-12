@@ -1,0 +1,486 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "KeyVaultName": {
+            "defaultValue": "Wiz-SentinelVault",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies The KeyVault name that stores all the integration credentials"
+            }
+        },
+        "FunctionName": {
+            "defaultValue": "WizToSentinel",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies The Function App name that executes the integration flow."
+            }
+        },
+        "WizAuthUrl": {
+            "defaultValue": "https://auth.app.wiz.io/oauth/token",
+            "type": "string",
+            "metadata": {
+                "description": "URL to obtain Wiz token."
+            }
+        },
+        "WizEndpointUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "URL to fetch Wiz data."
+            }
+        },
+        "WizClientId": {
+            "type": "string",
+            "metadata": {
+                "description": "Wiz Service Account Client ID."
+            }
+        },
+        "WizClientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Wiz Service Account Client Secret."
+            }
+        },
+        "AzureLogsAnalyticsWorkspaceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure Logs Analytics Workspace Id."
+            }
+        },
+        "AzureLogAnalyticsWorkspaceSharedKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Azure Logs Analytics Workspace shared key."
+            }
+        },
+        "EnableIssuesSending": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Specifies whether to enable sending Wiz Issues to Microsoft Sentinel."
+            }
+        },
+        "EnableVulnerbilitiesSending": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Specifies whether to enable sending Wiz Vulnerability Findings to Microsoft Sentinel."
+            }
+        },
+        "EnableAuditLogsSending": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Specifies whether to enable sending Wiz Audit Logs to Microsoft Sentinel."
+            }
+        },
+        "IssuesQueryFilter": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Copy the Wiz filters in a JSON format you would like to apply on the pull Issues query. Leave empty  to not use any filters. i.e - {'severity': 'HIGH'}"
+            }
+        },
+        "VulnerbailitiesQueryFilter": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Copy the Wiz filters in a JSON format you would like to apply on the pull Vulnerabilities query. Leave empty to not use any filters. i.e - {'severity': 'HIGH'}"
+            }
+        },
+        "AuditLogsQueryFilter": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Copy the Wiz filters in a JSON format you would like to apply on the pull Audit Logs query. Leave empty to not use any filters. i.e - {'status': 'FAILED'}"
+            }
+        }
+    },
+    "functions": [],
+    "variables": {
+        "WizAuthUrl_SecretName": "WizAuthUrl",
+        "wiz_auth_url_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('WizAuthUrl_SecretName'))]",
+        "WizApiEndpointUrl_SecretName": "WizApiEndpointUrl",
+        "wiz_api_endpoint_url_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('WizApiEndpointUrl_SecretName'))]",
+        "WizClientId_SecretName": "WizClientId",
+        "wiz_client_id_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('WizClientId_SecretName'))]",
+        "WizClientSecret_SecretName": "WizClientSecret",
+        "wiz_secret_key_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('WizClientSecret_SecretName'))]",
+        "AzureLogAnalyticsWorkspaceId_SecretName": "AzureLogAnalyticsWorkspaceId",
+        "logspace_workspace_id_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('AzureLogAnalyticsWorkspaceId_SecretName'))]",
+        "AzureLogAnalyticsWorkspaceSharedKey_SecretName": "AzureLogAnalyticsWorkspaceSharedKey",
+        "logspace_workspace_shared_key_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('AzureLogAnalyticsWorkspaceSharedKey_SecretName'))]",
+        "EnableIssuesSending_SecretName": "EnableIssuesSending",
+        "enable_issues_sending_key_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('EnableIssuesSending_SecretName'))]",
+        "EnableVulnerabilitiesSending_SecretName": "EnableVulnerabilitiesSending",
+        "enable_vulns_sending_key_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('EnableVulnerabilitiesSending_SecretName'))]",
+        "EnableAuditLogsSending_SecretName": "EnableAuditLogsSending",
+        "enable_audit_logs_sending_key_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('EnableAuditLogsSending_SecretName'))]",
+        "IssuesQueryFilter_SecretName": "IssuesQueryFilter",
+        "issues_query_filter_key_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('IssuesQueryFilter_SecretName'))]",
+        "VulnerabilitiesQueryFilter_SecretName": "VulnerabilitiesQueryFilter",
+        "vulnerabilities_query_filter_key_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('VulnerabilitiesQueryFilter_SecretName'))]",
+        "AuditLogsQueryFilter_SecretName": "AuditLogsQueryFilter",
+        "audit_logs_query_filter_key_referance": "[format('@Microsoft.KeyVault(VaultName={0};SecretName={1})', parameters('keyVaultName'), variables('AuditLogsQueryFilter_SecretName'))]",
+        "StorageSuffix": "[environment().suffixes.storage]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2022-11-01",
+            "name": "[parameters('KeyVaultName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('FunctionName'))]"
+            ],
+            "properties": {
+                "tenantId": "[subscription().tenantId]",
+                "sku": {
+                    "family": "A",
+                    "name": "Standard"
+                },
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(resourceId('Microsoft.Web/sites', parameters('FunctionName')), '2022-03-01', 'Full').identity.principalId]",
+                        "permissions": {
+                            "certificates": [],
+                            "keys": [],
+                            "secrets": [
+                                "Get",
+                                "List"
+                            ]
+                        }
+                    }
+                ],
+                "enablePurgeProtection": true
+            },
+            "resources": [
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('WizClientSecret_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('WizClientSecret')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('WizClientId_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('WizClientId')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('WizAuthUrl_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('WizAuthUrl')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('WizApiEndpointUrl_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('WizEndpointUrl')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('AzureLogAnalyticsWorkspaceSharedKey_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('AzureLogAnalyticsWorkspaceSharedKey')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('AzureLogAnalyticsWorkspaceId_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('AzureLogsAnalyticsWorkspaceId')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('EnableIssuesSending_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('EnableIssuesSending')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('EnableVulnerabilitiesSending_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('EnableVulnerbilitiesSending')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('EnableAuditLogsSending_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('EnableAuditLogsSending')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('IssuesQueryFilter_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('IssuesQueryFilter')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('VulnerabilitiesQueryFilter_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('VulnerbailitiesQueryFilter')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2022-11-01",
+                    "name": "[variables('AuditLogsQueryFilter_SecretName')]",
+                    "properties": {
+                        "value": "[parameters('AuditLogsQueryFilter')]"
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[parameters('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[parameters('FunctionName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "name": "[parameters('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/components', parameters('FunctionName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[parameters('FunctionName')]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "PYTHON|3.9",
+                    "alwaysOn": false
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites/', parameters('FunctionName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('WizClientSecret_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('WizClientId_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('WizAuthUrl_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('WizApiEndpointUrl_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('AzureLogAnalyticsWorkspaceId_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('AzureLogAnalyticsWorkspaceSharedKey_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('EnableIssuesSending_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('EnableVulnerabilitiesSending_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('EnableAuditLogsSending_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('IssuesQueryFilter_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('VulnerabilitiesQueryFilter_SecretName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), variables('AuditLogsQueryFilter_SecretName'))]"
+
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', parameters('FunctionName')), '2020-02-02').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('Microsoft.insights/components', parameters('FunctionName')), '2020-02-02').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(parameters('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('FunctionName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(parameters('FunctionName')),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('FunctionName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "WEBSITE_CONTENTSHARE": "[toLower(parameters('FunctionName'))]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://wizio-public.s3.us-east-2.amazonaws.com/deployment-v2/azure/integrations/sentinel/packages/wiz_sentinel_latest.zip",
+                        "wiz_api_endpoint": "[variables('wiz_api_endpoint_url_referance')]",
+                        "wiz_auth_url": "[variables('wiz_auth_url_referance')]",
+                        "wiz_client_id": "[variables('wiz_client_id_referance')]",
+                        "wiz_secret_key": "[variables('wiz_secret_key_referance')]",
+                        "workspace_customer_id": "[variables('logspace_workspace_id_referance')]",
+                        "workspace_shared_key": "[variables('logspace_workspace_shared_key_referance')]",
+                        "enable_issues_sending": "[variables('enable_issues_sending_key_referance')]",
+                        "enable_vulnerabilities_sending": "[variables('enable_vulns_sending_key_referance')]",
+                        "enable_audit_logs_sending": "[variables('enable_audit_logs_sending_key_referance')]",
+                        "issues_query_filter": "[variables('issues_query_filter_key_referance')]",
+                        "vulnerabilities_query_filter": "[variables('vulnerabilities_query_filter_key_referance')]",
+                        "audit_logs_query_filter": "[variables('audit_logs_query_filter_key_referance')]",
+                        "debug_level": 20
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2022-09-01",
+            "name": "[tolower(parameters('FunctionName'))]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [
+                    ],
+                    "ipRules": [
+                    ],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(parameters('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(parameters('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": [
+                    ]
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(parameters('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(parameters('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": [
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(parameters('FunctionName'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(parameters('FunctionName'), '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(parameters('FunctionName'), '/default/', tolower(parameters('FunctionName')))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('FunctionName'))]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            }
+        }
+    ],
+    "outputs": {}
+}
