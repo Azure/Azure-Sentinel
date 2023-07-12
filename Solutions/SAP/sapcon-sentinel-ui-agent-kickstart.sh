@@ -374,15 +374,16 @@ fi
 #Verifying SDK version
 unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
 sudo chmod +x -R /tmp/nwrfcsdk/lib/*.so
-SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
-sdkok=$?
-rm -rf /tmp/nwrfcsdk
-if [ ! $sdkok -eq 0 ]; then
-	log "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
-	log "$SDKLOADRESULT"
-	log "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
-	exit 1
-fi
+
+# SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
+# sdkok=$?
+# rm -rf /tmp/nwrfcsdk
+# if [ ! $sdkok -eq 0 ]; then
+	# log "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
+	# log "$SDKLOADRESULT"
+	# log "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
+	# exit 1
+# fi
 
 #Building the container
 containername="$containername-$AGENTNAME"
