@@ -118,9 +118,7 @@ ParserQuery: |
       | where not(disabled) 
           and LogType_s == "AUDIT" 
           and EventName_s !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN")
-      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))
-      | extend EventEndTime = EventStartTime
-      | where (isnull(starttime) or EventStartTime >= starttime) and (isnull(endtime) or EventEndTime <= endtime)
+      | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
       | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(LoginIP_s, srcipaddr_has_any_prefix))
       | extend
           Operation = CommandName_s,
@@ -154,13 +152,15 @@ ParserQuery: |
           OldValue = OldValue_s,
           DvcHostname = host_s,
           ActorUsername = AdminName_s,
-          Object = ObjectName_s
+          Object = ObjectName_s,
+          EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)-tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)))
       | extend
           Src = SrcIpAddr,
           ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
           ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""),
           User = ActorUsername,
-          Value = NewValue
+          Value = NewValue,
+          EventEndTime = EventStartTime
       | extend
           IpAddr = SrcIpAddr,
           ValueType = iff(isnotempty(Value),"Other","")
@@ -194,9 +194,7 @@ ParserQuery: |
       | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
       | where DeviceEventCategory == "AUDIT" 
           and (toupper(ProcessName) !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
-      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime))
-      | extend EventEndTime = EventStartTime
-      | where (isnull(starttime) or EventStartTime >= starttime) and (isnull(endtime) or EventEndTime <= endtime)
+      | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
       | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix))
       | extend
           Operation = ProcessName,
@@ -223,7 +221,6 @@ ParserQuery: |
           EventCount = toint(1)
       | extend
           Dvc = DeviceName, 
-          EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
           Operation = ProcessName,
           DvcIpAddr = DeviceAddress,
           NewValue = DeviceCustomString1,
@@ -233,13 +230,15 @@ ParserQuery: |
           DvcHostname = DeviceName,
           ActorUsername = DestinationUserName,
           Object = FileName,
-          ThreatConfidence = toint(ThreatConfidence)
+          ThreatConfidence = toint(ThreatConfidence),
+          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime)))
       | extend
           Src = SrcIpAddr,
           ActorUsernameType = iff(isnotempty(ActorUsername),"Simple",""),
           ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""),
           User = ActorUsername,
-          Value = NewValue
+          Value = NewValue,
+          EventEndTime = EventStartTime
       | extend
           IpAddr = SrcIpAddr,
           ValueType = iff(isnotempty(Value),"Other","")
