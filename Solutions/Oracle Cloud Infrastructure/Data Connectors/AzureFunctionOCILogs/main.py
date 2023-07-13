@@ -21,6 +21,8 @@ LOG_TYPE = 'OCI_Logs'
 CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition',"0")
+Message_Limit = os.getenv('Message_Limit',250)
+limit = int(Message_Limit)
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -48,7 +50,7 @@ def main(mytimer: func.TimerRequest):
     else :
         cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
     
-    process_events(stream_client, StreamOcid, cursor, sentinel_connector, start_ts)
+    process_events(stream_client, StreamOcid, cursor, limit, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
 
 def parse_key(key_input):
@@ -109,10 +111,10 @@ def get_cursor_by_partition(client, stream_id, partition):
     return cursor
 
 
-def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, sentinel: AzureSentinelConnector, start_ts):
+def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, limit, sentinel: AzureSentinelConnector, start_ts):
     cursor = initial_cursor
     while True:
-        get_response = client.get_messages(stream_id, cursor, limit=250, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
+        get_response = client.get_messages(stream_id, cursor, limit, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
         if not get_response.data:
             return
 
