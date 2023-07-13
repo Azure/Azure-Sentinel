@@ -126,8 +126,8 @@ namespace Kqlvalidations.Tests
             }
         }
 
-
-        public bool Validate_DetectionTemplates_AllFilesAreYamls()
+        [Fact]
+        public void Validate_DetectionTemplates_AllFilesAreYamls()
         {
             List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
             var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList(); // Detection folder
@@ -135,53 +135,7 @@ namespace Kqlvalidations.Tests
             var AllFiles = Directory.GetFiles(detectionPath[0], "*", SearchOption.AllDirectories).ToList();
             AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
             var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
-            return AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles;
-        }
-
-        [Fact]
-        public void Validate_PRFiles_AreYaml()
-        {
-            int prNumber = 0;
-            int.TryParse(Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
-
-            //prNumber=8414;
-            if (prNumber != 0)
-            {
-                //try
-                //{
-                    var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
-                    var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
-
-                    foreach (var prFile in prFiles)
-                    {
-                        // Regular expression patterns to match the PR file path
-                        string solutionPattern = @"^Solutions\/[\w\s-]+\/Analytic Rules\/.*$";
-                        string detectionPattern = @"^Detections\/.*$";
-
-                        if (Regex.IsMatch(prFile.FileName, solutionPattern, RegexOptions.IgnoreCase) ||
-                            Regex.IsMatch(prFile.FileName, detectionPattern, RegexOptions.IgnoreCase))
-                        {
-                            if (!prFile.FileName.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
-                            {
-                                Assert.True(false, $"File '{prFile.FileName}' in the PR matches a detection folder path but is not a YAML file.");
-                            }
-                        }
-                    }
-                //}
-                //catch (Exception ex)
-                //{
-                //    Console.WriteLine("Error occurred while getting the files from the PR. Error message: " + ex.Message);
-                //    // Check all files for YAML validation
-                //    Assert.True(Validate_DetectionTemplates_AllFilesAreYamls(), $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
-
-                //}
-            }
-            else
-            {
-                // Skip the test as there is no PR number available
-                Assert.True(Validate_DetectionTemplates_AllFilesAreYamls(), $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
-
-            }
+            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles, $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
         }
 
         [Fact]
