@@ -49,42 +49,42 @@ ParserQuery: |
   let parser=(disabled:bool=false){
     CommonSecurityLog
     | where not(disabled)
-    | where DeviceVendor == "Fortinet" 
+    | where DeviceVendor  == "Fortinet" 
         and DeviceProduct startswith "FortiGate"
-        and (Activity == "webfilter utm passthrough"
-            or Activity == "webfilter utm blocked")
-    | extend EventResultDetails = "NA"
+        and (Activity     == "webfilter utm passthrough"
+            or Activity   == "webfilter utm blocked")
+    | extend 
+        EventResultDetails = "NA"
     | lookup EventLookup on DeviceAction 
-    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName
     | project-rename 
-      Url = RequestURL
-      ,UrlCategory = RequestContext
-      ,DstBytes = ReceivedBytes
-      , DstInterfaceName = DeviceOutboundInterface
-      , DstIpAddr = DestinationIP
-      , DstPortNumber = DestinationPort
-      , Dvc = Computer
-      , EventMessage = Activity
+      Url                     = RequestURL
+      , UrlCategory           = RequestContext
+      , DstBytes              = ReceivedBytes
+      , DstInterfaceName      = DeviceOutboundInterface
+      , DstIpAddr             = DestinationIP
+      , DstPortNumber         = DestinationPort
+      , DvcHostname           = Computer
+      , EventMessage          = Activity
       , EventOriginalSeverity = LogSeverity
-      , EventProduct = DeviceProduct
-      , EventProductVersion = DeviceVersion
-      , SrcBytes = SentBytes
-      , SrcInterfaceName = DeviceInboundInterface
-      , SrcIpAddr = SourceIP
-      , SrcPortNumber = SourcePort
-      , DvcId = DeviceExternalID
-      , EventUid = _ItemId
+      , EventProduct          = DeviceProduct
+      , EventProductVersion   = DeviceVersion
+      , SrcBytes              = SentBytes
+      , SrcInterfaceName      = DeviceInboundInterface
+      , SrcIpAddr             = SourceIP
+      , SrcPortNumber         = SourcePort
+      , DvcId                 = DeviceExternalID
+      , EventUid              = _ItemId
+      , DstHostname           = DestinationHostName
+      , SrcHostname           = SourceHostname
+      , SrcUsername           = SourceUserName
+      , DstUsername           = DestinationUserName
     | invoke _ASIM_ResolveNetworkProtocol ('Protocol')
+    | extend 
+        DstUsernameType = _ASIM_GetUsernameType(DstUsername)
+        , SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
     | project-rename DvcOriginalAction = DeviceAction
     | parse-kv AdditionalExtensions as (
-            httpmethod:string,
-            agent:string
-        ) with (pair_delimiter=';', kv_delimiter='=', quote='"')
-    | project-rename
-        HttpRequestMethod       = httpmethod,
-        HttpUserAgent           = agent
-    | parse-kv AdditionalExtensions as (
-            referralurl:string,
             FortinetFortiGatestart:datetime,
             FortinetFortiGatesrcintfrole:string,
             FortinetFortiGatedstintfrole:string,
@@ -95,11 +95,16 @@ ParserQuery: |
             FortinetFortiGatecrscore:string,
             FortinetFortiGateduration:int,
             FortinetFortiGatesentpkt:long,
-            FortinetFortiGatercvdpkt:long
+            FortinetFortiGatercvdpkt:long,
+            ['ad.referralurl']:string,
+            ['ad.httpmethod']:string,
+            ['ad.agent']:string
         ) with (pair_delimiter=';', kv_delimiter='=')
     | parse AdditionalExtensions with * "x-forwarded-for=" HttpRequestXff:string ";" *
     | project-rename
-        HttpReferrer            = referralurl,
+        HttpReferrer            = ['ad.referralurl'],
+        HttpRequestMethod       = ['ad.httpmethod'],
+        HttpUserAgent           = ['ad.agent'],
         EventStartTime          = FortinetFortiGatestart,
         SrcZone                 = FortinetFortiGatesrcintfrole,
         DstZone                 = FortinetFortiGatedstintfrole,
@@ -111,28 +116,37 @@ ParserQuery: |
         ThreatOriginalRiskLevel = FortinetFortiGatecrscore,
         SrcPackets              = FortinetFortiGatesentpkt,
         DstPackets              = FortinetFortiGatercvdpkt
-    | extend EventCount = int(1)
-      , EventSchema = "WebSession"
-      , EventSchemaVersion = "0.2.6"
-      , EventType = "HTTPsession"
-      , EventVendor = "Fortinet"
-      , DvcIdType = "Other"
-      , NetworkBytes = DstBytes + SrcBytes
-      , EventEndTime = TimeGenerated
-      , EventStartTime = coalesce(EventStartTime, TimeGenerated)
+    | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
+    | extend 
+        HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
+        HttpUserAgent = coalesce(temp_HttpUserAgent,HttpUserAgent)
+    | project-away temp_*
+    | extend 
+      EventCount               = int(1)
+      , EventSchema            = "WebSession"
+      , EventSchemaVersion     = "0.2.6"
+      , EventType              = "HTTPsession"
+      , EventVendor            = "Fortinet"
+      , DvcIdType              = "Other"
+      , NetworkBytes           = DstBytes + SrcBytes
+      , EventEndTime           = TimeGenerated
+      , EventStartTime         = coalesce(EventStartTime, TimeGenerated)
       , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
           , DstIpAddr contains ":", "IPv6"
           , "")
-      , NetworkPackets = DstPackets + SrcPackets
-      , UserAgent = HttpUserAgent
+      , NetworkPackets         = DstPackets + SrcPackets
+      , UserAgent              = HttpUserAgent
+      , Dvc                    = DvcHostname
+      , User                   = SrcUsername
+      , Hostname               = DstHostname
     | lookup SeverityLookup on EventOriginalSeverity
     | extend 
-        Src = SrcIpAddr,
-        Dst = DstIpAddr,
+        Src       = SrcIpAddr,
+        Dst       = DstIpAddr,
         SessionId = NetworkSessionId,
-        IpAddr = SrcIpAddr,
-        Duration = NetworkDuration,
-        Rule = tostring(RuleNumber)
+        IpAddr    = SrcIpAddr,
+        Duration  = NetworkDuration,
+        Rule      = tostring(RuleNumber)
     | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber
   };
   parser (disabled=disabled)
