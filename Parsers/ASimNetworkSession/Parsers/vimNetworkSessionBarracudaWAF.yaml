@@ -115,10 +115,8 @@ ParserQuery: |
           barracuda_CL
       | where not(disabled)
           and LogType_s == "NF"
-      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))
-      | extend EventEndTime = EventStartTime
-      | where (isnull(starttime) or EventStartTime >= starttime)
-          and (isnull(endtime) or EventEndTime <= endtime)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
       | extend
           temp_SrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any),
           temp_DstMatch = has_any_ipv4_prefix(DestinationIP_s, dst_or_any)
@@ -158,11 +156,13 @@ ParserQuery: |
           DvcIpAddr = HostIP_s,                            
           DstPortNumber = toint(DestinationPort_d),
           SrcPortNumber = toint(SourcePort_d),
-          EventProductVersion = DeviceVersion_s
+          EventProductVersion = DeviceVersion_s,
+          EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)-tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)))
       | extend
           IpAddr = SrcIpAddr,
           Src = SrcIpAddr,
-          Dst = DstIpAddr
+          Dst = DstIpAddr,
+          EventEndTime = EventStartTime
       | project-away
           *_d,
           *_s,
@@ -196,10 +196,8 @@ ParserQuery: |
       CommonSecurityLog
       | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
       | where DeviceEventCategory == "NF"
-      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime))
-      | extend EventEndTime = EventStartTime
-      | where (isnull(starttime) or EventStartTime >= starttime)
-          and (isnull(endtime) or EventEndTime <= endtime)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
       | extend
           temp_SrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any),
           temp_DstMatch = has_any_ipv4_prefix(DestinationIP, dst_or_any)
@@ -239,11 +237,13 @@ ParserQuery: |
           DvcIpAddr = DestinationIP,                            
           DstPortNumber = toint(DestinationPort),
           SrcPortNumber = toint(SourcePort),
-          EventProductVersion = DeviceVersion
+          EventProductVersion = DeviceVersion,
+          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime)))
       | extend
           IpAddr = SrcIpAddr,
           Src = SrcIpAddr,
-          Dst=DstIpAddr    
+          Dst=DstIpAddr,
+          EventEndTime = EventStartTime
       | project-away
           ThreatConfidence,
           CommunicationDirection,
