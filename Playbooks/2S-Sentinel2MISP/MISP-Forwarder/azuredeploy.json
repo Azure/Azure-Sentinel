@@ -2,216 +2,225 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "author": "Sopra Steria",
-        "comment": "This Playbook will forward selected Threat Intelligence from your Sentinel Workspace to an orchestrator playbook. By default it supports sending filehashes and filenames from Defender 365 'Malware was prevented' alerts."
-},
-"parameters": {
-"PlaybookName": {
-"defaultValue": "MISP-Forwarder",
-"type": "string"
-}
-},
-"variables": {
-    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
-},
-"resources": [
-{
-"type": "Microsoft.Web/connections",
-"apiVersion": "2016-06-01",
-"name": "[variables('AzureSentinelConnectionName')]",
-"location": "[resourceGroup().location]",
-"kind": "V1",
-"properties": {
-    "displayName": "[variables('AzureSentinelConnectionName')]",
-    "customParameterValues": {},
-    "api": {
-        "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'azuresentinel')]"
+        "title": "2S-MISP-Forwarder", 
+        "description": "This Playbook will forward selected Threat Intelligence from your Sentinel Workspace to an orchestrator playbook. By default it supports sending filehashes and filenames from Defender 365 'Malware was prevented' alerts.",
+        "prerequisites": "1. The webhook URI from the MISP-Orchestrator playbook. 2. Microsoft 365 Defender connector configured.",
+        "lastUpdateTime": "2023-07-13T09:51:37Z",
+        "tags": ["Microsoft Sentinel", "ThreatIntelligenceIndicator", "MISP"], 
+        "support": {
+            "tier": "Community"
+        },
+        "author": {
+            "name": "Sopra Steria"
+        }
     },
-    "parameterValueType": "Alternative"
-}
-},
-{
-"properties": {
-"provisioningState": "Succeeded",
-"state": "Enabled",
-"definition": {
-    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-    "contentVersion": "1.0.0.0",
     "parameters": {
-        "$connections": {
-        "defaultValue": {},
-        "type": "Object"
+        "PlaybookName": {
+            "defaultValue": "MISP-Forwarder",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+    {
+    "type": "Microsoft.Web/connections",
+    "apiVersion": "2016-06-01",
+    "name": "[variables('AzureSentinelConnectionName')]",
+    "location": "[resourceGroup().location]",
+    "kind": "V1",
+    "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+            "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'azuresentinel')]"
+        },
+        "parameterValueType": "Alternative"
     }
-},
-"triggers": {
-    "Microsoft_Sentinel_incident": {
-        "type": "ApiConnectionWebhook",
-        "inputs": {
-            "body": {
-                "callback_url": "@{listCallbackUrl()}"
+    },
+    {
+    "properties": {
+    "provisioningState": "Succeeded",
+    "state": "Enabled",
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "parameters": {
+            "$connections": {
+            "defaultValue": {},
+            "type": "Object"
+        }
+    },
+    "triggers": {
+        "Microsoft_Sentinel_incident": {
+            "type": "ApiConnectionWebhook",
+            "inputs": {
+                "body": {
+                    "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                    "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                    }
+                },
+                "path": "/incident-creation"
+            }
+        }
+    },
+    "actions": {
+        "For_each": {
+            "foreach": "@variables('EntitiesArray')",
+            "actions": {
+                "Condition": {
+                    "actions": {
+                        "HTTP": {
+                        "runAfter": {},
+                        "type": "Http",
+                        "inputs": {
+                            "body": "@body('Parse_JSON_2')",
+                            "headers": {
+                                "IncidentId": "@triggerBody()?['object']?['id']",
+                                "IncidentTitle": "@triggerBody()?['object']?['properties']?['title']"
+                            },
+                            "method": "POST",
+                            "uri": "https://replace.me/with/your/misp/orchestrator/url/please"
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Parse_JSON_2": [
+                        "Succeeded"
+                    ]
+                },
+                "expression": {
+                    "or": [
+                        {
+                            "equals": [
+                                "@body('Parse_JSON_2')?['kind']",
+                                "FileHash"
+                            ]
+                        },
+                        {
+                            "equals": [
+                                "@body('Parse_Json_2')['kind']",
+                                "File"
+                            ]
+                        }
+                    ]
+                },
+                "type": "If"
             },
-            "host": {
-                "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                }
+            "Delay": {
+                "inputs": {
+                    "interval": {
+                        "count": 30,
+                        "unit": "Second"
+                    }
+                },
+                "runAfter": {
+                    "Condition": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "wait"
             },
-            "path": "/incident-creation"
+            "Parse_JSON_2": {
+            "runAfter": {},
+            "type": "ParseJson",
+            "inputs": {
+                "content": "@items('For_each')",
+            "schema": {}
         }
     }
-},
-"actions": {
-    "For_each": {
-        "foreach": "@variables('EntitiesArray')",
-        "actions": {
-            "Condition": {
-                "actions": {
-                    "HTTP": {
-                    "runAfter": {},
-                    "type": "Http",
-                    "inputs": {
-                        "body": "@body('Parse_JSON_2')",
-                        "headers": {
-                            "IncidentId": "@triggerBody()?['object']?['id']",
-                            "IncidentTitle": "@triggerBody()?['object']?['properties']?['title']"
-                        },
-                        "method": "POST",
-                        "uri": "https://replace.me/with/your/misp/orchestrator/url/please"
-                    }
-                }
-            },
-            "runAfter": {
-                "Parse_JSON_2": [
-                    "Succeeded"
-                ]
-            },
-            "expression": {
-                "or": [
-                    {
-                        "equals": [
-                            "@body('Parse_JSON_2')?['kind']",
-                            "FileHash"
-                        ]
-                    },
-                    {
-                        "equals": [
-                            "@body('Parse_Json_2')['kind']",
-                            "File"
-                        ]
-                    }
-                ]
-            },
-            "type": "If"
-        },
-        "Delay": {
-            "inputs": {
-                "interval": {
-                    "count": 30,
-                    "unit": "Second"
-                }
-            },
-            "runAfter": {
-                "Condition": [
-                    "Succeeded"
-                ]
-            },
-            "type": "wait"
-        },
-        "Parse_JSON_2": {
-        "runAfter": {},
-        "type": "ParseJson",
-        "inputs": {
-            "content": "@items('For_each')",
-        "schema": {}
+    },
+    "runAfter": {
+    "Initialize_variable_CurrentEntity": [
+        "Succeeded"
+    ]
+    },
+    "type": "Foreach",
+    "runtimeConfiguration": {
+    "concurrency": {
+        "repetitions": 1
     }
-}
-},
-"runAfter": {
-"Initialize_variable_CurrentEntity": [
-    "Succeeded"
-]
-},
-"type": "Foreach",
-"runtimeConfiguration": {
-"concurrency": {
-    "repetitions": 1
-}
-}
-},
-"Initialize_variable_CurrentEntity": {
-"runAfter": {
-"Initialize_variable_EntitiesArray": [
-    "Succeeded"
-]
-},
-"type": "InitializeVariable",
-"inputs": {
-"variables": [
-    {
-        "name": "CurrentEntity",
-        "type": "string"
     }
-]
-}
-},
-"Initialize_variable_EntitiesArray": {
-"runAfter": {
-"Parse_JSON": [
-    "Succeeded"
-]
-},
-"type": "InitializeVariable",
-"inputs": {
-"variables": [
-    {
-        "name": "EntitiesArray",
-        "type": "array",
-        "value": "@body('Parse_JSON')"
+    },
+    "Initialize_variable_CurrentEntity": {
+    "runAfter": {
+    "Initialize_variable_EntitiesArray": [
+        "Succeeded"
+    ]
+    },
+    "type": "InitializeVariable",
+    "inputs": {
+    "variables": [
+        {
+            "name": "CurrentEntity",
+            "type": "string"
+        }
+    ]
     }
-]
-}
-},
-"Parse_JSON": {
-"runAfter": {},
-"type": "ParseJson",
-"inputs": {
-"content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
-"schema": {}
-}
-}
-},
-"outputs": {}
-},
-"parameters": {
-"$connections": {
-"value": {
-    "azuresentinel": {
-        "connectionid": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', variables('AzureSentinelConnectionName'))]",
-        "connectionName": "variables('AzureSentinelConnectionName')",
-        "connectionProperties": {
-           "authentication": {
-              "type": "ManagedServiceIdentity"
-           }
-        },
-        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+    },
+    "Initialize_variable_EntitiesArray": {
+    "runAfter": {
+    "Parse_JSON": [
+        "Succeeded"
+    ]
+    },
+    "type": "InitializeVariable",
+    "inputs": {
+    "variables": [
+        {
+            "name": "EntitiesArray",
+            "type": "array",
+            "value": "@body('Parse_JSON')"
+        }
+    ]
     }
-}
-}
-}
-},
-"name": "[parameters('PlaybookName')]",
-"type": "Microsoft.Logic/workflows",
-"location": "[resourceGroup().location]",
-"identity": {
-"type": "SystemAssigned"
-},
-"tags": {
-"hidden-SentinelTemplateName": "MISP-Forwarder",
-"hidden-SentinelTemplateVersion": "1.0"
-},
-"apiVersion": "2017-07-01",
-"dependsOn": [
-    "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
-]
-}
-]
+    },
+    "Parse_JSON": {
+    "runAfter": {},
+    "type": "ParseJson",
+    "inputs": {
+    "content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+    "schema": {}
+    }
+    }
+    },
+    "outputs": {}
+    },
+    "parameters": {
+    "$connections": {
+    "value": {
+        "azuresentinel": {
+            "connectionid": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', variables('AzureSentinelConnectionName'))]",
+            "connectionName": "variables('AzureSentinelConnectionName')",
+            "connectionProperties": {
+               "authentication": {
+                  "type": "ManagedServiceIdentity"
+               }
+            },
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+    }
+    }
+    }
+    },
+    "name": "[parameters('PlaybookName')]",
+    "type": "Microsoft.Logic/workflows",
+    "location": "[resourceGroup().location]",
+    "identity": {
+    "type": "SystemAssigned"
+    },
+    "tags": {
+    "hidden-SentinelTemplateName": "MISP-Forwarder",
+    "hidden-SentinelTemplateVersion": "1.0"
+    },
+    "apiVersion": "2017-07-01",
+    "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+    ]
+    }
+    ]
 }
