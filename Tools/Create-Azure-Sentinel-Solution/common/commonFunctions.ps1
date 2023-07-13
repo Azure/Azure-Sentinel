@@ -1993,7 +1993,17 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         $huntingQueryDescription = ""
                         if ($yaml.description) {
-                            $huntingQueryDescription = $yaml.description.substring(1, $yaml.description.length - 3)
+                            #$huntingQueryDescription = $yaml.description.substring(1, $yaml.description.length - 3)
+                            $huntingQueryDescription = $yaml.description.Trim();
+                            if($huntingQueryDescription.StartsWith("'"))
+                            {
+                                $huntingQueryDescription = $huntingQueryDescription.substring(1, $huntingQueryDescription.length-1)
+                            }
+
+                            if($huntingQueryDescription.EndsWith("'"))
+                            {
+                                $huntingQueryDescription = $huntingQueryDescription.substring(0, $huntingQueryDescription.length-1)
+                            }
                             $descriptionObj = [PSCustomObject]@{
                                 name  = "description";
                                 value = $huntingQueryDescription
