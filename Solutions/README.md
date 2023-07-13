@@ -88,6 +88,7 @@ If you or your company is a first-time app publisher on Azure Marketplace, [foll
 The following steps reference the Partner Center's more detailed documentation.
 
 1.	[Create an Azure application type offer](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer) and configure the offer setup details as per the relevant  guidance.
+> Ensure that the OfferID contains the keyword "sentinel". Consider using the format: `microsoft-sentinel-solution-<productname>`
 
 2.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
 

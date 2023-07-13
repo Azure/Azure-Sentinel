@@ -1,0 +1,67 @@
+name: Deploy Artifacts to Partner Center
+env:
+  APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
+  DEFAULTPACKAGEVERSION: "${{ vars.DEFAULTPACKAGEVERSION }}"
+  BRANCH_NAME: "${{ github.event.client_payload.pull_request.head.ref }}"
+on:
+  repository_dispatch:
+    types: [partnercenter-command]
+jobs:
+  solutionNameDetails:
+    uses: ./.github/workflows/getSolutionName.yaml
+    secrets: inherit
+
+  neworexistingsolution:
+    needs: solutionNameDetails
+    uses: ./.github/workflows/neworexistingsolution.yaml
+    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' }} 
+    with: 
+      solutionName: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+    secrets: inherit
+
+  deployToPartnerCenter:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [solutionNameDetails, neworexistingsolution]
+    env:
+      RUNID: "${{ github.event.client_payload.github.runId }}" 
+      SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+      SOLUTION_OFFER_ID: "${{ needs.neworexistingsolution.outputs.solutionOfferId }}"
+      IS_NEW_SOLUTION: "${{ needs.neworexistingsolution.outputs.isNewSolution }}"
+    outputs:
+      IsPartnerCenterDeploymentSuccess: ${{ steps.deploy.outputs.IsPartnerCenterDeploymentSuccess }}
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        with:
+          fetch-depth: 0
+          ref: ${{ env.BRANCH_NAME }} 
+      - shell: pwsh
+        id: deploy
+        name: Deploy Artifacts to Partner Center
+        run: |
+          $instrumentationKey = "${{ vars.APPINSIGHTS }}"
+          $defaultPackageVersion = "${{ vars.defaultPackageVersion }}"
+          $offerId = 'azure-sentinel-solution-testingoffers' # "${{ env.SOLUTION_OFFER_ID }}"
+          $runId = "${{ env.RUNID }}"
+          $solutionName = "${{ env.SOLUTION_NAME }}"
+          $pullRequestNumber = "${{ github.event.client_payload.pull_request.number }}"
+          $isNewSolution = "${{ env.IS_NEW_SOLUTION }}"
+
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml
+          ./.script/package-automation/partnerCenterDeploy.ps1 $solutionName $pullRequestNumber $runId $instrumentationKey $defaultPackageVersion $offerId $isNewSolution
+
+  addCommentOnFailure:
+    needs: deployToPartnerCenter
+    if: ${{ failure() && needs.pullRequestStatus.outputs.IsPartnerCenterDeploymentSuccess == 'False' }}
+    uses: ./.github/workflows/addComment.yaml
+    with:
+      message: 'Deployment of artifacts to Partner Center failed!'
+
+  addCommentOnSuccess:
+    needs: deployToPartnerCenter
+    if: ${{ success() && needs.pullRequestStatus.outputs.IsPartnerCenterDeploymentSuccess == 'True' }}
+    uses: ./.github/workflows/addComment.yaml
+    with:
+      message: 'Deployment of artifacts to Partner Center Succeeded!'
