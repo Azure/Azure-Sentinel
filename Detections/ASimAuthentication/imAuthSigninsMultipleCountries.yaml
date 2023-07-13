@@ -21,21 +21,28 @@ tags:
 query: |
   let searchTimeframe = ago(3h);
   let threshold = 2;
-  let ipWhitelist = dynamic([]);
+  let ipAllowList = dynamic([]);
   imAuthentication
   | where TimeGenerated > searchTimeframe
-  | where not(SrcIpAddr has_any (ipWhitelist))
+  | where not(SrcIpAddr has_any (ipAllowList))
   | where EventType == 'Logon' and EventResult == 'Success'
   | where isnotempty(SrcGeoCountry)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Vendors=make_set(EventVendor), Products=make_set(EventProduct), IPs = make_set(SrcIpAddr), Countries = make_set(SrcGeoCountry), NumOfCountries = dcount(SrcGeoCountry)
-      by TargetUserId, TargetUsername, TargetUserType
+  | summarize
+    StartTime = min(TimeGenerated),
+    EndTime = max(TimeGenerated),
+    Vendors = make_set(EventVendor, 10),
+    Products = make_set(EventProduct, 10),
+    IPs = make_set(SrcIpAddr, 100),
+    Countries = make_set(SrcGeoCountry, 10),
+    NumOfCountries = dcount(SrcGeoCountry)
+    by TargetUserId, TargetUsername, TargetUserType
   | where NumOfCountries >= threshold
   | extend timestamp = StartTime, AccountCustomEntity = TargetUsername
 
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Name
         columnName: AccountCustomEntity
 version: 1.3.2
 kind: Scheduled
