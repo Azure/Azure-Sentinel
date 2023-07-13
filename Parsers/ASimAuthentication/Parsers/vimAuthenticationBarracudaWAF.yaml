@@ -89,10 +89,8 @@ ParserQuery: |
       | where not(disabled)
           and (LogType_s == "AUDIT")
           and (EventName_s in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
-      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))
-      | extend EventEndTime = EventStartTime
-      | where (isnull(starttime) or EventStartTime >= starttime)
-          and (isnull(endtime) or EventEndTime <= endtime)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
           and (targetusername_has == '*' or (AdminName_s has targetusername_has))
       | parse trim(@'[^\w(")]+', EventMessage_s) with * "Reason=" Reason:string
       | extend Reason = trim(@'(")', Reason)
@@ -114,10 +112,12 @@ ParserQuery: |
           DvcIpAddr = HostIP_s,
           SrcIpAddr = LoginIP_s,
           DvcHostname = host_s,
-          ActorUsername = AdminName_s
+          ActorUsername = AdminName_s,
+          EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)-tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)))
       | extend
           ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
-          ActorUserType = iff(isnotempty(ActorUsername), "Admin", "")
+          ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""),
+          EventEndTime = EventStartTime
       | extend
           IpAddr = SrcIpAddr,
           Src = SrcIpAddr
@@ -147,10 +147,8 @@ ParserQuery: |
       | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
       | where DeviceEventCategory == "AUDIT"
           and (toupper(ProcessName) in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
-      | extend EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime))
-      | extend EventEndTime = EventStartTime
-      | where (isnull(starttime) or EventStartTime >= starttime)
-          and (isnull(endtime) or EventEndTime <= endtime)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
           and (targetusername_has == '*' or (DestinationUserName has targetusername_has))
       | parse trim(@'[^\w(")]+', Message) with * "Reason=" Reason:string
       | extend Reason = trim(@'(")', Reason)
@@ -173,10 +171,12 @@ ParserQuery: |
           DvcIpAddr = DeviceAddress,
           SrcIpAddr = SourceIP,
           DvcHostname = DeviceName,
-          ActorUsername = DestinationUserName
+          ActorUsername = DestinationUserName,
+          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime)))
       | extend
           ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
-          ActorUserType = iff(isnotempty(ActorUsername), "Admin", "")
+          ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""), 
+          EventEndTime = EventStartTime
       | extend
           IpAddr = SrcIpAddr,
           Src = SrcIpAddr
