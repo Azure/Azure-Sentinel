@@ -37,7 +37,7 @@ else:
 # Defining the S3 Client object based on AWS Credentials
 def _create_s3_client():
     s3_session = get_session()
-    boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME, retries = {'max_attempts': 10, 'mode': 'standard'}, read_timeout = 0)
+    boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME, retries = {'max_attempts': 10, 'mode': 'standard'}, read_timeout = 0, tcp_keepalive = True)
     return s3_session.create_client(
                                     's3',
                                     region_name=AWS_REGION_NAME,
