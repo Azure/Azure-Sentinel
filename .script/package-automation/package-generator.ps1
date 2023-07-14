@@ -7,7 +7,7 @@ function ErrorOutput {
     Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
     Write-Output "packageCreationPath=''" >> $env:GITHUB_OUTPUT
     Write-Output "blobName=''" >> $env:GITHUB_OUTPUT
-    exit 1
+    #exit 1
 }
 
 try {
