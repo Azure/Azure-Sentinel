@@ -59,7 +59,7 @@ class MicrosoftSentinel(Utils):
                             response.status,
                         )
                     )
-                    return
+                    return None
                 elif response.status == 429:
                     applogger.error(
                         "{}(method={}) : {} : trying again error 429.".format(

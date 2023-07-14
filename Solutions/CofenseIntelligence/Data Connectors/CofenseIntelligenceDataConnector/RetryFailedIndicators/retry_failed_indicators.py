@@ -71,7 +71,7 @@ def list_checkpoint_files(parent_dir):
                 file_names.append(file["name"])
             return file_names
         else:
-            return
+            return None
     except ResourceNotFoundError:
         applogger.error(
             "{}(method={}) : {} : No Failed Indicators File Found.".format(

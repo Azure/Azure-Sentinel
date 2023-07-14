@@ -59,7 +59,7 @@ class MicrosoftSentinel(Utils):
                             response.status,
                         )
                     )
-                    return
+                    return None
                 elif response.status == 400:
                     json_response = await response.json()
                     applogger.warning(

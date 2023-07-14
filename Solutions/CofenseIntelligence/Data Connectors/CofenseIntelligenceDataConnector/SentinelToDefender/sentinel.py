@@ -280,7 +280,7 @@ class MicrosoftSentinel:
             self.new_execution_flag = self.sentinel_checkpoint_json_data.get(
                 "new_execution_flag"
             )
-
+        return None
     def post_indicators(self, sentinel_json_indicator_list, defender_object):
         """To post and update the indicators into MS Defender."""
         try:

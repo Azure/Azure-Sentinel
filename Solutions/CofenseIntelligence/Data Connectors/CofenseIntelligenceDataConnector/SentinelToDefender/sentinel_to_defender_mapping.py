@@ -10,8 +10,8 @@ class SentinelToDefenderMapping:
 
     def get_defender_indicator_value(self, indicator):
         """To convert sentinel indicator pattern to threat value."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             sentinel_pattern = indicator.get("properties", {}).get(
                 "parsedPattern", None
             )
@@ -47,8 +47,8 @@ class SentinelToDefenderMapping:
     def get_defender_indicator_type(self, indicator):
         """To convert sentinel indicator type to defender accepted indicator type."""
         # getting indicator type.
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             sentinel_indicator_pattern_type = indicator.get("properties", {}).get(
                 "patternType", None
             )
@@ -83,8 +83,8 @@ class SentinelToDefenderMapping:
 
     def get_defender_action_and_severity(self, indicator):
         """To convert sentinel confidence value to defender action."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             confidence = indicator.get("properties", {}).get("confidence", "")
             actions = None
             severity = None
@@ -125,8 +125,8 @@ class SentinelToDefenderMapping:
 
     def get_defender_title(self, indicator):
         """To parse indicator title."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             sentinel_indicator_display_name = indicator.get("properties", {}).get(
                 "displayName", None
             )
@@ -149,8 +149,8 @@ class SentinelToDefenderMapping:
 
     def get_defender_description(self, indicator):
         """To parse defender indicator description."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             sentinel_indicator_description = indicator.get("properties", {}).get(
                 "description", None
             )

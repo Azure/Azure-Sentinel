@@ -37,7 +37,6 @@ CREATE_SENTINEL_INDICATORS_URL = (
 AZURE_RESOURCE_GROUP = os.environ.get("Azure_Resource_Group_Name", "")
 AZURE_WORKSPACE_NAME = os.environ.get("Azure_Workspace_Name", "")
 AZURE_SUBSCRIPTION_ID = os.environ.get("Azure_Subscription_Id", "")
-CONNECTION_STRING = os.environ.get("AzureWebJobsStorage", "")
 SENTINEL_429_SLEEP = 60
 IS_DEFENDER_USER = os.environ.get("SendCofenseIndicatorToDefender", "")
 SCHEDULE = os.environ.get("Schedule", "")
