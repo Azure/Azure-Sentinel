@@ -22,7 +22,7 @@ $jsonBody = $BodyJson | ConvertTo-Json
 Write-Host "jsonBody $jsonBody"
 $Parameters = @{
     Method      = "POST"
-    Uri         = "https://api.github.com/repos/v-amolpatil/packagingrepo/dispatches"
+    Uri         = "https://api.github.com/repos/Azure/Azure-Sentinel/dispatches"
     Headers     = $Header
     ContentType = "application/json"
     Body        = $jsonBody

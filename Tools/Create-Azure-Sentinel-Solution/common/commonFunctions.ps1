@@ -489,7 +489,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
 
-                        $workbookFinalPath = $baseFolderPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';  #"https://raw.githubusercontent.com/v-amolpatil/packagingrepo/master/" #$workbookMetadataPathForPipelineRun 
+                        $workbookFinalPath = $baseFolderPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';  
                         
                         # BELOW IS THE NEW CODE ADDED FROM AZURE SENTINEL REPO
                         if($contentToImport.TemplateSpec) {
@@ -582,6 +582,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                             return $_;
                                         }
                                     }
+                                }
+                                
+                                if ($dependencies.Count -gt 0)
+                                {
+                                    $dependencies = $dependencies[0]
                                 }
                                 $WorkbookDependencyCriteria = @();
                                 foreach($dataTypesDependencies in $dependencies.dataTypesDependencies)
