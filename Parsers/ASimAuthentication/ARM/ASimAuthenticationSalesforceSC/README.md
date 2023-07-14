@@ -1,6 +1,6 @@
-# Salesforce ASIM Authentication Normalization Parser
+# Salesforce Service Cloud ASIM Authentication Normalization Parser
 
-ARM template for ASIM Authentication schema parser for Salesforce.
+ARM template for ASIM Authentication schema parser for Salesforce Service Cloud.
 
 This ASIM parser supports normalizing Salesforce sign in logs, stored in the  SalesforceServiceCloud_CL table, to the ASIM Authentication schema.
 
