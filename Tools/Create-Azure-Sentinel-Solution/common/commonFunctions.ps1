@@ -1575,7 +1575,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     if ($contentToImport.TemplateSpec) {
                         $connectorName = $contentToImport.Name
                         # Add workspace resource ID if not available
-                        if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+                        if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                         }
                         # If both ID and Title exist, is standard GenericUI data connector
@@ -2051,7 +2051,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryTemplateSpecName$global:huntingQueryCounter" -NotePropertyValue "[concat(parameters('workspace'),'-hq-',uniquestring(variables('_huntingQuerycontentId$global:huntingQueryCounter')))]"
                             }
 
-                            if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+                            if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
                                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                             }
 
@@ -2395,7 +2395,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$global:analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId$global:analyticRuleCounter')))]"
                             }
 
-                            if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+                            if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
                                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                             }
                             
@@ -2961,7 +2961,7 @@ function Base32Encode([uint32]$charValue)
 function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceDetails)
 {
         # Add workspace resource ID if not available
-        if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+        if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
         }
 
