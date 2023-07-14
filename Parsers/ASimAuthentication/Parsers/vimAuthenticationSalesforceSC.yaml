@@ -1,27 +1,37 @@
 Parser:
-  Title: Authentication ASIM parser for Salesforce Service Cloud
+  Title: ASIM Authentication filtering parser for Salesforce Service Cloud
   Version: '0.1'
-  LastUpdated: September 30, 2022
+  LastUpdated: July 8th, 2023
 Product:
   Name: Salesforce Service Cloud
 Normalization:
   Schema: Authentication
   Version: '0.1.3'
 References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Salesforce sign in logs, stored in the  SalesforceServiceCloud_CL table, to the ASIM Authentication schema.
-ParserName: ASimAuthenticationSalesforceSC
+  This ASIM parser supports filtering and normalizing the Salesforce Service Cloud logs stored in 'SalesforceServiceCloud_CL' table to the ASIM authentication normalized schema.
+ParserName: vimAuthenticationSalesforceSC
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-    let SalesforceSignin=(disabled:bool=false){
-    let EventResultMapping = datatable (login_status_s:string,EventResultDetails:string,EventResult:string)[
+  let EventResultMapping = datatable (login_status_s:string,EventResultDetails:string,EventResult:string)[
         "LOGIN_CHALLENGE_ISSUED","Other","Failure",
         "LOGIN_CHALLENGE_PENDING","Other","Failure",
         "LOGIN_DATA_DOWNLOAD_ONLY","Other","Failure",
@@ -142,35 +152,45 @@ ParserQuery: |
         "LOGIN_SAML_SITE_INACTIVE","Other","Failure",
         "LOGIN_TWOFACTOR_REQ","Other","Failure"
     ];
-    let SalesforceEventType = dynamic(['Login','Logout']);
+  let SalesforceEventType = dynamic(['Login','LoginAs','Logout']);
+  let EventTypeLookup = datatable(event_type_s:string, EventType:string)[
+        "Login","Logon",
+        "LoginAs","Logon",
+        "Logout","Logoff"
+  ];
+  let parser = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    targetusername_has:string="*",
+    disabled:bool=false
+  )
+  {
     SalesforceServiceCloud_CL 
     | where not(disabled)
+    //  -- Pre filtering
+    | where 
+    (isnull(starttime)   or TimeGenerated >= starttime) 
+    and (isnull(endtime)     or TimeGenerated <= endtime) 
+    and (targetusername_has=='*' or (user_name_s has targetusername_has ))
+    and event_type_s in~ (SalesforceEventType)
+    //  -- end pre-filtering
     | extend TimeGenerated = todatetime(tostring(split(timestamp_s,'.',0)[0]))
-    | where event_type_s in (SalesforceEventType)
     | lookup EventResultMapping on login_status_s
-    | extend 
-          EventProduct='Salesforce Service Cloud'        
-        , EventSchema = 'Authentication'
-        , EventVendor = 'Salesforce'
-        , EventCount = int(1)
-        , EventSchemaVersion = '0.1.0'
-        , EventStartTime = TimeGenerated
-        , EventEndTime = TimeGenerated
-        , EventType = iff(event_type_s == 'Login', 'Logon', 'Logoff')
     | project-rename
-          EventProductVersion = api_version_s
-        , EventOriginalResultDetails = login_status_s
-        , TargetSessionId =login_key_s
-        , TargetUserId = user_id_s
-        , TargetUsername = user_name_s
-        , TargetOriginalUserType = user_type_s
-        , EventOriginalUid = request_id_s
-        , SrcIpAddr = source_ip_s
-        , TargetIpAddr = client_ip_s
-        , TargetUserScope = organization_id_s
-        , TlsCipher = cipher_suite_s
-        , TlsVersion = tls_protocol_s
-        , HttpUserAgent= browser_type_s
+    EventProductVersion = api_version_s
+    , EventOriginalResultDetails = login_status_s
+    , ActorSessionId = coalesce(session_key_s,login_key_s)
+    , TargetUserId = user_id_s
+    , TargetUsername = user_name_s
+    , TargetOriginalUserType = user_type_s
+    , EventOriginalUid = request_id_s
+    , SrcIpAddr = source_ip_s
+    , TargetIpAddr = client_ip_s
+    , TargetUserScope = organization_id_s
+    , TlsCipher = cipher_suite_s
+    , TlsVersion = tls_protocol_s
+    , HttpUserAgent= browser_type_s
+    , TargetUrl = uri_s
     | extend
             TargetUserType = iff(isnotempty(TargetOriginalUserType),"Other","")         
           , TargetUserIdType = iff(isnotempty(TargetUserId),"SaleforceId","")         
@@ -180,6 +200,15 @@ ParserQuery: |
           , Src = SrcIpAddr
           , IpAddr = SrcIpAddr
           , Dst= TargetIpAddr
+    | extend
+          EventVendor = 'Salesforce'
+        , EventProduct='Salesforce Service Cloud'
+        , EventCount = int(1)    
+        , EventSchema = 'Authentication'
+        , EventSchemaVersion = '0.1.3'
+        , EventStartTime = TimeGenerated
+        , EventEndTime = TimeGenerated
+        , EventTypeLookup on event_type_s
     | project-away *_s
-    };
-    SalesforceSignin(disabled)
+  };
+  parser (starttime, endtime, targetusername_has, disabled)
