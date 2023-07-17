@@ -44,7 +44,7 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
             if ($val.Count -eq 0) {
                 if ($isWorkbook)
                 {
-                    $resourceObj.$key = '[]'
+                    $resourceObj.$key = @()
                 }
                 else
                 {
