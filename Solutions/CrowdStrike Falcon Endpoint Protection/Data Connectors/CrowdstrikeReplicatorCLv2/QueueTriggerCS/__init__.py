@@ -84,7 +84,6 @@ async def main(msg: func.QueueMessage) -> None:
                         await process_file_secondary_CLv2(bucket, link, client, session)
                     else:
                         await process_file_primary_CLv2(bucket, link, client, session, eventsSchemaMappingDict, requiredFieldsMappingDict)
-                    logging.info("Successfully executed {} Bucket.".format(link)) 
                 except Exception as e:
                     logging.error('Error while processing bucket. Error: {}'.format(link, str(e)))
                     raise e
@@ -174,6 +173,7 @@ async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSche
             async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
                 s += decompressed_chunk.decode(errors='ignore')
                 lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                await session.sleep(0)
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
