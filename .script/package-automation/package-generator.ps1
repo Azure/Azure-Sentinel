@@ -7,7 +7,7 @@ function ErrorOutput {
     Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
     Write-Output "packageCreationPath=''" >> $env:GITHUB_OUTPUT
     Write-Output "blobName=''" >> $env:GITHUB_OUTPUT
-    exit 1
+    #exit 1
 }
 
 try {
@@ -88,6 +88,7 @@ try {
         foreach ($item in $datafolderFiles) {
             $paramterFileExist = $item -match ([regex]::Escape("parameters.json"))
             $paramtersFileExist = $item -match ([regex]::Escape("parameter.json"))
+            $paramtersFileExist = $item -match ([regex]::Escape("system_generated_metadata.json"))
             if ($paramterFileExist -or $paramtersFileExist) 
             { } 
             else { 
@@ -170,8 +171,7 @@ try {
 
     $solutionFolderPath = 'Solutions/' + $solutionName + "/"
     $filesList = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
-    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" }
-
+    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
     if ($dataFolderFiles.Count -gt 0) {
         $selectFirstdataFolderFile = $dataFolderFiles | Select-Object -first 1
         $filteredString = $selectFirstdataFolderFile.Replace("$solutionFolderPath", '', 'OrdinalIgnoreCase')
@@ -191,7 +191,7 @@ try {
 
     $baseFolderPath = $inputBaseFolderPath #'/home/runner/work/packagingrepo/packagingrepo/'
     $dataFilePath = $baseFolderPath + $solutionDataFolder + $dataFolderFile
-    $dataFileLink = "https://github.com/v-amolpatil/packagingrepo/master/Solutions/$solutionName/$dataFolderActualName/$dataFolderFile"
+    $dataFileLink = "https://github.com/Azure/Azure-Sentinel/master/Solutions/$solutionName/$dataFolderActualName/$dataFolderFile"
 
     Write-Output "dataFileLink=$dataFileLink" >> $env:GITHUB_OUTPUT
     Write-Host "Data File Path $dataFilePath"
@@ -567,7 +567,7 @@ try {
     
         if ($linkedTemplate.Count -gt 0)
         {
-            $playbooksFolderResult = $playbooksFolderResult | Where-Object { $_ -notlike "$linkedTemplate" } 
+            $playbooksFolderResult = $playbooksFolderResult | Where-Object { $_ -notlike "*$linkedTemplate" } 
         }
     
         $playbooksFolderResult = $playbooksFolderResult | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
@@ -604,7 +604,7 @@ try {
                 if ($linkedTemplate.Count -gt 0)
                 {
                     #REMOVE LINKED TEMPLATE
-                    $playbooksDynamicCustomConnector = $playbooksDynamicCustomConnector | Where-Object { $_ -notlike "$linkedTemplate" }
+                    $playbooksDynamicCustomConnector = $playbooksDynamicCustomConnector | Where-Object { $_ -notlike "*$linkedTemplate" }
                 }
             }
         }
