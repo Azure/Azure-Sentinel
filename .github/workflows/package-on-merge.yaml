@@ -1,0 +1,309 @@
+# THIS WORKFLOW WILL GET TRIGGERED WHEN PR IS MERGED IN MASTER
+name: Package Command On Merge Of PR
+env:
+  APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
+  DEFAULTPACKAGEVERSION: "${{ vars.DEFAULTPACKAGEVERSION }}"
+  BLOB_CONN_STRING: "${{ secrets.BLOB_CONN_STRING }}"
+  BASE_FOLDER_PATH: "${{ vars.BASEFOLDERPATH }}"
+  BRANCH_NAME: "${{ github.event.pull_request.head.ref }}"
+  ADO_TOKEN: "${{ secrets.ADO_TOKEN }}"
+  ADO_BASE_URL: "${{ vars.ADO_BASE_URL }}"
+  ADO_AREAPATH: "${{ vars.ADO_AREAPATH }}"
+  ADO_TEAMPROJECT: "${{ vars.ADO_TEAMPROJECT }}"
+  ADO_PARENT_LINK: "${{ vars.ADO_PARENT_LINK }}"
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - Solutions/**
+    types:
+      - closed
+jobs:
+  checkAutomatedPR:
+    if: ${{ github.event.pull_request.merged && !github.event.pull_request.head.repo.fork }}
+    uses: ./.github/workflows/checkAutomatedPR.yaml
+
+  solutionNameDetails:
+    if: ${{ github.event.pull_request.merged && !github.event.pull_request.head.repo.fork }}
+    needs: checkAutomatedPR
+    uses: ./.github/workflows/getSolutionName.yaml
+    secrets: inherit
+
+  checkSkipPackagingDetails:
+    if: ${{ github.event.pull_request.merged && !github.event.pull_request.head.repo.fork && needs.solutionNameDetails.outputs.solutionName != ''  }}
+    uses: ./.github/workflows/checkSkipPackagingInfo.yaml
+    secrets: inherit
+    needs: solutionNameDetails
+    with: 
+      solutionName: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+
+  neworexistingsolution:
+    needs: [solutionNameDetails, checkSkipPackagingDetails]
+    uses: ./.github/workflows/neworexistingsolution.yaml
+    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && needs.checkSkipPackagingDetails.outputs.isPackagingRequired == 'True' }} 
+    with: 
+      solutionName: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+    secrets: inherit
+
+  createpackage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [solutionNameDetails, neworexistingsolution]
+    env:
+      RUNID: "${{ github.event.client_payload.github.runId }}" 
+      PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
+      SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+      SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
+      SOLUTION_OFFER_ID: "${{ needs.neworexistingsolution.outputs.solutionOfferId }}"
+      IS_NEW_SOLUTION: "${{ needs.neworexistingsolution.outputs.isNewSolution }}"
+    outputs:
+      isCreatePackage: ${{ steps.step1.outputs.isCreatePackage }}
+      packageCreationPath: "${{ steps.step1.outputs.packageCreationPath }}"
+      packageVersion: "${{ steps.step1.outputs.packageVersion }}"
+      blobName: "${{ steps.step1.outputs.blobName }}"
+      dataFileLink: "${{ steps.step1.outputs.dataFileLink }}"
+      dataFolderPath: "${{ steps.step1.outputs.dataFolderPath }}"
+      solutionBaseFolderPath: "${{ steps.step1.outputs.solutionBaseFolderPath }}"
+      dataInputFileName: "${{ steps.step1.outputs.dataInputFileName }}"
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        with:
+          fetch-depth: 0
+          ref: ${{ env.BRANCH_NAME }} 
+      - shell: pwsh
+        id: step1
+        name: Check & Initiate Package Creation Process
+        run: |
+          $instrumentationKey = "${{ env.APPINSIGHTS }}"
+          $defaultPackageVersion = "${{ vars.defaultPackageVersion }}"
+          $solutionSupportedBy = "${{ env.SOLUTION_SUPPORTED_BY }}"
+          $solutionOfferId = "${{ env.SOLUTION_OFFER_ID }}"
+          $runId = "${{ env.RUNID }}"
+          $solutionName = "${{ needs.solutionNameDetails.outputs.solutionName }}"
+          $pullRequestNumber = "${{ github.event.pull_request.number }}"
+          $isNewSolution = "${{ env.IS_NEW_SOLUTION }}"
+
+          Write-Host "RunId = $runId, defaultPackageVersion = $defaultPackageVersion, solutionOfferId = $solutionOfferId, SOLUTION_NAME = $solutionName, PULL_REQUEST_NUMBER = $pullRequestNumber, isNewSolution = $isNewSolution"
+          . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
+          try
+          {
+            $customProperties = @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'EventName'="Create Package"; 'IsNewSolution'='$isNewSolution';'SolutionOfferId'='$solutionOfferId';'SolutionSupportedBy'='$solutionSupportedBy';'SolutionName'='$solutionName'; }
+            Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "Create Package" -CustomProperties $customProperties
+
+            if ($solutionName -eq '' -or $null -eq $solutionName)
+            {
+              Write-Output "::warning:: Package-Creation : Skipping as Solution name is blank."
+              Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for create-package started and received blank solutionName for Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+            }
+            else
+            {
+              Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for create-package started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+
+              $baseFolderPath = "/home/runner/work/Azure-Sentinel/Azure-Sentinel/"
+              Set-PSRepository PSGallery -InstallationPolicy Trusted
+              Install-Module powershell-yaml
+              ./.script/package-automation/package-generator.ps1 $solutionName $pullRequestNumber $runId $instrumentationKey $defaultPackageVersion $solutionOfferId $baseFolderPath $isNewSolution
+            }
+          }
+          catch
+          {
+            Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'ErrorDetails'="CreatePackage : Error occured in catch block: $_"; 'EventName'="Create Package"; 'SolutionOfferId'="$solutionOfferId"; }
+            exit 1
+          }
+
+      - name: Upload Artifacts
+        id: uploadPackageArtifacts
+        uses: actions/upload-artifact@e0057a5b76f2fdad976135e8dd7b691e632b9056
+        env:
+          BLOBNAME: "${{ steps.step1.outputs.blobName }}"
+          PACKAGE_CREATION_PATH: "${{ steps.step1.outputs.packageCreationPath }}"
+          DATA_FOLDER_PATH: "${{ steps.step1.outputs.dataFolderPath }}"
+          DATA_INPUT_FILE_NAME: "${{ steps.step1.outputs.dataInputFileName }}"
+          SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+          SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
+          RUNID: "${{ github.event.client_payload.github.runId }}" 
+          PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
+          IS_CREATE_PACKAGE: ${{ steps.step1.outputs.isCreatePackage }}
+        if: ${{ success() && (steps.step1.outcome == 'success' && env.IS_CREATE_PACKAGE && env.PACKAGE_CREATION_PATH != '' && env.BLOBNAME != '') }}
+        with: 
+          name: "${{ env.BLOBNAME }}"
+          path: "${{ env.PACKAGE_CREATION_PATH }}"
+
+      - name: Upload Data File Artifacts
+        id: uploadDataFileArtifact
+        uses: actions/upload-artifact@e0057a5b76f2fdad976135e8dd7b691e632b9056
+        env:
+          DATA_FOLDER_PATH: "${{ steps.step1.outputs.dataFolderPath }}"
+          DATA_INPUT_FILE_NAME: "${{ steps.step1.outputs.dataInputFileName }}"
+        if: ${{ success() && (steps.step1.outcome == 'success' && env.DATA_FOLDER_PATH != '' && env.DATA_INPUT_FILE_NAME != '') }}
+        with: 
+          name: "${{ env.DATA_INPUT_FILE_NAME }}"
+          path: "${{ env.DATA_FOLDER_PATH }}"
+
+      - shell: pwsh
+        id: uploadartifacts
+        name: uploadartifactsEvent
+        run: |
+          $solutionSupportedBy = "${{ env.SOLUTION_SUPPORTED_BY }}"
+          $runId = "${{ github.event.client_payload.github.runId }}"
+          $solutionName = "${{ env.SOLUTION_NAME }}"
+          $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
+          $instrumentationKey = "${{ env.APPINSIGHTS }}"
+          . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
+          $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'EventName'="Upload Artifacts"; }
+          Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "Upload Artifacts" -CustomProperties $customProperties 
+          Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for Uploaded Artifacts for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+
+  createNewPR:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: write
+    needs: [solutionNameDetails, neworexistingsolution, createpackage]
+    env:
+      BLOBNAME: "${{ needs.createpackage.outputs.blobName }}"
+      IS_CREATE_PACKAGE: ${{ needs.createpackage.outputs.isCreatePackage }}
+      PACKAGE_CREATION_PATH: "${{ needs.createpackage.outputs.packageCreationPath }}"
+      DATA_FOLDER_PATH: "${{ needs.createpackage.outputs.dataFolderPath }}"
+      DATA_INPUT_FILE_NAME: "${{ needs.createpackage.outputs.dataInputFileName }}"
+      SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+      PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
+      SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
+      ACTOR: "${{ github.actor }}"
+      ASSIGNEES: "${{ github.event.client_payload.github.actor }}"
+      CURRENT_BRANCH_NAME: "${{ github.event.pull_request.head.ref }}"
+      RUNID: "${{ github.event.client_payload.github.runId }}"
+      APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
+    outputs:
+      newPRNumber: ${{ steps.create-new-pr.outputs.pull-request-number }}
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+      - uses: actions/download-artifact@e9ef242655d12993efdcda9058dee2db83a2cb9b
+        with:
+          name : "${{ env.BLOBNAME }}"
+          path: "${{ env.PACKAGE_CREATION_PATH }}"
+
+      - uses: actions/download-artifact@e9ef242655d12993efdcda9058dee2db83a2cb9b
+        with:
+          name: "${{ env.DATA_INPUT_FILE_NAME }}"
+          path: "${{ env.DATA_FOLDER_PATH }}"
+
+      - name: create-new-pr
+        id: create-new-pr
+        if: ${{ success() && (env.IS_CREATE_PACKAGE && env.PACKAGE_CREATION_PATH != '' && env.BLOBNAME != '') }}
+        uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5
+        with:
+          committer: GitHub <noreply@github.com>
+          author: "v-atulyadav@microsoft.com>"
+          assignees: "${{ env.ASSIGNEES }}"
+          signoff: false
+          branch: "${{ env.CURRENT_BRANCH_NAME }}-automated-pr"
+          base: master
+          delete-branch: false
+          title: '[GitHub Bot] 🤖 Package Created For ${{ env.SOLUTION_NAME }} Solution'
+          body: |
+            Automation have successfully generated package for solution '${{ env.SOLUTION_NAME }}' based on Pull request #${{ env.PULL_REQUEST_NUMBER }}.
+      - shell: pwsh
+        id: createPREvents
+        name: createPREvents
+        run: |
+          . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
+          $runId = "${{ env.RUNID }}"
+          $solutionName = "${{ env.SOLUTION_NAME }}"
+          $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
+          $instrumentationKey = "${{ env.APPINSIGHTS }}"
+          $previousStepSuccessValue = "${{ steps.create-new-pr.outcome }}"
+          try
+          {
+            $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'EventName'="Create New PR"; 'create-new-pr-output'="$previousStepSuccessValue" }
+            
+            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for create new pull request started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+              Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "Create New PR" -CustomProperties $customProperties
+          }
+          catch 
+          {
+            $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'EventName'="Create New PR Events"; 'create-new-pr-output'="failed" }
+            Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties $customProperties
+            exit 1
+          }
+
+  addCommentOnNewPRCreation:
+    needs: [solutionNameDetails, createNewPR]
+    if: ${{ success() && needs.createNewPR.outputs.newPRNumber != '' }}
+    uses: ./.github/workflows/addComment.yaml
+    with:
+      message: "@${{ github.event.client_payload.github.actor }} The requested package for the '${{ needs.solutionNameDetails.outputs.solutionName }}' solution has been generated based on Pull request #${{ github.event.client_payload.pull_request.number }}"
+      prNumber: "${{ needs.createNewPR.outputs.newPRNumber }}"
+
+  release-project:
+    name: Publish-Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [createpackage, createNewPR]
+    env:
+      BLOBNAME: "${{ needs.createpackage.outputs.blobName }}"
+      IS_CREATE_PACKAGE: ${{ needs.createpackage.outputs.isCreatePackage }}
+      PACKAGE_CREATION_PATH: "${{ needs.createpackage.outputs.packageCreationPath }}"
+      PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
+      RUNID: "${{ github.event.client_payload.github.runId }}"
+      APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
+      SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
+    if: ${{ needs.createpackage.outputs.isCreatePackage && needs.createpackage.outputs.packageCreationPath != '' }} 
+    steps:
+    - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+    - name: Download artifacts
+      id: downloadArtifacts
+      uses: actions/download-artifact@e9ef242655d12993efdcda9058dee2db83a2cb9b
+      with:
+        name: "${{ env.BLOBNAME }}"
+        path: "${{ env.PACKAGE_CREATION_PATH }}"
+    - shell: pwsh
+      run: |
+        $runId = "${{ env.RUNID }}"
+        $solutionName = "${{ env.SOLUTION_NAME }}"
+        $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
+        $blobName = "${{ env.BLOBNAME }}"
+        $isCreatePackage = "${{ env.IS_CREATE_PACKAGE }}"
+        $packageCreationPath = "${{ env.PACKAGE_CREATION_PATH }}"
+        $instrumentationKey = "${{ env.APPINSIGHTS }}"
+        . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
+        $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'EventName'="Download artifacts"; 'BlobName'="$blobName"; 'isCreatePackage'="$isCreatePackage"; 'PackageCreationPath'="$packageCreationPath"; } 
+        Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "Download artifacts" -CustomProperties $customProperties
+        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for download artifacts started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties 
+    
+    - uses: fixpoint/azblob-upload-artifact@41eaaaa8fa50a5ba144d1d106c0e4ca11ca60c08
+      id: uploadBlobStorage
+      if: ${{ success() && steps.downloadArtifacts.outcome == 'success' }}
+      env:
+        blobName: "${{ env.BLOBNAME }}"
+        packageCreationPath: "${{ env.PACKAGE_CREATION_PATH }}"
+      with:
+        connection-string: "${{ env.BLOB_CONN_STRING }}"
+        name: "${{ env.BLOBNAME }}"
+        path: "${{ env.PACKAGE_CREATION_PATH }}"
+
+  create-ado:
+    runs-on: ubuntu-latest
+    needs: [solutionNameDetails, neworexistingsolution, createpackage, createNewPR, addCommentOnNewPRCreation, release-project]
+    if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
+    # if: ${{ always() && contains(needs.*.result, 'failure') }}
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+      - shell: pwsh 
+        name: Create ADO Record
+        run: |
+          $adoToken = "${{ env.ADO_TOKEN }}"
+          $adoBaseUrl = "${{ env.ADO_BASE_URL}}"
+          $adoAreaPath = "${{ env.ADO_AREAPATH}}"
+          $adoTeamProject = "${{ env.ADO_TEAMPROJECT}}"
+          $prNumber = "${{ github.event.pull_request.number }}"
+          $prTitle = "${{ github.event.client_payload.pull_request.title}}"
+          $dataFileLink = "${{ needs.createNewPR.outputs.dataFileLink }}"
+          $adoParentLink = "${{ env.ADO_PARENT_LINK }}"
+          $instrumentationKey = "${{ env.APPINSIGHTS }}"
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml
+          ./.script/package-automation/createADOItem.ps1 $adoToken $adoBaseUrl $adoAreaPath $adoTeamProject $prNumber $prTitle $dataFileLink $adoParentLink $instrumentationKey
