@@ -75,7 +75,7 @@ async def main(msg: func.QueueMessage) -> None:
     requiredFieldsMappingDict = requiredFieldsMapping.getDict()
     
     async with _create_s3_client() as client:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=600) as session:
             if link:
                 logging.info("Processing file {}".format(link))
                 try:
