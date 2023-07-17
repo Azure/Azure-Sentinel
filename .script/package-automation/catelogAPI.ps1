@@ -98,6 +98,10 @@ function GetOfferVersion($offerId, $mainTemplateUrl)
             $response = Invoke-RestMethod -Uri $mainTemplateUrl -Method 'GET' -Headers $headers
             $metadataDetails = $response.resources | Where-Object { ($_.name -eq "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]" -or $_.name -eq "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]") -and ($_.type -eq "Microsoft.OperationalInsights/workspaces/providers/metadata")};
 
+            if ($null -eq $metadataDetails)
+            {
+                $metadataDetails = $response.resources | Where-Object { ($_.name -eq "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]" -or $_.name -eq "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]") -and ($_.type -eq "Microsoft.OperationalInsights/workspaces/providers/contentPackages")};
+            }
             if ($null -eq $metadataDetails -or $metadataDetails -eq '')
             {
                 Write-Host "Offer Metadata Version details in MainTemplate is not found!"
