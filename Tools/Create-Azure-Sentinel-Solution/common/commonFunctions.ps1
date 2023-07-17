@@ -1127,6 +1127,13 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 }
                                 else {
                                     if (($prop.Value -isnot [System.Int32]) -and ($prop.Value -isnot [System.Int64])) {
+                                        if ($prop.Value -like ('*hidden-link*'))
+                                        {
+                                            $jsonValue = $prop.Value | ConvertTo-Json
+                                            $jsonValue = $jsonValue.replace('concat', '[concat')
+
+                                            $prop.Value = $jsonValue | ConvertFrom-Json
+                                        }
                                         $resourceObj.$key = $(addInternalSuffixRecursively $resourceObj.$key)
                                     }
                                 }
