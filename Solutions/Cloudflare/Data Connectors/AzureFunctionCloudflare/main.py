@@ -12,7 +12,6 @@ from .sentinel_connector_async import AzureSentinelConnectorAsync
 
 
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
-logging.getLogger('charset_normalizer').setLevel(logging.ERROR)
 
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
@@ -33,9 +32,6 @@ MAX_PAGE_SIZE = int(MAX_CONCURRENT_PROCESSING_FILES * 1.5)
 
 # Defines max number of events that can be sent in one request to Azure Sentinel
 MAX_BUCKET_SIZE = int(os.environ.get('MAX_BUCKET_SIZE', 2000))
-
-# Defines max chunk download size for blob storage in MB
-MAX_CHUNK_SIZE_MB = int(os.environ.get('MAX_CHUNK_SIZE_MB', 2))
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -83,7 +79,7 @@ class AzureBlobStorageConnector:
         self.total_events = 0
 
     def _create_container_client(self):
-        return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False, max_single_get_size=MAX_CHUNK_SIZE_MB*1024*1024, max_chunk_get_size=MAX_CHUNK_SIZE_MB*1024*1024)
+        return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False, max_single_get_size=2*1024*1024, max_chunk_get_size=2*1024*1024)
 
     async def get_blobs(self):
         container_client = self._create_container_client()

@@ -17,7 +17,10 @@
    ```  
 3. Script prompts you to enter your **Azure Tenant Id**
 
-4. **Supports both Azure Commercial and Azure Gov Tenants**  
+4. **Azure Government support** using ```-AzEnvironment [AzureCloud | AzureUSGovernment]``` (Defaults to ```AzureCloud```).  
+    ```PowerShell
+     .\Configure-Long-Term-Retention.ps1 -TenantId xxxx -AzEnvironment  AzureUSGovernment  
+     ```
 5. You are prompted to authenticate with credentials, once the user is authenticated, you will be prompted to choose 
 	- Subscription
 	- Log Analytics Workspace

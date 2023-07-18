@@ -16,10 +16,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
-      - AZFWApplicationRule
-      - AZFWNetworkRule
 queryFrequency: 1h
-queryPeriod: 25h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 1
 tactics:
@@ -28,48 +26,42 @@ tactics:
   - CommandAndControl
 relevantTechniques: []
 query: |
-  let LearningPeriod = 1d;
+  let LearningPeriod = 5d;
   let RunTime = 1h;
   let StartLearningPeriod = LearningPeriod + RunTime;
-  let EndRunTime = RunTime - 1h;
+  let EndRunTime = RunTime - 1d;
   let BinTime = 1h;
   let NumOfStdsThreshold = 3;
   let MinThreshold = 5.0;
   let MinLearningBuckets = 5;
-  let TrafficLogs = (union isfuzzy=true
-  (AzureDiagnostics
-  | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog" 
-  | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
-  | where Action == "Deny"
-  | where isnotempty(Fqdn) and isnotempty(SourceIp)),
-  (AZFWNetworkRule
-  | extend Fqdn = DestinationIp
-  | where Action == "Deny"
-  | where isnotempty(Fqdn) and isnotempty(SourceIp)),
-  (AZFWApplicationRule
-  | where Action == "Deny"
-  | where isnotempty(Fqdn) and isnotempty(SourceIp)));
+  let TrafficLogs = (AzureDiagnostics
+  | where TimeGenerated  between (ago(StartLearningPeriod) .. ago(EndRunTime))
+  | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
+  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport ". Action: " action "." *
+  | where action == "Deny"
+  | where isnotempty(dsturl) and isnotempty(srcip));
   let LearningSrcIpDenyRate = (TrafficLogs
   | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
-  | summarize count() by SourceIp, bin(TimeGenerated, BinTime), Fqdn
-  | summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by SourceIp, Fqdn
+  | summarize count() by srcip, bin(TimeGenerated, BinTime), dsturl
+  | summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by srcip, dsturl
   | where LearningTimeBuckets > MinLearningBuckets);
   let AlertTimeSrcIpDenyRate = (TrafficLogs
   | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
-  | summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp);
+  | summarize AlertTimeSrcIpDenyRateCount = count() by srcip);
   AlertTimeSrcIpDenyRate
-  | join kind=leftouter (LearningSrcIpDenyRate) on SourceIp
-  | extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
-  | where AlertTimeSrcIpDenyRateCount > LearningThreshold
-  | project-away SourceIp1, LearningTimeSrcIpDenyRateAvg, LearningTimeSrcIpDenyRateStd
+  | join kind=leftouter (LearningSrcIpDenyRate) on srcip
+  | extend LreaningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
+  | where AlertTimeSrcIpDenyRateCount > LreaningThreshold
+  | project-away srcip1, LearningTimeSrcIpDenyRateAvg, LearningTimeSrcIpDenyRateStd
+  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceIp
+        columnName: IPCustomEntity
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: Fqdn
-version: 1.1.0
+        columnName: URLCustomEntity
+version: 1.0.0
 kind: Scheduled

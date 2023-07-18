@@ -1,6 +1,5 @@
 Import-Module powershell-yaml
 
-Write-Host 'It is recommended to use createSolutionV3.ps1 file for solution packaging'
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
 $mainTemplateArtifact = [PSCustomObject]@{
@@ -23,42 +22,28 @@ function handleEmptyInstructionProperties ($inputObj) {
     } { $obj }
     $outputObj
 }
-function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
+function removePropertiesRecursively ($resourceObj) {
     foreach ($prop in $resourceObj.PsObject.Properties) {
         $key = $prop.Name
         $val = $prop.Value
         if ($null -eq $val) {
-            if ($isWorkbook)
-            {
-                $resourceObj.$key = ''
-            }
-            else
-            {
-                $resourceObj.$key = "[variables('blanks')]";
-                if (!$baseMainTemplate.variables.blanks) {
-                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
-                }
-            }
+            $resourceObj.$key = "[variables('blanks')]";
+                                            if (!$baseMainTemplate.variables.blanks) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                                }   
         }
         elseif ($val -is [System.Object[]]) {
             if ($val.Count -eq 0) {
-                if ($isWorkbook)
-                {
-                    $resourceObj.$key = @()
-                }
-                else
-                {
-                    #$resourceObj.PsObject.Properties.Remove($key)
-                    $resourceObj.$key = "[variables('TemplateEmptyArray')]";
-                    if (!$baseMainTemplate.variables.TemplateEmptyArray) {
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
-                    }
-                }
-            }
+                 #$resourceObj.PsObject.Properties.Remove($key)
+                 $resourceObj.$key = "[variables('TemplateEmptyArray')]";
+                                            if (!$baseMainTemplate.variables.TemplateEmptyArray) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                                            }
+        }
             else {
                 foreach ($item in $val) {
                     $itemIndex = $val.IndexOf($item)
-                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex] $isWorkbook)
+                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex])
                 }
             }
         }
@@ -68,7 +53,7 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
                     $resourceObj.PsObject.Properties.Remove($key)
                 }
                 else {
-                    $resourceObj.$key = $(removePropertiesRecursively $val $isWorkbook)
+                    $resourceObj.$key = $(removePropertiesRecursively $val)
                     if ($($resourceObj.$key.PsObject.Properties).Count -eq 0) {
                         $resourceObj.PsObject.Properties.Remove($key)
                     }
@@ -321,7 +306,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
                             # Remove empty braces
-                            $serializedData = $(removePropertiesRecursively $serializedData $true) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
+                            $serializedData = $(removePropertiesRecursively $serializedData) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
                         }
                         catch {
                             Write-Host "Failed to serialize $file" -ForegroundColor Red
@@ -418,7 +403,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add base templateSpec
                             $baseWorkbookTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2021-05-01";
                                 name       = "[variables('workbookTemplateSpecName$workbookCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -472,7 +457,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add templateSpecs/versions resource to hold actual content
                             $workbookTemplateSpecContent = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2021-05-01";
                                 name       = "[concat(variables('workbookTemplateSpecName$workbookCounter'),'/',variables('workbookVersion$workbookCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -988,19 +973,22 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 Write-Host $logicAppsPlaybookId;
                             }
 
+                            
+
                             $playbookResource =  $playbookResource
-                            $playbookResource = $(removePropertiesRecursively $playbookResource $false)
+                            $playbookResource = $(removePropertiesRecursively $playbookResource)
                             $playbookResource =  $(addInternalSuffixRecursively $playbookResource)
                             $playbookResource =  $(removeBlanksRecursively $playbookResource)
                             $playbookResources += $playbookResource;
                             $connectionCounter += 1
+
                         }
                         if(!$IsFunctionAppResource -and $rawData -like '*Microsoft.Web/sites*' )
                             {
                             if ($null -ne $playbookData -and $null -ne $playbookData.parameters){
                                         foreach($param in $playbookData.parameters.PsObject.Properties)
                                         {
-                                            if($param.Value -match "defaultValue" -and $functionAppList.ContainsKey($param.Value.defaultValue))
+                                            if($functionAppList.ContainsKey($param.Value.defaultValue))
                                             {
                                                 $playbookDependencies += [PSCustomObject] @{
                                                         kind = "AzureFunction";
@@ -1036,7 +1024,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add base templateSpec
                             $basePlaybookTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2021-05-01";
                                 name       = "[variables('playbookTemplateSpecName$playbookCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1126,7 +1114,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add templateSpecs/versions resource to hold actual content
                             $playbookTemplateSpecContent = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2021-05-01";
                                 name       = "[concat(variables('playbookTemplateSpecName$playbookCounter'),'/',variables('playbookVersion$playbookCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1280,7 +1268,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add base templateSpec
                             $baseDataConnectorTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2021-05-01";
                                 name       = "[variables('dataConnectorTemplateSpecName$connectorCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1360,7 +1348,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add templateSpecs/versions resource to hold actual content
                             $dataConnectorTemplateSpecContent = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2021-05-01";
                                 name       = "[concat(variables('dataConnectorTemplateSpecName$connectorCounter'),'/',variables('dataConnectorVersion$connectorCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -1809,7 +1797,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                                 $baseHuntingQueryTemplateSpec = [PSCustomObject]@{
                                     type       = "Microsoft.Resources/templateSpecs";
-                                    apiVersion = "2022-02-01";
+                                    apiVersion = "2021-05-01";
                                     name       = "[variables('huntingQueryTemplateSpecName$huntingQueryCounter')]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -1821,8 +1809,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         displayName = "$($solutionName) Hunting Query template";
                                     }
                                 }
-                                if($baseHuntingQueryTemplateSpec.properties.displayName.length -ge 64){
-                                    $baseHuntingQueryTemplateSpec.properties.displayName = "$($solutionName) HQ template";
+                                if($baseAnalyticRuleTemplateSpec.properties.displayName.length -ge 64){
+                                    $baseAnalyticRuleTemplateSpec.properties.displayName = "$($solutionName) HQ template";
                                 }
 
                                 $baseMainTemplate.resources += $baseHuntingQueryTemplateSpec
@@ -1858,7 +1846,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                  # Add templateSpecs/versions resource to hold actual content
                                 $huntingQueryTemplateSpecContent = [PSCustomObject]@{
                                     type       = "Microsoft.Resources/templateSpecs/versions";
-                                    apiVersion = "2022-02-01";
+                                    apiVersion = "2021-05-01";
                                     name       = "[concat(variables('huntingQueryTemplateSpecName$huntingQueryCounter'),'/',variables('huntingQueryVersion$huntingQueryCounter'))]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -2113,7 +2101,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                                 $baseAnalyticRuleTemplateSpec = [PSCustomObject]@{
                                     type       = "Microsoft.Resources/templateSpecs";
-                                    apiVersion = "2022-02-01";
+                                    apiVersion = "2021-05-01";
                                     name       = "[variables('analyticRuleTemplateSpecName$analyticRuleCounter')]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -2164,7 +2152,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                  # Add templateSpecs/versions resource to hold actual content
                                 $analyticRuleTemplateSpecContent = [PSCustomObject]@{
                                     type       = "Microsoft.Resources/templateSpecs/versions";
-                                    apiVersion = "2022-02-01";
+                                    apiVersion = "2021-05-01";
                                     name       = "[concat(variables('analyticRuleTemplateSpecName$analyticRuleCounter'),'/',variables('analyticRuleVersion$analyticRuleCounter'))]";
                                     location   = "[parameters('workspace-location')]";
                                     tags       = [PSCustomObject]@{
@@ -2262,7 +2250,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add base templateSpec
                             $baseParserTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2021-05-01";
                                 name       = "[variables('parserTemplateSpecName$parserCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -2330,7 +2318,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add templateSpecs/versions resource to hold actual content
                             $parserTemplateSpecContent = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs/versions";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2021-05-01";
                                 name       = "[concat(variables('parserTemplateSpecName$parserCounter'),'/',variables('parserVersion$parserCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
@@ -2660,5 +2648,5 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
     }
-    Invoke-Expression ". '$armTtkFolder/run-arm-ttk-in-automation.ps1' '$solutionName'"
+    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"
 }

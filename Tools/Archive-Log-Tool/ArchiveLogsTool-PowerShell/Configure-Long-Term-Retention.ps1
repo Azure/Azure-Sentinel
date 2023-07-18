@@ -13,19 +13,25 @@
             1. Check if table has any configuration (Basic\Analytics)
             2. Update Table configuration either to Analytics
             3. Update Table Retention based to Analytics
-         
+           
+    
+    .PARAMETER TenantId, AzEnvironment
+        Enter Azure Tenant Id (required)  
+        Enter Environment [AzureCloud | AzureUSGovernment]
+
     .NOTES
         AUTHOR: Sreedhar Ande
-        Last Edit : 5/15/2023 - Sreedhar Ande - Added Support for Azure Gov        
+        LASTEDIT: 6/14/2022 Ken Ward
 
     .EXAMPLE
-        .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
+        .\Configure-Long-Term-Retention.ps1 -TenantId xxxx -AzEnvironment [AzureCloud | AzureUSGovernment]
 #>
 
 #region UserInputs
 
 param(
-    [parameter(Mandatory = $true, HelpMessage = "Enter your Tenant Id")] [string] $TenantID    
+    [parameter(Mandatory = $true, HelpMessage = "Enter your Tenant Id")] [string] $TenantID,
+    [Parameter(Mandatory = $false, HelpMessage = "Enter Environment [AzureCloud | AzureUSGovernment]")] [string] $AzEnvironment = "AzureCloud"
 ) 
 
 #endregion UserInputs
@@ -222,8 +228,10 @@ function Set-TableConfiguration {
                                 TotalLogRetention=$TablesApiResult.properties.totalRetentionInDays;
                                 RetentionInArchive=$TablesApiResult.properties.archiveRetentionInDays;
                                 RetentionInWorkspace=$TablesApiResult.properties.retentionInDays
-                            }
-        }
+                            }  
+             
+
+		}
 	}
     return $SuccessTables
 }
@@ -244,7 +252,7 @@ function Get-AllTables {
     }
 
     If ($TablesApiResult.StatusCode -ne 200) {
-        $searchPattern = '(_RST|_EXT)'                
+        $searchPattern = '(_RST)'                
         foreach ($ta in $TablesApiResult.value) { 
             try {
                 if($ta.name.Trim() -notmatch $searchPattern) {                    
@@ -258,9 +266,11 @@ function Get-AllTables {
             }
             catch {
                 Write-Log -Message "Error adding $ta to collection" -LogFileName $LogFileName -Severity Error
-            }            	
+            }
+            	
         }
-    }	
+    }
+	
     return $AllTables
 }
 
@@ -278,7 +288,8 @@ function Update-TablesRetention {
         
         $TablesApiBody = @"
 			{
-				"properties": {					
+				"properties": {
+					"retentionInDays": 4,
 					"totalRetentionInDays":$ArchiveDays
 				}
 			}
@@ -312,20 +323,10 @@ function Collect-AnalyticsPlanRetentionDays {
     )
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-        
-    # Create a new form
+    
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'Table Plan:Analytics'
-
-    # Get the primary screen
-    $primaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen
-
-    # Set the form size and position
-    $formWidth = $primaryScreen.WorkingArea.Width * 0.2  # Adjust the form width as desired (80% of screen width in this example)
-    $formHeight = $primaryScreen.WorkingArea.Height * 0.2  # Adjust the form height as desired (80% of screen height in this example)
-    $formSize = New-Object System.Drawing.Size($formWidth, $formHeight)
-    $form.ClientSize = $formSize
-
+    $form.Size = New-Object System.Drawing.Size(380,250)
     $form.StartPosition = 'CenterScreen'
 
     $okButton = New-Object System.Windows.Forms.Button
@@ -356,7 +357,7 @@ function Collect-AnalyticsPlanRetentionDays {
     $textBox.Size = New-Object System.Drawing.Size(260,60)
     $textBox.TabIndex = 1
     $form.Controls.Add($textBox)  
-        
+    
     $textBox.Add_TextChanged({
         $days = [int]$textBox.Text.Trim()
         $AllowedDays = '(1095|1460|1826|2191|2556)'
@@ -389,21 +390,9 @@ function Collect-AnalyticsPlanRetentionDays {
 function Select-Plan {    
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-   
-
-    # Create a new form
     $logselectform = New-Object System.Windows.Forms.Form
     $logselectform.Text = 'Table Plan'
-
-    # Get the primary screen
-    $primaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen
-
-    # Set the form size and position
-    $formWidth = $primaryScreen.WorkingArea.Width * 0.2  # Adjust the form width as desired (80% of screen width in this example)
-    $formHeight = $primaryScreen.WorkingArea.Height * 0.2  # Adjust the form height as desired (80% of screen height in this example)
-    $formSize = New-Object System.Drawing.Size($formWidth, $formHeight)
-    $logselectform.ClientSize = $formSize
-
+    $logselectform.Size = New-Object System.Drawing.Size(400,180)
     $logselectform.StartPosition = 'CenterScreen'
     
     $okb = New-Object System.Windows.Forms.Button
@@ -434,23 +423,13 @@ function Select-Plan {
 function Get-Confirmation {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-     # Create a new form
-     $logselectform = New-Object System.Windows.Forms.Form
-     $logselectform.Text = 'Table Plan'
- 
-     # Get the primary screen
-     $primaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen
- 
-     # Set the form size and position
-     $formWidth = $primaryScreen.WorkingArea.Width * 0.2  # Adjust the form width as desired (80% of screen width in this example)
-     $formHeight = $primaryScreen.WorkingArea.Height * 0.2  # Adjust the form height as desired (80% of screen height in this example)
-     $formSize = New-Object System.Drawing.Size($formWidth, $formHeight)
-     $logselectform.ClientSize = $formSize
- 
-     $logselectform.StartPosition = 'CenterScreen'
+    $logselectform = New-Object System.Windows.Forms.Form
+    $logselectform.Text = 'Confirmation'
+    $logselectform.Size = New-Object System.Drawing.Size(250,160)
+    $logselectform.StartPosition = 'CenterScreen'
 
     $label = New-Object System.Windows.Forms.Label
-    $label.Location = New-Object System.Drawing.Point(40,40)
+    $label.Location = New-Object System.Drawing.Point(10,20)
     $label.Size = New-Object System.Drawing.Size(250,20)
     $label.Text = 'Do you want to continue?'
     $logselectform.Controls.Add($label)
@@ -491,6 +470,15 @@ $AzModulesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescr
 
 $AzModulesQuestionDecision = $Host.UI.PromptForChoice($title, $AzModulesQuestion, $AzModulesQuestionChoices, 1)
 
+#Set API endpoints
+if ($AzEnvironment -eq "AzureUSGovernment") {
+    $APIEndpoint = "management.usgovcloudapi.net"
+}
+else {
+    $APIEndpoint = "management.azure.com"
+    $AzEnvironment = "AzureCloud"
+}
+
 if ($AzModulesQuestionDecision -eq 0) {
     $UpdateAzModules = $true
 }
@@ -522,7 +510,7 @@ get-azcontext -ListAvailable | ForEach-Object{$_ | remove-azcontext -Force -Verb
 Write-Log "Clearing of existing connection and context completed." -LogFileName $LogFileName -Severity Information
 Try {
     #Connect to tenant with context name and save it to variable
-    $AzContext = Connect-AzAccount -Tenant $TenantID -ContextName 'MyAzContext' -Force -ErrorAction Stop
+    Connect-AzAccount -Tenant $TenantID -ContextName 'MyAzContext' -Force -ErrorAction Stop -Environment $AzEnvironment -UseDeviceAuthentication
         
     #Select subscription to build
     $GetSubscriptions = Get-AzSubscription -TenantId $TenantID | Where-Object {($_.state -eq 'enabled') } | Out-GridView -Title "Select Subscription to Use" -PassThru       
@@ -530,14 +518,6 @@ Try {
 catch {    
     Write-Log "Error When trying to connect to tenant : $($_)" -LogFileName $LogFileName -Severity Error
     exit    
-}
-
-#Set API endpoints
-if ($AzContext.Context.Environment.Name.Trim() -eq "AzureUSGovernment") {
-    $APIEndpoint = "management.usgovcloudapi.net"
-}
-else {
-    $APIEndpoint = "management.azure.com"    
 }
 
 $AzureAccessToken = (Get-AzAccessToken).Token            

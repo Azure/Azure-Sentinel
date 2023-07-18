@@ -13,10 +13,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
-      - AZFWApplicationRule
-      - AZFWNetworkRule
 queryFrequency: 1h
-queryPeriod: 1d
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 1
 tactics:
@@ -24,35 +22,29 @@ tactics:
 relevantTechniques:
   - T1046
 query: |
-  let MinimumDifferentHostsThreshold = 200;
-  let ExcludedPorts = dynamic([80 , 443]);
+  let RunTime = 1h;
+  let StartRunTime = 1d;
+  let EndRunTime = StartRunTime - RunTime;
+  let MinimumDifferentHostsThreashold = 200;
+  let ExcludedPorts = dynamic([80, 443]);
   let BinTime = 30s;
-  union isfuzzy=true(
-  AZFWApplicationRule
-  | where DestinationPort !in (ExcludedPorts)
-  | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort, Fqdn
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold),
-  (AZFWNetworkRule
-  | extend Fqdn = DestinationIp
-  | where DestinationPort !in (ExcludedPorts)
-  | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort, Fqdn
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold),
-  (AzureDiagnostics
+  AzureDiagnostics
+  | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
-  | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
-  | where DestinationPort !in (ExcludedPorts)
-  | where isnotempty(Fqdn) and isnotempty(SourceIp) and isnotempty(DestinationPort)
-  | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort, Fqdn
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold)
-  | project bin(TimeGenerated, BinTime), SourceIp, DestinationPort, AlertTimedCountHostsInBinTime, Fqdn
+  | parse msg_s with * "from " srcip ":" srcport " to " dsturl ":" dstport
+  | where dstport !in (ExcludedPorts)
+  | where isnotempty(dsturl) and isnotempty(srcip) and isnotempty(dstport)
+  | summarize AlertTimedCountHostsInBinTime = dcount(dsturl) by srcip, bin(TimeGenerated, BinTime), dstport, dsturl
+  | where AlertTimedCountHostsInBinTime > MinimumDifferentHostsThreashold
+  | extend IPCustomEntity = srcip, URLCustomEntity = dsturl
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceIp
+        columnName: IPCustomEntity
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: Fqdn
-version: 1.2.1
+        columnName: URLCustomEntity
+version: 1.0.0
 kind: Scheduled
