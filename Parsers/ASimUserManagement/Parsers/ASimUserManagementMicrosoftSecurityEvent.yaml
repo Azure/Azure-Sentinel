@@ -1,0 +1,204 @@
+Parser:
+  Title: User Management ASIM parser for Microsoft Security Event logs
+  Version: '0.1.0'
+  LastUpdated: 16 Jul, 2023
+Product:
+  Name: Microsoft
+Normalization:
+  Schema: UserManagement
+  Version: '0.1.1'
+References:
+- Title: ASIM User Management Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Microsoft Security Event logs delivered using AMA to the ASIM UserManagement normalized schema.
+ParserName: ASimUserManagementMicrosoftSecurityEvent
+EquivalentBuiltInParser: _ASim_UserManagement_MicrosoftSecurityEvent
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled:bool = false
+  ) {
+      let EventIDLookup = datatable(EventID:int, EventType:string, EventSubtype:string, GroupType:string)
+      [   
+          "4720", "UserCreated", "UserCreated", "", 
+          "4722", "UserEnabled", "UserModified", "", 
+          "4723", "PasswordChanged", "UserModified", "", 
+          "4724", "PasswordReset", "UserModified", "", 
+          "4725", "UserDisabled", "UserModified", "", 
+          "4726", "UserDeleted", "UserModified", "", 
+          "4727", "GroupCreated", "GroupCreated", "Global Security Enabled", 
+          "4728", "UserAddedToGroup", "GroupModified", "Global Security Enabled", 
+          "4729", "UserRemovedFromGroup", "GroupModified", "Global Security Enabled", 
+          "4730", "GroupDeleted", "GroupModified", "Global Security Enabled", 
+          "4731", "GroupCreated", "GroupCreated", "Local Security Enabled", 
+          "4732", "UserAddedToGroup", "GroupModified", "Local Security Enabled", 
+          "4733", "UserRemovedFromGroup", "GroupModified", "Local Security Enabled", 
+          "4734", "GroupDeleted", "GroupModified", "Local Security Enabled", 
+          "4738", "UserModified", "UserModified", "", 
+          "4740", "UserLocked", "UserModified", "", 
+          "4744", "GroupCreated", "GroupCreated", "Local Distribution", 
+          "4748", "GroupDeleted", "GroupModified", "Local Distribution", 
+          "4749", "GroupCreated", "GroupCreated", "Global Distribution", 
+          "4753", "GroupDeleted", "GroupModified", "Global Distribution", 
+          "4754", "GroupCreated", "GroupCreated", "Universal Security Enabled", 
+          "4756", "UserAddedToGroup", "GroupModified", "Universal Security Enabled", 
+          "4757", "UserRemovedFromGroup", "GroupModified", "Universal Security Enabled", 
+          "4758", "GroupDeleted", "GroupModified", "Universal Security Enabled", 
+          "4759", "GroupCreated", "GroupCreated", "Universal Distribution", 
+          "4763", "GroupDeleted", "GroupModified", "Universal Distribution", 
+          "4767", "UserLocked", "UserModified", "", 
+          "4781", "UserModified", "UserModified", "" 
+      ];
+      let UserTypeLookup = datatable (AccountType:string, ActorOriginalUserType:string)
+      [
+          'User', 'Regular',
+          'Machine', 'Machine'
+      ]; 
+      let UserEventID = toscalar(
+          EventIDLookup
+          | where not(disabled)
+          | where EventSubtype in("UserCreated","UserModified") 
+          | summarize make_set(EventID)
+      );
+      let GroupEventID = toscalar(
+          EventIDLookup
+          | where not(disabled)
+          | where EventSubtype in("GroupCreated","GroupModified")  
+          | summarize make_set(EventID)
+      );
+      union (
+          WindowsEvent
+          | where not(disabled)
+          | where EventID in(UserEventID)
+          | extend
+              TargetDomain = tostring(EventData.TargetDomainName),
+              TargetUserId = tostring(EventData.TargetSid),
+              TargetUsername = tostring(EventData.TargetUserName),
+              OldTargetUserName = tostring(EventData.OldTargetUserName),
+              NewTargetUserName = tostring(EventData.NewTargetUserName),
+              ActorUserId = tostring(EventData.SubjectUserSid),
+              SubjectDomainName = tostring(EventData.SubjectDomainName),
+              SubjectUserName = tostring(EventData.SubjectUserName),
+              ActorOriginalUserType = tostring(EventData.AccountType),
+              ActorSessionId = tostring(EventData.SubjectLogonId)
+          | project-rename
+              NewPropertyValue = NewTargetUserName,
+              PreviousPropertyValue = OldTargetUserName
+          | extend 
+              TargetUsername = coalesce(TargetUsername, PreviousPropertyValue)
+          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue
+          | extend
+              TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
+              TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
+      ),(
+          SecurityEvent
+          | where not(disabled)
+          | where EventID in(UserEventID)
+          | project-rename 
+              TargetUserId = TargetSid,
+              TargetUsername = TargetUserName,
+              ActorUserId = SubjectUserSid,
+              ActorOriginalUserType = AccountType,
+              ActorSessionId = SubjectLogonId,
+              TargetDomain = TargetDomainName
+          | parse-kv EventData as 
+              (
+                  OldTargetUserName:string,
+                  NewTargetUserName:string
+              ) 
+              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+          | project-rename
+              NewPropertyValue = NewTargetUserName,
+              PreviousPropertyValue = OldTargetUserName
+          | extend 
+              TargetUsername = coalesce(TargetUsername, PreviousPropertyValue)
+          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue
+          | extend
+              TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
+              TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
+      ),(
+          WindowsEvent
+          | where not(disabled)
+          | where EventID in(GroupEventID)
+          | extend 
+              GroupId = tostring(EventData.TargetSid),
+              GroupName = tostring(EventData.TargetUserName),
+              OldTargetUserName = tostring(EventData.OldTargetUserName),
+              NewTargetUserName = tostring(EventData.NewTargetUserName),
+              ActorUserId = tostring(EventData.SubjectUserSid),
+              SubjectDomainName = tostring(EventData.SubjectDomainName),
+              SubjectUserName = tostring(EventData.SubjectUserName),
+              ActorOriginalUserType = tostring(EventData.AccountType),
+              ActorSessionId = tostring(EventData.SubjectLogonId),
+              MemberName = tostring(EventData.MemberName),
+              MemberSid = tostring(EventData.MemberSid),
+              GroupDomain = tostring(EventData.TargetDomainName)
+          | extend 
+              TargetUsername = MemberName,
+              TargetUserId = MemberSid,
+              GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName))
+          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId
+          | extend 
+              GroupIdType = iif(isnotempty(GroupId), "SID","")
+      ),(
+          SecurityEvent
+          | where not(disabled)
+          | where EventID in(GroupEventID)
+          | project-rename 
+              GroupId = TargetSid,
+              GroupName = TargetUserName,
+              ActorUserId = SubjectUserSid,
+              ActorOriginalUserType = AccountType,
+              ActorSessionId = SubjectLogonId,
+              GroupDomain = TargetDomainName
+          | extend GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName))
+          | parse-kv EventData as 
+              (
+                  MemberName:string,
+                  MemberSid:string
+              ) 
+              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+          | project-rename 
+              TargetUsername = MemberName,
+              TargetUserId = MemberSid
+          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId
+          | extend 
+              GroupIdType = iif(isnotempty(GroupId), "SID","")
+      )
+  | lookup EventIDLookup on EventID
+  | invoke _ASIM_ResolveDvcFQDN ("Computer")
+  | lookup UserTypeLookup on ActorOriginalUserType
+  | project-rename 
+      DvcId = _ResourceId,
+      EventUid = _ItemId
+  | extend 
+      EventResult = "Success",
+      EventSeverity = "Informational",
+      EventSchema = "UserManagement",
+      EventSchemaVersion = "0.1.1",
+      Dvc = DvcHostname,
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventVendor = 'Microsoft',
+      EventProduct = 'Security Events',
+      DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
+      EventOriginalType = tostring(EventID),
+      DvcOs = "Windows",
+      ActorUserIdType = iif(isnotempty(ActorUserId), "SID",""),
+      ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
+      Hostname = DvcHostname
+  | project-away Subject*
+  | extend
+      ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+      TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+      GroupNameType = _ASIM_GetUsernameType(GroupName),
+      User = ActorUsername
+  };
+  parser (disabled=disabled)
