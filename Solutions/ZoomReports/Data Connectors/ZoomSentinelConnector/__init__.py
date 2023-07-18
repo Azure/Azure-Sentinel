@@ -10,7 +10,7 @@ import os
 import logging
 from .state_manager import StateManager
 
-zoom_account_id= os.environ['AccountId']
+zoom_account_id= os.environ['AccountID']
 zoom_client_id=os.environ['ClientID']
 zoom_client_secret=os.environ['ClientSecret']
 customer_id = os.environ['WorkspaceID']
