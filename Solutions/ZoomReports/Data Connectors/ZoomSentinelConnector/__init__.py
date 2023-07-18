@@ -1,5 +1,4 @@
 import azure.functions as func
-import jwt
 import datetime
 import json
 import base64
@@ -11,8 +10,9 @@ import os
 import logging
 from .state_manager import StateManager
 
-jwt_api_key = os.environ['ZoomApiKey']
-jwt_api_secret = os.environ['ZoomApiSecret']
+zoom_account_id= os.environ['AccountId']
+zoom_client_id=os.environ['ClientID']
+zoom_client_secret=os.environ['ClientSecret']
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 connection_string = os.environ['AzureWebJobsStorage']
@@ -31,24 +31,34 @@ if(not match):
 class Zoom:
 
     def __init__(self):
-        self.api_key = jwt_api_key
-        self.api_secret = jwt_api_secret
+        self.account_id=zoom_account_id
+        self.client_id=zoom_client_id
+        self.client_secret=zoom_client_secret
         self.base_url = "https://api.zoom.us/v2"
-        self.jwt_token_exp_hours = 1
-        self.jwt_token = self.generate_jwt_token()
+        self.token_url = "https://zoom.us/oauth/token?grant_type=account_credentials&account_id="+zoom_account_id
+        self.oauth_token = self.generate_oauth_token()
         self.from_day,self.to_day = self.generate_date()
         self.headers = {
                              'Accept': 'application/json',
-                             'authorization': "Bearer " + self.jwt_token,
+                             'authorization': "Bearer " + self.oauth_token,
                          }
 
-    def generate_jwt_token(self):
-        payload = {
-            'iss': self.api_key,
-            'exp': datetime.datetime.now() + datetime.timedelta(hours=self.jwt_token_exp_hours)
-        }
-        jwt_token = jwt.encode(payload, self.api_secret)
-        return jwt_token
+    def generate_oauth_token(self):
+        base64String=base64.b64encode(f"{self.client_id}:{self.client_secret}".encode('utf-8')).decode("ascii")
+        headersfortokens = {
+                            'Accept': 'application/json',
+                            'authorization': "Basic " + base64String,
+                   }
+        query_params = {
+                        "grant_type": "account_credentials",
+                        "account_id": self.account_id,
+                   }
+        oauth_token = requests.post(url = self.token_url ,
+                         params = query_params,
+                         headers = headersfortokens)
+        jsonData = json.loads(oauth_token.text)
+        oauth_token=jsonData['access_token']
+        return oauth_token
 
     def generate_date(self):
         current_time_day = datetime.datetime.utcnow().replace(second=0, microsecond=0)
