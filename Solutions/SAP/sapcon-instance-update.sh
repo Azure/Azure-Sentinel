@@ -25,6 +25,8 @@ STARTPARAMS="$@"
 dockerimage="mcr.microsoft.com/azure-sentinel/solutions/sapcon"
 sdkfileloc="/sapcon-app/inst/"
 CONTAINERNAMES=()
+test_logs="NO LOGS TO DISPLAY"
+
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -218,7 +220,7 @@ while IFS= read -r contname; do
 				envstring+="-e $variable "
 			fi
 		done
-		
+
 		# Check if we have an agent guid already. if we don't have - generate and add to the envstring
 		if [[ $envstring != *"SENTINEL_AGENT_GUID="* ]]; then
 			envstring+="-e SENTINEL_AGENT_GUID=$(uuidgen) "
@@ -283,6 +285,16 @@ while IFS= read -r contname; do
 					log "Agent test run finished. Exit code $containerexitcode"
 					if [ "$containerexitcode" == 0 ]; then
 						dryrunsuccess=1
+					elif [ "$containerexitcode" == 5 ]; then
+						echo ""
+						log "Failed to connect to the SAP system"
+						dryrunsuccess=0
+						break
+					elif [ "$containerexitcode" == 6 ]; then
+						echo ""
+						log "Failed to send heartbeat data to Azure Sentinel Workspace"
+						dryrunsuccess=0
+						break
 					elif [ "$containerexitcode" == 7 ]; then
 						echo ""
 						log "Insufficient authorizations in SAP"
@@ -312,6 +324,7 @@ while IFS= read -r contname; do
 				docker stop "$testruncontainer" >/dev/null
 			fi
 			log "Test run finished, removing agent in test run mode"
+            		test_logs=$(docker logs "$testruncontainer" --tail 70 2>&1)
 			docker rm "$testruncontainer" >/dev/null
 		else
 			log "Creating new agent without test mode"
@@ -325,7 +338,7 @@ while IFS= read -r contname; do
 			echo ""
 			log "Test run NOT successful, removing new agent, renaming the old agent to original name"
 			log "----Agent debug logs START----"
-			log "$(docker logs "$contname")"
+			log "$test_logs"
 			log "----Agent debug logs END----"
 		fi
 		if [ $dryrunsuccess == 1 ]; then
