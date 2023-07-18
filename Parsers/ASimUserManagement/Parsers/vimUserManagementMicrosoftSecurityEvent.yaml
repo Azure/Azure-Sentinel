@@ -17,13 +17,24 @@ Description: |
 ParserName: ASimUserManagementMicrosoftSecurityEvent
 EquivalentBuiltInParser: _ASim_UserManagement_MicrosoftSecurityEvent
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
   let parser = (
-      disabled:bool = false
-  ) {
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    disabled:bool=false
+    ) {
       let EventIDLookup = datatable(EventID:int, EventType:string, EventSubtype:string, GroupType:string)
       [   
           "4720", "UserCreated", "UserCreated", "", 
@@ -75,6 +86,8 @@ ParserQuery: |
       union (
           WindowsEvent
           | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+                and (isnull(endtime) or TimeGenerated <= endtime)
           | where EventID in(UserEventID)
           | extend
               TargetDomain = tostring(EventData.TargetDomainName),
@@ -99,6 +112,8 @@ ParserQuery: |
       ),(
           SecurityEvent
           | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+            and (isnull(endtime) or TimeGenerated <= endtime)
           | where EventID in(UserEventID)
           | project-rename 
               TargetUserId = TargetSid,
@@ -125,6 +140,8 @@ ParserQuery: |
       ),(
           WindowsEvent
           | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+                and (isnull(endtime) or TimeGenerated <= endtime)          
           | where EventID in(GroupEventID)
           | extend 
               GroupId = tostring(EventData.TargetSid),
@@ -149,6 +166,8 @@ ParserQuery: |
       ),(
           SecurityEvent
           | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+                and (isnull(endtime) or TimeGenerated <= endtime)          
           | where not (EventID in (4744, 4748, 4749, 4753, 4759, 4763))
           | where EventID in(GroupEventID)
           | project-rename 
@@ -174,6 +193,8 @@ ParserQuery: |
       ),(
           SecurityEvent
           | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+                and (isnull(endtime) or TimeGenerated <= endtime)          
           | where EventID in (4744, 4748, 4749, 4753, 4759, 4763)
           | parse-kv EventData as 
             (
@@ -238,4 +259,8 @@ ParserQuery: |
       GroupNameType = _ASIM_GetUsernameType(GroupName),
       User = ActorUsername
   };
-  parser (disabled=disabled)
+    parser (
+        starttime = starttime,
+        endtime = endtime,
+        disabled=disabled
+    )
