@@ -18,18 +18,22 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
   const pr = await GetPRDetails();
 
   if(pr){ // pr may return undefined
-    const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
-    
+      const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
+      console.log(`Changed files: ${changedFiles}`);
     if(changedFiles && changedFiles.length > 0){
       const options = [pr.targetBranch, pr.sourceBranch, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
-      const diffSummary = await git.diff(options);
-      const diffLinesArray = diffSummary.split('\n').map(l => l.trim());
-      const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
+        const diffSummary = await git.diff(options);
+        console.log(`Diff summary: ${diffSummary}`);
+        const diffLinesArray = diffSummary.split('\n').map(l => l.trim());
+        console.log(`Diff lines array: ${diffLinesArray}`);
+        const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
+        console.log(`Version changes: ${versionChanges}`);
 
       items
       .filter((workbookMetadata: WorkbookMetadata) => changedFiles.includes(`${workbooksDirectoryPath}/${workbookMetadata.templateRelativePath}`))
       .forEach((workbookMetadata: WorkbookMetadata) => {
-        const templateRelativePath = workbookMetadata.templateRelativePath;
+          const templateRelativePath = workbookMetadata.templateRelativePath;
+          console.log(`Template relative path: ${templateRelativePath}`);
         if(versionChanges[templateRelativePath] == null){
           // If the workbook has changed but the version was not updated (a matching key was not found in the versionChanges dictionary) - throw error
           throw new WorkbookValidationError(`The workbook ${workbookMetadata.templateRelativePath} has been modified but the version has not been incremented in the ${workbooksDirectoryPath}/WorkbooksMetadata.json file.`);
