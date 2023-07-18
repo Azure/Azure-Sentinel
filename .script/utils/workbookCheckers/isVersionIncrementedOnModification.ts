@@ -69,12 +69,14 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
 
         // The '+' may be added to a line as part of the 'git diff' output
         if(diffLines[currentLine].startsWith('+') && diffLines[currentLine].includes('"version":')){ // We are only interested in changes of the version value of an existing workbook
-          newVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+            newVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+            console.log(`New version: ${newVersion}`);
         }
 
         // The '-' may be added to a line as part of the 'git diff' output
         if(diffLines[currentLine].startsWith('-') && diffLines[currentLine].includes('"version":')){ // We are only interested in changes of the version value of an existing workbook
-          oldVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+            oldVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+            console.log(`Old version: ${oldVersion}`);
         }
 
         currentLine++;
