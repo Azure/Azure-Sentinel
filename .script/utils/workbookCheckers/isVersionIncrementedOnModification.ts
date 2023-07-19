@@ -62,9 +62,6 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
     let currentLine = 0;
     const workbookVersionChanges: any = {};
     const replaceQuotesRegex = /\"/gi;
-    let templateRelativePath: string | null = null;
-    let newVersion: string | null = null;
-    let oldVersion: string | null = null;
 
     while (currentLine < diffLines.length && diffLines[currentLine] !== '[') {
         currentLine++; // Skip to beginning of Workbooks array
@@ -73,9 +70,7 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
     while (currentLine < diffLines.length && diffLines[currentLine] !== ']') {
         if (diffLines[currentLine] === '{') {
             currentLine++; // Beginning of a workbook metadata object
-            templateRelativePath = null;
-            newVersion = null;
-            oldVersion = null;
+            let templateRelativePath: string | null = null, newVersion: string | null = null, oldVersion: string | null = null;
             let objectLevel = 1;
 
             while (currentLine < diffLines.length && objectLevel > 0) {
@@ -103,13 +98,16 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
                     objectLevel++;
                 }
 
-                currentLine++;
+                if (objectLevel > 0) {
+                    currentLine++; // Increment currentLine only if the end of object is not reached
+                }
             }
 
             if (templateRelativePath && newVersion && oldVersion) {
                 console.log("template relative path at assingment " + templateRelativePath);
                 console.log("new version at assingment " + newVersion);
                 console.log("oldVersion at assingment " + oldVersion);
+
                 workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
             }
         }
@@ -119,3 +117,4 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
 
     return workbookVersionChanges;
 }
+
