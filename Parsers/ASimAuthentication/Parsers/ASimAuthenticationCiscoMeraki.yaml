@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 - Title: Cisco Meraki Documentation
-  Link: https://documentation.meraki.com/ 
+  Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
 Description: |
   This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Authentication normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
 ParserName: ASimAuthenticationCiscoMeraki
@@ -22,7 +22,6 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-
 ParserQuery: |
   let LogSubTypeList = dynamic(["8021x_auth", "wpa_auth", "splash_auth", "8021x_deauth", "8021x_client_deauth", "wpa_deauth", "8021x_eap_failure", "8021x_eap_success"]);
   let EventResultDetailsLookup = datatable (reason: string, EventResultDetails: string)
@@ -103,18 +102,21 @@ ParserQuery: |
       | extend
           SrcIpAddr = tostring(split(coalesce(last_known_client_ip, ip, client_ip), " ")[0]),
           DvcMacAddr = client_mac,
-          User = identity,
+          TargetUsername = identity,
           AdditionalFields = bag_pack("aid", aid),
           EventOriginalType = LogType,
-          EventOriginalSubType = LogSubType
+          EventOriginalSubType = LogSubType,
+          EventUid = _ResourceId
       | extend
           SrcIpAddr = trim('"', SrcIpAddr),
           DvcMacAddr = trim('"', DvcMacAddr),
-          User = trim('"', User),
+          TargetUsername = trim('"', TargetUsername),
           reason = trim('"', reason)
       | extend
           DvcIpAddr = SrcIpAddr,
-          IpAddr = SrcIpAddr
+          IpAddr = SrcIpAddr,
+          User = TargetUsername,
+          TargetUsernameType = iff(isnotempty(TargetUsername), "Simple", "")
       | lookup EventFieldsLookup on LogSubType
       | lookup EventResultDetailsLookup on reason
       | extend EventResultDetails = iff(tolong(reason) between (25 .. 65535), "Other", EventResultDetails)

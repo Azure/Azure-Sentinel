@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 - Title: Cisco Meraki Documentation
-  Link: https://documentation.meraki.com/ 
+  Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
 Description: |
   This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Authentication normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
 ParserName: vimAuthenticationCiscoMeraki
@@ -108,9 +108,9 @@ ParserQuery: |
       | where LogSubType in (LogSubTypeList) or (LogSubType == "disassociation" and Substring has "auth_neg_failed")
       | invoke _ASIM_ResolveDvcFQDN('Device')
       | parse-kv Substring as(last_known_client_ip: string, ip: string, client_ip: string, client_mac: string, identity: string, reason: string, aid: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
-      | extend User = identity
-      | extend User = trim('"', User)
-      | where (targetusername_has == "*" or User =~ targetusername_has)
+      | extend TargetUsername = identity
+      | extend TargetUsername = trim('"', TargetUsername)
+      | where (targetusername_has == "*" or TargetUsername has targetusername_has)
       | extend Dvc = DvcHostname, 
               aid = trim('"', aid)
       | extend
@@ -118,14 +118,17 @@ ParserQuery: |
           DvcMacAddr = client_mac,
           AdditionalFields = bag_pack("aid", aid),
           EventOriginalType = LogType,
-          EventOriginalSubType = LogSubType
+          EventOriginalSubType = LogSubType,
+          TargetUsernameType = iff(isnotempty(TargetUsername), "Simple", ""),
+          EventUid = _ResourceId
       | extend
             SrcIpAddr = trim('"', SrcIpAddr),
             DvcMacAddr = trim('"', DvcMacAddr),
             reason = trim('"', reason)
       | extend
             DvcIpAddr = SrcIpAddr,
-            IpAddr = SrcIpAddr
+            IpAddr = SrcIpAddr,
+            User = TargetUsername
       | lookup EventFieldsLookup on LogSubType
       | lookup EventResultDetailsLookup on reason
       | extend EventResultDetails = iff(tolong(reason) between (25 .. 65535), "Other", EventResultDetails)
