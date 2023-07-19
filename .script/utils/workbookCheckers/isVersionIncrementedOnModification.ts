@@ -2,6 +2,7 @@ import { GetDiffFiles, GetPRDetails } from "../gitWrapper";
 import { WorkbookMetadata } from "../workbookMetadata";
 import gitP, { SimpleGit } from 'simple-git/promise';
 import { WorkbookValidationError } from "../validationError";
+import { forEach } from "lodash";
 
 const workingDir:string = process.cwd();
 const git: SimpleGit = gitP(workingDir);
@@ -76,7 +77,7 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
 
                 if (line.trim().startsWith('"templateRelativePath":')) {
                     templateRelativePath = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-                    console.log("Template relative path: " + templateRelativePath);
+                    console.log("Template relative path in diff lines: " + templateRelativePath);
                 }
 
                 if (line.trim().startsWith('+') && line.includes('"version":')) {
@@ -100,6 +101,9 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
 
             // Here we finish iterating over the current workbook metadata object. We will add the parsed workbook changes only if all fields are populated.
             if (templateRelativePath != null && newVersion != null && oldVersion != null) {
+                console.log("template relative path at assingment " + templateRelativePath);
+                console.log("new version at assingment " + newVersion);
+                console.log("oldVersion at assingment " + oldVersion);
                 workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
             }
         }
