@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 - Title: Cisco Meraki Documentation
-  Link: https://documentation.meraki.com/
+  Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
 Description: |
   This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Audit Event normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
 ParserName: vimAuditEventCiscoMeraki
@@ -40,6 +40,15 @@ ParserParams:
   - Name: eventresult
     Type: string
     Default: '*'
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
 ParserQuery: |
   let EventFieldsLookup = datatable(TempOperation: string, Operation: string, EventResult: string, EventType: string)
   [
@@ -65,7 +74,7 @@ ParserQuery: |
       "Partial", "Informational",
       "Failure", "Low"
   ];
-  let parser=(disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventresult: string='*', operation_has_any: dynamic=dynamic([]), eventtype_in: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([])) {
+  let parser=(disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventresult: string='*', operation_has_any: dynamic=dynamic([]), eventtype_in: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), object_has_any: dynamic=dynamic([]), newvalue_has_any: dynamic=dynamic([])) {
   let allData = union isfuzzy=true
       (
       meraki_CL
@@ -80,6 +89,9 @@ ParserQuery: |
       | where not(disabled)
           and (isnull(starttime) or TimeGenerated >= starttime)
           and (isnull(endtime) or TimeGenerated <= endtime) 
+          and array_length(newvalue_has_any) == 0
+          and array_length(object_has_any) == 0
+          and array_length(actorusername_has_any) == 0
           and LogMessage has "events"
           and (LogMessage has_any ("vpn_connectivity_change", "status changed", "VRRP active", "VRRP passive") or LogMessage has_cs "Site-to-site" or LogMessage has_cs "Port")
       | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
@@ -89,9 +101,7 @@ ParserQuery: |
       | extend EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
       | extend LogType = tostring(Parser[2]),
           Substring = tostring(Parser[3])
-      | where LogType == "events"
-      and (array_length(eventtype_in) == 0 or LogMessage has_any (eventtype_in))
-      and (eventresult == "*" or LogMessage has eventresult);
+      | where LogType == "events";
   let SiteToSiteData = PreFilteredData
       | where Substring has_cs "Site-to-site";
   let SiteToSite_deleted = SiteToSiteData
@@ -169,7 +179,7 @@ ParserQuery: |
           (Operation == "Port status change" and EventResult == "Failure") or (Operation == "Spanning-tree guard state change" and EventResult in ("Partial", "Failure")), "Disable",
           EventType
       )
-      | where (array_length(eventtype_in) == 0 or Operation has_any (eventtype_in))
+      | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
       | extend 
           temp_srcipport = iff(temp_srcipport has "]" and temp_srcipport !has ":", trim(']', temp_srcipport), temp_srcipport),
           temp_targetipport = iff(temp_targetipport has "]" and temp_targetipport !has ":", trim(']', temp_targetipport), temp_targetipport)
@@ -188,7 +198,7 @@ ParserQuery: |
       | extend SrcIpAddr = iff(temp_srcipport has ".", split(temp_srcipport, ":")[0], coalesce(temp_srcip, temp_srcipport))
       | extend
       temp_SrcMatch=has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
-      | where array_length(srcipaddr_has_any_prefix) == 0 or isnotempty(temp_SrcMatch)
+      | where (array_length(srcipaddr_has_any_prefix) == 0 or temp_SrcMatch)
       | parse temp_targetipport with * "[" temp_targetip "]:" temp_targetport
       | extend TargetIpAddr = iff(temp_targetipport has ".", split(temp_targetipport, ":")[0], coalesce(temp_targetip, temp_targetipport))
       | extend TargetPortNumber = iff(TargetIpAddr has ".", toint(split(temp_targetipport, ":")[1]), toint(coalesce(temp_targetport, "")))
@@ -257,4 +267,4 @@ ParserQuery: |
           ProcessName,
           CollectorHostName
   };
-  parser(disabled=disabled, starttime=starttime, endtime=endtime, eventresult=eventresult, operation_has_any=operation_has_any, eventtype_in=eventtype_in, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix)
+  parser(disabled=disabled, starttime=starttime, endtime=endtime, eventresult=eventresult, operation_has_any=operation_has_any, eventtype_in=eventtype_in, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, actorusername_has_any=actorusername_has_any, object_has_any=object_has_any, newvalue_has_any=newvalue_has_any)
