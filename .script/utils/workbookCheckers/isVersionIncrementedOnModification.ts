@@ -58,48 +58,54 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
 }
 
 
-function extractVersionChangesByWorkbook(diffLines: string[]){
-  let currentLine = 0;
-  let workbookVersionChanges: any = {};
-  while(diffLines[currentLine++] != '['){} // Skip to beginning of Workbooks array
+function extractVersionChangesByWorkbook(diffLines: string[]) {
+    let currentLine = 0;
+    const workbookVersionChanges: any = {};
+    while (diffLines[currentLine++] !== '[') { } // Skip to beginning of Workbooks array
 
-    while (diffLines[currentLine] != "]") {
-        console.log(`Diff line at top: ${diffLines[currentLine]}`);
-    if(diffLines[currentLine] == "{"){ // Beginning of a workbook metadata object
+    while (currentLine < diffLines.length && diffLines[currentLine] !== ']') {
+        if (diffLines[currentLine] === '{') { // Beginning of a workbook metadata object
+            currentLine++;
+            let templateRelativePath, newVersion, oldVersion;
+            const replaceQuotesRegex = /\"/gi; // If the replace method receives a string as the first parameter, then only the first occurrence is replaced. To replace all, a regex is required.
+            let objectLevel = 1;
+
+            while (currentLine < diffLines.length && objectLevel > 0) { // While current line is not end of object
+                const line = diffLines[currentLine];
+                const nextLine = diffLines[currentLine + 1];
+
+                if (line.trim().startsWith('"templateRelativePath":')) {
+                    templateRelativePath = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+                    console.log("Template relative path: " + templateRelativePath);
+                }
+
+                if (line.trim().startsWith('+') && line.includes('"version":')) {
+                    newVersion = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+                    console.log("New version: " + newVersion);
+                }
+
+                if (line.trim().startsWith('-') && line.includes('"version":')) {
+                    oldVersion = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+                    console.log("Old version: " + oldVersion);
+                }
+
+                if (nextLine && nextLine.trim() === '}') {
+                    objectLevel--;
+                } else if (nextLine && nextLine.trim() === '{') {
+                    objectLevel++;
+                }
+
+                currentLine++;
+            }
+
+            // Here we finish iterating over the current workbook metadata object. We will add the parsed workbook changes only if all fields are populated.
+            if (templateRelativePath != null && newVersion != null && oldVersion != null) {
+                workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
+            }
+        }
+
         currentLine++;
-        console.log(`Diff line in if: ${diffLines[currentLine]}`);
-      let templateRelativePath, newVersion, oldVersion;
-      const replaceQuotesRegex = /\"/gi; // If the replace method receives a string as the first parameter, then only the first occurrence is replaced. To replace all, a regex is required.
-
-      while(!(diffLines[currentLine] == "}" || diffLines[currentLine] == "},")){ // While current line is not end of object
-        if(diffLines[currentLine].startsWith('"templateRelativePath":')){
-          templateRelativePath = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-        }
-
-        // The '+' may be added to a line as part of the 'git diff' output
-          if (diffLines[currentLine].startsWith('+') && diffLines[currentLine].includes('"version":')) { // We are only interested in changes of the version value of an existing workbook
-              console.log(`Diff line new: ${diffLines[currentLine]}`);
-            newVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-            console.log(`New version: ${newVersion}`);
-        }
-
-        // The '-' may be added to a line as part of the 'git diff' output
-          if (diffLines[currentLine].startsWith('-') && diffLines[currentLine].includes('"version":')) { // We are only interested in changes of the version value of an existing workbook
-              console.log(`Diff line old: ${diffLines[currentLine]}`);
-            oldVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-            console.log(`Old version: ${oldVersion}`);
-        }
-
-        currentLine++;
-      }
-
-      // Here we finish iterating over the current workbook metadata object. We will add the parsed workbook changes only if all fields are populated.
-      if(templateRelativePath != null && newVersion != null && oldVersion != null){
-        workbookVersionChanges[templateRelativePath] = {"newVersion": newVersion, "oldVersion": oldVersion};
-      }
     }
-    currentLine++;
-  }
 
-  return workbookVersionChanges;
+    return workbookVersionChanges;
 }
