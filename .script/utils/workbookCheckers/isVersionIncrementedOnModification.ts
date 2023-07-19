@@ -69,11 +69,13 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
 
     while (currentLine < diffLines.length && diffLines[currentLine] !== ']') {
         if (diffLines[currentLine] === '{') {
-            currentLine++; // Beginning of a workbook metadata object
-            let templateRelativePath: string | null = null, newVersion: string | null = null, oldVersion: string | null = null;
-            let objectLevel = 1;
+            let templateRelativePath: string | null = null;
+            let newVersion: string | null = null;
+            let oldVersion: string | null = null;
 
-            while (currentLine < diffLines.length && objectLevel > 0) {
+            currentLine++; // Beginning of a workbook metadata object
+
+            while (currentLine < diffLines.length && diffLines[currentLine] !== '}' && diffLines[currentLine] !== '},') {
                 const line = diffLines[currentLine];
 
                 if (line.trim().startsWith('"templateRelativePath":')) {
@@ -92,22 +94,10 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
                     }
                 }
 
-                if (line.trim() === '}') {
-                    objectLevel--;
-                } else if (line.trim() === '{') {
-                    objectLevel++;
-                }
-
-                if (objectLevel > 0) {
-                    currentLine++; // Increment currentLine only if the end of object is not reached
-                }
+                currentLine++;
             }
 
             if (templateRelativePath && newVersion && oldVersion) {
-                console.log("template relative path at assingment " + templateRelativePath);
-                console.log("new version at assingment " + newVersion);
-                console.log("oldVersion at assingment " + oldVersion);
-
                 workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
             }
         }
@@ -117,4 +107,5 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
 
     return workbookVersionChanges;
 }
+
 
