@@ -61,7 +61,8 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
   let workbookVersionChanges: any = {};
   while(diffLines[currentLine++] != '['){} // Skip to beginning of Workbooks array
 
-  while(diffLines[currentLine] != "]"){
+    while (diffLines[currentLine] != "]") {
+        console.log(`Diff line at top: ${diffLines[currentLine]}`);
     if(diffLines[currentLine] == "{"){ // Beginning of a workbook metadata object
       currentLine++;
       let templateRelativePath, newVersion, oldVersion;
