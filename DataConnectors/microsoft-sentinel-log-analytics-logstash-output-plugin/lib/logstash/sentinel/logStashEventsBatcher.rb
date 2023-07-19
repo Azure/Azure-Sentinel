@@ -46,6 +46,7 @@ class LogStashEventsBatcher
             force_retry = false
             # Retry logic:
             # 400 bad request or general exceptions are dropped
+            # 408 reqeust timeout and client timeout (open/read) will retry the current message
             # 429 (too many requests) are retried forever 
             # All other http errors are retried for total every of @logstashLoganalyticsConfiguration.RETRANSMISSION_DELAY until @logstashLoganalyticsConfiguration.retransmission_time seconds passed
             begin
@@ -57,18 +58,24 @@ class LogStashEventsBatcher
                     @logger.info("Successfully posted #{amount_of_documents} logs into log analytics DCR stream [#{@logstashLoganalyticsConfiguration.dcr_stream_name}] x-ms-request-id [#{request_id}].")
                     return
                 else
-                    @logger.error("#{api_name} request failed. Error code: #{response.code} #{try_get_info_from_error_response(response)}")
                     @logger.trace("Rest client response ['#{response}']")
+                    @logger.error("#{api_name} request failed. Error code: #{response.code} #{try_get_info_from_error_response(response)}")
                 end
+            rescue RestClient::Exceptions::Timeout => eto
+                @logger.debug("Timeout exception ['#{eto.display}'] when posting data to #{api_name}. Rest client response ['#{eto.response.display}']. [amount_of_documents=#{amount_of_documents} request payload=#{uncompressed_payload || call_payload}")
+                @logger.error("Timeout exception while posting data to #{api_name}. [Exception: '#{eto}'] [amount of documents=#{amount_of_documents}]'")
+                force_retry = true
 
             rescue RestClient::ExceptionWithResponse => ewr
                 response = ewr.response
-                @logger.error("Exception when posting data to #{api_name}. [Exception: '#{ewr}'] #{try_get_info_from_error_response(ewr.response)} [amount of documents=#{amount_of_documents}]'")
                 @logger.trace("Exception in posting data to #{api_name}. Rest client response ['#{ewr.response}']. [amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")
+                @logger.error("Exception when posting data to #{api_name}. [Exception: '#{ewr}'] #{try_get_info_from_error_response(ewr.response)} [amount of documents=#{amount_of_documents}]'")
 
                 if ewr.http_code.to_f == 400
                     @logger.info("Not trying to resend since exception http code is #{ewr.http_code}")
                     return                
+                elsif ewr.http_code.to_f == 408
+                    force_retry = true
                 elsif ewr.http_code.to_f == 429
                     # thrutteling detected, backoff before resending
                     parsed_retry_after = response.headers.include?(:retry_after) ? response.headers[:retry_after].to_i : 0
@@ -78,8 +85,8 @@ class LogStashEventsBatcher
                     force_retry = true
                 end
             rescue Exception => ex
-                @logger.error("Exception in posting data to #{api_name}. [Exception: '#{ex}, amount of documents=#{amount_of_documents}]'")
                 @logger.trace("Exception in posting data to #{api_name}.[amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")       
+                @logger.error("Exception in posting data to #{api_name}. [Exception: '#{ex}, amount of documents=#{amount_of_documents}]'")
             end
             is_retry = true
             @logger.info("Retrying transmission to #{api_name} in #{seconds_to_sleep} seconds.")
@@ -102,23 +109,33 @@ class LogStashEventsBatcher
 
     def get_request_id_from_response(response)
         output =""
-        if response.headers.include?(:x_ms_request_id)
-            output += response.headers[:x_ms_request_id]
+        begin
+            if !response.nil? && response.headers.include?(:x_ms_request_id)
+                output += response.headers[:x_ms_request_id]
+            end
+        rescue Exception => ex
+            @logger.debug("Error while getting reqeust id from success response headers: #{ex.display}")
         end
        return output
     end
 
     # Try to get the values of the x-ms-error-code and x-ms-request-id headers and content of body, decorate it for printing
     def try_get_info_from_error_response(response)
-        output = ""
-        if response.headers.include?(:x_ms_error_code)
-            output += " [ms-error-code header: #{response.headers[:x_ms_error_code]}]"
+        begin
+            output = ""
+            if !response.nil?                
+                if response.headers.include?(:x_ms_error_code)
+                    output += " [ms-error-code header: #{response.headers[:x_ms_error_code]}]"
+            end
+            if response.headers.include?(:x_ms_request_id)
+                output += " [x-ms-request-id header: #{response.headers[:x_ms_request_id]}]"
+            end
+        end        
+            return output
+        rescue Exception => ex
+            @logger.debug("Error while getting reqeust id from headers: #{ex.display}")
+            return " [response content: #{response.to_s}]"
         end
-        if response.headers.include?(:x_ms_request_id)
-            output += " [x-ms-request-id header: #{response.headers[:x_ms_request_id]}]"
-        end
-        output += " [Response body: #{response.body}]" 
-        return output
     end
 
 end
