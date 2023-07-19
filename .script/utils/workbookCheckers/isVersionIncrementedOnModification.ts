@@ -61,48 +61,52 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
 function extractVersionChangesByWorkbook(diffLines: string[]) {
     let currentLine = 0;
     const workbookVersionChanges: any = {};
-    while (diffLines[currentLine++] !== '[') { } // Skip to beginning of Workbooks array
+    const replaceQuotesRegex = /\"/gi;
+    let templateRelativePath: string | null = null;
+    let newVersion: string | null = null;
+    let oldVersion: string | null = null;
+
+    while (currentLine < diffLines.length && diffLines[currentLine] !== '[') {
+        currentLine++; // Skip to beginning of Workbooks array
+    }
 
     while (currentLine < diffLines.length && diffLines[currentLine] !== ']') {
-        if (diffLines[currentLine] === '{') { // Beginning of a workbook metadata object
-            currentLine++;
-            let templateRelativePath, newVersion, oldVersion;
-            const replaceQuotesRegex = /\"/gi; // If the replace method receives a string as the first parameter, then only the first occurrence is replaced. To replace all, a regex is required.
+        if (diffLines[currentLine] === '{') {
+            currentLine++; // Beginning of a workbook metadata object
+            templateRelativePath = null;
+            newVersion = null;
+            oldVersion = null;
             let objectLevel = 1;
 
-            while (currentLine < diffLines.length && objectLevel > 0) { // While current line is not end of object
+            while (currentLine < diffLines.length && objectLevel > 0) {
                 const line = diffLines[currentLine];
-                const nextLine = diffLines[currentLine + 1];
 
                 if (line.trim().startsWith('"templateRelativePath":')) {
                     templateRelativePath = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-                    console.log("Template relative path in diff lines: " + templateRelativePath);
+                    console.log("Template relative path: " + templateRelativePath);
                 }
 
-                if (line.trim().startsWith('+') && line.includes('"version":')) {
-                    newVersion = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-                    console.log("New version: " + newVersion);
+                if ((line.trim().startsWith('+') || line.trim().startsWith('-')) && line.includes('"version":')) {
+                    const version = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+                    if (line.trim().startsWith('+')) {
+                        newVersion = version;
+                        console.log("New version: " + newVersion);
+                    } else {
+                        oldVersion = version;
+                        console.log("Old version: " + oldVersion);
+                    }
                 }
 
-                if (line.trim().startsWith('-') && line.includes('"version":')) {
-                    oldVersion = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-                    console.log("Old version: " + oldVersion);
-                }
-
-                if (nextLine && nextLine.trim() === '}') {
+                if (line.trim() === '}') {
                     objectLevel--;
-                } else if (nextLine && nextLine.trim() === '{') {
+                } else if (line.trim() === '{') {
                     objectLevel++;
                 }
 
                 currentLine++;
             }
 
-            // Here we finish iterating over the current workbook metadata object. We will add the parsed workbook changes only if all fields are populated.
-            if (templateRelativePath != null && newVersion != null && oldVersion != null) {
-                console.log("template relative path at assingment " + templateRelativePath);
-                console.log("new version at assingment " + newVersion);
-                console.log("oldVersion at assingment " + oldVersion);
+            if (templateRelativePath && newVersion && oldVersion) {
                 workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
             }
         }
