@@ -44,10 +44,10 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 
 ## Screenshots
 **Incident Trigger**
-![Incident Trigger](./Isolate-MDEMachine/Isolate-MDEMachine-incident-trigger/images/designerLight.png)
+![Incident Trigger](./Isolate-MDEMachine-incident-trigger/images/designerLight.png)
 
 **Alert Trigger**
-![Alert Trigger](./Isolate-MDEMachine/Isolate-MDEMachine-alert-trigger/images/Isolate-MDEMachine_alert.png)>
+![Alert Trigger](./Isolate-MDEMachine-alert-trigger/images/Isolate-MDEMachine_alert.png)>
 
 **Entity Trigger**
-![Entity Trigger](./Isolate-MDEMachine/Isolate-MDE-Machine-entity-trigger/images/playbookDark.png)>
+![Entity Trigger](./Isolate-MDE-Machine-entity-trigger/images/playbookDark.png)>

@@ -8,16 +8,16 @@ on:
       - "Solutions/**"
 
 env:
-  BRANCH_NAME: "${{ github.event.client_payload.pull_request.head.ref }}"
+  BRANCH_NAME: ${{ github.event.client_payload.pull_request.head.ref && github.event.client_payload.pull_request.head.ref || github.event.client_payload.pullRequestBranchName }}
 
 jobs:
   solutionNameDetails:
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    if: ${{ !github.event.pull_request.head.repo.fork && !contains(github.event.pull_request.labels.*.name, 'Content-Package') }}
     uses: ./.github/workflows/getSolutionName.yaml
     secrets: inherit
 
   checkPRContent:
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && !github.event.pull_request.head.repo.fork }}
     name: Check PR Content And Add Label
     runs-on: ubuntu-latest
     needs: solutionNameDetails
@@ -37,8 +37,8 @@ jobs:
           $instrumentationKey = "${{ vars.APPINSIGHTS }}"
           $runId = "${{ github.run_id }}"
           $solutionName = "${{ needs.solutionNameDetails.outputs.solutionName }}"
-          $pullRequestNumber = "${{ github.event.number }}"
-          Write-Host "PR Number $pullRequestNumber"
+          $pullRequestNumber = "${{ github.event.pull_request.number && github.event.pull_request.number || github.event.client_payload.pullRequestNumber }}"
+          Write-Host "PR Number $pullRequestNumber , solutionName $solutionName"
           ./.script/package-automation/checkPRContentChange.ps1 $solutionName $pullRequestNumber $runId $instrumentationKey
 
   addLabelWhenContentPackage:
