@@ -2,7 +2,6 @@ import { GetDiffFiles, GetPRDetails } from "../gitWrapper";
 import { WorkbookMetadata } from "../workbookMetadata";
 import gitP, { SimpleGit } from 'simple-git/promise';
 import { WorkbookValidationError } from "../validationError";
-import { forEach } from "lodash";
 
 const workingDir:string = process.cwd();
 const git: SimpleGit = gitP(workingDir);
