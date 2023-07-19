@@ -66,7 +66,8 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
     while (diffLines[currentLine] != "]") {
         console.log(`Diff line at top: ${diffLines[currentLine]}`);
     if(diffLines[currentLine] == "{"){ // Beginning of a workbook metadata object
-      currentLine++;
+        currentLine++;
+        console.log(`Diff line in if: ${diffLines[currentLine]}`);
       let templateRelativePath, newVersion, oldVersion;
       const replaceQuotesRegex = /\"/gi; // If the replace method receives a string as the first parameter, then only the first occurrence is replaced. To replace all, a regex is required.
 
