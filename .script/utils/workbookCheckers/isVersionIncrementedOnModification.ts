@@ -83,11 +83,6 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
             }
 
             if (templateRelativePath && newVersion && oldVersion) {
-
-                console.log("template relative path at assingment " + templateRelativePath);
-                console.log("new version at assingment " + newVersion);
-                console.log("oldVersion at assingment " + oldVersion);
-
                 workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
             }
         }
