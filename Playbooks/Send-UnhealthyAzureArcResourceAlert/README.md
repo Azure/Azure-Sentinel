@@ -1,10 +1,16 @@
 # Send-UnhealthyAzureArcResourceAlert
 author: Laraib khan
 
-This playbook will qyery Low analytics workspace about each Azure Arc-enabled resource/server that has had its health status change to "Unavailable" in the past day and has been in that state for more than 30 minute and Send that alert via Email.
+This playbook will query the Log Analytics workspace about each Azure Arc-enabled resource/server that has had its health status change to "Unavailable" in the past day and has been in that state for more than 30 minutes and Send that alert via Email.
+
+# Prerequisites
+- An Office 365 Email Account to enable Office 365 connection.
+
+# Post Deployment Steps
+After deploying the playbook in your sentinel environment, you need to make changes to the actions as explained below:
 
 ##Edit *Run query and list results* action 
-Select your own
+**Select your respective:**
 - Subscription
 - Resource Group
 - Resource Type
@@ -12,9 +18,8 @@ Select your own
 
 ![screenshot](./images/subscription.png)
 
-
 ##Edit *Send an Email* Action
-Replace <email-id@domain.com> with your own choice of email address.
+Replace <email-id@domain.com> with your own choice of email address where you want to receive/send email alerts.
 ![screenshot](./images/email.png)
 
 
