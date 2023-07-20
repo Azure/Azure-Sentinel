@@ -2,19 +2,21 @@ name: Deploy Artifacts to Partner Center
 env:
   APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
   DEFAULTPACKAGEVERSION: "${{ vars.DEFAULTPACKAGEVERSION }}"
-  BRANCH_NAME: "${{ github.event.client_payload.pull_request.head.ref }}"
+  BRANCH_NAME: ${{ github.event.pull_request.head.ref && github.event.pull_request.head.ref || github.event.client_payload.pullRequestBranchName }}
+
 on:
   repository_dispatch:
     types: [partnercenter-command]
 jobs:
   solutionNameDetails:
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     uses: ./.github/workflows/getSolutionName.yaml
     secrets: inherit
 
   neworexistingsolution:
     needs: solutionNameDetails
     uses: ./.github/workflows/neworexistingsolution.yaml
-    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' }} 
+    if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && !github.event.pull_request.head.repo.fork }} 
     with: 
       solutionName: "${{ needs.solutionNameDetails.outputs.solutionName }}"
     secrets: inherit
@@ -25,7 +27,7 @@ jobs:
       contents: read
     needs: [solutionNameDetails, neworexistingsolution]
     env:
-      RUNID: "${{ github.event.client_payload.github.runId }}" 
+      RUNID: "${{ github.run_id }}" 
       SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
       SOLUTION_OFFER_ID: "${{ needs.neworexistingsolution.outputs.solutionOfferId }}"
       IS_NEW_SOLUTION: "${{ needs.neworexistingsolution.outputs.isNewSolution }}"
@@ -45,7 +47,7 @@ jobs:
           $offerId = 'azure-sentinel-solution-testingoffers' # "${{ env.SOLUTION_OFFER_ID }}"
           $runId = "${{ env.RUNID }}"
           $solutionName = "${{ env.SOLUTION_NAME }}"
-          $pullRequestNumber = "${{ github.event.client_payload.pull_request.number }}"
+          $pullRequestNumber = "${{ github.event.pull_request.number && github.event.pull_request.number || github.event.client_payload.pullRequestNumber }}"
           $isNewSolution = "${{ env.IS_NEW_SOLUTION }}"
 
           Set-PSRepository PSGallery -InstallationPolicy Trusted
