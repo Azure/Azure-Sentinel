@@ -20,6 +20,7 @@ namespace Kqlvalidations.Tests
             //prNumber=8414;
             if (prNumber == 0)
             {
+                Console.WriteLine("PR Number is not set. Running all tests");
                 return GetDirectoryPaths()
                     .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
                     .ToList();
