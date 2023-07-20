@@ -1,20 +1,23 @@
 Parser:
   Title: Authentication ASIM parser for Cisco Device Logon Events
   Version: '0.1.0'
-  LastUpdated: 6 Jul 2023
+  LastUpdated: 19 Jul 2023
 Product:
-  Name: M365 Defender for EndPoint
+  Name: Cisco Adaptive Security Appliance (ASA)
 Normalization:
   Schema: Authentication
-  Version: '0.1.0'
+  Version: '0.1.3'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
+- Title: About Cisco ASA Messages
+  Link: https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/b_syslog/about.html
 Description: |
   This ASIM parser supports normalizing authentication events, collected from Cisco ASA devices, to the ASIM Authentication schema.
 ParserName: ASimAuthenticationCiscoASA
+EquivalentBuiltInParser: _ASim_Authentication_CiscoASA
 ParserParams:
   - Name: disabled
     Type: bool
@@ -23,50 +26,67 @@ ParserQuery: |
   let parser = (
     disabled:bool=false
   ){
-    let DeviceEventClassIDLookup = datatable (DeviceEventClassID:string, EventResultDetails:string, EventType:string, EventResult:string, EventSubType:string, DvcAction:string)
+    let DeviceEventClassIDLookup = datatable (DeviceEventClassID:string, EventResultDetails:string, EventType:string, EventResult:string, DvcAction:string, EventSubType:string)
     [
-        "113004", "", "Logon", "Success", "Remote", "",
-        "113005", "Other", "Logon", "Failure", "Remote", "",
-        "113006", "Logon violates policy", "Logon", "Failure", "Remote", "Blocked",
-        "113008", "", "Logon", "Success", "Remote", "",
-        "113010", "", "Logon", "Success", "Remote", "",
-        "113012", "", "Logon", "Success", "Remote", "",
-        "113019", "", "Logoff", "Success", "", "",
-        "113039", "", "Logon", "Success", "Remote", "",
-        "315011", "", "Logoff", "Success", "", "",
-        "502103", "", "Elevate", "Success", "AssumeRole", "",
-        "605004", "Other", "Logon", "Failure", "Remote", "",
-        "605005", "", "Logon", "Success", "Remote", "",
-        "611101", "", "Logon", "Success", "Remote", "",
-        "611102", "Other", "Logon", "Failure", "Remote", "",
-        "611103", "", "Logoff", "Success", "", "",
-        "713198", "Logon violates policy", "Logon", "Failure", "Remote", "Blocked",
-        "716002", "", "Logoff", "Success", "", "",
-        "716038", "", "Logon", "Success", "Remote", "",
-        "716039", "Other", "Logon", "Failure", "Remote", "",
-        "716040", "Other", "Logon", "Failure", "Remote", "",
-        "722022", "", "Logon", "Success", "Remote", "",
-        "722023", "", "Logoff", "Success", "", "",
-        "722028", "", "Logoff", "Success", "", "",
-        "722037", "", "Logoff", "Success", "", ""
-        ];
+        "113004", "", "Logon", "Success", "Allowed", "Remote",
+        "113005", "Incorrect password", "Logon", "Failure", "Blocked", "Remote",
+        "113006", "Logon violates policy", "Logon", "Failure", "Blocked", "Remote",
+        "113008", "", "Logon", "Success", "Allowed", "Remote",
+        "113010", "", "Logon", "Success", "Allowed", "Remote",
+        "113012", "", "Logon", "Success", "Allowed", "Remote",
+        "113019", "", "Logoff", "Success", "Allowed", "",
+        "113039", "", "Logon", "Success", "Allowed", "Remote",
+        "315011", "", "Logoff", "Success", "Allowed", "",
+        "502103", "", "Elevate", "Success", "Allowed", "AssumeRole",
+        "605004", "Other", "Logon", "Failure", "Blocked", "Remote",
+        "605005", "", "Logon", "Success", "Allowed", "Remote",
+        "611101", "", "Logon", "Success", "Allowed", "Remote",
+        "611102", "Other", "Logon", "Failure", "Blocked", "Remote",
+        "611103", "", "Logoff", "Success", "Allowed", "",
+        "713198", "Logon violates policy", "Logon", "Failure", "Blocked", "Remote",
+        "716002", "", "Logoff", "Success", "Allowed", "",
+        "716038", "", "Logon", "Success", "Allowed", "Remote",
+        "716039", "Other", "Logon", "Failure", "Blocked", "Remote",
+        "716040", "Other", "Logon", "Failure", "Blocked", "Remote",
+        "722002", "", "Logon", "Success", "Allowed", "",
+        "722003", "Other", "Logon", "Failure", "Blocked", "",
+        "722004", "Other", "Logon", "Failure", "Blocked", "",
+        "722005", "", "Logon", "Success", "Allowed", "",
+        "722006", "Other", "Logon", "Failure", "Blocked", "",
+        "722022", "", "Logon", "Success", "Allowed", "Remote",
+        "722023", "", "Logoff", "Success", "Allowed", "",
+        "722028", "", "Logoff", "Success", "Allowed", "",
+        "722037", "", "Logoff", "Success", "Allowed", ""
+    ];
     let FilteredDeviceEventClassID = toscalar(
         DeviceEventClassIDLookup 
         | summarize make_set(DeviceEventClassID)
     );
+    let SeverityLookup = datatable (EventOriginalSeverity:string, EventSeverity:string)
+    [
+        "1", "High", // Alert,
+        "2", "High", // Critical
+        "3", "Medium", // Error
+        "4", "Medium", // Warning
+        "5", "Medium", // Notification
+        "6", "Low", // Information
+        "7", "Informational", // Debug
+    ];
     let LogMessages = 
     CommonSecurityLog
     | where not(disabled) 
     | where DeviceVendor =~ "Cisco"
     | where DeviceProduct == "ASA"
     | where DeviceEventClassID in(FilteredDeviceEventClassID)
-    | project TimeGenerated, Type, Computer, _ItemId, DeviceEventClassID, Message, LogSeverity, DeviceAddress
+    | extend EventOriginalSeverity = tostring(split(Message,"-",1)[0])
+    | lookup SeverityLookup on EventOriginalSeverity
+    | project TimeGenerated, Type, Computer, _ItemId, DeviceEventClassID, Message, DeviceAddress,EventOriginalSeverity, EventSeverity
     | lookup DeviceEventClassIDLookup on DeviceEventClassID;
     union 
     (
         LogMessages
         | where DeviceEventClassID == 113005
-        | parse Message with * 'server = ' TargetIpAddr ' ' * 'user = ' TargetUsername ' ' * 'user IP = ' SrcIpAddr
+        | parse Message with * 'reason = ' EventOriginalResultDetails ' : server = ' TargetIpAddr ' ' * 'user = ' TargetUsername ' ' * 'user IP = ' SrcIpAddr
         | project-away Message
     ),
     (
@@ -120,7 +140,8 @@ ParserQuery: |
     (
         LogMessages
         | where DeviceEventClassID == 315011
-        | parse Message with * 'from ' SrcIpAddr ' ' * 'user "' TargetUsername '" ' *
+        | parse Message with * 'from ' SrcIpAddr ' ' * 'user "' TargetUsername '" ' * ' reason: "' EventOriginalResultDetails '" ' *
+        | extend EventResultDetails = iif(EventOriginalResultDetails == "Internal error", "Other", EventResultDetails)
         | project-away Message
     ),
     (
@@ -152,12 +173,35 @@ ParserQuery: |
         | where DeviceEventClassID == 716038
         | parse Message with * 'User ' TargetUsername ' IP ' SrcIpAddr ' Authentication'*
         | project-away Message
-    )
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID in(772002)
+        | parse Message with * 'user ' TargetUsername ', cause: ' EventOriginalResultDetails
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID in(772003,772004)
+        | parse Message with * 'user ' TargetUsername ', IP ' SrcIpAddr ', cause: ' EventOriginalResultDetails
+        | project-away Message
+    ), 
+    (
+        LogMessages
+        | where DeviceEventClassID in(772005)
+        | parse Message with * 'user ' TargetUsername ' passed'
+        | project-away Message
+    ),  
+    (
+        LogMessages
+        | where DeviceEventClassID in(772006)
+        | parse Message with * 'user ' TargetUsername ' failed'
+        | project-away Message
+    )      
     | project-rename 
         DvcHostname           = Computer,
         EventUid              = _ItemId,
         EventOriginalType     = DeviceEventClassID,
-        EventSeverity         = LogSeverity,
         DvcIpAddr             = DeviceAddress
     | extend 
         EventSchemaVersion = "0.1.3",
