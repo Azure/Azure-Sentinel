@@ -31,6 +31,57 @@ ParserParams:
 ParserQuery: |  
   let LogonEvents=dynamic([4624,4625]);
   let LogoffEvents=dynamic([4634,4647]);
+  let LogonStatus4768=datatable
+        (Status:string,EventResultDetails:string)[
+         "0x0","Successful Authentication"
+        ,"0x1","Client's entry in database has expired"
+        ,"0x2","Server's entry in database has expired"
+        ,"0x3","Requested protocol version # not supported"
+        ,"0x4","Client's key encrypted in old master key"
+        ,"0x5","Server's key encrypted in old master key"
+        ,"0x6","Client not found in Kerberos database"
+        ,"0x7","Server not found in Kerberos database"
+        ,"0x8","Multiple principal entries in database"
+        ,"0x9","The client or server has a null key"
+        ,"0xA","Ticket not eligible for postdating"
+        ,"0xB","Requested start time is later than end time"
+        ,"0xC","KDC policy rejects request"
+        ,"0xD","KDC cannot accommodate requested option"
+        ,"0xE","KDC has no support for encryption type"
+        ,"0xF","KDC has no support for checksum type"
+        ,"0x10","KDC has no support for padata type"
+        ,"0x11","KDC has no support for transited type"
+        ,"0x12","Clients credentials have been revoked"
+        ,"0x13","Credentials for server have been revoked"
+        ,"0x14","TGT has been revoked"
+        ,"0x15","Client not yet valid - try again later"
+        ,"0x16","Server not yet valid - try again later"
+        ,"0x17","Password has expired"
+        ,"0x18","Pre-authentication information was invalid"
+        ,"0x19","Additional pre-authentication required*"
+        ,"0x1F","Integrity check on decrypted field failed"
+        ,"0x20","Ticket expired"
+        ,"0x21","Ticket not yet valid"
+        ,"0x21","Ticket not yet valid"
+        ,"0x22","Request is a replay"
+        ,"0x23","The ticket isn't for us"
+        ,"0x24","Ticket and authenticator don't match"
+        ,"0x25","Clock skew too great"
+        ,"0x26","Incorrect net address"
+        ,"0x27","Protocol version mismatch"
+        ,"0x28","Invalid msg type"
+        ,"0x29","Message stream modified"
+        ,"0x2A","Message out of order"
+        ,"0x2C","Specified version of key is not available"
+        ,"0x2D","Service key not available"
+        ,"0x2E","Mutual authentication failed"
+        ,"0x2F","Incorrect message direction"
+        ,"0x30","Alternative authentication method required*"
+        ,"0x31","Incorrect sequence number in message"
+        ,"0x32","Inappropriate type of checksum in message"
+        ,"0x3C","Generic error (description in e-text)"
+        ,"0x3D","Field is too long for this implementation"
+        ];
   let LogonTypes=datatable(LogonType:int, EventSubType:string)[
       2, 'Interactive',
       3, 'Network',
@@ -210,5 +261,104 @@ ParserQuery: |
         , LogonTarget=TargetDvcHostname
         , Dvc=SrcDvcHostname
     };
+    let WinLogin4768 = (starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
+    WindowsEvent | where not(disabled)
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+        (isnull(starttime)   or TimeGenerated >= starttime)
+        and (isnull(endtime)     or TimeGenerated <= endtime)
+        and (targetusername_has=='*' or EventData.TargetUserName has targetusername_has)
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
+    | where EventID == 4768
+    | extend EventMessage = "4768 - A Kerberos authentication ticket (TGT) was requested."
+      , SrcDvcIpAddr = tostring(EventData.IpAddress)
+      , TargetPortNumber = toint(EventData.IpPort)
+      , TargetUserId = tostring(EventData.TargetSid)
+      , TargetDomainName = tostring(EventData.TargetDomainName)
+      , TargetUsername = tostring(iff (EventData.TargetDomainName in ('-',''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName)))
+      , LogonProtocol = tostring(EventData.ServiceName)
+      , Status = tostring(EventData.Status)
+      , EventProduct = "Security Events"
+    // ***************      <Postfilterring>  **********************************
+    | where (targetusername_has=='*' or TargetUsername has targetusername_has)
+    // ***************      <Postfilterring>  **********************************
+    | project-rename 
+        TargetDvcHostname = Computer
+      , EventOriginalUid=EventOriginId          
+      , EventOriginalType=EventID
+    | extend EventResult = iff(Status == "0x0", 'Success', 'Failure')
+      , EventCount=int(1)
+      , EventSchema = "Authentication"
+      , EventSchemaVersion = '0.1.0'
+      , EventProduct = "Security Events"
+      , ActorUserIdType = 'SID'
+      , TargetUserIdType = 'SID'
+      , EventVendor = 'Microsoft' 
+      , EventStartTime = TimeGenerated
+      , EventEndTime = TimeGenerated
+      , EventType = 'Logon'
+      , TargetUsernameType = iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
+      , SrcDvcOs = 'Windows'
+      , LogonProcessName = "Kerberos"
+    | extend TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
+    | lookup LogonStatus4768 on Status
+    /// ** Aliases 
+    | extend
+         User = TargetUsername
+        , LogonTarget = TargetDvcHostname
+        , Dvc = TargetDvcHostname
+};
+  let SecEventLogon4768 = (starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
+    SecurityEvent | where not(disabled)
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime)
+      and (isnull(endtime)     or TimeGenerated <= endtime)
+      and (targetusername_has=='*' or TargetUserName has targetusername_has)
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
+    | where EventID == 4768
+    | project-rename 
+         EventMessage = Activity
+       , TargetUserId = TargetUserSid
+       , TargetDvcHostname = Computer
+       , EventOriginalUid = EventOriginId
+       , LogonProtocol = ServiceName
+       , SrcDvcIpAddr = IpAddress
+       , EventOriginalType = EventID
+    | extend EventResult = iff(Status == "0x0", 'Success', 'Failure')
+      , EventCount=int(1)
+      , EventSchema = "Authentication"
+      , EventSchemaVersion = '0.1.0'
+      , EventProduct = "Security Events"
+      , ActorUserIdType = 'SID'
+      , TargetUserIdType = 'SID'
+      , EventVendor = 'Microsoft' 
+      , EventStartTime = TimeGenerated
+      , EventEndTime = TimeGenerated
+      , EventType = 'Logon'
+      , TargetUsername = iff (TargetDomainName in ('-',''), trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
+      , TargetUsernameType = iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
+      , SrcDvcOs = 'Windows'
+      , TargetPortNumber = toint(IpPort)
+      , LogonProcessName = "Kerberos"
+    | project-away TargetUserName, AccountType
+    | extend TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
+    | lookup LogonStatus4768 on Status
+    /// ** Aliases 
+    | extend
+         User = TargetUsername
+        , LogonTarget = TargetDvcHostname
+        , Dvc = TargetDvcHostname
+    };
   union isfuzzy=true SecEventLogon(starttime, endtime, targetusername_has, disabled)
                 ,    WinLogon(starttime, endtime, targetusername_has, disabled)
+                ,    WinLogin4768(starttime, endtime, targetusername_has, disabled)
+                ,    SecEventLogon4768(starttime, endtime, targetusername_has, disabled)
