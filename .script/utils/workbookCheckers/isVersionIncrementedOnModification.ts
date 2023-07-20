@@ -75,7 +75,7 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
 
             currentLine++; // Beginning of a workbook metadata object
 
-            while (currentLine < diffLines.length && diffLines[currentLine] !== '}' && diffLines[currentLine] !== '},') {
+            while (currentLine < diffLines.length && diffLines[currentLine] !== '}') {
                 const line = diffLines[currentLine];
 
                 if (line.trim().startsWith('"templateRelativePath":')) {
@@ -98,6 +98,11 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
             }
 
             if (templateRelativePath && newVersion && oldVersion) {
+
+                console.log("template relative path at assingment " + templateRelativePath);
+                console.log("new version at assingment " + newVersion);
+                console.log("oldVersion at assingment " + oldVersion);
+
                 workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
             }
         }
@@ -107,5 +112,7 @@ function extractVersionChangesByWorkbook(diffLines: string[]) {
 
     return workbookVersionChanges;
 }
+
+
 
 
