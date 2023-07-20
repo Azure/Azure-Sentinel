@@ -5,7 +5,7 @@ This playbook will qyery Low analytics workspace about each Azure Arc-enabled re
 
 ##Edit *Run query and list results* action 
 Select your own
-- Subcription
+- Subscription
 - Resource Group
 - Resource Type
 - Resource Name
@@ -14,11 +14,14 @@ Select your own
 
 
 ##Edit *Send an Email* Action
-Replace <email-id@domain.com> to your own choice of email address.
+Replace <email-id@domain.com> with your own choice of email address.
 ![screenshot](./images/email.png)
 
 
 # Deploy to Azure
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-UnhealthyAzureArcResourceAlert%2Fazuredeploy.json" target="_blank">
-<img src="https://aka.ms/deploytoazurebutton""/>
+<img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-UnhealthyAzureArcResourceAlert%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazuregovbutton"/>
 </a>
