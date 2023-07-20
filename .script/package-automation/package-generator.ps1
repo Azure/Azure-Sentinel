@@ -415,6 +415,7 @@ try {
         $dataConnectorFilesResultArray = GetValidDataConnectorFileNames($newDataConnectorFiles) | ConvertTo-Json -AsArray
         $dataConnectoryWithoutSpaceArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("DataConnectors")))
         if (!$dataConnectoryWithoutSpaceArrayAttributeExist) {
+            $dataFileContentObject.PSObject.Properties.Remove('Data Connectors')
             $dataFileContentObject | ForEach-Object {
                 $_ | Add-Member -MemberType NoteProperty -Name 'Data Connectors' -Value $dataConnectorFilesResultArray -PassThru
             }
