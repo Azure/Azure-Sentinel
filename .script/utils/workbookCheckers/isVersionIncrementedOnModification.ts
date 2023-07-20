@@ -35,16 +35,16 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
           const templateRelativePath = workbookMetadata.templateRelativePath;
           console.log(`Template relative path: ${templateRelativePath}`);
           if (versionChanges[templateRelativePath] == null) {
-              console.log(`Version changes in the if: ${versionChanges[templateRelativePath]}`);
-              console.log('new version in the if block: ' + versionChanges[templateRelativePath]['newVersion']);
-              console.log('old version in the if block: ' + versionChanges[templateRelativePath]['oldVersion']);
+              //console.log(`Version changes in the if: ${versionChanges[templateRelativePath]}`);
+              //console.log('new version in the if block: ' + versionChanges[templateRelativePath]['newVersion']);
+              //console.log('old version in the if block: ' + versionChanges[templateRelativePath]['oldVersion']);
           // If the workbook has changed but the version was not updated (a matching key was not found in the versionChanges dictionary) - throw error
           throw new WorkbookValidationError(`The workbook ${workbookMetadata.templateRelativePath} has been modified but the version has not been incremented in the ${workbooksDirectoryPath}/WorkbooksMetadata.json file.`);
         }
         else {
-            console.log(`Version changes in the else: ${versionChanges[templateRelativePath]}`);
-            console.log('new version in the else block: ' + versionChanges[templateRelativePath]['newVersion']);
-            console.log('old version in the else block: ' + versionChanges[templateRelativePath]['oldVersion']);
+            //console.log(`Version changes in the else: ${versionChanges[templateRelativePath]}`);
+            //console.log('new version in the else block: ' + versionChanges[templateRelativePath]['newVersion']);
+            //console.log('old version in the else block: ' + versionChanges[templateRelativePath]['oldVersion']);
 
           const isNewVersionGreaterThanOldVersion = versionChanges[templateRelativePath]["newVersion"] > versionChanges[templateRelativePath]["oldVersion"];
 
