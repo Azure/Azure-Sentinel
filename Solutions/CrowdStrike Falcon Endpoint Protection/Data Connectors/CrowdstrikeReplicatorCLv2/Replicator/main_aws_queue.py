@@ -115,8 +115,8 @@ async def main(mytimer: func.TimerRequest):
                             logging.error("Error during deleting message with MessageId {} from queue. Bucket: {}. Path prefix: {}. Error: {}".format(msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"], e))
                 else:
                     logging.info('No messages in SQS. Re-trying to check...')
-            except KeyboardInterrupt:
-                pass     
+            except Exception as e:
+                logging.warn("Processing the SQS Message failed. Error: {}".format(e))
 
 # This method is used to download all bucket names mentioned in the SQS message and send to Azure Storage Queue
 # mainQueueHelper : AzureStorageQueueHelper

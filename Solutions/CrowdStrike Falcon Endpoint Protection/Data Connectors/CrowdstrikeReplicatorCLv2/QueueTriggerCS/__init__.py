@@ -49,6 +49,9 @@ def _create_s3_client():
 async def main(msg: func.QueueMessage) -> None:
     logging.info('Starting script')
     logging.info("Required Raw String - {}".format(REQUIRE_RAW))
+    link = ""
+    bucket = ""
+    messageId = ""
     try:
         req_body = json.loads(msg.get_body().decode('ascii').replace("'",'"'))
     except ValueError:
@@ -83,10 +86,9 @@ async def main(msg: func.QueueMessage) -> None:
                         logging.info('Processing a secondary data bucket.')
                         await process_file_secondary_CLv2(bucket, link, client, session)
                     else:
-                        await process_file_primary_CLv2(bucket, link, client, session, eventsSchemaMappingDict, requiredFieldsMappingDict)
-                    logging.info("Successfully executed {} Bucket.".format(link)) 
+                        await process_file_primary_CLv2(bucket, link, client, session, eventsSchemaMappingDict, requiredFieldsMappingDict) 
                 except Exception as e:
-                    logging.error('Error while processing bucket. Error: {}'.format(link, str(e)))
+                    logging.error('Error while processing bucket {}. Error: {}'.format(link, str(e)))
                     raise e
 
 # This method customizes the data before ingestion. Both normalized and raw data is returned from this method.
@@ -212,7 +214,7 @@ async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSche
 
             logging.info("Finish processing file {} with {} normalized events and {} custom events.".format(s3_path,normalized_total_events_success,custom_total_events_success))
             if normalized_total_events_failure or custom_total_events_failure:
-                logging.info("Failure : {} normalized events failed and {} custom events failed.".format(s3_path,normalized_total_events_failure, custom_total_events_failure))
+                logging.info("Failure in {}: {} normalized events failed and {} custom events failed.".format(s3_path,normalized_total_events_failure,custom_total_events_failure))
 
         except Exception as e:
             logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
@@ -264,7 +266,7 @@ async def process_file_secondary_CLv2(bucket, s3_path, client, session):
             
             logging.info("Finish processing file {} with {} secondary events.".format(s3_path,total_events_success))
             if total_events_failure:
-                logging.info("Failure : {} secondary events failed".format(s3_path,total_events_failure))
+                logging.info("Failure in {} : {} secondary events failed".format(s3_path,total_events_failure))
 
         except Exception as e:
             logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
