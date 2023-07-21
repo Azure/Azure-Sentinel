@@ -83,7 +83,7 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
             if ($val.Count -eq 0) {
                 if ($isWorkbook)
                 {
-                    $resourceObj.$key = '[]'
+                    $resourceObj.$key = @()
                 }
                 else
                 {
@@ -489,7 +489,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
 
-                        $workbookFinalPath = $baseFolderPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';  #"https://raw.githubusercontent.com/v-amolpatil/packagingrepo/master/" #$workbookMetadataPathForPipelineRun 
+                        $workbookFinalPath = $baseFolderPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';  
                         
                         # BELOW IS THE NEW CODE ADDED FROM AZURE SENTINEL REPO
                         if($contentToImport.TemplateSpec) {
@@ -582,6 +582,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                             return $_;
                                         }
                                     }
+                                }
+                                
+                                if ($dependencies.Count -gt 0)
+                                {
+                                    $dependencies = $dependencies[0]
                                 }
                                 $WorkbookDependencyCriteria = @();
                                 foreach($dataTypesDependencies in $dependencies.dataTypesDependencies)
@@ -751,7 +756,9 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         else 
                         {
-                            if ($contentToImport.version -ne '3.0.0' )
+                            $major = $contentToImport.version.split(".")[0]
+                            #if ($contentToImport.version -ne '3.0.0' )
+                            if ($major -ne 3)
                             {
                                 $global:baseMainTemplate.resources += $newWorkbook
                                 if ($contentToImport.Metadata -or $isPipelineRun)
@@ -1570,7 +1577,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     if ($contentToImport.TemplateSpec) {
                         $connectorName = $contentToImport.Name
                         # Add workspace resource ID if not available
-                        if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+                        if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                         }
                         # If both ID and Title exist, is standard GenericUI data connector
@@ -1993,7 +2000,17 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         $huntingQueryDescription = ""
                         if ($yaml.description) {
-                            $huntingQueryDescription = $yaml.description.substring(1, $yaml.description.length - 3)
+                            #$huntingQueryDescription = $yaml.description.substring(1, $yaml.description.length - 3)
+                            $huntingQueryDescription = $yaml.description.Trim();
+                            if($huntingQueryDescription.StartsWith("'"))
+                            {
+                                $huntingQueryDescription = $huntingQueryDescription.substring(1, $huntingQueryDescription.length-1)
+                            }
+
+                            if($huntingQueryDescription.EndsWith("'"))
+                            {
+                                $huntingQueryDescription = $huntingQueryDescription.substring(0, $huntingQueryDescription.length-1)
+                            }
                             $descriptionObj = [PSCustomObject]@{
                                 name  = "description";
                                 value = $huntingQueryDescription
@@ -2036,7 +2053,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryTemplateSpecName$global:huntingQueryCounter" -NotePropertyValue "[concat(parameters('workspace'),'-hq-',uniquestring(variables('_huntingQuerycontentId$global:huntingQueryCounter')))]"
                             }
 
-                            if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+                            if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
                                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                             }
 
@@ -2380,7 +2397,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$global:analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId$global:analyticRuleCounter')))]"
                             }
 
-                            if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+                            if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
                                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                             }
                             
@@ -2946,7 +2963,7 @@ function Base32Encode([uint32]$charValue)
 function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceDetails)
 {
         # Add workspace resource ID if not available
-        if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+        if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
         }
 
