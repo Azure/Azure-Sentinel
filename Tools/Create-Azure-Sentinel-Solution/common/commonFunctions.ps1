@@ -756,7 +756,9 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         else 
                         {
-                            if ($contentToImport.version -ne '3.0.0' )
+                            $major = $contentToImport.version.split(".")[0]
+                            #if ($contentToImport.version -ne '3.0.0' )
+                            if ($major -ne 3)
                             {
                                 $global:baseMainTemplate.resources += $newWorkbook
                                 if ($contentToImport.Metadata -or $isPipelineRun)

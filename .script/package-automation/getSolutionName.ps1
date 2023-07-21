@@ -40,7 +40,12 @@ try
             }
         }
 
-        if ($solutionName -eq '')
+        if ($solutionName -eq 'SAP')
+        {
+            Write-Host "Skipping Github workflow for SAP Solution as solution dont have data file and SolutionMetadata file!"
+            Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
+        }
+        elseif ($solutionName -eq '')
         {
             Write-Host "Skipping Github workflow as Solution name cannot be blank."
             Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
