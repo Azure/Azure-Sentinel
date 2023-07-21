@@ -114,7 +114,7 @@ def get_cursor_by_partition(client, stream_id, partition):
 def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, limit, sentinel: AzureSentinelConnector, start_ts):
     cursor = initial_cursor
     while True:
-        get_response = client.get_messages(stream_id, cursor, limit, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
+        get_response = client.get_messages(stream_id, cursor, limit=limit, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
         if not get_response.data:
             return
 

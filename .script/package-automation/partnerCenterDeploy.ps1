@@ -63,7 +63,7 @@ try {
     $solutionFolderPath = 'Solutions/' + $solutionName + "/"
     $filesList = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
 
-    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" }
+    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
 
     if ($dataFolderFiles.Count -gt 0) {
         $selectFirstdataFolderFile = $dataFolderFiles | Select-Object -first 1
