@@ -19,7 +19,7 @@ connection_string = os.environ['AzureWebJobsStorage']
 AZURE_STORAGE_CONNECTION_STRING = os.environ['AzureWebJobsStorage']
 MAX_QUEUE_MESSAGES_MAIN_QUEUE = int(os.environ.get('MAX_QUEUE_MESSAGES_MAIN_QUEUE', 80))
 MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
-REQUIRE_SECONDARY_STRING = os.environ["USER_SELECTION_REQUIRE_SECONDARY"]
+REQUIRE_SECONDARY_STRING = os.environ.get('USER_SELECTION_REQUIRE_SECONDARY', 'false')
 
 if REQUIRE_SECONDARY_STRING.lower() == "true":
     REQUIRE_SECONDARY = True
@@ -58,7 +58,7 @@ async def main(mytimer: func.TimerRequest):
             logging.info("Main queue size is {}".format(mainQueueCount))
             while mainQueueCount >= MAX_QUEUE_MESSAGES_MAIN_QUEUE:
                 time.sleep(5)
-                if check_if_script_runs_too_long(0.95, script_start_time):
+                if check_if_script_runs_too_long(0.9, script_start_time):
                     logging.warn("Main queue already have enough messages to process. Not clearing any backlog or reading a new SQS message in this iteration.")
                     return
                 mainQueueCount = mainQueueHelper.get_queue_current_count()
@@ -77,11 +77,11 @@ async def main(mytimer: func.TimerRequest):
                     backlogQueueHelper.delete_queue_message(messageFromBacklog.id, messageFromBacklog.pop_receipt)
                     backlogQueueCount = backlogQueueHelper.get_queue_current_count()
                     mainQueueCount = mainQueueHelper.get_queue_current_count()
-                if check_if_script_runs_too_long(0.95, script_start_time):
+                if check_if_script_runs_too_long(0.9, script_start_time):
                     logging.warn("Main queue already have enough messages to process. Read messages from backlog queue but not reading a new SQS message in this iteration.")
                     return
 
-            if check_if_script_runs_too_long(0.5, script_start_time):
+            if check_if_script_runs_too_long(0.75, script_start_time):
                 logging.warn("Queue already have enough messages to process. Read all messages from backlog queue but not reading a new SQS message in this iteration.")
                 return
 

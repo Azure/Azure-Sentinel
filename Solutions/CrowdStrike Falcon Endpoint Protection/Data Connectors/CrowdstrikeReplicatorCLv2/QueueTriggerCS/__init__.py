@@ -24,10 +24,10 @@ RAW_DATA_DCE_ENDPOINT = os.environ.get('DCE_INGESTION_ENDPOINT',  'NA')
 RAW_DATA_DCR_ID = os.environ.get('RAW_DATA_DCR_ID',  'NA')
 NORMALIZED_SCHEMA_NAMES = '{"Dns": "Custom-CrowdstrikeDns","File": "Custom-CrowdstrikeFile","Process": "Custom-CrowdstrikeProcess","Network": "Custom-CrowdstrikeNetwork","Auth": "Custom-CrowdstrikeAuth","Registry": "Custom-CrowdstrikeRegistry","Audit": "Custom-CrowdstrikeAudit","User": "Custom-CrowdstrikeUser","Additional": "Custom-CrowdstrikeAdditional"}'
 CUSTOM_SCHEMA_NAMES = '{"Dns": "Custom-CrowdstrikeDns","File": "Custom-CrowdstrikeFile","Process": "Custom-CrowdstrikeProcess","Network": "Custom-CrowdstrikeNetwork","Auth": "Custom-CrowdstrikeAuth","Registry": "Custom-CrowdstrikeRegistry","Audit": "Custom-CrowdstrikeAudit","User": "Custom-CrowdstrikeUser"}'
-REQUIRE_RAW_STRING = os.environ["USER_SELECTION_REQUIRE_RAW"]
+REQUIRE_RAW_STRING = os.environ.get('USER_SELECTION_REQUIRE_RAW',  'false')
 SECONDARY_DATA_SCHEMA = "Custom-CrowdStrikeSecondary"
-EVENT_TO_TABLE_MAPPING_LINK = os.environ['EVENT_TO_TABLE_MAPPING_LINK']
-REQUIRED_FIELDS_SCHEMA_LINK = os.environ['REQUIRED_FIELDS_SCHEMA_LINK']
+EVENT_TO_TABLE_MAPPING_LINK = os.environ.get('EVENT_TO_TABLE_MAPPING_LINK',  'https://aka.ms/CrowdStrikeEventsToTableMapping')
+REQUIRED_FIELDS_SCHEMA_LINK = os.environ.get('REQUIRED_FIELDS_SCHEMA_LINK',  'https://aka.ms/CrowdStrikeRequiredFieldsSchema')
 
 if REQUIRE_RAW_STRING.lower() == "true":
     REQUIRE_RAW = True
