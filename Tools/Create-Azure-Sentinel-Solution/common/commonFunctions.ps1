@@ -630,7 +630,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                             if ($contentResourceDetails.apiVersion -eq '3.0.0')
                             {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$global:workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId$global:workbookCounter'))),variables('workbookVersion$global:workbookCounter')))]"
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$global:workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId$global:workbookCounter'))))]"
                             }
                             else 
                             {
@@ -1309,15 +1309,15 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         if ($contentResourceDetails.apiVersion -eq '3.0.0')
                         {
                             if ($IsLogicAppsCustomConnector) {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$global:playbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-lc-',uniquestring(variables('_playbookContentId$global:playbookCounter'))),variables('playbookVersion$global:playbookCounter')))]"
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$global:playbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-lc-',uniquestring(variables('_playbookContentId$global:playbookCounter'))))]"
                                 $global:contentShortName  = 'lc'
                             }
                             elseif ($IsFunctionAppResource) {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$global:playbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-fa-',uniquestring(variables('_playbookContentId$global:playbookCounter'))),variables('playbookVersion$global:playbookCounter')))]"
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$global:playbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-fa-',uniquestring(variables('_playbookContentId$global:playbookCounter'))))]"
                                 $global:contentShortName  = 'fa'
                             }
                             else {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$global:playbookCounter" -NotePropertyValue  "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId$global:playbookCounter'))),variables('playbookVersion$global:playbookCounter')))]"
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$global:playbookCounter" -NotePropertyValue  "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId$global:playbookCounter'))))]"
                                 $global:contentShortName  = 'pl'
                             } 
                         }
@@ -1592,7 +1592,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         if ($contentResourceDetails.apiVersion -eq '3.0.0')
                         {
-                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateSpecName$global:connectorCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId$global:connectorCounter'))),variables('dataConnectorVersion$global:connectorCounter')))]"
+                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateSpecName$global:connectorCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId$global:connectorCounter'))))]"
                         }
                         else 
                         {
@@ -2046,7 +2046,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                             if ($contentResourceDetails.apiVersion -eq '3.0.0')
                             {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryTemplateSpecName$global:huntingQueryCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-hq-',uniquestring(variables('_huntingQuerycontentId$global:huntingQueryCounter'))),variables('huntingQueryVersion$global:huntingQueryCounter')))]"
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryTemplateSpecName$global:huntingQueryCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring(variables('_huntingQuerycontentId$global:huntingQueryCounter'))))]"
                             }
                             else 
                             {
@@ -2390,7 +2390,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                             if ($contentResourceDetails.apiVersion -eq '3.0.0')
                             {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$global:analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId$global:analyticRuleCounter'))),variables('analyticRuleVersion$global:analyticRuleCounter')))]"
+                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$global:analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId$global:analyticRuleCounter'))))]"
                             }
                             else 
                             {
@@ -3190,7 +3190,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
 
     if ($contentResourceDetails.apiVersion -eq '3.0.0')
     {
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$global:parserCounter'))),variables('parserVersion$global:parserCounter')))]"
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$global:parserCounter'))))]"
     }
     else 
     {
