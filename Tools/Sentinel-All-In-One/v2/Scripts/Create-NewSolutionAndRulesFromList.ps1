@@ -14,33 +14,73 @@ if (!$context) {
     $context = Get-AzContext
 }
 
+
+Write-Host "Connected to Azure with subscription: " $context.Subscription
+$context = Get-AzContext
+$instanceProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
+$profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($instanceProfile)
+$token = $profileClient.AcquireAccessToken($context.Subscription.TenantId)
+$authHeader = @{
+    'Content-Type'  = 'application/json' 
+    'Authorization' = 'Bearer ' + $token.AccessToken 
+}
 $SubscriptionId = $context.Subscription.Id
-Write-Host "Connected to Azure with subscription: " + $context.Subscription
+
+
+$baseUri = "https://management.azure.com/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${Workspace}"
+$alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
 
 # Get a list of all the solutions
-$url = "https://catalogapi.azure.com/offers?api-version=2018-08-01-beta&%24filter=categoryIds%2Fany%28cat%3A+cat+eq+%27AzureSentinelSolution%27%29+or+keywords%2Fany%28key%3A+contains%28key%2C%27f1de974b-f438-4719-b423-8bf704ba2aef%27%29%29"
-$allSolutions = (Invoke-RestMethod -Method "Get" -Uri $url -Headers $authHeader ).items
+$url = $baseUri + "/providers/Microsoft.SecurityInsights/contentProductPackages?api-version=2023-04-01-preview"
+$allSolutions = (Invoke-RestMethod -Method "Get" -Uri $url -Headers $authHeader ).value
 
 #Deploy each single solution
-$templateParameter = @{"workspace-location" = $Region; workspace = $Workspace }
+#$templateParameter = @{"workspace-location" = $Region; workspace = $Workspace }
 foreach ($deploySolution in $Solutions) {
-    $singleSolution = $allSolutions | Where-Object  -Property "displayName" -Contains $deploySolution
+    $singleSolution = $allSolutions | Where-Object { $_.properties.displayName -Contains $deploySolution }
     if ($null -eq $singleSolution) {
         Write-Error "Unable to get find solution with name $deploySolution" 
     }
     else {
-        $templateUri = $singleSolution.plans.artifacts | Where-Object -Property "name" -EQ "DefaultTemplate"
+        $solutionURL = $baseUri + "/providers/Microsoft.SecurityInsights/contentProductPackages/$($singleSolution.name)?api-version=2023-04-01-preview"
+        $solution = (Invoke-RestMethod -Method "Get" -Uri $solutionURL -Headers $authHeader )
+        Write-Host "Solution name: " $solution.name
+        $packagedContent = $solution.properties.packagedContent
+        #Some of the post deployment instruction contains invalid characters and since this is not displayed anywhere
+        #get rid of them.
+        foreach ($resource in $packagedContent.resources) { 
+            if ($null -ne $resource.properties.mainTemplate.metadata.postDeployment ) { 
+                $resource.properties.mainTemplate.metadata.postDeployment = $null 
+            } 
+        }
+        $installBody = @{"properties" = @{
+                "parameters" = @{
+                    "workspace"          = @{"value" = $Workspace }
+                    "workspace-location" = @{"value" = $Region }
+                }
+                "template"   = $packagedContent
+                "mode"       = "Incremental"
+            }
+        }
+        $deploymentName = ("allinone-" + $solution.name)
+        if ($deploymentName.Length -ge 64){
+            $deploymentName = $deploymentName.Substring(0,64)
+        }
+        $installURL = "https://management.azure.com/subscriptions/$($SubscriptionId)/resourcegroups/$($ResourceGroup)/providers/Microsoft.Resources/deployments/" + $deploymentName + "?api-version=2021-04-01"
+        #$templateUri = $singleSolution.plans.artifacts | Where-Object -Property "name" -EQ "DefaultTemplate"
         Write-Host "Deploying solution:  $deploySolution"
-        New-AzResourceGroupDeployment -ResourceGroupName $ResourceGroup -TemplateUri $templateUri.uri -TemplateParameterObject $templateParameter
+        
+        try{
+            Invoke-RestMethod -Uri $installURL -Method Put -Headers $authHeader -Body ($installBody | ConvertTo-Json -EnumsAsStrings -Depth 50 -EscapeHandling EscapeNonAscii)
         Write-Host "Deployed solution:  $deploySolution"
+        }
+        catch {
+            $errorReturn = $_
+            Write-Error $errorReturn
+        }
     }
 
 }
-
-
-$baseUri = "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${Workspace}"
-$alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
-
 
 #####
 #create rules from any rule templates that came from solutions
@@ -50,181 +90,112 @@ if (($SeveritiesToInclude -eq "None") -or ($null -eq $SeveritiesToInclude)) {
     Exit
 }
 
-$solutionURL = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+#Give the system time to update all the needed databases before trying to install the rules.
+Start-Sleep -Seconds 60
+
+#URL to get all the needed Analytic Rule templates
+$solutionURL = $baseUri + "/providers/Microsoft.SecurityInsights/contentTemplates?api-version=2023-05-01-preview"
+#Add a filter only return analytic rule templates
+$solutionURL += "&%24filter=(properties%2FcontentKind%20eq%20'AnalyticsRule')"
+
+$results = (Invoke-RestMethod -Uri $solutionURL -Method Get -Headers $authHeader).value
   
-#We only care about those rule templates that were created by Microsoft Sentinel solutions so
-#this query will make sure to filter out anything else as well as provide some overview data (which is not used)
-$query = @"
-    Resources 
-    | where type =~ 'Microsoft.Resources/templateSpecs/versions' 
-    | where tags['hidden-sentinelContentType'] =~ 'AnalyticsRule' 
-    and tags['hidden-sentinelWorkspaceId'] =~ '/subscriptions/$($SubscriptionId)/resourceGroups/$($ResourceGroup)/providers/Microsoft.OperationalInsights/workspaces/$($Workspace)' 
-    | extend version = name 
-    | extend parsed_version = parse_version(version) 
-    | extend resources = parse_json(parse_json(parse_json(properties).template).resources) 
-    | extend metadata = parse_json(resources[array_length(resources)-1].properties)
-    | extend contentId=tostring(metadata.contentId) 
-    | summarize arg_max(parsed_version, version, properties) by contentId 
-    | project contentId, version, properties
-"@
-
-$body = @{
-    "subscriptions" = @($SubscriptionId)
-    "query"         = $query
-}
-
-$azureProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
-$profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($azureProfile)
-$token = $profileClient.AcquireAccessToken($context.Subscription.TenantId)
-$authHeader = @{
-    'Content-Type'  = 'application/json'
-    'Authorization' = 'Bearer ' + $token.AccessToken
-}
-
-#Load all the rule templates from solutions
-$results = Invoke-RestMethod -Uri $solutionURL -Method POST -Headers $authHeader -Body ($body | ConvertTo-Json -EnumsAsStrings -Depth 5)
-Write-Host "results..." $results
+$BaseAlertUri = $baseUri + "/providers/Microsoft.SecurityInsights/alertRules/"
+$BaseMetaURI = $baseURI + "/providers/Microsoft.SecurityInsights/metadata/analyticsrule-"
 
 
+Write-Host "Severities to include..." $SeveritiesToInclude
 #Iterate through all the rule templates
-foreach ($result in $results.data) {
+foreach ($result in $results ) {
     #Make sure that the template's severity is one we want to include
-    $severity = $result.properties.template.resources.properties.severity[0]
-    Write-Host "Severity is... " $severity " of type " $severity.GetType()
+    $severity = $result.properties.mainTemplate.resources.properties[0].severity
+    Write-Host "Rule Template's severity is... " $severity 
+    #Write-Host "condition is..." $SeveritiesToInclude.Contains($severity)   
     if ($SeveritiesToInclude.Contains($severity)) {
         Write-Host "Enabling alert rule template... " $result.properties.template.resources.properties.displayName
-        #Get to the actual template data
-        $template = $result.properties.template.resources.properties
-        $kind = $result.properties.template.resources.kind
-        $name = $result.contentId
+
+        $templateVersion = $result.properties.mainTemplate.resources.properties[1].version
+        $template = $result.properties.mainTemplate.resources.properties[0]
+        $kind = $result.properties.mainTemplate.resources.kind
+        $displayName = $template.displayName
+        $eventGroupingSettings = $template.eventGroupingSettings
+        if ($null -eq $eventGroupingSettings) {
+            $eventGroupingSettings = [ordered]@{aggregationKind = "SingleAlert" }
+        }
         $body = ""
+        $properties = $result.properties.mainTemplate.resources[0].properties
+        $properties.enabled = $true
+        #Add the field to link this rule with the rule template so that the rule template will show up as used
+        #We had to use the "Add-Member" command since this field does not exist in the rule template that we are copying from.
+        $properties | Add-Member -NotePropertyName "alertRuleTemplateName" -NotePropertyValue $result.properties.mainTemplate.resources[0].name
+        $properties | Add-Member -NotePropertyName "templateVersion" -NotePropertyValue $result.properties.mainTemplate.resources[1].properties.version
 
-        #For some reason there is a null as the last entry in the tactics array so we need to remove it
-        $tactics = ""
-        # If there is only 1 entry and the null, then if we return just the entry, it gets returned
-        # as a string so we need to make sure we return an array
-        if ($template.tactics.Count -eq 2) {
-            [String[]]$tactics = $template.tactics[0]
-        }
-        else {
-            #Return only those entries that are not null
-            $tactics = $template.tactics | Where-Object { $_ -ne $null }
-        }
-
-        #For some reason there is a null as the last entry in the techniques array so we need to remove it
-        $techniques = ""
-        # If there is only 1 entry and the null, then if we return just the entry, it gets returned
-        # as a string so we need to make sure we return an array
-        
-        if ($template.techniques.Count -eq 2) {
-            [String[]]$techniques = $template.techniques[0]
-        }
-        else {
-            #Return only those entries that are not null
-            $techniques = $template.techniques | Where-Object { $_ -ne $null }
-        }
-
-        #For some reason there is a null as the last entry in the entities array so we need to remove it as well
-        #as any entry that is just ".nan"
-        $entityMappings = $template.entityMappings | Where-Object { $_ -ne $null }
-        #If the arrary of EntityMappings only contained one entry, it will not be returned as an arry
-        # so we need to convert it into JSON while forcing it to be an array and then convert it back
-        # without enumerating the output so that it remains an array
-        if ($null -ne $entityMappings) {
-            if ($entityMappings.GetType().BaseType.Name -ne "Array") {
-                $entityMappings = $entityMappings | ConvertTo-Json -Depth 5 -AsArray | ConvertFrom-Json -NoEnumerate
-            }
-        }
-        
-        #Some entity mappings are stored as empty strings (not sure why) so we need 
-        #to check for that and set to null if it is empty so no error gets thrown
-        #if ([String]::IsNullOrWhiteSpace($entityMappings)) {
-        #    $entityMappings = $null
-        #}
-        
-        $templateVersion = $template.version | Where-Object { $_ -ne $null }
-        $suppressionDuration = $template.suppressionDuration | Where-Object { $_ -ne $null }
 
         #Depending on the type of alert we are creating, the body has different parameters
         switch ($kind) {
-            #Have not seen any Microsoft Security rule templates coming from solutions
             "MicrosoftSecurityIncidentCreation" {  
                 $body = @{
                     "kind"       = "MicrosoftSecurityIncidentCreation"
-                    "properties" = @{
-                        "enabled"       = "true"
-                        "productFilter" = $template.productFilter
-                        "displayName"   = $template.displayName
-                    }
+                    "properties" = $properties
                 }
             }
             "NRT" {
-                #For some reason, all the string values are returned as arrays (with null as the second entry)
-                #and we only care about the first entry hence the [0] after everything
                 $body = @{
                     "kind"       = "NRT"
-                    "properties" = @{
-                        "enabled"               = "true"
-                        "alertRuleTemplateName" = $name
-                        "displayName"           = $template.displayName[0]
-                        "description"           = $template.description[0]
-                        "severity"              = $template.severity[0]
-                        "tactics"               = $tactics
-                        "techniques"            = $techniques
-                        "query"                 = $template.query[0]
-                        "suppressionDuration"   = $suppressionDuration
-                        "suppressionEnabled"    = $false
-                        "eventGroupingSettings" = $template.eventGroupingSettings[0]
-                        "templateVersion"       = $templateVersion
-                        "entityMappings"        = $entityMappings
-                    }
+                    "properties" = $properties
                 }
             }
             "Scheduled" {
-                #For some reason, all the string values are returned as arrays (with null as the second entry)
-                #and we only care about the first entry hence the [0] after everything
                 $body = @{
                     "kind"       = "Scheduled"
-                    "properties" = @{
-                        "alertRuleTemplateName" = $name
-                        "description"           = $template.description[0]
-                        "displayName"           = $template.displayName[0]
-                        "enabled"               = "true"
-                        "entityMappings"        = $entityMappings
-                        "eventGroupingSettings" = $template.eventGroupingSettings[0]
-                        "query"                 = $template.query[0]
-                        "queryFrequency"        = $template.queryFrequency[0]
-                        "queryPeriod"           = $template.queryPeriod[0]
-                        "severity"              = $template.severity[0]
-                        "suppressionDuration"   = $suppressionDuration
-                        "suppressionEnabled"    = $false
-                        "tactics"               = $tactics
-                        "techniques"            = $techniques
-                        "templateVersion"       = $templateVersion
-                        "triggerOperator"       = $template.triggerOperator[0]
-                        "triggerThreshold"      = $template.triggerThreshold[0]
-                    }
+                    "properties" = $properties
                 }
+                
             }
-            #Hopefully this won't be accessed
             Default { }
         }
         #If we have created the body...
         if ("" -ne $body) {
-            #Create the GUId for the alert.
-            $guid = New-Guid
-
-            #Create the URI we need to create the alert.  Using the latest and greatest API call
-            $alertUriGuid = $alertUri + $guid + '?api-version=2022-11-01-preview'
-
+            #Create the GUId for the alert and create it.
+            $guid = (New-Guid).Guid
+            #Create the URI we need to create the alert.
+            $alertUri = $BaseAlertUri + $guid + "?api-version=2022-12-01-preview"
             try {
-                Invoke-AzRestMethod -Path $alertUriGuid -Method PUT -Payload ($body | ConvertTo-Json -EnumsAsStrings -Depth 8)
+                Write-Host "Attempting to create rule $($displayName)"
+                $verdict = Invoke-RestMethod -Uri $alertUri -Method Put -Headers $authHeader -Body ($body | ConvertTo-Json -EnumsAsStrings -Depth 50)
+                #Invoke-RestMethod -Uri $installURL -Method Put -Headers $authHeader -Body ($installBody | ConvertTo-Json -EnumsAsStrings -Depth 50)
+                Write-Output "Succeeded"
+                $solution = $allSolutions.properties | Where-Object -Property "contentId" -Contains $result.properties.packageId
+                $metabody = @{
+                    "apiVersion" = "2022-01-01-preview"
+                    "name"       = "analyticsrule-" + $verdict.name
+                    "type"       = "Microsoft.OperationalInsights/workspaces/providers/metadata"
+                    "id"         = $null
+                    "properties" = @{
+                        "contentId" = $verdict.name
+                        "parentId"  = $verdict.id
+                        "kind"      = "AnalyticsRule"
+                        "version"   = $templateVersion
+                        "source"    = $solution.source
+                        "author"    = $solution.author
+                        "support"   = $solution.support
+                    }
+                }
+                Write-Output "    Updating metadata...."
+                $metaURI = $BaseMetaURI + $verdict.name + "?api-version=2022-01-01-preview"
+                $metaVerdict = Invoke-RestMethod -Uri $metaURI -Method Put -Headers $authHeader -Body ($metabody | ConvertTo-Json -EnumsAsStrings -Depth 5)
+                Write-Output "Succeeded"
             }
             catch {
-                #Most likely any errors are due to the rule template having errors, typically in the query
-                Write-Verbose $_
-                Write-Error "Unable to create alert rule with error code: $($_.Exception.Message)" -ErrorAction Stop
+                #The most likely error is that there is a missing dataset. There is a new
+                #addition to the REST API to check for the existance of a dataset but
+                #it only checks certain ones.  Hope to modify this to do the check
+                #before trying to create the alert.
+                $errorReturn = $_
+                Write-Error $errorReturn
             }
+            #This pauses for 5 second so that we don't overload the workspace.
+            Start-Sleep -Seconds 1
         }
     }
 }
