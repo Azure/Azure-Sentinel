@@ -270,6 +270,7 @@ async def process_file_secondary_CLv2(bucket, s3_path, client, session):
 
         except Exception as e:
             logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
+            raise e
 
 class FileHelper:
 

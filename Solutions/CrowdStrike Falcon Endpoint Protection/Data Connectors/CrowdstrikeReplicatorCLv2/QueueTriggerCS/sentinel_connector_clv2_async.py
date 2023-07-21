@@ -6,7 +6,7 @@ from collections import deque
 import zlib
 
 class AzureSentinelConnectorCLv2Async:
-    def __init__(self, session: aiohttp.ClientSession, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=2500, queue_size_bytes=7 * (2**20)):
+    def __init__(self, session: aiohttp.ClientSession, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=3500, queue_size_bytes=7 * (2**20)):
         self.dce_endpoint = dce_endpoint
         self.dcr_id = dcr_id
         self.stream_name = stream_name
