@@ -47,6 +47,12 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         {
             var parsersYamlFilesLoader = new ParsersYamlFilesLoader();
             var parsersYamlFiles = parsersYamlFilesLoader.GetFilesNames();
+
+            if (parsersYamlFiles.Count == 1 && parsersYamlFiles[0] == "NoFile.yaml")
+            {
+                return Enumerable.Empty<FunctionSchema>(); // Return an empty collection
+            }
+
             return parsersYamlFiles.Select(fileName =>
             {
                 var schema = fileName.Split(Path.DirectorySeparatorChar)[^3];

@@ -20,11 +20,11 @@ LOG_TYPE = 'GCP_DNS'
 
 
 # interval of script execution
-SCRIPT_EXECUTION_INTERVAL_MINUTES = 5
+SCRIPT_EXECUTION_INTERVAL_MINUTES = 10
 # if ts of last processed file is older than "now - MAX_PERIOD_MINUTES" then script will get events from "now - MAX_PERIOD_MINUTES"
 MAX_PERIOD_MINUTES = 60 * 24 * 7
 
-MAX_SCRIPT_EXEC_TIME_MINUTES = 5
+MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
