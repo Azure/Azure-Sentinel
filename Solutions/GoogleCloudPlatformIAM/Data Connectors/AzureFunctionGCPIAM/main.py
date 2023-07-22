@@ -21,7 +21,7 @@ LOG_TYPE = 'GCP_IAM'
 # interval of script execution
 SCRIPT_EXECUTION_INTERVAL_MINUTES = 5
 # if ts of last processed file is older than "now - MAX_PERIOD_MINUTES" then script will get events from last time stamp +1 day
-MAX_PERIOD_MINUTES = 60 * 24 * 1
+MAX_PERIOD_MINUTES = 60 * 12
 
 LOG_ANALYTICS_URI =  os.environ.get('logAnalyticsUri')
 
@@ -177,7 +177,7 @@ def get_last_ts(state_manager: StateManager):
     if diff_seconds > MAX_PERIOD_MINUTES * 60:
         old_last_ts = last_ts
         last_ts += datetime.timedelta(microseconds=1)
-        endtime = min(last_ts + datetime.timedelta(days=1),now - datetime.timedelta(minutes=1))
+        endtime = min(last_ts + datetime.timedelta(minutes=MAX_PERIOD_MINUTES),now - datetime.timedelta(minutes=1))
         logging.info('Last timestamp {} is older than max search period ({} minutes). Getting data (from {} to {})'.format(old_last_ts, MAX_PERIOD_MINUTES, last_ts, endtime))
     else:
         last_ts += datetime.timedelta(microseconds=1)
