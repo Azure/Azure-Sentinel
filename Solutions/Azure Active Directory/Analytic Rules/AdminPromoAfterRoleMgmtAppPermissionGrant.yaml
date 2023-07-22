@@ -31,7 +31,6 @@ query: |
   | where Category =~ "ApplicationManagement" and LoggedByService =~ "Core Directory"
   | where OperationName =~ "Add app role assignment to service principal"
   | mv-expand TargetResource = TargetResources
-  //| where tostring(TargetResource["displayName"]) == "Microsoft Graph"
   | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
   | where tostring(modifiedProperty["displayName"]) == "AppRole.Value"
   | extend PermissionGrant = tostring(modifiedProperty["newValue"])
@@ -57,7 +56,6 @@ query: |
       AuditLogs
       | where TimeGenerated > ago(query_frequency)
       | where Category =~ "RoleManagement" and LoggedByService =~ "Core Directory" and AADOperationType =~ "Assign"
-      //| where OperationName in ("Add eligible member to role", "Add member to role")
       | where isnotempty(InitiatedBy["app"])
       | mv-expand TargetResource = TargetResources
       | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
@@ -79,15 +77,20 @@ query: |
           AppServicePrincipalId = tostring(InitiatedBy["app"]["servicePrincipalId"])
       ) on AppServicePrincipalId
   | where PermissionGrant_TimeGenerated < RoleAssignment_TimeGenerated
-  | project PermissionGrant_TimeGenerated, PermissionGrant_OperationName, PermissionGrant_Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, PermissionGrant_InitiatedBy, PermissionGrant_TargetResources, PermissionGrant_AdditionalDetails, PermissionGrant_CorrelationId, RoleAssignment_TimeGenerated, RoleAssignment_OperationName, RoleAssignment_Result, RoleAssignment, TargetType, Target, TargetId, RoleAssignment_InitiatedBy, RoleAssignment_TargetResources, RoleAssignment_AdditionalDetails, RoleAssignment_CorrelationId
+  | extend
+      TargetName = tostring(split(Target, "@")[0]),
+      TargetUPNSuffix = tostring(split(Target, "@")[1])
+  | project PermissionGrant_TimeGenerated, PermissionGrant_OperationName, PermissionGrant_Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, PermissionGrant_InitiatedBy, PermissionGrant_TargetResources, PermissionGrant_AdditionalDetails, PermissionGrant_CorrelationId, RoleAssignment_TimeGenerated, RoleAssignment_OperationName, RoleAssignment_Result, RoleAssignment, TargetType, Target, TargetName, TargetUPNSuffix, TargetId, RoleAssignment_InitiatedBy, RoleAssignment_TargetResources, RoleAssignment_AdditionalDetails, RoleAssignment_CorrelationId
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Name
         columnName: AppDisplayName
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Target
+      - identifier: Name
+        columnName: TargetName
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
 version: 1.0.3
 kind: Scheduled
