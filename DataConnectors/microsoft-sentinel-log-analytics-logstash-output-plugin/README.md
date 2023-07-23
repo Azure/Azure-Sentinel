@@ -3,8 +3,8 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.0.2  
-Released on: 2023-04-27
+Plugin version: v1.1.0  
+Released on: 2023-07-23
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -23,8 +23,8 @@ Microsoft Sentinel provides Logstash output plugin to Log analytics workspace us
 Install the microsoft-sentinel-log-analytics-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
-- Logstash 7 Between 7.0 and 7.17.6
-- Logstash 8 Between 8.0 and 8.4.2
+- Logstash 7 Between 7.0 and 7.17.10
+- Logstash 8 Between 8.0 and 8.8.1
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
