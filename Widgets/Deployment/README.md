@@ -136,7 +136,7 @@ If you receive a message in your widgets that the widget configuration store has
 
 1) Get the workspace ID, Resource Group and Subscription ID as described [here](#locating-the-workspace-information).
 
-2) Run one of the following Powershell script, and copy the key vault name to be used later:
+2) Run the following Powershell script, and copy the key vault name to be used later:
 
 - Start Azure Cloud Shell:
   - [Open cloud shell from the Azure Portal](https://learn.microsoft.com/azure/cloud-shell/quickstart?tabs=azurecli#start-cloud-shell)
