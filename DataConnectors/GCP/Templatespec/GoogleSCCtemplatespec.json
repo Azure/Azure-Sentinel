@@ -1,0 +1,945 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "minLength": 1,
+            "type": "String",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "variables": {
+        "solutionId": "azuresentinel.azure-sentinel-solution-gcpscclogs-api",
+        "_solutionId": "[variables('solutionId')]",
+        "dataCollectionRuleImmutableId": "data collection rule immutableId",
+        "_dataCollectionRuleImmutableId": "[variables('dataCollectionRuleImmutableId')]",
+        "dataCollectionEndpointId": "[concat('/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+        "_dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "uiConfigId1": "GoogleSCCDefinition",
+        "_uiConfigId1": "[variables('uiConfigId1')]",
+        "dataConnectorContentId1": "GoogleSCCDefinition",
+        "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+        "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+        "_dataConnectorId1": "[variables('dataConnectorId1')]",
+        "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+        "dataConnectorVersion1": "1.0.0",
+        "dataConnectorContentId2": "GoogleSCC",
+        "_dataConnectorContentId2": "[variables('dataConnectorContentId2')]",
+        "dataConnectorId2": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+        "_dataConnectorId2": "[variables('dataConnectorId2')]",
+        "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2')))]",
+        "dataConnectorVersion2": "1.0.0",
+        "resourceGroupName": "[resourceGroup().name]",
+        "subscription": "[last(split(subscription().id, '/'))]",
+        "dataCollectionRuleId": "GoogleSCC",
+        "streamName": "GoogleCloudSCC_CL",
+        "logAnalyticsTableId": "[concat('Custom-', variables('streamName'))]",
+        "dataType": "GoogleSCC",
+        "destinationName": "clv2ws1"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/templateSpecs",
+            "apiVersion": "2021-05-01",
+            "name": "[variables('dataConnectorTemplateSpecName1')]",
+            "location": "[parameters('workspace-location')]",
+            "tags": {
+                "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+                "hidden-sentinelContentType": "DataConnector"
+            },
+            "properties": {
+                "description": "GoogleSCC data connector with template",
+                "displayName": "GoogleSCC uditLogs template"
+            }
+        },
+        {
+            "type": "Microsoft.Resources/templateSpecs/versions",
+            "apiVersion": "2021-05-01",
+            "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+            ],
+            "tags": {
+                "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+                "hidden-sentinelContentType": "DataConnector"
+            },
+            "properties": {
+                "description": "GoogleSCC data connector with template version 1.0.0",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersion1')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+                            "apiVersion": "2022-09-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "Customizable",
+                            "properties": {
+                                "connectorUiConfig": {
+                                    "title": "Google SCC",
+                                    "publisher": "Microsoft",
+                                    "descriptionMarkdown": "The Google Cloud Platform (GCP) Security Command Center is a comprehensive security and risk management platform for Google Cloud, ingested from Sentinel's connector. It offers features such as asset inventory and discovery, vulnerability and threat detection, and risk mitigation and remediation to help you gain insight into your organization's security and data attack surface. This integration enables you to perform tasks related to findings and assets more effectively.",
+                                    "graphQueriesTableName": "GoogleCloudSCC_CL",
+                                    "graphQueries": [
+                                        {
+                                            "metricName": "Total events received",
+                                            "legend": "Google SCC",
+                                            "baseQuery": "{{graphQueriesTableName}}"
+                                        }
+                                    ],
+                                    "sampleQueries": [
+                                        {
+                                            "description": "Get Sample of Google SCC",
+                                            "query": "{{graphQueriesTableName}}\n | take 10"
+                                        }
+                                    ],
+                                    "dataTypes": [
+                                        {
+                                            "name": "{{graphQueriesTableName}}",
+                                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | where TimeGenerated > ago(12h) | where name_s == \"no data test\"               | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                                        }
+                                    ],
+                                    "connectivityCriteria": [
+                                        {
+                                            "type": "HasDataConnectors",
+                                            "value": null
+                                        }
+                                    ],
+                                    "availability": {
+                                        "status": 1,
+                                        "isPreview": false
+                                    },
+                                    "permissions": {
+                                        "tenant": null,
+                                        "licenses": null,
+                                        "resourceProvider": [
+                                            {
+                                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                                "providerDisplayName": "Workspace",
+                                                "scope": "Workspace",
+                                                "requiredPermissions": {
+                                                    "read": true,
+                                                    "write": true,
+                                                    "delete": true,
+                                                    "action": false
+                                                }
+                                            },
+                                            {
+                                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                                "providerDisplayName": "Keys",
+                                                "scope": "Workspace",
+                                                "requiredPermissions": {
+                                                    "read": false,
+                                                    "write": false,
+                                                    "delete": false,
+                                                    "action": true
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "instructionSteps": [
+                                        {
+                                            "title": "Connect Google to Microsoft Sentinel",
+                                            "description": "To enable Google SCC for Microsoft Sentinel, provide the required information below and click on Connect.",
+                                            "instructions": [
+                                                {
+                                                    "parameters": {
+                                                        "label": "GCP Project id",
+                                                        "placeholder": "GCP_project_id",
+                                                        "type": "text",
+                                                        "name": "ProjectId"
+                                                    },
+                                                    "type": "Textbox"
+                                                },
+                                                {
+                                                    "parameters": {
+                                                        "label": "GCP Project number",
+                                                        "placeholder": "GCP_project_number",
+                                                        "type": "text",
+                                                        "name": "ProjectNumber"
+                                                    },
+                                                    "type": "Textbox"
+                                                },
+                                                {
+                                                    "parameters": {
+                                                        "disabled": false,
+                                                        "label": "toggle",
+                                                        "isPrimary": true,
+                                                        "name": "toggle",
+                                                        "transformation": {
+                                                            "dataCollectionRuleTemplateSpecName": "",
+                                                            "logAnalyticsTableTemplateSpecName": "",
+                                                            "outputStream": "",
+                                                            "transformationType": "predefinedTransformation"
+                                                        }
+                                                    },
+                                                    "type": "ToggleConnectionButton"
+                                                }
+                                            ],
+                                            "innerSteps": null
+                                        }
+                                    ],
+                                    "isConnectivityCriteriasMatchSome": false
+                                },
+                                "connectionsConfig": {
+                                    "templateSpecName": "[concat('/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/providers/Microsoft.Resources/templateSpecs/',variables('dataConnectorTemplateSpecName2'))]",
+                                    "templateSpecVersion": "[variables('dataConnectorVersion2')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('streamName')]",
+                            "type": "Microsoft.OperationalInsights/workspaces",
+                            "apiVersion": "2021-03-01-privatepreview",
+                            "location": "[parameters('workspace-location')]",
+                            "tags": {},
+                            "properties": {
+                                "totalRetentionInDays": 30,
+                                "archiveRetentionInDays": 0,
+                                "plan": "Analytics",
+                                "retentionInDaysAsDefault": true,
+                                "totalRetentionInDaysAsDefault": true,
+                                "schema": {
+                                    "tableSubType": "DataCollectionRuleBased",
+                                    "name": "[variables('streamName')]",
+                                    "tableType": "CustomLog",
+                                    "columns": [
+                                        {
+                                            "name": "findings",
+                                            "type": "dynamic",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "resource",
+                                            "type": "dynamic",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "sourceProperties",
+                                            "type": "dynamic",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "datetime",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "canonicalName",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "category",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "finding_access",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "assetDisplayName",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "assetId",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "cloudDlpDataProfile",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "cloudDlpInspection",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "createTime",
+                                            "type": "datetime",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "finding_database",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "compliance",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "description",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "eventTime",
+                                            "type": "datetime",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "exfiltration",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "externalUri",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "findingClass",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "findingProviderId",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "indicator",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "kernelRootkit",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "kubernetes",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "mitreAttack",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "mute",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "name",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "parent",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "parentDisplayName",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "resourceName",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "severity",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "state",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "vulnerability",
+                                            "type": "dynamic",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "workflowState",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "resource_name",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "resource_DisplayName",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "resource_project",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "projectDisplayName",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "resource_parent",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "resource_parentDisplayName",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "resource_type",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        },
+                                        {
+                                            "name": "folders",
+                                            "type": "string",
+                                            "description": "",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        }
+                                    ],
+                                    "standardColumns": [
+                                        {
+                                            "name": "TenantId",
+                                            "type": "guid",
+                                            "isDefaultDisplay": false,
+                                            "isHidden": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('dataCollectionRuleId')]",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+                                "dataCollectionEndpointId": "[variables('_dataCollectionEndpointId')]",
+                                "streamDeclarations": {
+                                    "[concat('Custom-', variables('streamName'))]": {
+                                        "columns": [
+                                            {
+                                                "name": "TimeGenerated",
+                                                "type": "datetime"
+                                            },
+                                            {
+                                                "name": "finding",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "resource",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "sourceProperties",
+                                                "type": "dynamic"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                            "name": "[variables('destinationName')]"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": [
+                                            "[concat('Custom-', variables('streamName'))]"
+                                        ],
+                                        "destinations": [
+                                            "[variables('destinationName')]"
+                                        ],
+                                        "transformKql": "source\n| extend TimeGenerated =  todatetime(finding.eventTime), findings = parse_json(finding), resource = parse_json(resource), sourceProperties = parse_json(sourceProperties)\n | extend canonicalName = tostring(findings.canonicalName)\n | extend category = tostring(findings.category)\n | extend finding_access = findings.access\n | extend assetDisplayName = tostring(findings.assetDisplayName)\n | extend assetId = tostring(findings.assetId)\n | extend cloudDlpDataProfile = todynamic(findings.cloudDlpDataProfile)\n | extend cloudDlpInspection = todynamic(findings.cloudDlpInspection)\n | extend createTime = todatetime(findings.createTime)\n | extend finding_database = todynamic(findings.database)\n | extend compliances = todynamic(findings.compliance)\n| extend description = tostring(findings.description)\n | extend eventTime = todatetime(findings.eventTime)\n  | extend exfiltration = todynamic(findings.exfiltration)\n  | extend externalUri = tostring(findings.externalUri)\n | extend findingClass = tostring(findings.findingClass)\n | extend findingProviderId = tostring(findings.findingProviderId)\n | extend indicator = todynamic(findings.indicator)\n | extend kernelRootkit = todynamic(findings.kernelRootkit)\n | extend kubernetes = todynamic(findings.kubernetes)\n| extend mitreAttack = todynamic(findings.mitreAttack)\n | extend mute = tostring(findings.mute)\n | extend name = tostring(findings.name)\n  |  extend parent = tostring(findings.parent)\n | extend parentDisplayName = tostring(findings.parentDisplayName) \n | extend resourceName = tostring(findings.resourceName)\n | extend severity = tostring(findings.severity)\n | extend state = tostring(findings.state)\n | extend vulnerability = todynamic(findings.vulnerability)\n | extend workflowState = tostring(findings.workflowState)\n | extend resource_name = tostring(resource.name)\n | extend resource_DisplayName = tostring(resource.DisplayName)\n | extend resource_project = tostring(resource.['project'])\n | extend projectDisplayName = tostring(resource.projectDisplayName)\n | extend resource_parent = tostring(resource.parent)\n | extend resource_parentDisplayName = tostring(resource.parentDisplayName) \n| extend resource_type = tostring(resource.type)\n | extend folders = tostring(resource.folders)\n ",
+                                        "outputStream": "[concat('Custom-', variables('streamName'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "apiVersion": "2022-01-01-preview",
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+                                "contentId": "[variables('_dataConnectorContentId1')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersion1')]",
+                                "source": {
+                                    "kind": "Solution",
+                                    "name": "Google Cloud Platform Security Command Center",
+                                    "sourceId": "[variables('_solutionId')]"
+                                },
+                                "author": {
+                                    "name": "Microsoft"
+                                },
+                                "support": {
+                                    "name": "Microsoft Corporation",
+                                    "email": "support@microsoft.com",
+                                    "tier": "Microsoft",
+                                    "link": "https://support.microsoft.com"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "kind": "DataConnector",
+                                            "contentId": "[variables('_dataConnectorContentId2')]",
+                                            "version": "[variables('dataConnectorVersion2')]"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "apiVersion": "2022-01-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "Google Cloud Platform Security Command Center",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "Microsoft"
+                },
+                "support": {
+                    "name": "Microsoft Corporation",
+                    "email": "support@microsoft.com",
+                    "tier": "Microsoft",
+                    "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('_dataConnectorContentId2')]",
+                            "version": "[variables('dataConnectorVersion2')]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "apiVersion": "2022-09-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+            "location": "[parameters('workspace-location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "title": "Google Security Command Center",
+                    "publisher": "Microsoft",
+                    "descriptionMarkdown": "The Google Cloud Platform (GCP) Security Command Center is a comprehensive security and risk management platform for Google Cloud, ingested from Sentinel's connector. It offers features such as asset inventory and discovery, vulnerability and threat detection, and risk mitigation and remediation to help you gain insight into your organization's security and data attack surface. This integration enables you to perform tasks related to findings and assets more effectively.",
+                    "graphQueriesTableName": "GoogleCloudSCC_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total events received",
+                            "legend": "Google Security Command Center",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Get Sample of Google SCC",
+                            "query": "{{graphQueriesTableName}}\n | take 10"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | where TimeGenerated > ago(12h) | where name_s == \"no data test\"               | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors",
+                            "value": null
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "tenant": null,
+                        "licenses": null,
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "read": true,
+                                    "write": true,
+                                    "delete": true,
+                                    "action": false
+                                }
+                            },
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                "providerDisplayName": "Keys",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "read": false,
+                                    "write": false,
+                                    "delete": false,
+                                    "action": true
+                                }
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "instructions": [
+                                {
+                                    "type": "Markdown",
+                                    "parameters": {
+                                        "content": "#### 1. Set up your GCP environment \n You must have the following GCP resources defined and configured: topic, subscription for the topic, workload identity pool, workload identity provider and service account with permissions to get and consume from subscription. \n Terraform provides API for the IAM that creates the resources. [Link to Terraform scripts](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation)."
+                                    }
+                                },
+                                {
+                                    "type": "CopyableLabel",
+                                    "parameters": {
+                                        "label": "Tenant ID: A unique identifier that is used as an input in the Terraform configuration within a GCP environment.",
+                                        "fillWith": [
+                                            "TenantId"
+                                        ],
+                                        "name": "PoolId",
+                                        "disabled": true
+                                    }
+                                },
+                                {
+                                    "type": "Markdown",
+                                    "parameters": {
+                                        "content": "#### 2. Connect new collectors \n To enable GCP Audit Logs for Microsoft Sentinel, click the Add new collector button, fill the required information in the context pane and click on Connect."
+                                    }
+                                },
+                                {
+                                    "type": "GCPGrid",
+                                    "parameters": {}
+                                },
+                                {
+                                    "type": "GCPContextPane",
+                                    "parameters": {}
+                                }
+                            ]
+                        }
+                    ],
+                    "isConnectivityCriteriasMatchSome": false
+                },
+                "connectionsConfig": {
+                    "templateSpecName": "[concat('/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/providers/Microsoft.Resources/templateSpecs/',variables('dataConnectorTemplateSpecName2'))]",
+                    "templateSpecVersion": "[variables('dataConnectorVersion2')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/templateSpecs",
+            "apiVersion": "2021-05-01",
+            "name": "[variables('dataConnectorTemplateSpecName2')]",
+            "location": "[parameters('workspace-location')]",
+            "tags": {
+                "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+                "hidden-sentinelContentType": "LogicAppsCustomConnector"
+            },
+            "properties": {
+                "description": "GoogleSCC data connector with template",
+                "displayName": "GoogleSCC template"
+            }
+        },
+        {
+            "type": "Microsoft.Resources/templateSpecs/versions",
+            "apiVersion": "2021-05-01",
+            "name": "[concat(variables('dataConnectorTemplateSpecName2'),'/',variables('dataConnectorVersion2'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName2'))]"
+            ],
+            "tags": {
+                "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+                "hidden-sentinelContentType": "LogicAppsCustomConnector"
+            },
+            "properties": {
+                "description": "GoogleSCC data connector with template version 2.0.0",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersion2')]",
+                    "parameters": {
+                        "GCPProjectId": {
+                            "type": "String",
+                            "minLength": 4
+                        },
+                        "GCPProjectNumber": {
+                            "type": "String",
+                            "minLength": 1
+                        },
+                        "GCPWorkloadIdentityProviderId": {
+                            "type": "String"
+                        },
+                        "GCPServiceAccountEmail": {
+                            "type": "String",
+                            "minLength": 1
+                        },
+                        "GCPSubscriptionName": {
+                            "type": "String",
+                            "minLength": 3
+                        },
+                        "connectorDefinitionName": {
+                            "defaultValue": "connectorDefinitionName",
+                            "type": "string",
+                            "minLength": 1,
+                            "metadata": {
+                                "description": "connectorDefinitionName"
+                            }
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "type": "object",
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection Endpoint",
+                                "dataCollectionRuleImmutableId": "[variables('_dataCollectionRuleImmutableId')]"
+                            }
+                        },
+                        "guidValue": {
+                            "type": "string",
+                            "defaultValue": "[[newGuid()]"
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentId2": "[variables('_dataConnectorContentId2')]",
+                        "connectorName": "[[concat('GoogleSCC', parameters('guidValue'))]"
+                    },
+                    "resources": [
+                        {
+                            "name": "[[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('connectorName'))]",
+                            "apiVersion": "2023-05-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "GCP",
+                            "properties": {
+                                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                                "dcrConfig": {
+                                    "streamName": "[variables('logAnalyticsTableId')]",
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                                },
+                                "dataType": "[variables('dataType')]",
+                                "auth": {
+                                    "serviceAccountEmail": "[[parameters('GCPServiceAccountEmail')]",
+                                    "projectNumber": "[[parameters('GCPProjectNumber')]",
+                                    "workloadIdentityProviderId": "[[parameters('GCPWorkloadIdentityProviderId')]"
+                                },
+                                "request": {
+                                    "projectId": "[[parameters('GCPProjectId')]",
+                                    "subscriptionNames": [
+                                        "[[parameters('GCPSubscriptionName')]"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "apiVersion": "2022-01-01-preview",
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId2'))]",
+                                "contentId": "[variables('_dataConnectorContentId2')]",
+                                "kind": "LogicAppsCustomConnector",
+                                "version": "[variables('dataConnectorVersion2')]",
+                                "source": {
+                                    "kind": "Solution",
+                                    "name": "Google Cloud Platform Security Command Center",
+                                    "sourceId": "[variables('_solutionId')]"
+                                },
+                                "author": {
+                                    "name": "Microsoft"
+                                },
+                                "support": {
+                                    "name": "Microsoft Corporation",
+                                    "email": "support@microsoft.com",
+                                    "tier": "Microsoft",
+                                    "link": "https://support.microsoft.com"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "apiVersion": "2022-01-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "version": "2.0.0",
+                "kind": "Solution",
+                "contentSchemaVersion": "2.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "parentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "Google Cloud Platform Security Command Center",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "Microsoft"
+                },
+                "support": {
+                    "name": "Microsoft Corporation",
+                    "email": "support@microsoft.com",
+                    "tier": "Microsoft",
+                    "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('_dataConnectorContentId1')]",
+                            "version": "[variables('dataConnectorVersion1')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2022-06-24",
+                "providers": [
+                    "Microsoft"
+                ],
+                "categories": {
+                    "domains": [
+                        "Cloud Provider"
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

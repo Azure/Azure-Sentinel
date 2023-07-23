@@ -19,7 +19,7 @@ As ASIM solutions does not have a connector of its own it is important to see if
 
 ## ASIM Schema mapping 
 
-An [ASIM](https://learn.microsoft.com/azure/sentinel/normalization) schema provides a set of strucutured property sets that enables normalization of commonly used properties in Microsoft Sentinel. Learn more about [ASIM Normalized Schema](https://learn.microsoft.com/azure/sentinel/normalization#normalized-schemas) in Microsoft Sentinel. Using the fields from a normalized schema in a query ensures that the query will work with every normalized source.
+An [ASIM](https://learn.microsoft.com/azure/sentinel/normalization) schema provides a set of structured property sets that enables normalization of commonly used properties in Microsoft Sentinel. Learn more about [ASIM Normalized Schema](https://learn.microsoft.com/azure/sentinel/normalization#normalized-schemas) in Microsoft Sentinel. Using the fields from a normalized schema in a query ensures that the query will work with every normalized source.
 	
 To understand how schemas fit within the ASIM architecture, refer to the [ASIM architecture diagram](https://learn.microsoft.com/azure/sentinel/normalization#asim-components)
  
