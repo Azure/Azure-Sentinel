@@ -1,9 +1,9 @@
 # encoding: utf-8
 require "logstash/outputs/base"
 require "logstash/namespace"
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
-require "logstash/sentinel/sampleFileCreator"
-require "logstash/sentinel/logsSender"
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/sampleFileCreator"
+require "logstash/sentinel_la/logsSender"
 
 
 class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base

@@ -1,5 +1,5 @@
 # encoding: utf-8
-require "logstash/sentinel/version"
+require "logstash/sentinel_la/version"
 require 'rest-client'
 require 'json'
 require 'openssl'
@@ -10,8 +10,8 @@ require 'rbconfig'
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal 
 class LogAnalyticsClient
 
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
-require "logstash/sentinel/logAnalyticsAadTokenProvider"
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
 
 
   def initialize (logstashLoganalyticsConfiguration)

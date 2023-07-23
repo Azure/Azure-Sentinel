@@ -1,4 +1,4 @@
-require File.expand_path('../lib/logstash/sentinel/version', __FILE__)
+require File.expand_path('../lib/logstash/sentinel_la/version', __FILE__)
 
 Gem::Specification.new do |s|
   s.name = 'microsoft-sentinel-log-analytics-logstash-output-plugin'

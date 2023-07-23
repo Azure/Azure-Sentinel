@@ -1,5 +1,5 @@
 # encoding: utf-8
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 
 module LogStash
   module Outputs

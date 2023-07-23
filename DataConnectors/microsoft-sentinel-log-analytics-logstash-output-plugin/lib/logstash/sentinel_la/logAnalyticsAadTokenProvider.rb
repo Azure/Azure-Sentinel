@@ -1,5 +1,5 @@
 # encoding: utf-8
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 require 'rest-client'
 require 'json'
 require 'openssl'

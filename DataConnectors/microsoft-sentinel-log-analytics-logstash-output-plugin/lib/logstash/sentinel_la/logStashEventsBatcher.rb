@@ -1,7 +1,7 @@
 # encoding: utf-8
 
-require "logstash/sentinel/logAnalyticsClient"
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/logAnalyticsClient"
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 
 # LogStashAutoResizeBuffer class setting a resizable buffer which is flushed periodically
 # The buffer resize itself according to Azure Loganalytics  and configuration limitations
