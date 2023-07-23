@@ -62,7 +62,7 @@ class LogStashEventsBatcher
                     @logger.error("#{api_name} request failed. Error code: #{response.code} #{try_get_info_from_error_response(response)}")
                 end
             rescue RestClient::Exceptions::Timeout => eto
-                @logger.debug("Timeout exception ['#{eto.display}'] when posting data to #{api_name}. Rest client response ['#{eto.response.display}']. [amount_of_documents=#{amount_of_documents} request payload=#{uncompressed_payload || call_payload}")
+                @logger.trace("Timeout exception ['#{eto.display}'] when posting data to #{api_name}. Rest client response ['#{eto.response.display}']. [amount_of_documents=#{amount_of_documents}]")
                 @logger.error("Timeout exception while posting data to #{api_name}. [Exception: '#{eto}'] [amount of documents=#{amount_of_documents}]'")
                 force_retry = true
 
