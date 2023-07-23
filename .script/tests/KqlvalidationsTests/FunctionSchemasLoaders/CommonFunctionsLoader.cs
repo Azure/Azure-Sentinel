@@ -11,8 +11,15 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         public IEnumerable<FunctionSchema> Load()
         {
             List<string> commonFunctionsYamlFiles = (new CommonFunctionsYamlFilesLoader()).GetFilesNames();
-            return  commonFunctionsYamlFiles.Select(GetFunction).ToList();
+
+            if (commonFunctionsYamlFiles.Count == 1 && commonFunctionsYamlFiles[0] == "NoFile.yaml")
+            {
+                return Enumerable.Empty<FunctionSchema>(); // Return an empty collection
+            }
+
+            return commonFunctionsYamlFiles.Select(GetFunction).ToList();
         }
+
 
         /// <summary>
         /// Extracts the fuction's name, parameters and result columns from the yaml file and creates the FunctionSchema.

@@ -14,7 +14,7 @@ try
     $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
     Write-Host "List of files in PR: $diff"
 
-    $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"}
+    $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' }
     Write-Host "Filtered Files $filteredFiles"
 
     if ($filteredFiles.Count -gt 0)
@@ -40,7 +40,12 @@ try
             }
         }
 
-        if ($solutionName -eq '')
+        if ($solutionName -eq 'SAP')
+        {
+            Write-Host "Skipping Github workflow for SAP Solution as solution dont have data file and SolutionMetadata file!"
+            Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
+        }
+        elseif ($solutionName -eq '')
         {
             Write-Host "Skipping Github workflow as Solution name cannot be blank."
             Write-Output "solutionName=" >> $env:GITHUB_OUTPUT

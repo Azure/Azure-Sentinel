@@ -32,8 +32,9 @@ try
 			$global:baseMainTemplate.variables | Add-Member -NotePropertyName "email" -NotePropertyValue $($metadataAuthor[1])
 			$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_email" -NotePropertyValue "[variables('email')]"
 		}
-		
-		if ($contentToImport.version -eq '3.0.0')
+
+		$major = $contentToImport.version.split(".")[0]
+		if ($major -ge 3)
 		{
 			$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionName" -NotePropertyValue $solutionName
 			$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionVersion" -NotePropertyValue $contentToImport.version
