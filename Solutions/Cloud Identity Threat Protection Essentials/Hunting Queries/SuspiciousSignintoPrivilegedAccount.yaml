@@ -4,10 +4,17 @@ description: |
   'This query searches for any Sign-ins from non-compliant device/device registered without MFA(Multi-factor Authentication)/unknown device to privileged account using pre-built watchlist to identify accounts.
   Microsoft Sentinel now provides built-in watchlist templates, that can be customized for your environment and used during investigations.
   Reference: https://techcommunity.microsoft.com/t5/azure-sentinel/what-s-new-watchlists-templates-are-now-in-public-preview/ba-p/2614340'
+  This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 tactics:
   - InitialAccess
 relevantTechniques:
@@ -16,49 +23,70 @@ query: |
   let priv_users = ('_GetWatchlist("VIPUsers")') ;
   (union isfuzzy=true
   (SigninLogs //when a device is registered/joined without MFA 
-  | where AuthenticationRequirement =~ "multiFactorAuthentication"
-  | where ResourceDisplayName =~ "Device Registration Service" 
-  | where ConditionalAccessStatus =~ "success"
+  | where AuthenticationRequirement == "multiFactorAuthentication"
+  | where ResourceDisplayName == "Device Registration Service" 
+  | where ConditionalAccessStatus == "success"
   | extend AccountName = tolower(split(UserPrincipalName, "@")[0]), WinSecEventDomain = "-"
-  | where AccountName in~ (priv_users)
+  | where AccountName in (priv_users)
   | project-rename  ServiceOrSystem = AppDisplayName, ClientIP = IPAddress), 
   (
   (SigninLogs //Sign-ins by non-compliant devices
   | where DeviceDetail.isCompliant == false
-  | where ConditionalAccessStatus =~ "success"
+  | where ConditionalAccessStatus == "success"
     | extend AccountName = tolower(split(UserPrincipalName, "@")[0]), WinSecEventDomain = "-"
-    | where AccountName in~ (priv_users)
+    | where AccountName in (priv_users)
     | project-rename  ServiceOrSystem = AppDisplayName, ClientIP = IPAddress)
   ),
   (SigninLogs //Sign-ins by unknown devices
   | where isempty(DeviceDetail.deviceId)
-  | where AuthenticationRequirement =~ "singleFactorAuthentication"
+  | where AuthenticationRequirement == "singleFactorAuthentication"
   | where ResultType == "0"
   | where NetworkLocationDetails == "[]"
   | extend AccountName = tolower(split(UserPrincipalName, "@")[0]), WinSecEventDomain = "-"
-  | where AccountName in~ (priv_users)
+  | where AccountName in (priv_users)
   | project-rename  ServiceOrSystem = AppDisplayName, ClientIP = IPAddress)
   )
-  | project UserPrincipalName, AppId, Category, ClientIP, CorrelationId, ResourceId, Identity
-  | extend UserName = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
-  | extend Account_0_Name = UserName
-  | extend Account_0_UPNSuffix = UPNSuffix
-  | extend IP_0_Address = ClientIP
-  | extend AzureResource_0_ResourceId = ResourceId
+  | project AccountCustomEntity =tolower(AccountName), AppId, Category, IPCustomEntity = ClientIP, CorrelationId, ResourceCustomEntity = ResourceId, Identity
+  | join kind=leftouter (
+        IdentityInfo
+        | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+        | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+        | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+        | summarize
+            Tags = make_set(Tags, 1000),
+            GroupMembership = make_set(GroupMembership, 1000),
+            AssignedRoles = make_set(AssignedRoles, 1000),
+            BlastRadiusInt = sum(BlastRadiusInt),
+            UserType = make_set(UserType, 1000),
+            UserAccountControl = make_set(UserType, 1000)
+        by AccountUPN
+        | extend AccountCustomEntity = tolower(AccountUPN)
+  ) on AccountCustomEntity
+  | join kind=leftouter (
+        BehaviorAnalytics
+        | where ActivityType in ("FailedLogOn", "LogOn")
+        | where isnotempty(SourceIPAddress)
+        | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+        | project-rename IPCustomEntity = SourceIPAddress
+        | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+        by IPCustomEntity
+  ) on IPCustomEntity
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | sort by UEBARiskScore desc
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: UserName
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
+      - identifier: FullName
+        columnName: AccountCustomEntity
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ClientIP
+        columnName: IPCustomEntity
   - entityType: AzureResource
     fieldMappings:
       - identifier: ResourceId
-        columnName: ResourceId
-version: 1.0.1
+        columnName: ResourceCustomEntity
 
