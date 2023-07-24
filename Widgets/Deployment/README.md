@@ -136,14 +136,21 @@ If you receive a message in your widgets that the widget configuration store has
 
 1) Get the workspace ID, Resource Group and Subscription ID as described [here](#locating-the-workspace-information).
 
-2) Run one of the following scripts (TBD: where to download and pre-requisites) and copy the key vault name to be used later:
+2) Run the following Powershell script, and copy the key vault name to be used later:
 
-``` Python
-python CreateKVName.py –workspace-id <workspace-id>
+- Start Azure Cloud Shell:
+  - [Open cloud shell from the Azure Portal](https://learn.microsoft.com/azure/cloud-shell/quickstart?tabs=azurecli#start-cloud-shell)
+  - [Select PowerShell as your shell environment](https://learn.microsoft.com/en-us/azure/cloud-shell/quickstart?tabs=azurecli#select-your-shell-environment)
+- Use Azure Cloud Shell to copy the KeyVault provisioning script:
+
+``` Command Line
+Invoke-WebRequest -Uri https://aka.ms/SentinelWidgetsDeployScript -OutFile WidgetsKvCreation.Ps1
 ```
 
-``` PowerShell
-./CreateKVName.PS1 -WorkspaceId <workspace-id>
+- Use Azure Cloud Shell to run the KeyVault provisioning script (See [Locating the workspace information](#locating-the-workspace-information) for information on how to get the Subscription ID and Workspace ID):
+
+``` Command Line
+./WidgetsKvCreation.Ps1 -SubscriptionId <subscription id> -WorkspaceId <workspace id> -OnlyPrintKeyVaultName
 ```
 
 3) Search for "Key Vault" in Azure global search and choose “Key vaults”:

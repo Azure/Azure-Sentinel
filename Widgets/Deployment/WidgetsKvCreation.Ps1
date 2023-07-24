@@ -9,7 +9,11 @@ param (
         
         # The Sentinel's workspace Id (Guid). Can be found under Sentinel instance => "Settings" => "Workspace settings" => "Essentials"
         [Parameter(Mandatory = $true)]
-        [string]$WorkspaceId
+        [string]$WorkspaceId,
+
+        # If set, the script will only return the KeyVault name (needed when KV is created manually by the user and only needs the KV name) 
+        [Parameter(Mandatory = $false)]
+        [Switch]$OnlyPrintKeyVaultName
     )
 
 function Get-WigdetsKeyVaultName {
@@ -124,6 +128,11 @@ if ($workspace -eq $null) {
 
 # Create the KV
 $keyVaultName = Get-WigdetsKeyVaultName -workspaceId $WorkspaceId
+if ($OnlyPrintKeyVaultName) {
+    Write-Log "The KeyValue name is: '$keyVaultName'. Aborting"
+    return
+}
+
 if ((Get-AzKeyVault -Name $keyVaultName) -eq $null) { # KeyVault doesn't exist
     Write-Log "KeyValut Deployment in progress, please wait.."
 
