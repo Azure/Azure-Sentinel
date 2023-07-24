@@ -576,7 +576,7 @@ try {
         #======================================
         #check if folder with *Connector Name present inside of Solutions folder or in playbooks folder eg: Check Point or Cisco ISE solution 
         $filterPath = "$solutionFolderPath" + "*Connector/*"
-        $playbooksDynamicCustomConnector = $filesList -like ($filterPath)
+        $playbooksDynamicCustomConnector = $filesList -like ($filterPath) | Where-Object {$_ -notlike '*/Data Connectors/*'} | Where-Object {$_ -notlike '*/DataConnectors/*'}
     
         if ($playbooksDynamicCustomConnector -ne $false -and $playbooksDynamicCustomConnector.Count -gt 0)
         {
