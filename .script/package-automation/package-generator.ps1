@@ -102,7 +102,7 @@ try {
         $playbookFiles = $playbookFiles -match ([regex]::Escape(".json"))
     
         if ($playbookFiles.Count -gt 0) {
-            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' }
+            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' } | Where-Object { $_ -notlike '*function.json*' }
         }
     
         return $playbookFiles;
