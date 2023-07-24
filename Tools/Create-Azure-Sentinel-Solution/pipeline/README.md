@@ -4,39 +4,25 @@ Microsoft Sentinel Solutions provide an in-product experience for central discov
 
 The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Microsoft Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists.
 
-## Setup
-
-- Install PowerShell 7.1+
-
-  - If you already have PowerShell 5.1, please follow this [upgrade guide](https://docs.microsoft.com/powershell/scripting/install/migrating-from-windows-powershell-51-to-powershell-7?view=powershell-7.1).
-
-  - If you do not already have PowerShell, please follow this [installation guide](https://docs.microsoft.com/powershell/scripting/install/installing-powershell-core-on-windows?view=powershell-7.1).
-
-- Install Node.js
-
-  - The installation process can be started from [their website](https://nodejs.org/).
-
-- Install YAML Toolkit for Powershell
-
-  - `Install-Module powershell-yaml`
-
-- *For ease of editing, it's recommended to use VSCode with the 'Azure Resource Manager (ARM) Tools' extension installed*
-
-  - Install [VSCode](https://code.visualstudio.com/).
-
-  - Install the [Azure Resource Manager (ARM) Tools Extension](https://marketplace.visualstudio.com/items?itemName=msazurermtools.azurerm-vscode-tools).
-
-    - This extension provides language support, resource auto-completion, and automatic template validation within your IDE.
-
 ## Creating Solution Package
 
 Clone the repository [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) to `C:\GitHub`.
 
 ### Create Input File
 
-- Make sure to have a .json input data file inside of 'data' folder for your solution. 
-- There is NO need to place your data file inside of input folder as during package creation you will be asked to enter the data folder path from Solutions:
-eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
+- Make sure to have a **.json** input data file inside of 'Data' folder for your solution. 
+- Review the input file format guidance below to create/update the input file. Ensure that all the mandatory properties have the intended values. Review all optional properties wherever necessary.
+> **NOTE:** The input file is used by the pipeline to auto-generate a solution package. Any inaccuracies in this file will propogate unintended changes in the auto-generated solution package.
+- (Optional) Set the "createPackage" property in data input file. This property is optional and is default to true. 
+> This should be set to **false**, only when the package creation requires to be skipped.
+- The json array properties for content types ("Workbooks", "Analytic Rules", "Data Connectors", "Parsers", "Playbooks" & "Parsers") in input file are optional as it will be calculated at pipeline run automatically. Please note:
+    - If any of the propereties are not added to the input file, all the content templates from the Solutions folder for each property that doesn't exist will be computed at runtime and then added to the solution package. 
+    - If content names are specified, only the templates specified will be considered for packaging.
+    - If you want any specific resources not to be added to the package, just specify empty array in data input file. E.g: If you have playbooks folder and files in a solution but dont want to add these playbooks to the generated package, then specify an empty array for the "Playbooks" property (such as "Playbooks": []). Doing this will ensure playbooks (even if they exist) are not considered during the packaging process.
+
+    E.g: For solution "Alibaba Cloud", if you have parsers, dataconnectors  then no need to specify json array in data input file and when we make any change in the solution and push it via a pull request, it will trigger workflows that identify files automatically within the Alibaba Clould solution and generate package accordingly.
+
+- When Pull Request is in open state, this package will be added automatically into the same PR.
 
 #### **Input File Format:**
 
@@ -46,10 +32,10 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
  * -----------------------------------------------------
  * The purpose of this json is to provide detail on the various fields the input file can have.
  * Name: Solution Name - Ex. "Symantec Endpoint Protection"
- * Author: Author Name+Email of Solution - Ex. "Eli Forbes - v-eliforbes@microsoft.com"
+ * Author: Author Name+Email of Solution - Ex. "Clark Kent - Clark.Kent@contoso.com"
  * Logo: Link to the Logo used in createUiDefinition.json
  * - NOTE: This field is only recommended for Azure Global Cloud. It is not recommended for solutions in Azure Government Cloud as the image will not be shown properly.
- * Description: Solution Description used in createUiDefinition.json. Can include markdown.
+ * Description: Solution description used in createUiDefinition.json. Can include markdown.
  * WorkbookDescription: Workbook description(s), generally from Workbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
  * PlaybookDescription: Playbook description(s), generally from Playbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
  * WatchlistDescription: Watchlist description(s), generally from Watchlists' Property data. This field can be a string if 1 description is used across all, and an array if multiple are used. This field is used if the description from the Watchlist resource is not desired in the Create-UI.
@@ -63,33 +49,33 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  * Version: Version to be used during package creation. Default version will be 3.0.0. This tool supports package creation for 2.x.x(Template Spec) and 3.x.x(contentPackages). Based on variable 'defaultPackageVersion' and given Version input. If the defaultPackageVersion is 3.0.0 and Data file input version is 2.0.1 then it package generated is of 3.0.0 i.e which ever is higher takes precedence. Here we are also verifying the catelogAPI to check version deployed in PartnerCenter. If 'defaultPackageVersion' is 2.0.0 and data input file version is 2.0.4 but in PartnerCenter catelogAPI version installed is 2.0.2 then package generated is of 2.0.3 i.e it will increment the package version based on catelogAPI.
  * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
- * TemplateSpec: Boolean value used to determine whether the package should be generated as a template spec
+ * All properties are MANDATORY unless explicitly specified as optional in the comment with the property.
  */
 {
   "Name": "{SolutionName}",
   "Author": "{AuthorName - Email}",
   "Logo": "<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">",
   "Description": "{Solution Description}",
-  "WorkbookDescription": ["{Description of workbook}"],
-  "Workbooks": [],
-  "WorkbookBladeDescription: string; //Description used in the CreateUiDefinition.json for Workbooks Blade
-  "AnalyticalRuleBladeDescription": "{//Description used in the CreateUiDefinition.json for Analytical Rule Blade"
-  "HuntingQueryBladeDescription": "//Description used in the CreateUiDefinition.json for Hunting Query Blade"
-  "PlaybooksBladeDescription": "//Description used in the CreateUiDefinition.json for Playbook Blade"
-  "Analytic Rules": [],
-  "Playbooks": [], //Please make sure if there is any CustomConnector in the solution then it's entry should be added prior to any other playbook.
-  "PlaybookDescription": ["{Description of playbook}"],
-  "Parsers": [],
-  "SavedSearches": [],
-  "Hunting Queries": [],
-  "Data Connectors": [],
-  "Watchlists": [],
-  "WatchlistDescription": [],
+  "WorkbookDescription": ["{Description of workbook(s)}"],
+  "Workbooks": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder.
+  "WorkbookBladeDescription": "{string}", //This is optional property. Custom description to be used in the CreateUiDefinition.json for Workbooks Blade
+  "AnalyticalRuleBladeDescription": "{string}", //This is optional property. Custom description to be used in the CreateUiDefinition.json for Analytical Rule Blade
+  "HuntingQueryBladeDescription": "{string}", //This is optional property. Custom description to be used in the CreateUiDefinition.json for Hunting Query Blade
+  "PlaybooksBladeDescription": "{string}", //This is optional property. Custom description to be used in the CreateUiDefinition.json for Playbook Blade
+  "Analytic Rules": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder.
+  "Playbooks": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder. Ensure if there is any CustomConnector in the solution then it's entry should be added prior to any other playbook.
+  "PlaybookDescription": ["{Description of playbook(s)}"],
+  "Parsers": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder.
+  "SavedSearches": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder.
+  "Hunting Queries": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder.
+  "Data Connectors": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder.
+  "Watchlists": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder.
+  "WatchlistDescription": [], //Optional. If not specified, this will be auto-populated with ALL Workbooks in the respective solution folder.
   "BasePath": "{Path to Solution Content}",
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "{Name of Solution Metadata file}",
-  "TemplateSpec": true, // Default should be true
-  "Is1PConnector": false
+  "Is1PConnector": false,
+  "createPackage": true  // This is optional property. Default value is true. When set to false, a package will not be generated using V3(local) or V4(pipeline).
 }
 
 ```
@@ -156,7 +142,6 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "BasePath": "C:\\GitHub\\Azure-Sentinel",
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "SolutionMetadata.json",
-  "TemplateSpec": true, // Default should be true
   "Is1PConnector": false
 }
 ```
@@ -174,7 +159,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 /**
  * Solution Automation Metadata File Json
  * -----------------------------------------------------
- * The purpose of this json is to provide detail on the various fields the metadata solution can have. Refer to the metadata schema and example provided after the definitions for further context.
+ * The purpose of this json is to provide detail on the various fields the metadata of a solution can have. Refer to the metadata schema and example provided after the definitions for further context.
  * publisherId: An identifier that's used by Partner Center to uniquely identify the publisher associated with a commercial marketplace account.- Ex. "azuresentinel", "CheckPoint", "semperis"
  * offerId: Id of the Offer of Solution - Ex. "azure-sentinel-solution-ciscoaci", "azure-sentinel-solution-semperis-dsp"
  * firstPublishDate: Solution first published date
@@ -186,20 +171,20 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
  content and support documentation](https://aka.ms/sentinelcontentsupportmodel) for further information.
  */
 {
-    "publisherId": {Id of Publisher},
-    "offerId": {Solution Offer Id},
-    "firstPublishDate": {Solution First Published Date},
-    "lastPublishDate": {Solution recent Published Date},
-    "providers": {Solution provider list},
+    "publisherId": "{Id of Publisher}",
+    "offerId": "{Solution Offer Id}",
+    "firstPublishDate": "{Solution First Published Date in the YYYY-MM-DD format}",
+    "lastPublishDate": "{Solution recent Published Date in the YYYY-MM-DD format}",
+    "providers": "{Solution provider list}",
     "categories": {
-      "domains" : {Solution category domain list},
-      "verticals": {Solution category vertical list},
+      "domains" : "{Solution category domain list}",
+      "verticals": "{Solution category vertical list}",
      },
     "support": {
-      "name": {Publisher ID},
-      "email": {Email for Solution Support},
-      "tier": {Support Tier},
-      "link": {Link of Support contacts for Solution},
+      "name": "{Name of the entity supporting the solution}",
+      "email": "{Email for Solution support}",
+      "tier": "{Support Tier}", //Enter one of the following: Microsoft, Partner or Community
+      "link": "{Link of Support contacts for Solution}",
     }
 }
 
@@ -229,17 +214,20 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 
 ### Generate Solution Package
 
-NOTE: It is now recommended to use 'createSolutionV3.ps1' file instead of 'createSolutionV2.ps1'. 'createSolutionV2.ps1' is not recommended going forward. 'createSolutionV4.ps1' file is used for GitHub pipeline and is not used for local use. `'createSolutionV3.ps1' requires 'commonFunctions.ps1' file which is placed under 'Tools\Create-Azure-Sentinel-Solution\common' path and this file 'commonFunctions.ps1' has all core logic to create package.`
+- `Package will now be created in an automated way through an automated pipeline and without the need to run any commands locally to generate the solution package. 'createSolutionV4.ps1' file is specifically for pipeline way of generating package for any of the solutions`. 'createSolutionV4.ps1' file is located at `./Tools/Create-Azure-Sentinel-Solution/pipeline` folder path. This file cannot be run locally and is meant for packaging from pipeline using Github workflows.
+ > **IMPORTANT:** To generate package locally make use of `createSolutionV3.ps1` which is in './Tools/Create-Azure-Sentinel-Solution/V3' folder.
+- Core business logic for 'createSolutionV3.ps1' and 'createSolutionV4.ps1' files are inside of './Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1' file. 
+- For any of the WorkbookMetadata change make use of './Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json' file.
+- Make sure you have data input file inside of **Data** folder and added a SolutionMetadata.json file inside in the respetcive solutions folder.
+- (Optional) Set the "createPackage" property in data input file. This property is optional and is set default to true. 
+> This should be set to **false**, only when the package creation requires to be skipped.
+- The json array properties for content types ("Workbooks", "Analytic Rules", "Data Connectors", "Parsers", "Playbooks" & "Parsers") in input file are optional as it will be calculated at pipeline run automatically. Please note:
+    - If any of the propereties are not added to the input file, all the content templates from the Solutions folder for each property that doesn't exist will be computed at runtime and then added to the solution package. 
+    - If content names are specified, only the templates specified will be considered for packaging.
+    - If you want any specific resources not to be added to the package, just specify empty array in data input file. E.g: If you have playbooks folder and files in a solution but dont want to add these playbooks to the generated package, then specify an empty array for the "Playbooks" property (such as "Playbooks": []). Doing this will ensure playbooks (even if they exist) are not considered during the packaging process.
+    E.g: For solution "Alibaba Cloud", if you have parsers, dataconnectors  then no need to specify json array in data input file and when we make any change in the solution and push it via a pull request, it will trigger workflows that identify files automatically within the Alibaba Clould solution and generate package accordingly.
 
-To generate the solution package, run the `createSolutionV3.ps1` script in the automation folder, `Tools/Create-Azure-Sentinel-Solution/V3`.
-> Ex. From repository root, run: `./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1`
-
-Executing above command with ask you to enter the data file path in the solution as 'Enter solution data file path'. Just specify the data folder path from Solutions. No need to specify data file path. This will generate and compress the solution package, and name the package using the version provided in the input file.
-eg: Enter solution data file path : C:\Github\Azure-Sentinel\Solutions\Agari\data
-
-In above example we have provided path of data folder only without file name. Also there is NO need to copy paste data input file to Tools/input folder.
-
-The package consists of the following files:
+The package, once generated consists of the following files:
 
 * `createUIDefinition.json`: Template containing the definition for the Deployment Creation UI
 
@@ -247,7 +235,7 @@ The package consists of the following files:
 
 These files will be created in the solution's `Package` folder with respect to the resources provided in the given input file. For every new modification to the files after the initial version of package, a new zip file should be created with an updated version name (3.0.0, 3.0.1 etc.) containing modified `createUIDefinition.json` and `mainTemplate.json` files.
 
-Upon package creation, the automation will automatically import and run validation on the generated files using the Azure Toolkit / TTK CLI tool.
+Upon package creation, the automation will automatically import and run automated validation on the generated files using the Azure Toolkit / TTK CLI tool.
 
 ### Azure Toolkit Validation
 
@@ -257,6 +245,7 @@ If you've already run the package creation tool in your current PowerShell insta
 
 #### Azure Toolkit Validation Setup
 
+- When package is generated using pipeline this step is automatically executed. For manual validation follow below steps.
 - Clone the [arm-ttk repository](https://github.com/Azure/arm-ttk) to `C:\One`
   - If `C:\One` does not exist, create the folder.
   - You may also choose a different folder, but properly reference it in the Profile script.
@@ -387,3 +376,12 @@ If you see arm-ttk error for 'contentProductId' and 'id' for 'Ids should be deri
 #### FILE EXTENSIONS
 
 Make sure to specify file extension in lower case and and not caps(eg: office365.JSON).
+
+#### MERGE MASTER INTO PULL REQUEST
+
+It is always recommended to take latest pull of master branch and create a pull request. If a pull request is raised and we do master pull to get latest into our branch then make sure before pushing it to server we make a minor change in our solutions file be it a space or tag change in solutions that will identify your solution changes.
+If we push changes after taking the latest from master then the package will not be generated for your changes in pr but for master changes. So once master latest is pulled make a minor change of space of tag in your existing solution file and then push the changes to server. This way package will be generated for your solution only. The reason is pipeline will always checks for the latest commit and run package processing step on it.
+
+#### AUTOMATIC PACKAGE FOR FORK PULL REQUEST IS NOT SUPPORTED
+
+When a pull request from a fork is raised with changes and pushed then pipeline packaging process will not kick start automatically. Due to security reasons we are not supporting packaging for form pull requests. We are working on a way for fork pull request to be able to create package automatically from pipeline. 
