@@ -12,12 +12,20 @@ namespace Kqlvalidations.Tests
 
         protected abstract List<string> GetDirectoryPaths();
 
-        public List<string> GetFilesNames()
+        //declare load all files on optional parameter loadAllFiles
+
+        public List<string> GetFilesNames(bool loadAllFiles=false)
         {
+            if(loadAllFiles)
+            {
+                return GetDirectoryPaths()
+                    .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
+                    .ToList();
+            }
             int prNumber = 0;
             int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
             //assign pr number to debug with a pr
-            //prNumber=8414;
+            prNumber=8595;
             if (prNumber == 0)
             {
                 Console.WriteLine("PR Number is not set. Running all tests");
