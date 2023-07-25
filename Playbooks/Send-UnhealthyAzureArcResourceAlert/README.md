@@ -9,7 +9,7 @@ This playbook will query the Log Analytics workspace about each Azure Arc-enable
 # Post Deployment Steps
 After deploying the playbook in your sentinel environment, you need to make changes to the actions as explained below:
 
-##Edit *Run query and list results* action 
+## Edit [Run query and list results] action 
 **Select your respective:**
 - Subscription
 - Resource Group
@@ -18,8 +18,9 @@ After deploying the playbook in your sentinel environment, you need to make chan
 
 ![screenshot](./images/subscription.png)
 
-##Edit *Send an Email* Action
+## Edit [Send an Email] action
 Replace <email-id@domain.com> with your own choice of email address where you want to receive/send email alerts.
+
 ![screenshot](./images/email.png)
 
 
