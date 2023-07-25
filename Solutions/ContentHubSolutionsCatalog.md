@@ -3258,3 +3258,4 @@ This file is a catalog of all solutions and standalone content templates that ex
 |Visualizations Demo| |Visualizations Demo|Workbook|Learn and explore the many ways of displaying information within Microsoft Sentinel workbooks|Standalone|
 |Workspace audit| |Workspace audit|Workbook|Workspace auditing report Use this report to understand query runs across your workspace.|Standalone|
 |Workspace Usage Report| |Workspace Usage Report|Workbook|Gain insights into your workspace's usage. In this workbook, you can view your workspaceΓÇÖs data consumption, latency, recommended tasks and Cost and Usage statistics.|Standalone|
+
