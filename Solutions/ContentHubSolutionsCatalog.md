@@ -1,11 +1,11 @@
 # Microsoft Sentinel Content Hub Solutions' Catalog
 
-### This file is a catalog of all solutions and standalone content templates that exist in the Microsoft Sentinel Content Hub along with a mapping of the content that exists in each solution package.
+This file is a catalog of all solutions and standalone content templates that exist in the Microsoft Sentinel Content Hub along with a mapping of the content that exists in each solution package. The catalog in the xlsx format is available [here](https://aka.ms/SolutioncatalogExcel).
 
-##### Last Modified: 25-07-2023
+**Last Modified: 25-07-2023**
 
-|Solution / Standalone Template Name|Description|Template Display Name|Content Kind|Template Description|Package Type|
-|-------------|--------------------|---------------------|------------|--------------------|------------|
+|Solution/Standalone Template Name|Description|Template Display Name|Content Kind|Template Description|Package Type|
+|---------|-----|--|---|------|-----|
 |42Crunch Microsoft Sentinel Connector|APIs are increasingly the number one attack vector for adversaries due to their growing abundance and ease of attack via automated scripts and tools. Most public APIs are under constant attack by skilled human adversaries and growing legions of bots.Well-designed, secure APIs are critical to mitigating the risk of attack, but it is essential to also actively monitor and defend your APIs - the frontline of your perimeter - via direct integration into SIEM and SOCs. Using the 42Crunch Sentinel connector, you can quickly set up Sentinel to start ingesting logs from the 42Crunch micro-API Firewall directly into Log Analytics workspaces. With this integration you can:Create alerts on common API error conditionsEnrich API logs with threat intelligence data (i.e. known bad IPs)Detect attack patterns for common adversarial tools (i.e. Kiterunner)Understand common bot behaviors and evasion techniquesIdentify key trends and patterns across all exposed APIs|API - BOLA|AnalyticsRule|42Crunch API protection against BOLA|Solution|
 | | |API - Account Takeover|AnalyticsRule|42Crunch API protection against account takeover|Solution|
 | | |API - Invalid host access|AnalyticsRule|42Crunch API protection against invalid host access|Solution|
