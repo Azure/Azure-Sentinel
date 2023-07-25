@@ -3,7 +3,8 @@ name: User Accounts - Sign in Failure due to CA Spikes
 description: |
   ' Identifies spike in failed sign-ins from user accounts due to conditional access policied.
   Spike is determined based on Time series anomaly which will look at historical baseline values.
-  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins
+  This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -12,6 +13,12 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -24,6 +31,7 @@ relevantTechniques:
 tags:
   - AADSecOpsGuide
 query: |
+  let riskScoreCutoff = 20; //Adjust this based on volume of results
   let starttime = 14d;
   let timeframe = 1d;
   let scorethreshold = 3;
@@ -60,6 +68,37 @@ query: |
   ) on UserPrincipalName, $left.AnomalyHour == $right.DateHour
   | project LatestAnomalyTime, OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = DailyCount, baseline, anomalies, score
   | extend timestamp = LatestAnomalyTime, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  | extend UserPrincipalName = tolower(UserPrincipalName)
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+  ) on UserPrincipalName
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename IPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPAddress)
+  on IPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | where UEBARiskScore > riskScoreCutoff
+  | sort by UEBARiskScore desc 
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -71,5 +110,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.2
+version: 2.0.2
 kind: Scheduled

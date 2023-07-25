@@ -16,7 +16,7 @@ class Email(Model):
                  spam_score: int, spf: str, originating_ip: str,
                  reporter_domain: str, company_id: int, feedback_requested: bool, feedback_provided: bool,
                  reported_risk: int, category: str, risk: str, risk_source: str, sent_at: str, reported_at: str,
-                 assessed_at: str, content_status: str, id: int = None, links_count: int = None,
+                 assessed_at: str, checked_at: str, content_status: str, id: int = None, links_count: int = None,
                  attachments_count: int = None):
         self.id = id
         self.message_id = message_id
@@ -43,6 +43,7 @@ class Email(Model):
         self.sent_at = sent_at
         self.reported_at = reported_at
         self.assessed_at = assessed_at
+        self.checked_at = checked_at
         self.content_status = content_status
         self.headers = []
         self.assessments = []
@@ -100,7 +101,7 @@ class Email(Model):
                     feedback_provided=json_item['feedback_provided'], reported_risk=json_item['reported_risk'],
                     category=json_item['category'], risk=json_item['risk'], risk_source=json_item['risk_source'],
                     sent_at=json_item['sent_at'], reported_at=json_item['reported_at'],
-                    assessed_at=json_item['assessed_at'], content_status=json_item['content_status'],
+                    assessed_at=json_item['assessed_at'], checked_at=json_item['checked_at'], content_status=json_item['content_status'],
                     id=json_item['id'])
 
         if 'links_count' in json_item:
