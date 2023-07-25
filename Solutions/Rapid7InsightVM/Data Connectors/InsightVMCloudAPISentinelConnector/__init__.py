@@ -62,7 +62,7 @@ async def main(mytimer: func.TimerRequest):
                 last_processed_date = await process_assets(assets=assets, api=api, sentinel=sentinel,
                                                            state_manager=state_manager)
                 state_manager.remember_last_date(last_processed_date)
-            if(last_processed_date == None):
+            if(last_processed_date is None):
                 logging.info('Last Processed date is None so setting EndDate {}'.format(end_time))
                 state_manager.remember_last_date(end_time)
             await state_manager.save_last_date_to_storage()
