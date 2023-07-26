@@ -1,7 +1,7 @@
 Parser:
   Title: SonicWall Firewall Network Sessions
   Version: '0.1'
-  LastUpdated: July 6, 2023
+  LastUpdated: July 25, 2023
 Product:
   Name: SonicWall
 Normalization:
@@ -31,7 +31,7 @@ ParserQuery: |
   CommonSecurityLog
   | where DeviceVendor == "SonicWall"
   | where ( isnotempty(SourceIP) or isnotempty(DestinationIP) )
-  | parse-kv AdditionalExtensions as (['gcat']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string) with (pair_delimiter=";", kv_delimiter="=")
+  | parse-kv AdditionalExtensions as (['gcat']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string, ['af_polid']:string, ['fileid']:string) with (pair_delimiter=";", kv_delimiter="=")
   | extend RequestURL_ = extract(@"(?:[.*;]+?)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)(?:;fw_action)", 1, AdditionalExtensions)
   | extend RequestURL_ = iif(RequestURL_ startswith "snpt" or RequestURL_ startswith "dnpt" or RequestURL_ startswith "appid" or RequestURL_ startswith "appName", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), RequestURL_)
   | extend RequestURL_ = iif(RequestURL_ matches regex @"^(.{2,6}=.{1,6})", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), iif(RequestURL_ matches regex @"^\w=\d$", "", RequestURL_))
@@ -42,7 +42,6 @@ ParserQuery: |
                             DvcAction == "NA", "NA",
                             "Failure"
                             )
-  // This adds a column for LogMsgSeverity, using case() to map the ingested LogSeverity int value to a friendly string.
   | extend LogMsgSeverity = case(LogSeverity == 10, "Emergency (0)",
                                               LogSeverity == 9, "Alert (1)",
                                               LogSeverity == 8, "Critical (2)",
@@ -55,16 +54,23 @@ ParserQuery: |
                                               LogSeverity == 1, "Not Mapped (1)",
                                               "Not Mapped"
                                               )
-  // This adds a column for the HTTP "RequestMethod" column, using case() to map the ingested RequestMethod int value to a friendly string.
-  | extend HTTPRequestMethod = case(RequestMethod == 0, "No Operation (0)",
+  | extend HttpRequestMethod = case(RequestMethod == 0, "No Operation (0)",
                                               RequestMethod == 1, "HTTP GET (1)",
                                               RequestMethod == 2, "HTTP POST (2)",
                                               RequestMethod == 3, "HTTP HEAD (3)",
                                               ""
                                               )
-  // Renaming columns to friendlier names.
+  | extend NetworkProtocolVersion = case(DestinationIP has ".", "IPv4"
+                                            , DestinationIP has ":", "IPv6"
+                                            , ""
+                                            )
+    , NetworkProtocol = toupper(trim_end(@"/.*", Protocol))
   | project-rename
     EventResourceId = _ResourceId
+    , DstMacAddr = DestinationMACAddress
+    , SrcMacAddr = SourceMACAddress
+    , DstHostname = DestinationHostName
+    , SrcHostname = SourceHostName
     , DeviceModel = DeviceProduct
     , FirmwareVersion = DeviceVersion
     , SerialNumber = Computer
@@ -73,25 +79,28 @@ ParserQuery: |
     , OutboundInterface = DeviceOutboundInterface
     , InboundInterface = DeviceInboundInterface
     , ApplicationID = ApplicationProtocol // Application ID number (when Flow Reporting is enabled).
-    , CFSBlockFullString = Reason // CFS Block Category ID and Name
-    // DeviceCustomStringX (csX=)
+    , CFSFullString = Reason // CFS Category ID and Name
     , RuleDetails = DeviceCustomString1 // Rule ID. Identify a policy or rule associated with an event.
     , SourceVPNPolicyName = DeviceCustomString2 // Displays the source VPN policy name associated with the event.
     , DestinationVPNPolicyName = DeviceCustomString3 // Displays the destination VPN policy name associated with the event.
     , InterfaceStatistics = DeviceCustomString4 // Displays interface statistics.
     , SoleraNPCSURL = DeviceCustomString5 // URL. Applicable only when NPCS Solera is enabled. Displays the URL of an NPCS object.
     , LogMsgNote = DeviceCustomString6 // "Note" field. Additional information that is application-dependent.
-    // DeviceCustomStringXLabel (csXLabel=)
     , NATSourceIPAddress = DeviceCustomString1Label // NAT'ed source IP4/IPv6 address.
     , NATDestinationIPAddress = DeviceCustomString2Label // NAT'ed destination IPv4/IPv6 address.
     , SourceZone = DeviceCustomString3Label // Source Zone on Gen7. Src Zone Type on Gen6.
     , DestinationZone = DeviceCustomString4Label // Destination Zone on Gen7. Dest Zone Type (Trusted/Untrusted, etc.) on Gen6.
     , UserSessionType = DeviceCustomString5Label // String indicating the user session type, determined by the auth mechanism.
     , UserSessionDuration = DeviceCustomString6Label // User session duration in seconds.
-    // FieldDeviceCustomNumberX (cnX=)
     , ICMPType = FieldDeviceCustomNumber1 // ICMP Type
     , ICMPCode = FieldDeviceCustomNumber2 // ICMP Code
-  // Handle the log group category mapping to a friendly value.
+    , SrcUsername = SourceUserName
+    , ThreatOriginalConfidence = ThreatConfidence
+    , DstNatIpAddr = DestinationTranslatedAddress
+    , DstNatPortNumber = DestinationTranslatedPort
+    , SrcNatIpAddr = SourceTranslatedAddress
+    , SrcNatPortNumber = SourceTranslatedPort
+    , HttpUserAgent = RequestClientApplication
   | extend
       gcat = column_ifexists("gcat", 0) // If column doesn't exist, creates the column and sets it to 0. Also avoids errors if returned query is empty.
     , appcat = column_ifexists("appcat", "") // Application Category from App Control. Sets an empty appcat column if column doesn't exist.
@@ -118,7 +127,6 @@ ParserQuery: |
                                                 gcat == 19, "Unified Policy Engine (19)",
                                                 "Log Category Not Mapped"
                                                 )
-  // Handle mapping of the legacy category if one is assigned.
   | extend LegacyMessageCategory = case(DeviceEventCategory == 0, "None (0)",
                                               DeviceEventCategory == 1, "System Maintenance (1)",
                                               DeviceEventCategory == 2, "System Errors (2)",
@@ -145,23 +153,22 @@ ParserQuery: |
                                               DeviceEventCategory == 8388608, "Expanded - Unified Policy Engine (8388608)",
                                               "Legacy Category Not Mapped"
                                               )
-  // This adds a column for the IPS Priority level, using case() to map the ingested int value to a friendly string.
   | extend IPSPriority = case(ipspri == 1, "High (1)",
                                               ipspri == 2, "Medium (2)",
                                               ipspri == 3, "Low (3)",
                                               ""
                                               )
-  // This adds a column for the Anti-Spyware Priority level, using case() to map the ingested int value to a friendly string.
   | extend AntiSpywarePriority = case(spypri == 1, "High (1)",
                                               spypri == 2, "Medium (2)",
                                               spypri == 3, "Low (3)",
                                               ""
                                               )
-  // Creating a consistent set of columns that can be used later in the query and removed from view at the end.
   | extend
       EventProduct = "SonicOS"
     , EventVendor = DeviceVendor
+    , DvcIdType = "Other"
     , Dvc = SerialNumber
+    , Hostname = DstHostname
     , FieldDeviceCustomNumber1Label = column_ifexists("FieldDeviceCustomNumber1Label", "") // FieldDeviceCustomNumberXLabel (cnXLabel=)
     , FieldDeviceCustomNumber2Label = column_ifexists("FieldDeviceCustomNumber2Label", "") // FieldDeviceCustomNumberXLabel (cnXLabel=)
     , DeviceCustomNumber1Label = column_ifexists("DeviceCustomNumber1Label", "") // DeviceCustomNumberXLabel (cnXLabel=)
@@ -169,6 +176,7 @@ ParserQuery: |
     , DeviceCustomNumber3Label = column_ifexists("DeviceCustomNumber3Label", "") // Connection Duration in milliseconds (for Connnection Closed msgs)
     , fw_action = column_ifexists("fw_action", "") // Firewall Action, such as drop, forward, mgmt, NA
     , susr = column_ifexists("susr", "") // Logged-in username associated with the log event.
+    , af_polid = column_ifexists("af_polid", "") // App Rule Policy ID.
     , srcV6 = column_ifexists("srcV6", "") // Source IPv6 IP
     , dstV6 = column_ifexists("dstV6", "") // Destination IPv6 IP
     , appName = column_ifexists("appName", "") // Non-signature Application name that matches the Application ID "app" or "f".
@@ -183,6 +191,9 @@ ParserQuery: |
     , ipscat = extract(@'^["]([a-zA-Z-]+)', 1, column_ifexists("ipscat", "")) // IPS Category/Signature
     , IPSSignatureName = extract(@'[ ](.*)\S', 1, column_ifexists("ipscat", "")) // IPS Signature name
     , spycat = column_ifexists("spycat", "") // // Anti-Spyware Category.
+    , FileSize = tolong(column_ifexists("FileSize", long(null)))
+    , HttpReferrer = extract(@'Referer: (.*)\"$', 1, column_ifexists("LogMsgNote", ""))
+    , HttpRequestMethod_ = extract(@'Command: (.\w+)', 1, column_ifexists("LogMsgNote", ""))
     , CaptureATPVerdict = extract(@'Gateway Anti-Virus Status: (.*)\. ', 1, column_ifexists("Message", "")) // // Capture ATP Verdict from the Message.
     , arg = column_ifexists("arg", "") // URL. Represents the URL path name.
     , FileIdentifier = column_ifexists("fileid", "") // File hash or URL.
@@ -192,11 +203,22 @@ ParserQuery: |
     , spt = column_ifexists("spt", "") // Source port
     , snpt = column_ifexists("snpt", "") // NAT'ed source port
     , bid = column_ifexists("bid", "") // Blade ID
-    // Handle parsing of "Reason" to new CFS columns.
-    , CFSBlockCategoryID = extract(@'(\d+)\s', 1, column_ifexists("CFSBlockFullString", "")) // Application Name from App Control
-    , CFSBlockCategoryName = extract(@'.*-("(.*))', 1, column_ifexists("CFSBlockFullString", "")) // Application Name from App Control
+    , SrcZone = SourceZone
+    , DstZone = DestinationZone
+    , DvcOriginalAction = DeviceAction
+    , EventOriginalSeverity = CEFLogMsgSeverity
+    , DvcInboundInterface = InboundInterface
+    , DvcOutboundInterface = OutboundInterface
+    , DstIpAddr = DestinationIP
+    , Dst = DestinationIP
+    , DstPortNumber = DestinationPort
+    , SrcIpAddr = SourceIP
+    , Src = SourceIP
+    , IpAddr = SourceIP
+    , SrcPortNumber = SourcePort
+    , CFSCategoryID = extract(@'(\d+)\s', 1, column_ifexists("CFSFullString", "")) // Application Name from App Control
+    , CFSCategoryName = extract(@'.*-("(.*))', 1, column_ifexists("CFSFullString", "")) // Application Name from App Control
     , CFSPolicyName = extract(@'Policy: (.*), Info:', 1, column_ifexists("LogMsgNote", ""))
-    // Configuration Auditing Tags
     , auditId = column_ifexists("auditId", "") // Audit ID of the Configuration Auditing event.
     , tranxId = column_ifexists("tranxId", "") // Transaction ID of the entries pertaining to the same transaction or batch.
     , userMode = column_ifexists("userMode", "") // User Mode. Displays the privileges assigned to a user.
@@ -213,7 +235,33 @@ ParserQuery: |
     , EventSchema = "NetworkSession"
     , EventCount = toint(1)
     , ThreatConfidence = toint(column_ifexists("ThreatConfidence", int(null)))
-  // Renaming the columns above to create a consistent set of columns with friendlier names.
+  | extend
+      UrlCategory = CFSCategoryName
+      , HttpRequestMethod = coalesce(HttpRequestMethod, HttpRequestMethod_)
+      , SrcUsername = coalesce(susr, SrcUsername)
+      , NetworkDirection = case(SrcZone == "WAN" and DstZone == "WAN", "External"
+                                , SrcZone == "WAN" and DstZone != "WAN", "Inbound"
+                                , SrcZone == "VPN" and DstZone == "WAN", "Outbound"
+                                , SrcZone == "VPN" and DstZone != "WAN", "Inbound"
+                                , DstZone == "WAN", "Outbound"
+                                , ""
+                                )
+  | extend
+      SrcUsernameType = case(SrcUsername has "=", "DN",
+                                    SrcUsername has "\\", "Windows",
+                                    SrcUsername has "@", "UPN",
+                                    SrcUsername == "Unknown (external IP)", "",
+                                    SrcUsername == "Unknown (SSO bypassed)", "",
+                                    isnotempty(SrcUsername), "Simple",
+                                    ""
+                                    )
+      , ThreatField = case(isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Outbound", "SrcIpAddr"
+            , isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Inbound", "DstIpAddr"
+            , "")
+  | extend
+        ThreatIpAddr = case(ThreatField == "SrcIpAddr", SrcIpAddr
+                            , ThreatField == "DstIpAddr", DstIpAddr
+                            , "")
   | project-rename
       ReceivedPackets_Field = FieldDeviceCustomNumber1Label // FieldDeviceCustomNumberXLabel (cnXLabel=)
     , ReceivedPackets = DeviceCustomNumber1Label // DeviceCustomNumberXLabel (cnXLabel=)
@@ -221,7 +269,8 @@ ParserQuery: |
     , SentPackets = DeviceCustomNumber2Label // DeviceCustomNumberXLabel (cnXLabel=)
     , ConnectionDuration = DeviceCustomNumber3Label
     , FirewallAction = fw_action // Firewall Action, such as drop, forward, mgmt, NA
-    , UserName = susr // Logged-in username associated with the log event.
+    , User = susr // Logged-in username associated with the log event.
+    , AppRulePolicyId = af_polid // App Rule Policy ID.
     , SourceIPv6Address = srcV6 // Source IPv6 IP
     , DestinationIPv6Address = dstV6 // Destination IPv6 IP
     , ServiceName = appName // Non-signature Application name that matches the Application ID "app" or "f".
@@ -239,7 +288,6 @@ ParserQuery: |
     , SourcePortSPT = spt // Source port
     , NATSourcePort = snpt // NAT'ed source port
     , BladeID = bid // Blade ID
-    // Configuration Auditing Tags
     , AuditID = auditId // Audit ID of the Configuration Auditing event.
     , AuditTransactionID = tranxId // Transaction ID of the entries pertaining to the same transaction or batch.
     , AuditUserPrivileges = userMode // User Mode. Displays the privileges assigned to a user.
@@ -249,7 +297,6 @@ ParserQuery: |
     , AuditNewValue = newValue // The new value associated with the auditing event.
     , AuditTime = auditTime // The timestamp indicates the time configuration was changed.
     , AuditPath = auditPath // The logical location of the configuration setting.
-  // Removing the older column names that were replaced with friendly names.
   | project-away
       CEFLogMsgSeverity
     , DeviceEventCategory
@@ -257,7 +304,6 @@ ParserQuery: |
     , RequestMethod
     , ipspri
     , spypri
-  // Reorder the remaining columns into a meaningful order.
   | project-reorder
       TimeGenerated
     , DeviceVendor
@@ -272,9 +318,9 @@ ParserQuery: |
     , Activity
     , Message
     , LogMsgNote
-    , CFSBlockCategoryID
-    , CFSBlockCategoryName
-    , CFSBlockFullString
+    , CFSCategoryID
+    , CFSCategoryName
+    , CFSFullString
     , CFSPolicyName
     , RequestURL
     , SourceIP
@@ -284,7 +330,7 @@ ParserQuery: |
     , SourcePortSPT
     , NATSourcePort
     , SourceDnsDomain
-    , SourceMACAddress
+    , SrcMacAddr
     , InboundInterface
     , SourceZone
     , SourceVPNPolicyName
@@ -295,7 +341,7 @@ ParserQuery: |
     , DestinationPortDPT
     , NATDestinationPort
     , DestinationDnsDomain
-    , DestinationMACAddress
+    , DstMacAddr
     , OutboundInterface
     , DestinationZone
     , DestinationVPNPolicyName
@@ -328,9 +374,9 @@ ParserQuery: |
     , ReceivedPackets
     , SentPackets
     , ConnectionDuration
-    , HTTPRequestMethod
+    , HttpRequestMethod
     , URLPathName
-    , UserName
+    , User
     , UserSessionType
     , UserSessionDuration
     , AuditID
