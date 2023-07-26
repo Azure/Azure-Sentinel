@@ -25,6 +25,7 @@ LOGTYPE = os.environ.get('LogType',"alert, audit")
 
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
 MAX_PERIOD_MINUTES = 60 * 6
+FIELD_SIZE_LIMIT_BYTES = 1000 * 32
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -67,7 +68,7 @@ class PrismaCloudConnector:
         self._auth_lock = asyncio.Lock()
         self.alerts_state_manager = StateManagerAsync(FILE_SHARE_CONN_STRING, share_name='prismacloudcheckpoint', file_path='prismacloudlastalert')
         self.auditlogs_state_manager = StateManagerAsync(FILE_SHARE_CONN_STRING, share_name='prismacloudcheckpoint', file_path='prismacloudlastauditlog')
-        self.sentinel = AzureSentinelMultiConnectorAsync(self.session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
+        self.sentinel = AzureSentinelMultiConnectorAsync(self.session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, FIELD_SIZE_LIMIT_BYTES, queue_size=10000)
         self.sent_alerts = 0
         self.sent_audit_logs = 0
         self.last_alert_ts = None
@@ -85,6 +86,15 @@ class PrismaCloudConnector:
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
             last_alert_ts_ms = alert['alertTime']
+            if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
+                policy_complianceMetadata = alert['policy']['complianceMetadata']
+                if(len(json.dumps(policy_complianceMetadata).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                        queue_list = self.sentinel._split_big_request(policy_complianceMetadata)
+                        count = 1
+                        for q in queue_list:
+                            columnname = 'complianceMetadataPart' + str(count)
+                            alert['policy'][columnname] = q
+                            count+=1
             alert = self.clear_alert(alert)
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
@@ -193,6 +203,8 @@ class PrismaCloudConnector:
     def clear_alert(alert):
         if 'resource' in alert and 'data' in alert['resource']:
             del alert['resource']['data']
+        if 'policy' in alert and 'complianceMetadataPart2' in alert['policy']:
+            del alert['policy']['complianceMetadata']
         return alert
 
     async def get_audit_logs(self, start_time):
