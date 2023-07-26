@@ -4,8 +4,9 @@ import select
 import re
 import argparse
 import sys
+from distutils.version import StrictVersion
 
-SCRIPT_VERSION = 2.2
+SCRIPT_VERSION = 2.3
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
@@ -16,6 +17,8 @@ PATH_FOR_CSS_TICKET = {
     "MK": "https://portal.azure.cn/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview",
     "Gov": "https://portal.azure.us/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"}
 AGENT_CONF_FILE = "/etc/opt/microsoft/azuremonitoragent/config-cache/mdsd.hr.json"
+AGENT_VERSION = "0.0"
+AGENT_MIN_HARDENING_VERSION = "1.26.0"
 FAILED_TESTS_COUNT = 0
 STREAM_SCENARIO = "cef"  # default value
 WARNING_TESTS_COUNT = 0
@@ -252,6 +255,7 @@ class AgentInstallationVerifications:
     OMS_RUNNING_ERROR_MESSAGE = "Detected the OMS Agent running on your machine. If not necessary please remove it to avoid duplicated data in the workspace, which can result in an increase in costs"
 
     def verify_agent_is_running(self):
+        global AGENT_VERSION
         """
         Verifying the agent service called mdsd is listening on its default port
         """
@@ -270,8 +274,9 @@ class AgentInstallationVerifications:
         else:
             command_object.command_to_run = "sudo /opt/microsoft/azuremonitoragent/bin/mdsd -V"
             command_object.run_command()
+            AGENT_VERSION = str(command_object.command_result)
             print_ok(
-                "Detected AMA running version- {}".format(command_object.command_result))
+                "Detected AMA running version- {}".format(AGENT_VERSION))
 
     @staticmethod
     def print_arc_version():
@@ -513,9 +518,9 @@ class OperatingSystemVerifications:
     """
     # CONSTANTS
     SELINUX_DOCUMENTATION = "https://access.redhat.com/documentation/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
-    SELINUX_RUNNING_ERROR_MESSAGE = "Detected SELinux running on the machine. The CEF connector does not support any form of hardening at the moment," \
-                                    "and having SELinux in Enforcing mode can harm the forwarding of data. Please disable SELinux by running the command \'setenforce 0\'." \
-                                    "This will disable SELinux temporarily. In order to disable permemently please follow this documentation- {}".format(
+    SELINUX_RUNNING_ERROR_MESSAGE = "Detected SELinux running on the machine. The agent version running on the machine is outdated and does not support ingestion with hardening." \
+                                    "Please update to the latest Agent version or disable SELINUX by running: the command \'setenforce 0\'." \
+                                    "This will disable SELinux temporarily, as it can harm the data ingestion. In order to disable it permanently please follow this documentation- {}".format(
         SELINUX_DOCUMENTATION)
     IPTABLES_BLOCKING_TRAFFIC_ERROR_MESSAGE = "Iptables might be blocking incoming traffic to the agent." \
                                               " Please verify there are no firewall rules blocking incoming traffic to port 514 and run again."
@@ -523,17 +528,21 @@ class OperatingSystemVerifications:
                               " Having a full disk can harm the agent functionality and eventually cause data loss" \
                               " Please free disk space on this machine and run again."
 
-    def verify_selinux_disabled(self):
+    def verify_selinux_state(self):
         """
         Verify SELinux is not in enforcing mode, which can harm the events' forwarding to the agent.
         """
-        command_name = "verify_selinux_disabled"
+        command_name = "verify_selinux_state"
         command_to_run = "sudo getenforce 2> /dev/null; if [ $? != 0 ]; then echo 'Disabled'; fi"
         result_keywords_array = ["Enforcing"]
         command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
-        command_object.run_full_test(True)
-        if not command_object.is_successful:
-            print_error(self.SELINUX_RUNNING_ERROR_MESSAGE)
+        if StrictVersion(AGENT_VERSION) < StrictVersion(AGENT_MIN_HARDENING_VERSION):
+            command_object.run_full_test(True)
+            if not command_object.is_successful:
+                print_error(self.SELINUX_RUNNING_ERROR_MESSAGE)
+        else:
+            command_object.is_successful = True
+            command_object.print_result_to_prompt()
 
     def verify_iptables(self):
         """
@@ -557,7 +566,7 @@ class OperatingSystemVerifications:
 
     def verify_free_disk_space(self):
         """
-        Verify there is enough free disk space on the machine for the event forwarding to work as expected. The minimal is set to 1 GB
+        Verify there is enough free disk space on the machine for the event forwarding to work as expected. The minimum is set to 1 GB
         """
         minimal_free_space_kb = 1048576
         command_name = "verify_free_disk_space"
@@ -575,7 +584,7 @@ class OperatingSystemVerifications:
         """
         This function is only called by main and runs all the tests in this class
         """
-        self.verify_selinux_disabled()
+        self.verify_selinux_state()
         self.verify_iptables()
         self.verify_free_disk_space()
 
@@ -592,6 +601,7 @@ class IncomingEventsVerifications:
     IDENT_NAME = {"cef": "CEF", "asa": "%ASA-7-106010", 'ftd': "%FTD-6-305012"}
     TCPDUMP_NOT_INSTALLED_ERROR_MESSAGE = "Notice that \'tcpdump\' is not installed in your Linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'."
     LOGGER_NOT_INSTALLED_ERROR_MESSAGE = "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace."
+    LINUX_HARDENING_DOC = "https://learn.microsoft.com/he-il/azure/azure-monitor/agents/agents-overview#linux-hardening-standards"
 
     @staticmethod
     def check_stream_in_line(line, ident):
@@ -649,6 +659,9 @@ class IncomingEventsVerifications:
             end_seconds = int(round(time.time()))
         print_error("Could not locate {0} message in tcpdump. Please verify {0} events can be sent to the machine and"
                     " there is not firewall blocking incoming traffic".format(STREAM_SCENARIO.upper()))
+        if mock_message:
+            print_warning("In case hardening is in place please refer to this documentation in order to verify it's configured correctly- "
+                       "{}".format(self.LINUX_HARDENING_DOC))
         command_object.command_result = str(line)
         command_object.run_full_verification()
         return False
