@@ -1,0 +1,93 @@
+id: 042f2801-a375-4cfd-bd29-041fc7ed88a0
+name: Risky user signin observed in non-Microsoft network device
+description: |
+  'This content is utilized to identify instances of successful login by risky users, who have been observed engaging in potentially suspicious network activity on non-Microsoft network devices.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId:  AzureActiveDirectory
+    dataTypes:
+        - SigninLogs
+  - connectorId:  PaloAltoNetworks
+    dataTypes:
+    - CommonSecurityLog (PaloAlto)
+  - connectorId:  Fortinet
+    dataTypes:
+    - CommonSecurityLog (Fortinet)
+  - connectorId:  CheckPoint
+    dataTypes:
+    - CommonSecurityLog (CheckPoint)
+  - connectorId:  Zscaler
+    dataTypes:
+    - CommonSecurityLog (Zscaler)
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+
+    SigninLogs
+    //Find risky Signin
+    | where RiskState == "atRisk" and ResultType == 0
+    | extend Signin_Time = TimeGenerated
+    | summarize
+        AppDisplayName=make_set(AppDisplayName),
+        ClientAppUsed=make_set(ClientAppUsed),
+        UserAgent=make_set(UserAgent),
+        CorrelationId=make_set(CorrelationId),
+        Signin_Time= min(Signin_Time),
+        RiskEventTypes=make_set(RiskEventTypes)
+        by
+        ConditionalAccessStatus,
+        IPAddress,
+        IsRisky,
+        ResourceDisplayName,
+        RiskDetail,
+        ResultType,
+        RiskLevelAggregated,
+        RiskLevelDuringSignIn,
+        RiskState,
+        UserPrincipalName=tostring(tolower(UserPrincipalName)),
+        SourceSystem
+    | join kind=inner (
+        CommonSecurityLog
+        | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
+        | where DeviceProduct startswith "FortiGate" or DeviceProduct startswith  "PAN" or DeviceProduct startswith  "VPN" or DeviceProduct startswith "FireWall" or DeviceProduct startswith  "NSSWeblog" or DeviceProduct startswith "URL"
+        | where DeviceAction != "Block"
+        | where isnotempty(RequestURL)
+        | where isnotempty(SourceUserName)
+        | extend SourceUserName = tolower(SourceUserName)
+        | summarize
+            min(TimeGenerated),
+            max(TimeGenerated),
+            Activity=make_set(Activity)
+            by DestinationHostName, DestinationIP, RequestURL, SourceUserName=tostring(tolower(SourceUserName)),DeviceVendor,DeviceProduct
+        | extend 3p_observed_Time= min_TimeGenerated,Name = tostring(split(SourceUserName,"@")[0]),UPNSuffix =tostring(split(SourceUserName,"@")[1]))
+        on $left.IPAddress == $right.DestinationIP and $left.UserPrincipalName == $right.SourceUserName
+    | extend Timediff = datetime_diff('day', 3p_observed_Time, Signin_Time)
+    | where Timediff <= 1 and Timediff >= 0
+
+entityMappings:
+    - entityType: Account
+      fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+    - entityType: IP
+      fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+    - entityType: DNS
+      fieldMappings:
+      - identifier: DomainName
+        columnName: DestinationHostName
+    - entityType: Host
+      fieldMappings:
+      - identifier: FullName
+        columnName: SourceSystem
+kind: Scheduled
+version: 1.0.2
