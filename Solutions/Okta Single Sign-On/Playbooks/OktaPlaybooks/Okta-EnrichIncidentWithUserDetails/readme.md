@@ -1,6 +1,6 @@
 # Okta-Enrich Incident With User Details Playbook
  ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the user details and user group details from Okta
  2. Adds a rich comment to the incident with all the collected information
     ![Comment example](./images/Incident_Comment.png)
@@ -23,21 +23,21 @@
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for Okta Api  Connection (For authorizing the Okta API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account 
 2. Configure the automation rules to trigger this playbook
 
 
 ## Playbook steps explained
-### When Azure Sentinel incident creation rule is triggered
+### When Microsoft Sentinel incident creation rule is triggered
 
-Azure Sentinel incident is created. The playbook receives the incident as the input.
+Microsoft Sentinel incident is created. The playbook receives the incident as the input.
 ### Entities - Get Accounts
 
 Get the list of risky/malicious accounts as entities from the Incident

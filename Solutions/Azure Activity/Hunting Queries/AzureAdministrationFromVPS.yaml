@@ -1,0 +1,38 @@
+id: 1b8779c9-abf2-444f-a21f-437b8f90ac4a
+name: AzureActivity Administration From VPS Providers
+description: |
+  'Looks for administrative actions in AzureActivity from known VPS provider network ranges.
+  This is not an exhaustive list of VPS provider ranges but covers some of the most prevalent providers observed.'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+tags:
+  - Ignite2021
+query: |
+  let IP_Data = (externaldata(network:string)
+  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/VPS_Networks.csv"] with (format="csv"));
+  AzureActivity
+  | where CategoryValue =~ "Administrative"
+  | evaluate ipv4_lookup(IP_Data, CallerIpAddress, network, return_unmatched = false)
+  | summarize Operations = make_set(OperationNameValue), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by CallerIpAddress, Caller
+  | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = CallerIpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.0.1

@@ -1,0 +1,170 @@
+{
+  "id": "WithSecureElementsViaConnector",
+  "title": "WithSecure Elements via Connector",
+  "publisher": "WithSecure",
+  "descriptionMarkdown": "WithSecure Elements is a unified cloud-based cyber security platform.\nBy connecting WithSecure Elements via Connector to Microsoft Sentinel, security events can be received in Common Event Format (CEF) over syslog.\nIt requires deploying \"Elements Connector\" either on-prem or in cloud.\nThe Common Event Format (CEF) provides natively search & correlation, alerting and threat intelligence enrichment for each data log.",
+  "graphQueries": [
+    {
+      "metricName": "Total data received",
+      "legend": "WITH_SECURE_ELEMENTS_CONNECTOR",
+      "baseQuery": "CommonSecurityLog\n| where DeviceVendor == \"WithSecure™\""
+    }
+  ],
+ "sampleQueries": [
+  {
+    "description": "All logs",
+    "query": "CommonSecurityLog\n| where DeviceVendor == \"WithSecure™\"\n| sort by TimeGenerated"
+  }
+],
+  "dataTypes": [
+    {
+      "name": "CommonSecurityLog (WithSecure Events)",
+      "lastDataReceivedQuery": "CommonSecurityLog\n| where DeviceVendor == \"WithSecure™\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "CommonSecurityLog\n| where DeviceVendor == \"WithSecure™\"\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "read": true,
+          "write": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "1. Linux Syslog agent configuration",
+      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+      "innerSteps": [
+        {
+          "title": "1.1 Select or create a Linux machine",
+          "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your WithSecurity solution and Sentinel. The machine can be on-prem environment, Microsoft Azure or other cloud based.\n> Linux needs to have `syslog-ng` and `python`/`python3` installed."
+        },
+        {
+          "title": "1.2 Install the CEF collector on the Linux machine",
+          "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+          "instructions": [
+            {
+              "parameters": {
+                "fillWith": [
+                  "WorkspaceId",
+                  "PrimaryKey"
+                ],
+                "label": "Run the following command to install and apply the CEF collector:",
+                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "fillWith": [
+                  "WorkspaceId",
+                  "PrimaryKey"
+                ],
+                "label": "For python3 use command below:",
+                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python3 cef_installer.py {0} {1}"
+              },
+              "type": "CopyableLabel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "2. Forward data from WithSecure Elements Connector to Syslog agent",
+      "description": "This describes how to install and configure Elements Connector step by step.",
+      "innerSteps": [
+        {
+          "title": "2.1 Order Connector subscription",
+          "description": "If Connector subscription has not been ordered yet go to EPP in Elements Portal. Then navigate to Downloads and in Elements Connector section click 'Create subscription key' button. You can check Your subscription key in Subscriptions."
+        },
+        {
+          "title": "2.2 Download Connector",
+          "description": "Go to Downloads and in WithSecure Elements Connector section select correct installer."
+        },
+        {
+          "title": "2.3 Create management API key",
+          "description": "When in EPP open account settings in top right corner. Then select Get management API key. If key has been created earlier it can be read there as well."
+        },
+        {
+          "title": "2.4 Install Connector",
+          "description": "To install Elements Connector follow [Elements Connector Docs](https://help.f-secure.com/product.html#business/connector/latest/en/concept_BA55FDB13ABA44A8B16E9421713F4913-latest-en)."
+        },
+        {
+          "title": "2.5 Configure event forwarding",
+          "description": "If api access has not been configured during installation follow [Configuring API access for Elements Connector](https://help.f-secure.com/product.html#business/connector/latest/en/task_F657F4D0F2144CD5913EE510E155E234-latest-en).\nThen go to EPP, then Profiles, then use For Connector from where you can see the connector profiles. Create a new profile (or edit an existing not read-only profile). In Event forwarding enable it. SIEM system address: **127.0.0.1:514**. Set format to **Common Event Format**. Protocol is **TCP**. Save profile and assign it to Elements Connector in Devices tab."
+        }
+      ]
+    },
+    {
+      "title": "3. Validate connection",
+      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+      "instructions": [
+        {
+          "parameters": {
+            "fillWith": [
+              "WorkspaceId"
+            ],
+            "label": "Run the following command to validate your connectivity:",
+            "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py {0}"
+          },
+          "type": "CopyableLabel"
+        },
+        {
+          "parameters": {
+            "fillWith": [
+              "WorkspaceId"
+            ],
+            "label": "For python3 use command below:",
+            "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python3 cef_troubleshoot.py {0}"
+          },
+          "type": "CopyableLabel"
+        }
+      ]
+    },
+    {
+      "title": "4. Secure your machine ",
+      "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
+    }
+  ],
+  "metadata": {
+    "id": "2687fa7e-95f4-442d-bd41-8da4d634b0cb",
+    "version": "1.0.1",
+    "kind": "dataConnector",
+    "author": {
+      "name": "WithSecure"
+    },
+    "support": {
+      "tier": "developer",
+      "name": "WithSecure",
+      "link": "https://www.withsecure.com/en/support"
+    }
+  }
+}

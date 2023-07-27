@@ -1,0 +1,65 @@
+id: 218f60de-c269-457a-b882-9966632b9dc6
+name: Bulk Changes to Privileged Account Permissions
+description: |
+  'Identifies when changes to multiple users permissions are changed at once. Investigate immediately if not a planned change. This setting could enable an attacker access to Azure subscriptions in your environment.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let AdminRecords = AuditLogs
+  | where Category =~ "RoleManagement"
+  | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend Target = tostring(TargetResource.userPrincipalName),
+                 props = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = props on 
+    (
+        where Property.displayName =~ "Role.DisplayName"
+        | extend RoleName = trim('"',tostring(Property.newValue))
+    )
+  | where RoleName contains "Admin";
+  AdminRecords
+  | summarize dcount(Target) by bin(TimeGenerated, 1h)
+  | where dcount_Target > 9
+  | join kind=rightsemi  (
+    AdminRecords
+    | extend TimeWindow = bin(TimeGenerated, 1h)
+  ) on $left.TimeGenerated == $right.TimeWindow
+  | extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), "")
+  | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]),
+           InitiatedByUserName = tostring(split(InitiatedByUser,'@',0)[0]), InitiatedByUserUPNSuffix = tostring(split(InitiatedByUser,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetName
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatedByUserName
+      - identifier: UPNSuffix
+        columnName: InitiatedByUserUPNSuffix
+customDetails:
+    InitiatedByUser: InitiatedByUser
+    TargetUser: Target
+version: 1.0.4
+kind: Scheduled

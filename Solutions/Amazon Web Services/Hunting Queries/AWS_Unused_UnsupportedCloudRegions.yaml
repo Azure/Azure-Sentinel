@@ -1,0 +1,52 @@
+id: e0d57543-acbd-428b-bb96-24a67506f84d
+name: Unused or Unsupported Cloud Regions
+description: |
+  'Adversaries may create cloud instances in unused geographic service regions in order to evade detection.
+  Access is usually obtained through compromising accounts used to manage cloud infrastructure.
+  Refer: https://attack.mitre.org/techniques/T1535/'
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1535
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  // Generating historical table of all events per AccountId and Region
+  let EventInfo_CurrentDay =  materialize (AWSCloudTrail | where TimeGenerated between(starttime..endtime));
+  let EventInfo_historical = AWSCloudTrail  | where TimeGenerated  between (lookback..starttime) | summarize max(TimeGenerated) by AWSRegion, UserIdentityAccountId;
+  // Doing Leftanti join to find new regions historically not seen for the same account.
+  let EventInfo_Unseen = materialize (
+  EventInfo_CurrentDay
+  | summarize max(TimeGenerated) by AWSRegion, UserIdentityAccountId
+  | join kind= leftanti
+  (
+    EventInfo_historical
+  ) on AWSRegion, UserIdentityAccountId
+  );
+  EventInfo_Unseen
+  // Join Ununsed region seen with current data to gather context about API events seen
+  | join kind= inner (
+     EventInfo_CurrentDay
+  ) on AWSRegion, UserIdentityAccountId
+  | extend UnusedRegion = AWSRegion
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | summarize EventCount = count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), EventNameList=make_set(EventName), IPList=make_set(SourceIpAddress) by UserIdentityAccountId, UnusedRegion, UserIdentityUserName
+  | extend timestamp = StartTime , AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

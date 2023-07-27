@@ -1,0 +1,60 @@
+id: 050b9b3d-53d0-4364-a3da-1b678b8211ec
+name: User Assigned Privileged Role
+description: |
+  'Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  AuditLogs
+  | where Category =~ "RoleManagement"
+  | where AADOperationType in ("Assign", "AssignEligibleRole")
+  | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend Target = tostring(TargetResource.userPrincipalName)
+        | extend Target = iff(TargetResources.type == "ServicePrincipal", tostring(TargetResources.displayName), Target),
+                 props = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = props on 
+    (
+        where Property.displayName =~ "Role.DisplayName"
+        | extend RoleName = trim('"',tostring(Property.newValue))
+    )
+  | where RoleName contains "Admin"
+  | extend InitiatingApp = tostring(InitiatedBy.app.displayName)
+  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))
+  // Uncomment below to not alert for PIM activations
+  //| where Initiator != "MS-PIM"
+  | summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result
+  | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(Initiator,'@',0)[0]), InitiatorUPNSuffix = tostring(split(Initiator,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetName
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatorName
+      - identifier: UPNSuffix
+        columnName: InitiatorUPNSuffix
+version: 1.0.5
+kind: Scheduled

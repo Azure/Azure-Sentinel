@@ -1,0 +1,161 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logAnalyticsWorkspaceName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Sentinel is setup"
+            }
+        },
+        "connectorResourceName": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Resource name for connector"
+            }
+        }
+    },
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-10-01-preview",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/',parameters('connectorResourceName'))]",
+            "location": "[resourceGroup().location]",
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id" : "DynatraceAuditLogs",
+                    "title": "Dynatrace Audit Logs",
+                    "publisher": "Dynatrace",
+                    "descriptionMarkdown": "This connector uses the [Dynatrace Audit Logs REST API](https://www.dynatrace.com/support/help/dynatrace-api/environment-api/audit-logs) to ingest tenant audit logs into Microsoft Sentinel Log Analytics",
+                    "additionalRequirementBanner": "This data connector depends on a parser based on Kusto Function to work as expected which is deployed with the Microsoft Sentinel Solution.",
+                    "graphQueriesTableName": "DynatraceAuditLogs_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Dynatrace Audit Log Events",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All Audit Log Events",
+                            "query": "DynatraceAuditLogs\n| take 10"
+                        },
+                        {
+                            "description": "User Login Events",
+                            "query": "DynatraceAuditLogs\n| where EventType == \"LOGIN\"\n and Category == \"WEB_UI\"\n | take 10"
+                        },
+                        {
+                            "description": "Access Token Creation Events",
+                            "query": "DynatraceAuditLogs\n| where EventType == \"CREATE\"\n and Category == \"TOKEN\"\n | take 10"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": [
+                                "APIPolling"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": true
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Dynatrace tenant (ex. xyz.dynatrace.com)",
+                                "description": "You need a valid Dynatrace Tenant, to learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)."
+                            },
+                            {
+                                "name": "Dynatrace Access Token",
+                                "description": "You need a Dynatrace Access Token, the token should have ***Read audit logs*** (auditLogs.read) scope."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Dynatrace Audit Log Events to Microsoft Sentinel",
+                            "description": "Enable Dynatrace Audit [Logging](https://www.dynatrace.com/support/help/how-to-use-dynatrace/data-privacy-and-security/configuration/audit-logs#enable-audit-logging). \n Follow [these instructions](https://www.dynatrace.com/support/help/get-started/access-tokens#create-api-token) to generate an access token.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [
+                                            {
+                                                "displayText": "Dynatrace tenant (ex. xyz.dynatrace.com)",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{dynatraceEnvironmentUrl}}"
+                                            }
+                                        ]
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "APIKeyIdentifier": "Api-Token",
+                        "APIKeyName": "Authorization"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://{{dynatraceEnvironmentUrl}}/api/v2/auditlogs",
+                        "httpMethod": "Get",
+                        "rateLimitQPS": 2,
+                        "retryCount": 3,
+                        "timeoutInSeconds": 120,
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                        "queryWindowInMin": 5,
+                        "startTimeAttributeName": "from",
+                        "endTimeAttributeName": "to",
+                        "headers": {
+                            "Accept": "application/json"
+                        }
+                    },
+                    "paging": {
+                        "pagingType": "PageToken",
+                        "nextPageTokenJsonPath": "$.nextPageKey",
+                        "nextPageParaName": "nextPageKey",
+                        "pageSizeParaName": "pageSize",
+                        "pageSize": 1000
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$.auditLogs"
+                        ],
+                        "convertChildPropertiesToArray": true
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

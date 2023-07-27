@@ -1,0 +1,119 @@
+id: fcb9d75c-c3c1-4910-8697-f136bfef2363
+name: Potential beaconing activity (ASIM Network Session schema)
+description: |
+  This rule identifies beaconing patterns from Network traffic logs based on recurrent frequency patterns. Such potential outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts as discussed in this [Blog](http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/).\<br><br>
+  This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSVPCFlow
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight_CL
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoMeraki
+    dataTypes:
+      - Syslog
+      - CiscoMerakiNativePoller
+
+queryFrequency: 1d
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+  - T1571
+tags:
+  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/CommonSecurityLog/PaloAlto-NetworkBeaconing.yaml
+    ParentVersion: 1.0.0
+  - Schema: ASIMNetworkSession
+    SchemaVersion: 0.2.4
+
+query: |
+  let querystarttime = 2d;
+  let queryendtime = 1d;
+  let TimeDeltaThreshold = 10;
+  let TotalEventsThreshold = 15;
+  let PercentBeaconThreshold = 80;
+  _Im_NetworkSession(starttime=ago(querystarttime), endtime=ago(queryendtime))
+  | where not(ipv4_is_private(DstIpAddr))
+  | project TimeGenerated,   SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes
+  | sort by SrcIpAddr asc,TimeGenerated asc, DstIpAddr asc, DstPortNumber asc
+  | serialize
+  | extend nextTimeGenerated = next(TimeGenerated, 1), nextSrcIpAddr = next(SrcIpAddr, 1)
+  | extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated)
+  | where SrcIpAddr == nextSrcIpAddr
+  //Whitelisting criteria/ threshold criteria
+  | where TimeDeltainSeconds > TimeDeltaThreshold 
+  | project TimeGenerated, TimeDeltainSeconds,   SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes
+  | summarize count(), sum(DstBytes), sum(SrcBytes), make_list(TimeDeltainSeconds) 
+  by TimeDeltainSeconds, bin(TimeGenerated, 1h),   SrcIpAddr, DstIpAddr, DstPortNumber
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSrcBytes = sum(sum_SrcBytes), TotalDstBytes = sum(sum_DstBytes) 
+  by bin(TimeGenerated, 1h),   SrcIpAddr, DstIpAddr, DstPortNumber
+  | where TotalEvents > TotalEventsThreshold 
+  | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
+  | where BeaconPercent > PercentBeaconThreshold
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+
+alertDetailsOverride:
+  alertDisplayNameFormat: Potential beaconing from {{SrcIpAddr}} to {{DstIpAddr}}
+  alertDescriptionFormat: Potential beaconing pattern from a client at address {{SrcIpAddr}} to a server at address {{DstIpAddr}} over port {{DstPortNumber}} identified. Such potential outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts as discussed in this [Blog](http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/). The recurring frequency, reported as FrequencyTime in the custom details, and the total transferred volume reported as TotalDstBytes in the custom details, can help to determine the significance of this incident.
+
+customDetails:
+  DstPortNumber: DstPortNumber
+  FrequencyCount: TotalSrcBytes
+  FrequencyTime: MostFrequentTimeDeltaCount
+  TotalDstBytes: TotalDstBytes
+
+version: 1.1.2
+kind: Scheduled

@@ -1,0 +1,38 @@
+id: e7642e6e-cf27-46ec-a4b9-e4475228fead
+name: Summary of failed user logons by reason of failure
+description: |
+  'A summary of failed logons can be used to infer lateral movement with the intention of discovering credentials and sensitive data'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - CredentialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1110
+query: |
+  SecurityEvent
+  | where AccountType == 'User' and EventID == 4625
+  | extend Reason = case(
+  SubStatus == '0xc000005e', 'No logon servers available to service the logon request',
+  SubStatus == '0xc0000062', 'Account name is not properly formatted',
+  SubStatus == '0xc0000064', 'Account name does not exist',
+  SubStatus == '0xc000006a', 'Incorrect password',    SubStatus == '0xc000006d', 'Bad user name or password',
+  SubStatus == '0xc000006f', 'User logon blocked by account restriction',
+  SubStatus == '0xc000006f', 'User logon outside of restricted logon hours',
+  SubStatus == '0xc0000070', 'User logon blocked by workstation restriction',
+  SubStatus == '0xc0000071', 'Password has expired',
+  SubStatus == '0xc0000072', 'Account is disabled',
+  SubStatus == '0xc0000133', 'Clocks between DC and other computer too far out of sync',
+  SubStatus == '0xc000015b', 'The user has not been granted the requested logon right at this machine',
+  SubStatus == '0xc0000193', 'Account has expirated',
+  SubStatus == '0xc0000224', 'User is required to change password at next logon',
+  SubStatus == '0xc0000234', 'Account is currently locked out',
+  strcat('Unknown reason substatus: ', SubStatus))
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Reason
+  | extend timestamp = StartTimeUtc
+  

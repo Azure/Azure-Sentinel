@@ -1,0 +1,45 @@
+id: 269435e3-1db8-4423-9dfc-9bf59997da1c
+name: Privileged Role Assigned Outside PIM
+description: |
+  'Identifies a privileged role being assigned to a user outside of PIM
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+tags:
+    - AADSecOpsGuide
+query: |
+  AuditLogs
+  | where Category =~ "RoleManagement"
+  | where OperationName has "Add member to role outside of PIM"
+          or (LoggedByService =~ "Core Directory" and OperationName =~ "Add member to role" and Identity != "MS-PIM")
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend UserPrincipalName = tostring(TargetResource.userPrincipalName)
+    )
+  | extend IpAddress = tostring(InitiatedBy.user.ipAddress), Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name      
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+version: 1.0.4
+kind: Scheduled

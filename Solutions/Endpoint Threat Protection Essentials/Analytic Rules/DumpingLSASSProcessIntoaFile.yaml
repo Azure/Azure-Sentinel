@@ -1,0 +1,43 @@
+id: a7b9df32-1367-402d-b385-882daf6e3020
+name: Dumping LSASS Process Into a File
+description: | 
+  'Adversaries may attempt to access credential material stored in the process memory of the Local Security Authority Subsystem Service (LSASS).
+  After a user logs on, the system generates and stores a variety of credential materials in LSASS process memory.
+  These credential materials can be harvested by an administrative user or system and used to conduct lateral movement using alternate authentication materials.
+  As well as in-memory techniques, the LSASS process memory can be dumped from the target host and analyzed on a local system.
+  Ref: https://attack.mitre.org/techniques/T1003/001/'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1003.001
+query: |
+  Event
+  | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID==10
+  | parse EventData with * 'TargetImage">' TargetImage "<" * 'GrantedAccess">' GrantedAccess "<" * 'CallTrace">' CallTrace "<" * 
+  | where GrantedAccess =~ "0x1FFFFF" and TargetImage =~ "C:\\Windows\\System32\\lsass.exe" and CallTrace has_any ("dbghelp.dll","dbgcore.dll")
+  | parse EventData with * 'SourceProcessGUID">' SourceProcessGUID "<" * 'SourceImage">' SourceImage "<" *
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SourceProcessGUID, SourceImage, GrantedAccess, TargetImage, CallTrace
+  | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: SourceImage
+version: 1.0.1
+kind: Scheduled

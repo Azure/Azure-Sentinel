@@ -1,0 +1,214 @@
+id: 6e575295-a7e6-464c-8192-3e1d8fd6a990
+name: Log4j vulnerability exploit aka Log4Shell IP IOC
+description: |
+  'Identifies a match across various data feeds for IP IOCs related to the Log4j vulnerability exploit aka Log4Shell described in CVE-2021-44228.
+   References: https://cve.mitre.org/cgi-bin/cvename.cgi?name=2021-44228'
+severity: High
+status: Available
+tags:
+  - Log4j
+  - Log4Shell
+  - CVE-2021-44228
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
+  - Schema: ASIMNetworkSession
+    SchemaVersion: 0.2.0
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+     - OfficeActivity
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: AzureMonitor(WireData)
+    dataTypes:
+      - WireData
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+query:  |
+  let IPList = externaldata(IPAddress:string)[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Log4j_IOC_List.csv"] with (format="csv", ignoreFirstRecord=True);
+  let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
+  //Network logs
+  let CSlogSourceIP = CommonSecurityLog | summarize by IPAddress = SourceIP, Type;
+  let CSlogDestIP = CommonSecurityLog | summarize by IPAddress = DestinationIP, Type;
+  let CSlogMsgIP = CommonSecurityLog | extend MessageIP = extract(IPRegex, 0, Message) | summarize by IPAddress = MessageIP, Type;
+  let DnsIP = DnsEvents | summarize by IPAddress = IPAddresses, Type;
+  // If you have enabled the _Im_Dns and/or imNetworkSession normalization in your workspace, you can uncomment one or both below.  Reference - https://docs.microsoft.com/azure/sentinel/normalization
+  //let imDnsIP = _Im_Dns (response_has_any_prefix=IPList) | summarize by IPAddress = ResponseName, Type;
+  //let imNetSessIP = imNetworkSession (dstipaddr_has_any_prefix=IPList) | summarize by IPAddress = DstIpAddr, Type;
+  //Cloud service logs
+  let officeIP = OfficeActivity | summarize by IPAddress = ClientIP, Type;
+  let signinIP = SigninLogs | summarize by IPAddress, Type;
+  let nonintSigninIP = AADNonInteractiveUserSignInLogs | summarize by IPAddress, Type;
+  let azureActIP = AzureActivity | summarize by IPAddress = CallerIpAddress, Type;
+  let awsCtIP = AWSCloudTrail | summarize by IPAddress = SourceIpAddress, Type;
+  //Device logs
+  let vmConnSourceIP = VMConnection | summarize by IPAddress = SourceIp, Type;
+  let vmConnDestIP = VMConnection | summarize by IPAddress = DestinationIp, Type;
+  let iisLogIP = W3CIISLog | summarize by IPAddress = cIP, Type;
+  let devNetIP = DeviceNetworkEvents | summarize by IPAddress = RemoteIP, Type;
+  //need to parse to get IP
+  let azureDiagIP = AzureDiagnostics | where ResourceType == "AZUREFIREWALLS" | where Category in ("AzureFirewallApplicationRule", "AzureFirewallNetworkRule")
+  | where msg_s has_any (IPList) | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action | summarize by IPAddress = DestinationHost, Type;
+  let sysEvtIP = Event | where Source == "Microsoft-Windows-Sysmon" | where EventID == 3 | where EventData has_any (IPList) | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = tostring(EventDetail.[9].["#text"]), DestinationIP = tostring(EventDetail.[14].["#text"])
+  | where SourceIP in (IPList) or DestinationIP in (IPList) | extend IPAddress = iff(SourceIP in (IPList), SourceIP, DestinationIP) | summarize by IPAddress, Type;
+  // If you have enabled the _Im_DNS and/or imNetworkSession normalization in your workdspace, you can uncomment below and include. Reference - https://docs.microsoft.com/azure/sentinel/normalization
+  //let ipsort = union isfuzzy=true CSlogDestIP, CSlogMsgIP, CSlogSourceIP, DnsIP, officeIP, signinIP, nonintSigninIP, azureActIP, awsCtIP, vmConnDestIP, vmConnSourceIP, azureDiagIP, sysEvtIP, imDnsIP, imNetSessIP
+  // If you uncomment above, then comment out the line below
+  let ipsort = union isfuzzy=true CSlogDestIP, CSlogMsgIP, CSlogSourceIP, DnsIP, officeIP, signinIP, nonintSigninIP, azureActIP, awsCtIP, vmConnDestIP, vmConnSourceIP, azureDiagIP, sysEvtIP
+  | summarize by IPAddress
+  | where isnotempty(IPAddress) | where not(ipv4_is_private(IPAddress)) and IPAddress !in ('0.0.0.0','127.0.0.1');
+  let ipMatch = ipsort | where IPAddress in (IPList);
+  (union isfuzzy=true
+  (CommonSecurityLog
+  | where SourceIP in (ipMatch) or DestinationIP in (ipMatch) or Message has_any (ipMatch)
+  | project TimeGenerated, SourceIP, DestinationIP, Message, SourceUserID, RequestURL, Type
+  | extend MessageIP = extract(IPRegex, 0, Message)
+  | extend IPMatch = case(SourceIP in (ipMatch), "SourceIP", DestinationIP in (ipMatch), "DestinationIP", MessageIP in (ipMatch), "Message", "No Match")
+  | extend timestamp = TimeGenerated, IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "No Match")
+  ),
+  (OfficeActivity
+  | where  ClientIP in (ipMatch)
+  | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
+  | extend SourceIPAddress = ClientIP, Account = UserId
+  | extend timestamp = TimeGenerated , IPEntity = SourceIPAddress , AccountEntity = Account
+  ),
+  (DnsEvents
+  | where  IPAddresses has_any (ipMatch)
+  | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
+  | extend DestinationIPAddress = IPAddresses,  Host = Computer
+  | extend timestamp = TimeGenerated, IPEntity = DestinationIPAddress, HostEntity = Host
+  ),
+  (VMConnection
+  | where SourceIp in (ipMatch) or DestinationIp in (ipMatch)
+  | project TimeGenerated, Computer, SourceIp, DestinationIp, Type
+  | extend IPMatch = case( SourceIp in (ipMatch), "SourceIP", DestinationIp in (ipMatch), "DestinationIP", "None")
+  | extend timestamp = TimeGenerated , IPEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer
+  ),
+  (Event
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  | where EventID == 3
+  | where EventData has_any (ipMatch)
+  | project TimeGenerated, EventData, UserName, Computer, Type
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = tostring(EventDetail.[9].["#text"]), DestinationIP = tostring(EventDetail.[14].["#text"])
+  | where SourceIP in (ipMatch) or DestinationIP in (ipMatch)
+  | extend IPMatch = case( SourceIP in (ipMatch), "SourceIP", DestinationIP in (ipMatch), "DestinationIP", "None")
+  | extend timestamp = TimeGenerated, AccountEntity = UserName, HostEntity = Computer , IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
+  ),
+  (SigninLogs
+  | where IPAddress in (ipMatch)
+  | project TimeGenerated, UserPrincipalName, IPAddress, Type
+  | extend timestamp = TimeGenerated, AccountEntity = UserPrincipalName, IPEntity = IPAddress
+  ),
+  (AADNonInteractiveUserSignInLogs
+  | where IPAddress in (ipMatch)
+  | project TimeGenerated, UserPrincipalName, IPAddress, Type
+  | extend timestamp = TimeGenerated, AccountEntity = UserPrincipalName, IPEntity = IPAddress
+  ),
+  (W3CIISLog
+  | where cIP in (ipMatch)
+  | project TimeGenerated, Computer, cIP, csUserName, Type
+  | extend timestamp = TimeGenerated, IPEntity = cIP, HostEntity = Computer, AccountEntity = csUserName
+  ),
+  (AzureActivity
+  | where CallerIpAddress in (ipMatch)
+  | project TimeGenerated, CallerIpAddress, Caller, Type
+  | extend timestamp = TimeGenerated, IPEntity = CallerIpAddress, AccountEntity = Caller
+  ),
+  (
+  AWSCloudTrail
+  | where SourceIpAddress in (ipMatch)
+  | project TimeGenerated, SourceIpAddress, UserIdentityUserName, Type
+  | extend timestamp = TimeGenerated, IPEntity = SourceIpAddress, AccountEntity = UserIdentityUserName
+  ),
+  (
+  DeviceNetworkEvents
+  | where RemoteIP in (ipMatch)
+  | where ActionType =~ "InboundConnectionAccepted"
+  | project TimeGenerated, RemoteIP, DeviceName, Type
+  | extend timestamp = TimeGenerated, IPEntity = RemoteIP, HostEntity = DeviceName
+  ),
+  (
+  AzureDiagnostics
+  | where ResourceType =~ "AZUREFIREWALLS"
+  | where Category in ("AzureFirewallApplicationRule", "AzureFirewallNetworkRule")
+  | where msg_s has_any (ipMatch)
+  | project TimeGenerated, msg_s, Type
+  | parse msg_s with Protocol 'request from ' SourceIP ':' SourcePort 'to ' DestinationIP ':' DestinationPort '. Action:' Action
+  | where DestinationIP has_any (ipMatch)
+  | extend timestamp = TimeGenerated, IPEntity = DestinationIP
+  )
+  // If you have enabled the _Im_Dns and/or imNetworkSession normalization in your workdspace, you can uncomment below and include. Reference - https://docs.microsoft.com/azure/sentinel/normalization
+  //,
+  //(_Im_Dns (response_has_any_prefix=IPList)
+  //| project TimeGenerated, ResponseName, SrcIpAddr, Type
+  //| extend DestinationIPAddress = ResponseName,  Host = SrcIpAddr
+  //| extend timestamp = TimeGenerated, IPEntity = DestinationIPAddress, HostEntity = Host
+  //),
+  //(imNetworkSession (dstipaddr_has_any_prefix=IPList)
+  //| project TimeGenerated, DstIpAddr, SrcIpAddr, Type
+  //| extend timestamp = TimeGenerated, IPEntity = DstIpAddr, HostEntity = SrcIpAddr
+  //)
+  )
+  | extend Name = tostring(split(AccountEntity, '@', 0)[0]), UPNSuffix = tostring(split(AccountEntity, '@', 1)[0])
+  | extend HostName = tostring(split(HostEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostEntity, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPEntity
+version: 2.0.4
+kind: Scheduled

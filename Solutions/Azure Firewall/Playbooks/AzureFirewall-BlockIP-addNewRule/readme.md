@@ -1,7 +1,7 @@
 # Block IP Address in Azure Firewall by adding new rules to Network Rules Collection
 
  ## Summary
-When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions:
+When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions:
 1.  An adaptive card is sent to the SOC channel, providing IP address, Virus Total report , showing list of existing firewalls in the Resource group and providing an option to block IP Address to Deny network rules collection or Ignore.
 2. If SOC user confirms yes, the IP Address gets added to deny network rules collection and incident will get updates with endpoint information, summary of the action taken and virus total scan report.
 3. Else, incident will get updates with endpoint information and summary of the action taken. 
@@ -16,7 +16,7 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 ![Comment example](./Incident_Comment.png)
 
 ### Prerequisites 
-1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
+1. **This playbook template is based on Microsoft Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
 1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
 1. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. Relevant instructions can be found in the connector doc page.
 1. This playbook will add new rules to existing Network Collections in Azure Firewalls in your subscription. Make sure you have such prior to running the playbook. 
@@ -46,12 +46,15 @@ This playbook **Gets** and **Updates** Azure Firewalls. The registered applicati
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for other connection such as Teams connection and Virus Total (For authorizing the Virus Total API connection, the API Key needs to be provided)
+7.  Authorize the Azure Firewall custom connector by following the below mentioned steps.
+
+	  a. Navigate to playbook
 
      b. Click Edit
 
@@ -61,11 +64,11 @@ Once deployment is complete, you will need to authorize each connection.
         a. Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. 
 
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
+1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
 
 ## Playbook steps explained
-### When Azure Sentinel incident creation rule is triggered
+### When Microsoft Sentinel incident creation rule is triggered
 
 ### Varialbes 
 

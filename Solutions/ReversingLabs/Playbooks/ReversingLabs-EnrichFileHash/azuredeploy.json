@@ -1,0 +1,1283 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "ReversingLabs-EnrichFileHash",
+        "description": "This playbook will enrich a Sentinel Incident with file hash information from ReversingLabs TitaniumCloud. A comment will be added to the incident with details about the file.",
+        "prerequisites": [
+            "ReversingLabs TitaniumCloud license",
+            "ReversingLabs TitaniumCloud username and password"
+        ],
+        "lastUpdateTime": "2023-04-13T10:00:00.000Z",
+        "version": "1.1.1",
+        "entities": ["FileHash"],
+        "tags": ["Enrichment"],
+        "support": {
+            "name": "ReversingLabs",
+            "tier": "Partner",
+            "email": "support@reversinglabs.com",
+            "link": "https://support.reversinglabs.com/hc/en-us"
+        },
+        "author": {
+            "name": "Aaron Hoffmann"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ReversingLabs-EnrichFileHash",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook (Logic Apps resources) which will be created"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "ReversingLabsConnectionName": "[concat('reversinglabs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('ReversingLabsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('ReversingLabsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependson": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('ReversingLabsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_FileHashes": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/filehash"
+                            }
+                        },
+                        "For_each_-_File_hash_reputation": {
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Close_results_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><span style=\"font-size: 16px\"><strong>ЯEVERSING</strong></span><span style=\"font-size: 16px; color: rgb(209,72,65)\"><strong>LABS</strong></span><span style=\"font-size: 16px\"><strong> - Enrich File Hash</strong></span><span style=\"font-size: 16px\"><strong>@{variables('results_comment')}</strong></span><span style=\"font-size: 16px\"><strong></strong></span></p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Clear_analysis_story_variable": {
+                                    "runAfter": {
+                                        "Parse_hash_reputation_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "analysis_story",
+                                        "value": " "
+                                    }
+                                },
+                                "Clear_results_body_variable": {
+                                    "runAfter": {
+                                        "Clear_analysis_story_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "results_body",
+                                        "value": " "
+                                    }
+                                },
+                                "Close_results_table": {
+                                    "runAfter": {
+                                        "Condition_If_Hash_Unknown": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "results_comment",
+                                        "value": "@{variables('results_body')}</table>"
+                                    }
+                                },
+                                "Condition_If_Hash_Unknown": {
+                                    "actions": {
+                                        "Append_to_string_variable_unknown": {
+                                            "runAfter": {
+                                                "Compose_unknown_reputation": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "results_body",
+                                                "value": "@outputs('Compose_unknown_reputation')"
+                                            }
+                                        },
+                                        "Compose_unknown_reputation": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "<tr><td style=\"font-weight: bold;\">Hash (@{items('For_each_-_File_hash_reputation')?['Algorithm']})</td><td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['query_hash']?['sha256']}</td></tr><tr>  <td style=\"font-weight: bold;\">Status</td>  <td style=\"background-color: grey; font-weight: bold; color: white\">@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['status']}</td></tr><tr>  <td style=\"font-weight: bold;\">Status Description</td>  <td>The sample has not received a classification. It does not exist in the file reputation database, or there is no information on whether it is malicious or not.</td></tr>"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "For_each_Analysis_story": {
+                                                "foreach": "@body('Parse_JSON_file_hash_analysis')?['rl']?['sample']?['analysis']?['entries']",
+                                                "actions": {
+                                                    "Append_to_string_variable": {
+                                                        "runAfter": {},
+                                                        "type": "AppendToStringVariable",
+                                                        "inputs": {
+                                                            "name": "analysis_story",
+                                                            "value": "@items('For_each_Analysis_story')?['tc_report']?['story']"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Parse_JSON_file_hash_analysis": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Foreach"
+                                            },
+                                            "Get_File_Hash_Analysis_Detail": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "headers": {
+                                                        "User-Agent": "ReversingLabs Azure Connector TiCloud v1.0.0"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['reversinglabsintelligence']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "get",
+                                                    "path": "/api/databrowser/rldata/query/@{encodeURIComponent(toLower(string(items('For_each_-_File_hash_reputation')?['Algorithm'])))}/@{encodeURIComponent(items('For_each_-_File_hash_reputation')?['Value'])}",
+                                                    "queries": {
+                                                        "format": "json"
+                                                    }
+                                                }
+                                            },
+                                            "Parse_JSON_file_hash_analysis": {
+                                                "runAfter": {
+                                                    "Switch_-_reason": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('Get_File_Hash_Analysis_Detail')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "rl": {
+                                                                "properties": {
+                                                                    "sample": {
+                                                                        "properties": {
+                                                                            "analysis": {
+                                                                                "properties": {
+                                                                                    "entries": {
+                                                                                        "items": {
+                                                                                            "properties": {
+                                                                                                "analysis_type": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "analysis_version": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "record_time": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "tc_report": {
+                                                                                                    "properties": {
+                                                                                                        "info": {
+                                                                                                            "properties": {
+                                                                                                                "file": {
+                                                                                                                    "properties": {
+                                                                                                                        "file_subtype": {
+                                                                                                                            "type": "string"
+                                                                                                                        },
+                                                                                                                        "file_type": {
+                                                                                                                            "type": "string"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "identification": {
+                                                                                                                    "properties": {
+                                                                                                                        "name": {
+                                                                                                                            "type": "string"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "validation": {
+                                                                                                                    "properties": {
+                                                                                                                        "valid": {
+                                                                                                                            "type": "boolean"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "interesting_strings": {
+                                                                                                            "items": {
+                                                                                                                "properties": {
+                                                                                                                    "category": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "values": {
+                                                                                                                        "items": {
+                                                                                                                            "type": "string"
+                                                                                                                        },
+                                                                                                                        "type": "array"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "required": [
+                                                                                                                    "category",
+                                                                                                                    "values"
+                                                                                                                ],
+                                                                                                                "type": "object"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        },
+                                                                                                        "metadata": {
+                                                                                                            "properties": {
+                                                                                                                "application": {
+                                                                                                                    "properties": {
+                                                                                                                        "pe": {
+                                                                                                                            "properties": {
+                                                                                                                                "dos_header": {
+                                                                                                                                    "properties": {
+                                                                                                                                        "e_cblp": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_cp": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_cparhdr": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_crlc": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_cs": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_csum": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_ip": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_lfanew": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_lfarlc": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_maxalloc": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_minalloc": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_oemid": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_oeminfo": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_ovno": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_res": {
+                                                                                                                                            "type": "string"
+                                                                                                                                        },
+                                                                                                                                        "e_res2": {
+                                                                                                                                            "type": "string"
+                                                                                                                                        },
+                                                                                                                                        "e_sp": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "e_ss": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "has_rich_header": {
+                                                                                                                                            "type": "boolean"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    "type": "object"
+                                                                                                                                },
+                                                                                                                                "file_header": {
+                                                                                                                                    "properties": {
+                                                                                                                                        "characteristics": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "machine": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "number_of_sections": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "number_of_symbols": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "pointer_to_symbol_table": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_optional_headers": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "time_date_stamp": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "time_date_stamp_decoded": {
+                                                                                                                                            "type": "string"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    "type": "object"
+                                                                                                                                },
+                                                                                                                                "imports": {
+                                                                                                                                    "items": {
+                                                                                                                                        "properties": {
+                                                                                                                                            "apis": {
+                                                                                                                                                "items": {
+                                                                                                                                                    "type": "string"
+                                                                                                                                                },
+                                                                                                                                                "type": "array"
+                                                                                                                                            },
+                                                                                                                                            "name": {
+                                                                                                                                                "type": "string"
+                                                                                                                                            }
+                                                                                                                                        },
+                                                                                                                                        "required": [
+                                                                                                                                            "name",
+                                                                                                                                            "apis"
+                                                                                                                                        ],
+                                                                                                                                        "type": "object"
+                                                                                                                                    },
+                                                                                                                                    "type": "array"
+                                                                                                                                },
+                                                                                                                                "optional_header": {
+                                                                                                                                    "properties": {
+                                                                                                                                        "address_of_entry_point": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "base_of_code": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "base_of_data": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "checksum": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "data_directories": {
+                                                                                                                                            "items": {
+                                                                                                                                                "properties": {
+                                                                                                                                                    "address": {
+                                                                                                                                                        "type": "integer"
+                                                                                                                                                    },
+                                                                                                                                                    "size": {
+                                                                                                                                                        "type": "integer"
+                                                                                                                                                    }
+                                                                                                                                                },
+                                                                                                                                                "required": [
+                                                                                                                                                    "address",
+                                                                                                                                                    "size"
+                                                                                                                                                ],
+                                                                                                                                                "type": "object"
+                                                                                                                                            },
+                                                                                                                                            "type": "array"
+                                                                                                                                        },
+                                                                                                                                        "dll_characteristics": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "file_alignment": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "image_base": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "is_checksum_valid": {
+                                                                                                                                            "type": "boolean"
+                                                                                                                                        },
+                                                                                                                                        "loader_flags": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "major_image_version": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "major_linker_version": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "major_os_version": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "major_subsystem_version": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "minor_image_version": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "minor_linker_version": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "minor_os_version": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "minor_subsystem_version": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "number_of_rva_and_sizes": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "section_alignment": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_code": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_headers": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_heap_commit": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_heap_reserve": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_image": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_initialized_data": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_stack_commit": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_stack_reserve": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "size_of_uninitialized_data": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "subsystem": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        },
+                                                                                                                                        "win32_version_value": {
+                                                                                                                                            "type": "integer"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    "type": "object"
+                                                                                                                                },
+                                                                                                                                "resources": {
+                                                                                                                                    "items": {
+                                                                                                                                        "properties": {
+                                                                                                                                            "code_page": {
+                                                                                                                                                "type": "integer"
+                                                                                                                                            },
+                                                                                                                                            "language_id": {
+                                                                                                                                                "type": "integer"
+                                                                                                                                            },
+                                                                                                                                            "language_id_name": {
+                                                                                                                                                "type": "string"
+                                                                                                                                            },
+                                                                                                                                            "name": {
+                                                                                                                                                "type": "string"
+                                                                                                                                            },
+                                                                                                                                            "offset": {
+                                                                                                                                                "type": "integer"
+                                                                                                                                            },
+                                                                                                                                            "size": {
+                                                                                                                                                "type": "integer"
+                                                                                                                                            },
+                                                                                                                                            "type": {
+                                                                                                                                                "type": "string"
+                                                                                                                                            }
+                                                                                                                                        },
+                                                                                                                                        "required": [
+                                                                                                                                            "type",
+                                                                                                                                            "name",
+                                                                                                                                            "language_id_name",
+                                                                                                                                            "language_id",
+                                                                                                                                            "code_page",
+                                                                                                                                            "offset",
+                                                                                                                                            "size"
+                                                                                                                                        ],
+                                                                                                                                        "type": "object"
+                                                                                                                                    },
+                                                                                                                                    "type": "array"
+                                                                                                                                },
+                                                                                                                                "sections": {
+                                                                                                                                    "items": {
+                                                                                                                                        "properties": {
+                                                                                                                                            "address": {
+                                                                                                                                                "type": "integer"
+                                                                                                                                            },
+                                                                                                                                            "flags": {
+                                                                                                                                                "type": "integer"
+                                                                                                                                            },
+                                                                                                                                            "name": {
+                                                                                                                                                "type": "string"
+                                                                                                                                            },
+                                                                                                                                            "offset": {
+                                                                                                                                                "type": "integer"
+                                                                                                                                            },
+                                                                                                                                            "size": {
+                                                                                                                                                "type": "integer"
+                                                                                                                                            }
+                                                                                                                                        },
+                                                                                                                                        "required": [
+                                                                                                                                            "name",
+                                                                                                                                            "flags",
+                                                                                                                                            "size",
+                                                                                                                                            "address",
+                                                                                                                                            "offset"
+                                                                                                                                        ],
+                                                                                                                                        "type": "object"
+                                                                                                                                    },
+                                                                                                                                    "type": "array"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "type": "object"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "story": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "required": [
+                                                                                                "record_time",
+                                                                                                "analysis_type",
+                                                                                                "analysis_version",
+                                                                                                "tc_report"
+                                                                                            ],
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "crc32": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "dynamic_analysis": {
+                                                                                "properties": {
+                                                                                    "entries": {
+                                                                                        "items": {
+                                                                                            "properties": {
+                                                                                                "dynamic_analysis_report": {
+                                                                                                    "properties": {
+                                                                                                        "analysed_on": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "cuckoo_version": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "network": {
+                                                                                                            "properties": {
+                                                                                                                "udp_destinations": {
+                                                                                                                    "items": {
+                                                                                                                        "properties": {
+                                                                                                                            "address": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "port": {
+                                                                                                                                "type": "integer"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "required": [
+                                                                                                                            "port",
+                                                                                                                            "address"
+                                                                                                                        ],
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "type": "array"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "summary": {
+                                                                                                            "properties": {
+                                                                                                                "mutexes": {
+                                                                                                                    "items": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "type": "array"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "dynamic_analysis_report_joe_sandbox": {
+                                                                                                    "properties": {
+                                                                                                        "analysed_on": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "joe_sandbox_version": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "required": [],
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "imphash": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "md5": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "relationships": {
+                                                                                "properties": {
+                                                                                    "container_sample_sha1": {
+                                                                                        "items": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    },
+                                                                                    "parent_sample_sha1": {
+                                                                                        "items": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "ripemd160": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "sample_size": {
+                                                                                "type": "integer"
+                                                                            },
+                                                                            "sha1": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "sha256": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "sha384": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "sha512": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "sources": {
+                                                                                "properties": {
+                                                                                    "entries": {
+                                                                                        "items": {
+                                                                                            "properties": {
+                                                                                                "properties": {
+                                                                                                    "items": {
+                                                                                                        "properties": {
+                                                                                                            "name": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "value": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "required": [
+                                                                                                            "name",
+                                                                                                            "value"
+                                                                                                        ],
+                                                                                                        "type": "object"
+                                                                                                    },
+                                                                                                    "type": "array"
+                                                                                                },
+                                                                                                "record_time": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "tag": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "required": [
+                                                                                                "record_time",
+                                                                                                "tag"
+                                                                                            ],
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "ssdeep": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "xref": {
+                                                                                "properties": {
+                                                                                    "entries": {
+                                                                                        "items": {
+                                                                                            "properties": {
+                                                                                                "info": {
+                                                                                                    "properties": {
+                                                                                                        "scanners": {
+                                                                                                            "items": {
+                                                                                                                "properties": {
+                                                                                                                    "name": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "timestamp": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "version": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "required": [
+                                                                                                                    "name",
+                                                                                                                    "version",
+                                                                                                                    "timestamp"
+                                                                                                                ],
+                                                                                                                "type": "object"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "record_time": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "scanners": {
+                                                                                                    "items": {
+                                                                                                        "properties": {
+                                                                                                            "name": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "result": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "required": [
+                                                                                                            "name",
+                                                                                                            "result"
+                                                                                                        ],
+                                                                                                        "type": "object"
+                                                                                                    },
+                                                                                                    "type": "array"
+                                                                                                }
+                                                                                            },
+                                                                                            "required": [
+                                                                                                "record_time",
+                                                                                                "scanners",
+                                                                                                "info"
+                                                                                            ],
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    },
+                                                                                    "first_seen": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "last_seen": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "sample_type": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "Switch_-_reason": {
+                                                "runAfter": {
+                                                    "Get_File_Hash_Analysis_Detail": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "cases": {
+                                                    "Case": {
+                                                        "case": "best_source",
+                                                        "actions": {
+                                                            "Set_variable_2": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "classification_reason",
+                                                                    "value": "the sample can be obtained from a trusted source, or it was unpacked from a file originating from a trusted source"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "Case_2": {
+                                                        "case": "antivirus",
+                                                        "actions": {
+                                                            "Set_variable_3": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "classification_reason",
+                                                                    "value": "the sample was classified by the ReversingLabs multi-scan algorithm based on aggregated antivirus scan results"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "Case_3": {
+                                                        "case": "best_certificate",
+                                                        "actions": {
+                                                            "Set_variable_4": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "classification_reason",
+                                                                    "value": "the sample or its container are signed with a valid and trusted certificate"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "Case_4": {
+                                                        "case": "analyst_sample_override",
+                                                        "actions": {
+                                                            "Set_variable_5": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "classification_reason",
+                                                                    "value": "the sample was classified manually after an analysis"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "Case_5": {
+                                                        "case": "TC_certificate",
+                                                        "actions": {
+                                                            "Set_variable_6": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "classification_reason",
+                                                                    "value": "the sample is signed with a recognized whitelisted certificate"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "default": {
+                                                    "actions": {}
+                                                },
+                                                "expression": "@body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['reason']",
+                                                "type": "Switch"
+                                            },
+                                            "Switch_-_status": {
+                                                "runAfter": {
+                                                    "For_each_Analysis_story": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "cases": {
+                                                    "Case": {
+                                                        "case": "MALICIOUS",
+                                                        "actions": {
+                                                            "Append_to_string_variable_malicious": {
+                                                                "runAfter": {
+                                                                    "Compose_malicious_reputation": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "AppendToStringVariable",
+                                                                "inputs": {
+                                                                    "name": "results_body",
+                                                                    "value": "@outputs('Compose_malicious_reputation')"
+                                                                }
+                                                            },
+                                                            "Compose_malicious_reputation": {
+                                                                "runAfter": {},
+                                                                "type": "Compose",
+                                                                "inputs": "<tr>  <td style=\"font-weight: bold;\">Hash (@{items('For_each_-_File_hash_reputation')?['Algorithm']})</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['query_hash']?['sha256']}</td></tr><tr>  <td style=\"font-weight: bold;\">Status</td>  <td style=\"background-color: red; font-weight: bold; color: white\">@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['status']}</td></tr><tr>  <td style=\"font-weight: bold;\">Status Description</td>  <td>The sample was classified as malicious by ReversingLabs proprietary algorithms. This classification is reserved for high-accuracy heuristics and named threats, such as Emotet, Dridex and WannaCry. Threat severity is expressed through the threat level value on a scale of 1-5. The higher the value, the more severe the threat.</td></tr><tr>  <td style=\"font-weight: bold;\">Threat Name</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['threat_name']}</td></tr><tr>  <td style=\"font-weight: bold;\">Threat Level</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['threat_level']}</td></tr><tr>  <td style=\"font-weight: bold;\">Reason</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['reason']} - @{variables('classification_reason')}</td></tr><tr>  <td style=\"font-weight: bold;\">File Details</td>  <td>@{variables('analysis_story')}</td></tr><tr>  <td style=\"font-weight: bold;\">Scanner Detection</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['scanner_match']} of @{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['scanner_count']} scanners detected this file</td></tr>"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Case_2": {
+                                                        "case": "KNOWN",
+                                                        "actions": {
+                                                            "Append_to_string_variable_known": {
+                                                                "runAfter": {
+                                                                    "Compose_known_reputation": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "AppendToStringVariable",
+                                                                "inputs": {
+                                                                    "name": "results_body",
+                                                                    "value": "@outputs('Compose_known_reputation')"
+                                                                }
+                                                            },
+                                                            "Compose_known_reputation": {
+                                                                "runAfter": {},
+                                                                "type": "Compose",
+                                                                "inputs": "<tr>  <td style=\"font-weight: bold;\">Hash (@{items('For_each_-_File_hash_reputation')?['Algorithm']})</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['query_hash']?['sha256']}</td></tr><tr>  <td style=\"font-weight: bold;\">Status</td>  <td style=\"background-color: green; font-weight: bold; color: white\">@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['status']}</td></tr><tr>  <td style=\"font-weight: bold;\">Status Description</td>  <td>The sample is presumed to be benign by ReversingLabs. The sample does not have any AV detections from trustworthy sources and it does not match any of our internal threat signatures. We recommend checking the trust factor of the sample. A low trust factor (4 or 5 on a scale of 0 to 5, with 0 being highest trust) indicates the source is not trusted. On the other hand, samples with high trust factor values (0, 1, or 2) come from prominent software vendors.</td><tr>  <td style=\"font-weight: bold;\">Trust Factor</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['trust_factor']}</td></tr></tr><tr>  <td style=\"font-weight: bold;\">Reason</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['reason']} - @{variables('classification_reason')}</td></tr><tr>  <td style=\"font-weight: bold;\">Details</td>  <td>@{variables('analysis_story')}</td></tr>"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Case_3": {
+                                                        "case": "SUSPICIOUS",
+                                                        "actions": {
+                                                            "Append_to_string_variable_suspicious": {
+                                                                "runAfter": {
+                                                                    "Compose_suspicious_reputation": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "AppendToStringVariable",
+                                                                "inputs": {
+                                                                    "name": "results_body",
+                                                                    "value": "@outputs('Compose_suspicious_reputation')"
+                                                                }
+                                                            },
+                                                            "Compose_suspicious_reputation": {
+                                                                "runAfter": {},
+                                                                "type": "Compose",
+                                                                "inputs": "<tr>  <td style=\"font-weight: bold;\">Hash (@{items('For_each_-_File_hash_reputation')?['Algorithm']})</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['query_hash']?['sha256']}</td></tr><tr>  <td style=\"font-weight: bold;\">Status</td>  <td style=\"background-color: orange; font-weight: bold; color: black\">@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['status']}</td></tr><tr>  <td style=\"font-weight: bold;\">Status Description</td>  <td>The sample is considered suspicious based on ReversingLabs classification algorithm’s multi-level analysis. This file may be declared malicious or known at a later time when more reliable heuristics start detecting the file, when a threat specific signature is written, or any new information is received that changes its threat profile.</td></tr><tr>  <td style=\"font-weight: bold;\">Threat Name</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['threat_name']}</td></tr><tr>  <td style=\"font-weight: bold;\">Threat Level</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['threat_level']}</td></tr><tr>  <td style=\"font-weight: bold;\">Reason</td>  <td>@{body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['reason']} - @{variables('classification_reason')}</td></tr><tr>  <td style=\"font-weight: bold;\">Details</td>  <td>@{variables('analysis_story')}</td></tr>"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "default": {
+                                                    "actions": {}
+                                                },
+                                                "expression": "@body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['status']",
+                                                "type": "Switch"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_hash_reputation_JSON')?['rl']?['malware_presence']?['status']",
+                                                    "UNKNOWN"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_File_Hash_Reputation": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "headers": {
+                                            "User-Agent": "ReversingLabs Azure Connector TiCloud v1.0.0"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['reversinglabsintelligence']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/databrowser/malware_presence/query/@{encodeURIComponent(toLower(string(items('For_each_-_File_hash_reputation')?['Algorithm'])))}/@{encodeURIComponent(items('For_each_-_File_hash_reputation')?['Value'])}",
+                                        "queries": {
+                                            "extended": true,
+                                            "format": "json",
+                                            "show_hashes": true
+                                        }
+                                    }
+                                },
+                                "Parse_hash_reputation_JSON": {
+                                    "runAfter": {
+                                        "Get_File_Hash_Reputation": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_File_Hash_Reputation')",
+                                        "schema": {
+                                            "properties": {
+                                                "rl": {
+                                                    "properties": {
+                                                        "malware_presence": {
+                                                            "properties": {
+                                                                "classification": {
+                                                                    "properties": {
+                                                                        "family_name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "is_generic": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "platform": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "first_seen": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_seen": {
+                                                                    "type": "string"
+                                                                },
+                                                                "query_hash": {
+                                                                    "properties": {
+                                                                        "sha256": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "reason": {
+                                                                    "type": "string"
+                                                                },
+                                                                "scanner_count": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "scanner_match": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "scanner_percent": {
+                                                                    "type": "number"
+                                                                },
+                                                                "status": {
+                                                                    "type": "string"
+                                                                },
+                                                                "threat_level": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "threat_name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "trust_factor": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Clear_results_body_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "results_comment",
+                                        "value": "<table>\n  <tr>"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_classification_reason": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Initialize_analysis_story": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "analysis_story",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_classification_reason": {
+                            "runAfter": {
+                                "Initialize_analysis_story": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "classification_reason",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_results_table": {
+                            "runAfter": {
+                                "Entities_-_Get_FileHashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "results_comment",
+                                        "type": "string",
+                                        "value": "<table>\n  <tr>"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Initialize_results_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "results_body",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "azuresentinel",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "reversinglabsintelligence": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('ReversingLabsConnectionName'))]",
+                                "connectionName": "reversinglabsintelligence",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/reversinglabsintelligence')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

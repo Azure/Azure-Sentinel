@@ -1,0 +1,47 @@
+id: d57f675c-ad6c-44d0-95fb-3bf707e70155
+name: User account added or removed from a security group by an unauthorized user
+description: |
+  'User account added or removed from a security group by an unauthorized user, pass in a list'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+
+  // Create DataTable with your own values, example below shows dummy usernames that are authorized and for what domain
+  let List = datatable(AuthorizedUser:string, Domain:string)["Bob", "Domain", "joe", "domain", "MATT", "DOMAIN"];
+  SecurityEvent
+  | where EventID in (4728, 4729, 4732, 4733, 4746, 4747, 4751, 4752, 4756, 4757, 4761, 4762)
+  | join kind= leftanti (
+      List
+      | project SubjectUserName = tolower(AuthorizedUser), SubjectDomainName = toupper(Domain)
+  ) on SubjectUserName, SubjectDomainName
+  | project TimeGenerated, Computer, Account, SubjectUserName, SubjectDomainName, TargetAccount, EventID, Activity
+  | extend timestamp = TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = SubjectUserName
+  | extend Account_0_NTDomain = SubjectDomainName
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain  
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SubjectUserName
+      - identifier: NTDomain
+        columnName: SubjectDomainName 
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1

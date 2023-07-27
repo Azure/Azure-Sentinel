@@ -1,0 +1,46 @@
+id: 2b96760d-5307-44f0-94bd-8cf0ec52b1fb
+name: New User created on SQL Server
+description: |
+  This hunting query identifies creation of a new user from SQL Server
+  This query is based on the SQLEvent KQL Parser function (link below) 
+  SQLEvent KQL Parser provided at https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/SQLSever
+  Detailed blog post on Monitoring SQL Server with Microsoft Sentinel https://techcommunity.microsoft.com/t5/azure-sentinel/monitoring-sql-server-with-azure-sentinel/ba-p/1502960
+requiredDataConnectors:
+  - connectorId: AzureMonitor(WindowsEventLogs)
+    dataTypes:
+      - Event
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+        // SQLEvent is not the table name, it is the function name that should already be imported into your workspace.
+        // The underlying table where the data exists is the Event table.
+        // This query checks for new user account created on SQL Server using the SQLEvent() parser
+        //
+        SQLEvent
+        | where Statement has "Create Login"
+        | parse Statement with "CREATE LOGIN [" TargetUser:string "]" *
+        | project TimeGenerated, Computer, Action, ClientIP, CurrentUser, DatabaseName, TargetUser, ObjectName, Statement
+        | extend Name = iff(CurrentUser contains '@', tostring(split(CurrentUser, '@', 0)[0]), CurrentUser)
+        | extend UPNSuffix = iff(CurrentUser contains '@', tostring(split(CurrentUser, '@', 1)[0]), '')
+        | extend Name = iff(CurrentUser contains '\\', tostring(split(CurrentUser, '\\', 1)[0]), Name)
+        | extend NTDomain = iff(CurrentUser contains '\\', tostring(split(CurrentUser, '\\', 0)[0]), '')
+        | extend Account_0_Name = Name
+        | extend Account_0_UPNSuffix = UPNSuffix
+        | extend Account_0_NTDomain = NTDomain
+        | extend IP_0_Address = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 2.0.0

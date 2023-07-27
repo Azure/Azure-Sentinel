@@ -1,0 +1,851 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\"width=\"75px\" height=\"75px\">\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\nThe Threat Intelligence solution contains data connectors for import of threat indicators into Microsoft Sentinel, analytic rules for matching TI data with event data, workbook, and hunting queries. Threat indicators can be malicious IP's, URL's, filehashes, domains, email addresses etc.\n\n**Data Connectors:** 4, **Workbooks:** 1, **Analytic Rules:** 38, **Hunting Queries:** 5\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors1-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs four (4) data connectors for ingesting threat indicators (IP addresses, domains, URLs and file hashes) into Microsoft Sentinel. The ingested threat indicators can be used for correlation to enable monitoring, alerting, and hunting using your threat intelligence."
+            }
+          },
+          {
+            "name": "dataconnectors2-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "The data connectors installed are:"
+            }
+          },
+          {
+            "name": "DC1",
+            "type": "Microsoft.Common.Section",
+            "label": "(1)\t\tThreat Intelligence Platforms",
+            "elements": [
+              {
+                "name": "DC1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Use this connector to send threat indicators to Microsoft Sentinel from your Threat Intelligence Platform (TIP), such as Threat Connect, Palo Alto Networks MindMeld, MISP, or other integrated applications."
+                }
+              }
+            ]
+          },
+          {
+            "name": "DC2",
+            "type": "Microsoft.Common.Section",
+            "label": "(2)\t\tThreat Intelligence - TAXII",
+            "elements": [
+              {
+                "name": "DC1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Use this connector to bring in threat intelligence to Microsoft Sentinel from a TAXII 2.0 or 2.1 server."
+                }
+              }
+            ]
+          },
+          {
+            "name": "DC3",
+            "type": "Microsoft.Common.Section",
+            "label": "(3)\t\tThreat Intelligence Upload Indicators API",
+            "elements": [
+              {
+                "name": "DC1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Microsoft Sentinel offer a data plane API to bring in threat intelligence from your Threat Intelligence Platform (TIP), such as Threat Connect, Palo Alto Networks MineMeld, MISP, or other integrated applications. Threat indicators can include IP addresses, domains, URLs, file hashes and email addresses."
+                }
+              }
+            ]
+          },
+          {
+            "name": "DC4",
+            "type": "Microsoft.Common.Section",
+            "label": "(4)\t\tMicrosoft Defender Threat Intelligence",
+            "elements": [
+              {
+                "name": "DC1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Microsoft Sentinel provides you the capability to import threat intelligence generated by Microsoft to enable monitoring, alerting and hunting. Use this data connector to import Indicators of Compromise (IOCs) from Microsoft Defender Threat Intelligence (MDTI) into Microsoft Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes, etc."
+                }
+              }
+            ]
+          },
+          {
+            "name": "dataconnectors3-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "After installing the solution, configure and enable these data connectors by following guidance in Manage solution view."
+            }
+          },
+          {
+            "name": "dataconnectors-link2",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more about connecting data sources",
+                "uri": "https://docs.microsoft.com/azure/sentinel/connect-data-sources"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "Threat Intelligence",
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Gain insights into threat indicators ingestion and search for indicators at scale across Microsoft 1st Party, 3rd Party, On-Premises, Hybrid, and Multi-Cloud Workloads. Indicators Search facilitates a simple interface for finding IP, File, Hash, Sender and more across your data. Seamless pivots to correlate indicators with Microsoft Sentinel: Incidents to make your threat intelligence actionable."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Domain entity to CommonSecurityLog",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in CommonSecurityLog table from any Domain IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Domain entity to DnsEvents",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in DnsEvents from any Domain IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "(Preview) TI map Domain entity to Web Session Events (ASIM Web Session schema)",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule identifies Web Sessions for which the target URL hostname is a known IoC. <br><br>This rule uses the [Advanced Security Information Model (ASIM)](https:/aka.ms/AboutASIM) and supports any web session source that complies with ASIM."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Domain entity to PaloAlto",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in Palo Alto data in CommonSecurityLog table from any Domain IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Domain entity to SecurityAlert",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in SecurityAlert table from any Domain IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Domain entity to Syslog",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in Syslog table from any Domain IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Email entity to AzureActivity",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in AzureActivity table from any Email IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Email entity to OfficeActivity",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in OfficeActivity table from any Email IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic9",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Email entity to PaloAlto CommonSecurityLog",
+            "elements": [
+              {
+                "name": "analytic9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in CommonSecurityLog table from any Email IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic10",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Email entity to SecurityAlert",
+            "elements": [
+              {
+                "name": "analytic10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in SecurityAlert table from any Email IOC from TI which will extend coverage to datatypes such as MCAS, StorageThreatProtection and many others"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic11",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Email entity to SecurityEvent",
+            "elements": [
+              {
+                "name": "analytic11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in SecurityEvent table from any Email IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic12",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map Email entity to SigninLogs",
+            "elements": [
+              {
+                "name": "analytic12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in SigninLogs table from any Email IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic13",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map File Hash to CommonSecurityLog Event",
+            "elements": [
+              {
+                "name": "analytic13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic14",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map File Hash to Security Event",
+            "elements": [
+              {
+                "name": "analytic14-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in Security Event data from any File Hash IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic15",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map IP entity to AppServiceHTTPLogs",
+            "elements": [
+              {
+                "name": "analytic15-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in AppServiceHTTPLogs from any IP IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic16",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map IP entity to AWSCloudTrail",
+            "elements": [
+              {
+                "name": "analytic16-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in AWSCloudTrail from any IP IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic17",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map IP Entity to AzureActivity",
+            "elements": [
+              {
+                "name": "analytic17-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in AzureActivity."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic18",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map IP entity to AzureFirewall",
+            "elements": [
+              {
+                "name": "analytic18-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in AzureFirewall (NetworkRule & ApplicationRule Logs) from any IP IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic19",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map IP entity to Azure Key Vault logs",
+            "elements": [
+              {
+                "name": "analytic19-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in Azure Key Vault logsfrom any IP IOC from TI"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic20",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map IP entity to AzureNetworkAnalytics_CL (NSG Flow Logs)",
+            "elements": [
+              {
+                "name": "analytic20-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in AzureNetworkAnalytics_CL (NSG Flow Logs) from any IP IOC from TI that was Allowed"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic21",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map IP Entity to Azure SQL Security Audit Events",
+            "elements": [
+              {
+                "name": "analytic21-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SQL Security Audit Events."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic22",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map IP Entity to CommonSecurityLog",
+            "elements": [
+              {
+                "name": "analytic22-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in CommonSecurityLog."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic23",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map IP Entity to DnsEvents",
+            "elements": [
+              {
+                "name": "analytic23-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DnsEvents."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic24",
+            "type": "Microsoft.Common.Section",
+            "label": "(Preview) TI map IP entity to Web Session Events (ASIM Web Session schema)",
+            "elements": [
+              {
+                "name": "analytic24-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule identifies Web Sessions for which the source IP address is a known IoC. <br><br>This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic25",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map IP entity to OfficeActivity",
+            "elements": [
+              {
+                "name": "analytic25-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in OfficeActivity."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic26",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map IP Entity to SigninLogs",
+            "elements": [
+              {
+                "name": "analytic26-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SigninLogs."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic27",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map IP Entity to VMConnection",
+            "elements": [
+              {
+                "name": "analytic27-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in OfficeActivity."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic28",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map IP Entity to W3CIISLog",
+            "elements": [
+              {
+                "name": "analytic28-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in W3CIISLog."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic29",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map URL Entity to AuditLogs",
+            "elements": [
+              {
+                "name": "analytic29-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in AuditLogs."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic30",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map URL Entity to OfficeActivity Data",
+            "elements": [
+              {
+                "name": "analytic30-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in OfficeActivity data."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic31",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map URL Entity to PaloAlto Data",
+            "elements": [
+              {
+                "name": "analytic31-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in PaloAlto Data."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic32",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map URL Entity to SecurityAlert Data",
+            "elements": [
+              {
+                "name": "analytic32-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in SecurityAlert data."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic33",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map URL Entity to Syslog Data",
+            "elements": [
+              {
+                "name": "analytic33-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in Syslog data."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic34",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map IP Entity to Duo Security",
+            "elements": [
+              {
+                "name": "analytic34-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DuoSecurity."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic35",
+            "type": "Microsoft.Common.Section",
+            "label": "(Preview) TI map Domain entity to Dns Events (ASIM DNS Schema)",
+            "elements": [
+              {
+                "name": "analytic35-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in DNS events from any Domain IOC from TI\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema'"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic36",
+            "type": "Microsoft.Common.Section",
+            "label": "(Preview) TI map IP entity to DNS Events (ASIM DNS schema)",
+            "elements": [
+              {
+                "name": "analytic36-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule identifies DNS requests for which response IP address is a known IoC. <br><br>\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic37",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map IP entity to Network Session Events (ASIM Network Session schema)",
+            "elements": [
+              {
+                "name": "analytic37-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule identifies a match Network Sessions for which the source or destination IP address is a known IoC. <br><br>\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic38",
+            "type": "Microsoft.Common.Section",
+            "label": "TI map IP entity to GitHub_CL",
+            "elements": [
+              {
+                "name": "analytic38-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a match in GitHub_CL table from any IP IOC from TI"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map File Entity to OfficeActivity Event",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any matches in the OfficeActivity Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. \nSince file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection. This hunting query depends on Office365 ThreatIntelligence ThreatIntelligenceTaxii data connector (OfficeActivity ThreatIntelligenceIndicator ThreatIntelligenceIndicator Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map File Entity to Security Event",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any matches in the Security Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. \nSince file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection. This hunting query depends on SecurityEvents ThreatIntelligence ThreatIntelligenceTaxii data connector (SecurityEvent ThreatIntelligenceIndicator ThreatIntelligenceIndicator Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map File Entity to Syslog Event",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any matches in the Syslog Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. \nSince file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection. This hunting query depends on Syslog ThreatIntelligence ThreatIntelligenceTaxii data connector (Syslog ThreatIntelligenceIndicator ThreatIntelligenceIndicator Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map File Entity to VMConnection Event",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any matches in the VMConnection Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. \nSince file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection. This hunting query depends on AzureMonitor(VMInsights) ThreatIntelligence ThreatIntelligenceTaxii data connector (VMConnection ThreatIntelligenceIndicator ThreatIntelligenceIndicator Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "TI Map File Entity to WireData Event",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies any matches in the WireData Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. \nSince file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection. This hunting query depends on AzureMonitor(WireData) ThreatIntelligence ThreatIntelligenceTaxii data connector (WireData ThreatIntelligenceIndicator ThreatIntelligenceIndicator Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

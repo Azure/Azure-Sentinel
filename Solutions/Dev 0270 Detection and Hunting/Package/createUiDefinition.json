@@ -1,0 +1,145 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\"width=\"75px\"height=\"75px\">\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\nMicrosoft threat intelligence teams have been tracking multiple ransomware campaigns and have tied these attacks to DEV-0270, also known as Nemesis Kitten, a sub-group of Iranian actor PHOSPHORUS. Microsoft assesses with moderate confidence that DEV-0270 conducts malicious network operations, including widespread vulnerability scanning, on behalf of the government of Iran. For more technical and mitigation information, please read the [Microsoft Security blog](https://www.microsoft.com/en-us/security/blog/2022/09/07/profiling-dev-0270-phosphorus-ransomware-operations/). As Microsoft continues to track DEV-0270’s tactics and techniques, we are also sharing guidance, detections and hunting queries to help our customers better defend against this threat through our security products.\n\n**Analytic Rules:** 4\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Dev-0270 Malicious Powershell usage",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "DEV-0270 heavily uses powershell to achieve their objective at various stages of their attack. To locate powershell related activity tied to the actor, Microsoft Sentinel customers can run the following query."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Dev-0270 Registry IOC - September 2022",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The query below identifies modification of registry by Dev-0270 actor to disable security feature as well as to add ransom notes"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Dev-0270 WMIC  Discovery",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The query below identifies dllhost.exe using WMIC to discover additional hosts and associated domains in the environment."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "DEV-0270 New User Creation",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The following query tries to detect creation of a new user using a known DEV-0270 username/password schema"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

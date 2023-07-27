@@ -1,0 +1,56 @@
+id: e7ec9fa6-e7f7-41ed-a34b-b956837a3ee6
+name: Failed logon attempts in authpriv
+description: |
+  'Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in 
+  isn't provisioned on the machine. A few hits could indicate someone attempting to access a machine they aren't authorized to access. 
+  If there are many of hits, especially from outside your network, it could indicate a brute force attack. 
+  Default threshold for logon attempts is 15.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes: 
+      - Syslog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let threshold = 15;
+  // Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.
+  // IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages
+  // are aggregated.
+  Syslog
+  | where Facility =~ "authpriv"
+  | where SyslogMessage has "authentication failure" and SyslogMessage has " uid=0"
+  | parse SyslogMessage with * "rhost=" RemoteIP
+  | project TimeGenerated, Computer, ProcessName, HostIP, RemoteIP, ProcessID
+  | join kind=innerunique (
+      // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. 
+      Syslog 
+      | where Facility =~ "authpriv"
+      | where SyslogMessage has "user unknown"
+      | project Computer, HostIP, ProcessID
+      ) on Computer, HostIP, ProcessID
+  // Count the number of failed logon attempts by External IP and internal machine
+  | summarize FirstLogonAttempt = min(TimeGenerated), LatestLogonAttempt = max(TimeGenerated), TotalLogonAttempts = count() by Computer, HostIP, RemoteIP
+  // Calculate the time between first and last logon attempt (AttemptPeriodLength)
+  | extend TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt
+  | where TotalLogonAttempts >= threshold
+  | project FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts, TotalLogonAttempts, SourceAddress = RemoteIP, DestinationHost = Computer, DestinationAddress = HostIP
+  | sort by DestinationHost asc nulls last
+  | extend timestamp = FirstLogonAttempt, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationAddress
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

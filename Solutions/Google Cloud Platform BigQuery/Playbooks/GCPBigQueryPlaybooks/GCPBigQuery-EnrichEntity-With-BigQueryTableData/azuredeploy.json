@@ -1,0 +1,790 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Google Cloud Platform BigQuery - Enrich Incident with BigQuery Table Data",
+        "description":  "This playbook can be run from incident context manually or from automation rule to query the GCP BigQuery table and enrich the incident with query results. Query result is filtered based on provided entities.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, GCPBigQuery Custom Connector needs to be deployed under the same subscription.",
+            "2. Refer to [GCP BigQuery Logic App Custom Connector](../../CustomConnector/GCPBigQueryCustomConnector/readme.md) documentation for deployment and setup instructions."
+        ],
+        "postDeployment":  [
+            "1. Authorize/Configure all the connections.",
+            "2. Assign Microsoft Sentinel Responder Role to playbook."
+        ],
+        "prerequisitesDeployTemplateFile": "../../CustomConnector/GCPBigQueryCustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2023-02-24T01:25:52Z",
+        "entities": [
+        ],
+        "tags": [
+            "Google Cloud Platform BigQuery",
+            "Enrichment"
+        ],
+        "support": {
+            "tier": "Microsoft",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Microsoft"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "notes": [
+                    "Initial Version"
+                ]
+            }
+        ]
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "GCPBigQuery-EnrichEntity-With-BigQueryTableData",
+            "type":  "string"
+        },
+        "CustomConnectorName": {
+            "defaultValue": "GCPBigQueryCustomConnector",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the logic app connector which performs GCP BigQuery actions."
+            }
+        },
+        "BaseQuery":  {
+            "type":  "string",
+            "defaultValue": "select * from [ProjectID:DatasetID.TableName]",
+            "metadata": {
+                "description": "Enter base SQL Query to fetch data from BigQuery Table."
+            }
+        },
+        "BigQueryTableColumnName":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter BigQuery table column name (mapped to IP, URL, DNS etc entities) to filter the result based on those incident entities."
+            }
+        },
+        "ProjectID":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter Google Cloud Platform BigQuery ProjectID."
+            }
+        }
+    },
+    "variables":  {
+        "GCPBigQueryCustomConnectorConnectionName": "[concat('GCPBigQueryCustomConnector-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "BaseQuery":  {
+                            "defaultValue":  "[parameters('BaseQuery')]",
+                            "type":  "string"
+                        },
+                        "BigQueryTableColumnNameToFilter":  {
+                            "defaultValue":  "[parameters('BigQueryTableColumnName')]",
+                            "type":  "string"
+                        },
+                        "ProjectID":  {
+                            "defaultValue":  "[parameters('ProjectID')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Add_comment_to_incident_(V3)":  {
+                            "runAfter":  {
+                                "If_job_completed_successfully_":  [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "Set_variable_OutputMessage_on_error":  [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                    "message":  "\u003cp\u003e@{variables('OutputMessage')}\u003cbr\u003e\n@{body('Create_HTML_table')}\u003c/p\u003e"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/Incidents/Comment"
+                            }
+                        },
+                        "Create_QueryString":  {
+                            "runAfter":  {
+                                "For_each_entity":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "QueryString",
+                                "value":  "@{concat(parameters('BaseQuery'), ' where ', parameters('BigQueryTableColumnNameToFilter'), ' in ', '(', join(variables('EntitiesArray'), ','), ')')}"
+                            }
+                        },
+                        "For_each_entity":  {
+                            "foreach":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                            "actions":  {
+                                "Append_to_EntitiesArray":  {
+                                    "runAfter":  {
+                                        "Parse_Entity":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "AppendToArrayVariable",
+                                    "inputs":  {
+                                        "name":  "EntitiesArray",
+                                        "value":  "@concat('\"', body('Parse_Entity')?['properties']?['friendlyName'], '\"')"
+                                    }
+                                },
+                                "Parse_Entity":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@items('For_each_entity')",
+                                        "schema":  {
+                                            "properties":  {
+                                                "id":  {
+                                                    "type":  "string"
+                                                },
+                                                "kind":  {
+                                                    "type":  "string"
+                                                },
+                                                "properties":  {
+                                                    "properties":  {
+                                                        "friendlyName":  {
+                                                            "type":  "string"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                },
+                                                "type":  {
+                                                    "type":  "string"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_-_OutputTable":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "If_job_completed_successfully_":  {
+                            "actions":  {
+                                "Create_HTML_table":  {
+                                    "runAfter":  {
+                                        "For_each_row":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Table",
+                                    "inputs":  {
+                                        "format":  "HTML",
+                                        "from":  "@variables('OutputTable')"
+                                    }
+                                },
+                                "For_each_header":  {
+                                    "foreach":  "@body('Parse_Headers')",
+                                    "actions":  {
+                                        "Append_to_OutputHeaders":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "AppendToArrayVariable",
+                                            "inputs":  {
+                                                "name":  "OutputHeaders",
+                                                "value":  "@items('For_each_header')['name']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Parse_Headers":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach",
+                                    "runtimeConfiguration":  {
+                                        "concurrency":  {
+                                            "repetitions":  1
+                                        }
+                                    }
+                                },
+                                "For_each_row":  {
+                                    "foreach":  "@body('Parse_Rows')",
+                                    "actions":  {
+                                        "Append_to_OutputTable":  {
+                                            "runAfter":  {
+                                                "For_each_value":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "AppendToArrayVariable",
+                                            "inputs":  {
+                                                "name":  "OutputTable",
+                                                "value":  "@json(variables('OutputJSON'))"
+                                            }
+                                        },
+                                        "For_each_value":  {
+                                            "foreach":  "@items('For_each_row')['f']",
+                                            "actions":  {
+                                                "Increment_counter_variable":  {
+                                                    "runAfter":  {
+                                                        "Set_OutputJSON":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "IncrementVariable",
+                                                    "inputs":  {
+                                                        "name":  "counter",
+                                                        "value":  1
+                                                    }
+                                                },
+                                                "Set_OutputJSON":  {
+                                                    "runAfter":  {
+                                                        "Set_property_of_JSON_output":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "OutputJSON",
+                                                        "value":  "@variables('TempJSON')"
+                                                    }
+                                                },
+                                                "Set_property_of_JSON_output":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "TempJSON",
+                                                        "value":  "@{addProperty(json(variables('OutputJSON')), variables('OutputHeaders')[variables('counter')], items('For_each_value')['v'])}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                            },
+                                            "type":  "Foreach"
+                                        },
+                                        "Reset_variable_OutputJSON":  {
+                                            "runAfter":  {
+                                                "Reset_variable_counter_to_0":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "OutputJSON",
+                                                "value":  "{}"
+                                            }
+                                        },
+                                        "Reset_variable_counter_to_0":  {
+                                            "runAfter":  {
+                                                "Append_to_OutputTable":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "counter",
+                                                "value":  0
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Parse_Rows":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach",
+                                    "runtimeConfiguration":  {
+                                        "concurrency":  {
+                                            "repetitions":  1
+                                        }
+                                    }
+                                },
+                                "Parse_Headers":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@body('Run_Query_Job')?['schema']?['fields']",
+                                        "schema":  {
+                                            "items":  {
+                                                "properties":  {
+                                                    "mode":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "name":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "type":  {
+                                                        "type":  "string"
+                                                    }
+                                                },
+                                                "required":  [
+                                                    "name",
+                                                    "type",
+                                                    "mode"
+                                                ],
+                                                "type":  "object"
+                                            },
+                                            "type":  "array"
+                                        }
+                                    }
+                                },
+                                "Parse_Rows":  {
+                                    "runAfter":  {
+                                        "For_each_header":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@body('Run_Query_Job')?['rows']",
+                                        "schema":  {
+                                            "items":  {
+                                                "properties":  {
+                                                    "f":  {
+                                                        "items":  {
+                                                            "properties":  {
+                                                                "v":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "required":  [
+                                                                "v"
+                                                            ],
+                                                            "type":  "object"
+                                                        },
+                                                        "type":  "array"
+                                                    }
+                                                },
+                                                "required":  [
+                                                    "f"
+                                                ],
+                                                "type":  "object"
+                                            },
+                                            "type":  "array"
+                                        }
+                                    }
+                                },
+                                "Set_variable_-_OutputMessage_on_success":  {
+                                    "runAfter":  {
+                                        "Create_HTML_table":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "OutputMessage",
+                                        "value":  "\u003cstrong\u003eQuery execution was successful: \u003c/strong\u003e "
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Run_Query_Job":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                    "Set_variable_-_OutputMessage_on_zero_result":  {
+                                        "runAfter":  {
+                                        },
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "OutputMessage",
+                                            "value":  "\u003cstrong\u003e Query  \"\u003cem\u003e@{parameters('QueryString')}\u003c/em\u003e\" succeeded but 0 rows returned.\u003c/strong\u003e"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@body('Run_Query_Job')?['jobComplete']",
+                                            true
+                                        ]
+                                    },
+                                    {
+                                        "greater":  [
+                                            "@int(body('Run_Query_Job')?['totalRows'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Initialize_variable_-_EntitiesArray":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_OutputMessage":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "EntitiesArray",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_OutputHeaders":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_QueryString":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "OutputHeaders",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_OutputJSON":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_OutputHeaders":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "OutputJSON",
+                                        "type":  "string",
+                                        "value":  "{}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_OutputMessage":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "OutputMessage",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_OutputTable":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_counter":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "OutputTable",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_QueryString":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_EntitiesArray":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "QueryString",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TempJSON":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_OutputJSON":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "TempJSON",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_counter":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_TempJSON":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "counter",
+                                        "type":  "integer",
+                                        "value":  0
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_error_JSON":  {
+                            "runAfter":  {
+                                "Run_Query_Job":  [
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@body('Run_Query_Job')",
+                                "schema":  {
+                                    "properties":  {
+                                        "error":  {
+                                            "properties":  {
+                                                "code":  {
+                                                    "type":  "integer"
+                                                },
+                                                "details":  {
+                                                    "items":  {
+                                                        "properties":  {
+                                                            "@@type":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "metadata":  {
+                                                                "properties":  {
+                                                                    "method":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "service":  {
+                                                                        "type":  "string"
+                                                                    }
+                                                                },
+                                                                "type":  "object"
+                                                            },
+                                                            "reason":  {
+                                                                "type":  "string"
+                                                            }
+                                                        },
+                                                        "required":  [
+                                                            "@@type",
+                                                            "reason",
+                                                            "metadata"
+                                                        ],
+                                                        "type":  "object"
+                                                    },
+                                                    "type":  "array"
+                                                },
+                                                "errors":  {
+                                                    "items":  {
+                                                        "properties":  {
+                                                            "domain":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "location":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "locationType":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "message":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "reason":  {
+                                                                "type":  "string"
+                                                            }
+                                                        },
+                                                        "required":  [
+                                                            "message",
+                                                            "domain",
+                                                            "reason",
+                                                            "location",
+                                                            "locationType"
+                                                        ],
+                                                        "type":  "object"
+                                                    },
+                                                    "type":  "array"
+                                                },
+                                                "message":  {
+                                                    "type":  "string"
+                                                },
+                                                "status":  {
+                                                    "type":  "string"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        },
+                        "Run_Query_Job":  {
+                            "runAfter":  {
+                                "Create_QueryString":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "query":  "@{variables('QueryString')}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['GCPBigQueryCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/projects/@{encodeURIComponent(parameters('ProjectID'))}/queries",
+                                "queries":  {
+                                    "alt":  "json",
+                                    "prettyPrint":  "true"
+                                }
+                            }
+                        },
+                        "Set_variable_OutputMessage_on_error":  {
+                            "runAfter":  {
+                                "Parse_error_JSON":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "OutputMessage",
+                                "value":  "\u003cstrong\u003e Query failed or cancelled or timedout with following message: \u003c/strong\u003e @{body('Parse_error_JSON')?['error']?['message']}\n \u003cstrong\u003eCheck the logic app run for detailed error.\u003c/strong\u003e\n@{workflow()?['run']}"
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "GCPBigQueryCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('GcpbigquerycustomconnectorConnectionName'))]",
+                                "connectionName":  "[variables('GcpbigquerycustomconnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "GCPBigQuery-EnrichEntity-With-BigQueryTableData",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('GcpbigquerycustomconnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('GcpbigquerycustomconnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('GcpbigquerycustomconnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

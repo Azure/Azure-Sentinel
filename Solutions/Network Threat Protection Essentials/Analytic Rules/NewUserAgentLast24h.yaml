@@ -1,0 +1,88 @@
+id: b725d62c-eb77-42ff-96f6-bdc6745fc6e0
+name: New UserAgent observed in last 24 hours
+description: |
+  'Identifies new UserAgents observed in the last 24 hours versus the previous 14 days. This detection
+  extracts words from user agents to build the baseline and determine rareity rather than perform a
+  direct comparison. This avoids FPs caused by version numbers and other high entropy user agent components.
+  These new UserAgents could be benign. However, in normally stable environments,
+  these new UserAgents could provide a starting point for investigating malicious activity.
+  Note: W3CIISLog can be noisy depending on the environment, however OfficeActivity and AWSCloudTrail are
+  usually stable with low numbers of detections.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+  - Execution
+relevantTechniques:
+  - T1189
+  - T1071
+  - T1203
+query: |
+  let starttime = 14d;
+  let endtime = 1d;
+  let UserAgentAll =
+  (union isfuzzy=true
+  (OfficeActivity
+  | where TimeGenerated >= ago(starttime)
+  | where isnotempty(UserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP, Account = UserId, Type, RecordType, Operation
+  ),
+  (
+  W3CIISLog
+  | where TimeGenerated >= ago(starttime)
+  | where isnotempty(csUserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type, sSiteName, csMethod, csUriStem
+  ),
+  (
+  AWSCloudTrail
+  | where TimeGenerated >= ago(starttime)
+  | where isnotempty(UserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type, EventSource, EventName
+  ))
+  // remove wordSize blocks of non-numeric hex characters prior to word extraction
+  | extend UserAgentNoHexAlphas = replace("([A-Fa-f]{4,})", "x", UserAgent)
+  // once blocks of hex chars are removed, extract wordSize blocks of a-z
+  | extend Tokens = extract_all("([A-Za-z]{4,})", UserAgentNoHexAlphas)
+  // concatenate extracted words to create a summarized user agent for baseline and comparison
+  | extend NormalizedUserAgent = strcat_array(Tokens, "|")
+  | project-away UserAgentNoHexAlphas, Tokens;
+  UserAgentAll
+  | where StartTime >= ago(endtime)
+  | summarize StartTime = min(StartTime), EndTime = max(EndTime), count() by UserAgent, NormalizedUserAgent, SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem
+  | join kind=leftanti
+  (
+  UserAgentAll
+  | where StartTime < ago(endtime)
+  | summarize by NormalizedUserAgent, SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem
+  )
+  on NormalizedUserAgent
+  | extend timestamp = StartTime
+  | extend Name = tostring(split(Account, '@', 0)[0]), UPNSuffix = tostring(split(Account, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.4
+kind: Scheduled

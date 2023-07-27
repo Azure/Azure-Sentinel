@@ -1,0 +1,1005 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Intel 471 Malware Intelligence",
+        "description": "This playbook ingests malware indicators from Intel 471's Titan API into ThreatIntelligenceIndicator table.",
+        "prerequisites": [
+            "1. An active account in Titan platform, which is available as part of Intel 471's subscriptions. For more information, please contact sales@intel471.com.",
+            "2. Titan API credentials.",
+            "3. Pre-existing [Key Vault](https://docs.microsoft.com/azure/key-vault/general/basic-concepts) for securely storing Titan API credentials. Store Titan API credentials as secrets under `TitanUserName` and `TitanAPIKey` keys.",
+            "4. Pre-existing [Blob storage](https://docs.microsoft.com/azure/storage/blobs/storage-blobs-introduction) with blob container for persisting data such as cursor between the API calls."
+        ],
+        "postDeployment": [
+            "1. Go to the Key Vault. Select `Access control (IAM)` → `+ Add` → `Add role assignment`. Choose `Key Vault Secrets User`. On the next screen hit `+ Select members`, search for Intel 471 and select newly created logic app. Select it and proceed with granting access rights.",
+            "2. Go to created `Logic App` → `Edit`. Navigate to `CollectAndSubmitIndicators → SubmitInBatches → Connections` block. Inside this block create a new connection. Select `Connect with managed identity`, provide connection name and click `Create`.",
+            "3. Grant `ThreatIndicators.ReadWrite.OwnedBy` role for the Logic App to allow indicator ingestion through the tiIndicators API. It can't be done in the Azure portal at the moment. You can use the Azure CLI script listed below instead. Consult [Microsoft documentation](https://learn.microsoft.com/azure/app-service/scenario-secure-app-access-microsoft-graph-as-app?tabs=azure-cli#grant-access-to-microsoft-graph) for more details.",
+            "4. Optionally change the schedule's frequency in `Recurrence` block (the first one)."
+        ],
+        "lastUpdateTime": "2023-06-21T00:00:00.000Z",
+        "entities": [
+            "ip",
+            "filehash",
+            "url"
+        ],
+        "tags": [
+            "ThreatIntelligence"
+        ],
+        "author": {
+            "name": "Marcin Molenda / Intel 471, Inc."
+        },
+        "support": {
+          "name": "Intel 471",
+          "email": "support@intel471.com",
+          "tier": "Partner",
+          "link": "https://intel471.com/company/contact"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Intel471-ImportMalwareIntelligenceToSentinel",
+            "type": "String"
+        },
+        "StorageAccountName": {
+            "type": "String",
+            "metadata": {
+                "description": "Pre-existing Storage Account where Logic App can store helper data."
+            }
+        },
+        "StorageAccountContainerName": {
+            "type": "String",
+            "metadata": {
+                "description": "Pre-existing Container inside provided Storage Account."
+            }
+        },
+        "KeyVaultName": {
+            "type": "String",
+            "metadata": {
+                "description": "Pre-existing Key Vault with Titan API credentials. The credentials are expected under following keys: TitanUserName nad TitanAPIKey"
+            }
+        },
+        "TargetProduct": {
+            "defaultValue": "Azure Sentinel",
+            "type": "String",
+            "metadata": {
+                "description": "Security product to which the indicators will be applied. Allowed values: Azure Sentinel, Microsoft Defender ATP."
+            }
+        },
+        "Action": {
+            "defaultValue": "unknown",
+            "type": "String",
+            "metadata": {
+                "description": "The action to apply if the indicator is matched from within the targetProduct security tool. Allowed values: unknown, allow, block, alert."
+            }
+        },
+        "LookBackDays": {
+            "defaultValue": 0,
+            "type": "int",
+            "metadata": {
+                "description": "How many days of history should be pulled on the first run. Leave 0 to start from the current time."
+            }
+        }
+    },
+    "variables": {
+        "GraphSecurityConnectionName": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]",
+        "AzureBlobConnectionName": "[concat('azureblob-', parameters('PlaybookName'))]",
+        "StorageAccountName": "[parameters('StorageAccountName')]",
+        "StorageAccountContainerName": "[parameters('StorageAccountContainerName')]",
+        "AzureKeyVaultName": "[parameters('KeyVaultName')]",
+        "AzureKeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('GraphSecurityConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('GraphSecurityConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureBlobConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureBlobConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+                },
+                "parameterValues": {
+                    "accountName": "[variables('StorageAccountName')]",
+                    "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2022-09-01').keys[0].value]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureKeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureKeyVaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[variables('AzureKeyVaultName')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('GraphSecurityConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]"
+            ],
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "StorageAccountName": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "StorageAccountContainerName": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "BlobNameCursor": {
+                            "defaultValue": "cursor.txt",
+                            "type": "String"
+                        },
+                        "BlobNameFromDate": {
+                            "defaultValue": "fromdate.txt",
+                            "type": "String"
+                        },
+                        "LookBackDays": {
+                            "defaultValue": 0,
+                            "type": "int"
+                        },
+                        "TargetProduct": {
+                            "defaultValue": "Azure Sentinel",
+                            "type": "String"
+                        },
+                        "Action": {
+                            "defaultValue": "unknown",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "runs": 1
+                                }
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "CollectAndSubmitIndicators": {
+                            "actions": {
+                                "ClearCollectedIndicators": {
+                                    "inputs": {
+                                        "name": "collectedIndicators",
+                                        "value": []
+                                    },
+                                    "runAfter": {
+                                        "SubmitInBatches": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "CursorNotNull": {
+                                    "actions": {
+                                        "StoreCursor": {
+                                            "inputs": {
+                                                "body": "@string(variables('cursor'))",
+                                                "headers": {
+                                                    "ReadFileMetadataFromServer": true
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/files/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountContainerName'),'/',parameters('BlobNameCursor')))}"
+                                            },
+                                            "runAfter": {
+                                                "UpdateCursor": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
+                                        },
+                                        "UpdateCursor": {
+                                            "inputs": {
+                                                "name": "cursor",
+                                                "value": "@body('Parse_JSON')?['cursorNext']"
+                                            },
+                                            "runAfter": {},
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_JSON')?['cursorNext']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "FilterAndSplitFetchedIndicators": {
+                                    "actions": {
+                                        "Each_indicator": {
+                                            "actions": {
+                                                "Condition": {
+                                                    "actions": {
+                                                        "Switch": {
+                                                            "cases": {
+                                                                "Case": {
+                                                                    "actions": {
+                                                                        "Append_md5_indicator": {
+                                                                            "inputs": {
+                                                                                "name": "collectedIndicators",
+                                                                                "value": "@setProperty(setProperty(items('Each_indicator'), 'composedHashValue', items('Each_indicator')?['data']['indicator_data']?['file']?['md5']), 'composedHashType', 'md5')"
+                                                                            },
+                                                                            "runAfter": {},
+                                                                            "type": "AppendToArrayVariable"
+                                                                        },
+                                                                        "Append_sha1_indicator": {
+                                                                            "inputs": {
+                                                                                "name": "collectedIndicators",
+                                                                                "value": "@setProperty(setProperty(items('Each_indicator'), 'composedHashValue', items('Each_indicator')?['data']['indicator_data']?['file']?['sha1']), 'composedHashType', 'sha1')"
+                                                                            },
+                                                                            "runAfter": {},
+                                                                            "type": "AppendToArrayVariable"
+                                                                        },
+                                                                        "Append_sha256_indicator": {
+                                                                            "inputs": {
+                                                                                "name": "collectedIndicators",
+                                                                                "value": "@setProperty(setProperty(items('Each_indicator'), 'composedHashValue', items('Each_indicator')?['data']['indicator_data']?['file']?['sha256']), 'composedHashType', 'sha256')"
+                                                                            },
+                                                                            "runAfter": {},
+                                                                            "type": "AppendToArrayVariable"
+                                                                        }
+                                                                    },
+                                                                    "case": "file"
+                                                                }
+                                                            },
+                                                            "default": {
+                                                                "actions": {
+                                                                    "Append_indicator": {
+                                                                        "inputs": {
+                                                                            "name": "collectedIndicators",
+                                                                            "value": "@setProperty(setProperty(items('Each_indicator'), 'composedHashValue', ''), 'composedHashType', '')"
+                                                                        },
+                                                                        "runAfter": {},
+                                                                        "type": "AppendToArrayVariable"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": "@items('Each_indicator')?['data']['indicator_type']",
+                                                            "runAfter": {},
+                                                            "type": "Switch"
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "greater": [
+                                                                    "@items('Each_indicator')?['data']?['expiration']",
+                                                                    "@div(sub(ticks(utcNow()),ticks('1970-01-01')), 10000)"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "foreach": "@body('Parse_JSON')?['indicators']",
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('hasResults')",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "SetHasResults": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP": {
+                                    "inputs": {
+                                        "authentication": {
+                                            "password": "@body('GetApiKey')?['value']",
+                                            "type": "Basic",
+                                            "username": "@body('GetUsername')?['value']"
+                                        },
+                                        "headers": {
+                                            "User-Agent": "Intel 471 - Malware Intelligence - Azure Logic App 1.0.0"
+                                        },
+                                        "method": "GET",
+                                        "queries": "@if(equals(variables('cursor'), 'null'), variables('payload'), setProperty(variables('payload'), 'cursor', variables('cursor')))",
+                                        "uri": "https://api.intel471.com/v1/indicators/stream"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                },
+                                "MapIndicatorsToTiIndicators": {
+                                    "inputs": {
+                                        "from": "@variables('collectedIndicators')",
+                                        "select": {
+                                            "action": "@parameters('Action')",
+                                            "confidence": "@if(equals(item()?['data']?['confidence'], 'high'), 85, if(equals(item()?['data']?['confidence'], 'medium'), 50, 15))",
+                                            "description": "@concat('Intel 471 - ', item()?['data']?['context']?['description'])",
+                                            "expirationDateTime": "@addToTime('1970-01-01T00:00:00Z', div(item()?['data']['expiration'], 1000), 'second')",
+                                            "externalId": "@{item()?['data']?['uid']}",
+                                            "fileHashType": "@{item()?['composedHashType']}",
+                                            "fileHashValue": "@{item()?['composedHashValue']}",
+                                            "fileSize": "@if(contains(item()?['data']?['indicator_data'], 'file'), item()?['data']?['indicator_data']?['file']?['size'], '')",
+                                            "fileType": "@if(contains(item()?['data']?['indicator_data'], 'file'), item()?['data']?['indicator_data']?['file']?['type'], '')",
+                                            "killChain": "@if(equals(item()?['data']?['mitre_tactics'], 'command_and_control'), createArray('C2'), if(equals(item()?['data']?['mitre_tactics'], 'stage_capabilities'), createArray('Installation'), if(equals(item()?['data']?['mitre_tactics'], 'initial_access'), createArray('Exploitation'), json('[]'))))",
+                                            "lastReportedDateTime": "@{addToTime('1970-01-01T00:00:00Z', div(item()?['activity']['last'], 1000), 'second')}",
+                                            "malwareFamilyNames": "@createArray(item()['data']['threat']['data']['family'])",
+                                            "networkIPv4": "@{item()?['data']?['indicator_data']?['address']}",
+                                            "targetProduct": "@parameters('TargetProduct')",
+                                            "threatType": "Malware",
+                                            "tlpLevel": "amber",
+                                            "url": "@{item()?['data']?['indicator_data']?['url']}"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "FilterAndSplitFetchedIndicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Select"
+                                },
+                                "Parse_JSON": {
+                                    "inputs": {
+                                        "content": "@body('HTTP')",
+                                        "schema": {
+                                            "properties": {
+                                                "cursorNext": {
+                                                    "type": "string"
+                                                },
+                                                "indicators": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "activity": {
+                                                                "properties": {
+                                                                    "first": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "last": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "data": {
+                                                                "properties": {
+                                                                    "confidence": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "context": {
+                                                                        "properties": {
+                                                                            "description": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "expiration": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "indicator_data": {
+                                                                        "properties": {
+                                                                            "address": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "file": {
+                                                                                "properties": {
+                                                                                    "download_url": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "md5": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "sha1": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "sha256": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "size": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "ssdeep": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "geo_ip": {
+                                                                                "properties": {
+                                                                                    "city": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "country": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "country_code": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "isp": {
+                                                                                        "properties": {
+                                                                                            "autonomous_system": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "isp": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "network": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "organization": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "subdivision": {
+                                                                                        "items": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "url": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "indicator_type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "intel_requirements": {
+                                                                        "items": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "mitre_tactics": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "source_id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "threat": {
+                                                                        "properties": {
+                                                                            "data": {
+                                                                                "properties": {
+                                                                                    "family": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "malware_family_profile_uid": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "version": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "uid": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "uid": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "last_updated": {
+                                                                "type": "integer"
+                                                            },
+                                                            "meta": {
+                                                                "properties": {
+                                                                    "version": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "uid": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "activity",
+                                                            "data",
+                                                            "last_updated",
+                                                            "meta",
+                                                            "uid"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                },
+                                "SetHasResults": {
+                                    "inputs": {
+                                        "name": "hasResults",
+                                        "value": "@contains(body('Parse_JSON'), 'indicators')"
+                                    },
+                                    "runAfter": {
+                                        "CursorNotNull": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "SubmitInBatches": {
+                                    "actions": {
+                                        "Submit_multiple_tiIndicators": {
+                                            "inputs": {
+                                                "body": {
+                                                    "value": "@items('SubmitInBatches')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/beta/security/tiIndicators/submitTiIndicators"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "foreach": "@chunk(body('MapIndicatorsToTiIndicators'), 100)",
+                                    "runAfter": {
+                                        "MapIndicatorsToTiIndicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "expression": "@equals(variables('hasResults'), false)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "runAfter": {
+                                "InitIntel471Payload": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Until"
+                        },
+                        "GetApiKey": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('TitanAPIKey')}/value"
+                            },
+                            "runAfter": {
+                                "GetUsername": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "GetCursorFromBlob": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/files/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountContainerName'),'/',parameters('BlobNameCursor')))}/content",
+                                "queries": {
+                                    "inferContentType": true
+                                }
+                            },
+                            "runAfter": {
+                                "InitCollectedIndicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "GetFromDateFromBlob": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/files/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountContainerName'),'/',parameters('BlobNameFromDate')))}/content",
+                                "queries": {
+                                    "inferContentType": true
+                                }
+                            },
+                            "runAfter": {
+                                "IfCursorBlobExists": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "GetUsername": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('TitanUserName')}/value"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "IfCursorBlobExists": {
+                            "actions": {
+                                "SetCursor": {
+                                    "inputs": {
+                                        "name": "cursor",
+                                        "value": "@{body('GetCursorFromBlob')}"
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "CreateBlobForCursor": {
+                                        "inputs": {
+                                            "body": "null",
+                                            "headers": {
+                                                "ReadFileMetadataFromServer": true
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/files",
+                                            "queries": {
+                                                "folderPath": "@parameters('StorageAccountContainerName')",
+                                                "name": "@parameters('BlobNameCursor')",
+                                                "queryParametersSingleEncoded": true
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "runtimeConfiguration": {
+                                            "contentTransfer": {
+                                                "transferMode": "Chunked"
+                                            }
+                                        },
+                                        "type": "ApiConnection"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@actions('GetCursorFromBlob').outputs.statusCode",
+                                                404
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "GetCursorFromBlob": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "IfFromDateBlobExists": {
+                            "actions": {
+                                "SetFromDateFromBlob": {
+                                    "inputs": {
+                                        "name": "fromDate",
+                                        "value": "@int(body('GetFromDateFromBlob'))"
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "CreateBlobForFromDate": {
+                                        "inputs": {
+                                            "body": "@variables('fromDate')",
+                                            "headers": {
+                                                "ReadFileMetadataFromServer": true
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('StorageAccountName')))}/files",
+                                            "queries": {
+                                                "folderPath": "@parameters('StorageAccountContainerName')",
+                                                "name": "@parameters('BlobNameFromDate')",
+                                                "queryParametersSingleEncoded": true
+                                            }
+                                        },
+                                        "runAfter": {
+                                            "SetFromDate": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "runtimeConfiguration": {
+                                            "contentTransfer": {
+                                                "transferMode": "Chunked"
+                                            }
+                                        },
+                                        "type": "ApiConnection"
+                                    },
+                                    "SetFromDate": {
+                                        "inputs": {
+                                            "name": "fromDate",
+                                            "value": "@div(if(equals(parameters('LookBackDays'), 0), sub(ticks(utcNow()),ticks('1970-01-01')), sub(sub(ticks(utcNow()), mul(864000000000, parameters('LookBackDays'))), ticks('1970-01-01'))), 10000)"
+                                        },
+                                        "runAfter": {},
+                                        "type": "SetVariable"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@actions('GetFromDateFromBlob').outputs.statusCode",
+                                                404
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "GetFromDateFromBlob": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "InitCollectedIndicators": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "collectedIndicators",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "InitFromDate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "InitCursor": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "cursor",
+                                        "type": "string",
+                                        "value": "null"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "InitHasResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "InitFromDate": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fromDate",
+                                        "type": "integer"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "InitCursor": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "InitHasResults": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "hasResults",
+                                        "type": "boolean",
+                                        "value": true
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "GetApiKey": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "InitIntel471Payload": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "payload",
+                                        "type": "object",
+                                        "value": {
+                                            "count": 100,
+                                            "lastUpdatedFrom": "@variables('fromDate')"
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "IfFromDateBlobExists": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftgraphsecurity": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('GraphSecurityConnectionName'))]",
+                                "connectionName": "[variables('GraphSecurityConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                            },
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                                "connectionName": "[variables('AzureBlobConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                                "connectionName": "[variables('AzureKeyVaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "StorageAccountName": {
+                        "value": "[variables('StorageAccountName')]"
+                    },
+                    "StorageAccountContainerName": {
+                        "value": "[variables('StorageAccountContainerName')]"
+                    },
+                    "LookBackDays": {
+                        "value": "[parameters('LookBackDays')]"
+                    },
+                    "TargetProduct": {
+                        "value": "[parameters('TargetProduct')]"
+                    },
+                    "Action": {
+                        "value": "[parameters('Action')]"
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,49 @@
+id: 4644baf7-3464-45dd-bd9d-e07687e25f81
+name: Multiple Sources Affected by the Same TI Destination
+description: |
+  'Identifies multiple machines trying to reach out to the same destination blocked by TI in Azure Firewall. This can indicate attack on the organization by the same attack group.
+  
+  Configurable Parameters:
+  
+  - Minimum affected threshold - alert only if more than this number of hosts affected. Default is set to 5.
+  - Recommendation is to use the new resource specific logs. If you are using both, the TiTraffic Count will be duplicated.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+      - AZFWThreatIntel
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  let RunTime = 1d; 
+  let StartRunTime = 1d; 
+  let EndRunTime = StartRunTime - RunTime; 
+  let MinAffectedThershold = 5; 
+  union isfuzzy=true
+  (AzureDiagnostics 
+  | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
+  | where OperationName == "AzureFirewallThreatIntelLog"
+  | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int  "." * "Action: Deny. " ThreatDescription),
+  (AZFWThreatIntel
+  | where TimeGenerated between (ago(StartRunTime) .. ago(EndRunTime)))
+  | summarize TiTrafficCount = count(), dCountSourceIps = dcount(SourceIp), AffectedIps = make_set(SourceIp, 10000) by Fqdn, ThreatDescription,SourceIp 
+  | where array_length(AffectedIps) > MinAffectedThershold | order by TiTrafficCount desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Fqdn
+version: 1.1.1
+kind: Scheduled

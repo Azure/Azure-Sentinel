@@ -1,0 +1,36 @@
+id: 49ce5322-60d7-4b02-ad79-99f650aa5790
+name: Privilege escalation with admin managed policy
+description: |
+  'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on admin managed policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1484
+query: |
+  AWSCloudTrail
+  | where  EventName in ("AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+  | where tostring(parse_json(RequestParameters).policyArn) contains "Admin" and tostring(parse_json(RequestParameters).policyArn) !contains "FullAccess" and tostring(parse_json(RequestParameters).policyArn) !startswith "arn:aws:iam::aws:policy/AdministratorAccess"
+  | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, ResponseElements, UserIdentityArn
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityAccountId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

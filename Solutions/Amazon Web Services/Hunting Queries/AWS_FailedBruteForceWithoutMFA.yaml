@@ -1,0 +1,30 @@
+id: bf130d1d-702b-4af6-9528-8bc4229e59f4
+name: Multiple failed login attempts to an existing user without MFA
+description: |
+  'Failed brute force attempt detected on an existing user without MFA configurations.'
+severity: High
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Credential Access
+relevantTechniques:
+  - T1110
+query: |
+    AWSCloudTrail
+    | where EventName == "ConsoleLogin"
+    | where tostring(parse_json(ResponseElements).ConsoleLogin) == "Failure" and tostring(parse_json(AdditionalEventData).MFAUsed) == "No"
+    | summarize arg_min(TimeGenerated, *), failed_attempts=count() by UserIdentityUserName, SourceIpAddress
+    | where failed_attempts > 4
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

@@ -1,0 +1,34 @@
+id: 71d374e0-1cf8-4e50-aecd-ab6c519795c2
+name: Azure DevOps Retention Reduced
+description: |
+  'AzureDevOps retains items such as run records and produced artifacts for a configurable amount of time. An attacker looking to reduce the footprint left by their malicious activity may look to reduce the retention time for artifacts and runs.
+  This query will look for where retention has been reduced to the minimum level - 1, or reduced by more than half.'
+severity: Low
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1564
+query: |
+  AzureDevOpsAuditing
+  | where OperationName =~ "Pipelines.PipelineRetentionSettingChanged"
+  | where Data.SettingName in ("PurgeArtifacts", "PurgeRuns")
+  | where Data.NewValue == 1 or Data.NewValue < Data.OldValue/2
+  | project-reorder TimeGenerated, OperationName, ActorUPN, IpAddress, UserAgent, Data
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled

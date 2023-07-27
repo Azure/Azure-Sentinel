@@ -1,0 +1,203 @@
+Parser:
+  Title: Audit Event ASIM parser for Microsoft Windows Events audit events
+  Version: '0.1'
+  LastUpdated: Dec 20 2022
+Product:
+  Name: Microsoft Windows
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Office 365 Management Activity API schema
+  Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
+Description: |
+  This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) in the SecurityEvent, WindowsEvent and Event tables to the ASIM Audit Event schema.
+ParserName: ASimAuditEventMicrosoftWindowsEvents
+EquivalentBuiltInParser: _ASim_AuditEvent_MicrosoftWindowsEvents
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool = false) {
+    // Parsed Events Ids
+    let ParsedEventIds = dynamic([1102,4698,4699,4700,4701,4702,4929,5025,5027,5028,5029,5030,5034,5035,5037,7035,7036,7040,7045,2009,5136]);
+    // Eventlog Event Ids
+    let EventlogEventIds = dynamic([1102]);
+    // Scheduled Task Event Ids
+    let ScheduledTaskEventIds = dynamic([4698,4699,4700,4701,4702]);
+    // Active Directory Replica Source Naming Context Event Ids
+    let ActiveDirectoryReplicaIds = dynamic([4929]);
+    // Firewall Event Ids
+    let FirewallEventIds = dynamic([5025,5027,5028,5029,5030,5034,5035,5037]);
+    // Service Event Ids
+    let ServiceEventIds = dynamic([7035,7036,7040,7045,2009]); 
+    // Directory Service Object Ids
+    let DirectoryServiceIds = dynamic([5136]);   
+    // EventID Lookup
+    let EventIDLookup = datatable(EventID:int, Operation:string, EventType:string, Object:string, ObjectType:string, EventResult:string)
+    [   
+        1102, "Delete Logs", "Delete", "Security Logs", "Event Log", "Success",
+        4698, "Create Scheduled Task", "Create", "", "Scheduled Task", "Success",
+        4699, "Delete Scheduled Task", "Delete", "", "Scheduled Task", "Success",
+        4700, "Enable Scheduled Task", "Enable", "", "Scheduled Task", "Success",
+        4701, "Disable Scheduled Task ", "Disable", "", "Scheduled Task", "Success",
+        4702, "Update Scheduled Task", "Set", "", "Scheduled Task", "Success",
+        4929, "Remove Active Directory Replica Source Naming Context", "Delete", "", "Other", "Success",
+        5025, "Stop Firewall Service", "Disable", "Firewall Service", "Service", "Success",
+        5027, "Retrieve the Security Policy From The Local Storage", "Read", "Firewall Service", "Service", "Failure",
+        5028, "Parse the new Security Policy", "Set", "Firewall Service", "Service", "Failure",
+        5029, "Initialize the Firewall Driver", "Initialize", "Firewall Service", "Service", "Failure",
+        5030, "Start the Firewall Service", "Start", "Firewall Service", "Service", "Failure",
+        5034, "Stop Firewall Driver", "Stop", "Firewall Driver", "Driver", "Failure",
+        5035, "Start Firewall Driver", "Start", "Firewall Driver", "Driver", "Failure",
+        5037, "Terminating Firewall Driver", "Terminate", "Firewall Driver", "Driver", "Failure",
+        7035, "Start Control Sent", "Execute", "Service", "Service", "Success",
+        7036, "Enter Stop State", "Stop", "Service", "Service", "Success",
+        7040, "Changed Service Settings", "Set", "Service", "Service", "Success",
+        7045, "Install Service", "Install", "Service", "Service", "Success",
+        2009, "Load Group Policy", "Other", "Service", "Service", "Failure",
+        5136, "Modified Directory Services Object", "Set", "", "Directory Service Object", "Success"
+    ];
+    let ParsedEvents =
+    union (
+        union (
+        // SecurityEvents
+            SecurityEvent
+            | where not(disabled)
+            | where EventID in(ParsedEventIds)
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
+        ),
+        (
+        // Event
+            Event
+            | where not(disabled)
+            | where EventID in(ParsedEventIds)
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
+        )
+        | parse-kv EventData as 
+            (
+                SubjectUserSid:string,
+                SubjectUserName:string,
+                SubjectDomainName:string,
+                SubjectLogonId:string,
+                TaskName:string,
+                TaskContent:string,
+                TaskContentNew:string,
+                ClientProcessId:string,
+                DestinationDRA:string,
+                SourceDRA:string,
+                SourceAddr:string,
+                ObjectDN:string,
+                AttributeValue:string
+            ) 
+        with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+        | project-away EventData
+    ),
+    // WindowsEvents
+    (
+        WindowsEvent
+        | where not(disabled)
+        | where EventID in(ParsedEventIds)
+        | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
+        | extend
+            SubjectUserSid = tostring(EventData.SubjectUserSid),
+            SubjectUserName = tostring(EventData.SubjectUserName),
+            SubjectDomainName = tostring(EventData.SubjectDomainName),
+            SubjectLogonId = tostring(EventData.SubjectLogonId),
+            TaskName = tostring(EventData.TaskName),
+            TaskContent = tostring(EventData.TaskContent),
+            TaskContentNew = tostring(EventData.TaskContentNew),
+            ClientProcessId = tostring(EventData.ClientProcessId),
+            DestinationDRA = tostring(EventData.DestinationDRA),
+            SourceDRA = tostring(EventData.SourceDRA),
+            SourceAddr = tostring(EventData.SourceAddr),
+            ObjectDN = tostring(EventData.ObjectDN),
+            AttributeValue = tostring(EventData.AttributeValue)
+        | project-away EventData
+    )
+    | lookup EventIDLookup on EventID
+    ;
+    // Parse EventLog
+    let EventLog = ParsedEvents
+    | where EventID in(EventlogEventIds)
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue;
+    // Parse Scheduled Task
+    let ScheduledTask = ParsedEvents
+    | where EventID in(ScheduledTaskEventIds)
+    | extend 
+        Object = TaskName,
+        NewValue = coalesce(
+            TaskContent,
+            TaskContentNew
+        )
+    | extend 
+        Value = NewValue
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse ADR
+    let ActiveDirectoryReplica = ParsedEvents
+    | where EventID in(ActiveDirectoryReplicaIds)
+    | extend 
+        NewValue = SourceDRA,
+        OldValue = DestinationDRA,
+        SrcFQDN = SourceAddr
+    | extend 
+        Value = NewValue,
+        Object = OldValue
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse WindowsFirewall
+    let WindowsFirewall = ParsedEvents
+    | where EventID in(FirewallEventIds)
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse ServiceEvent
+    let ServiceEvent = ParsedEvents
+    | where EventID in(ServiceEventIds)
+    | project-away Task*, *DRA, SourceAddr, ObjectDN, AttributeValue
+    ;
+    // Parse DirectoryService
+    let DirectoryService = ParsedEvents
+    | where EventID in(DirectoryServiceIds)
+    | extend 
+        Object = ObjectDN
+    | project-rename 
+        NewValue = AttributeValue
+    | extend
+        Value = NewValue
+    | project-away Task*, *DRA, SourceAddr, ObjectDN
+    ;
+    // Union Events
+    union EventLog, ScheduledTask, ActiveDirectoryReplica, WindowsFirewall, ServiceEvent, DirectoryService
+        | invoke _ASIM_ResolveDvcFQDN("Computer")
+        | project-rename 
+            ActorUserId = SubjectUserSid,
+            ActorSessionId = SubjectLogonId,
+            DvcId = _ResourceId,
+            ActingAppId = ClientProcessId,
+            EventUid = _ItemId
+        | extend
+            EventCount = int(1),
+            EventStartTime = TimeGenerated, 
+            EventEndTime= TimeGenerated,
+            EventProduct = 'Windows',
+            EventVendor = 'Microsoft',
+            EventSchemaVersion = '0.1.0',
+            EventSchema = 'AuditEvent',
+            EventOriginalType = tostring(EventID),
+            DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
+            ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
+            ActorUsernameType = iff (SubjectDomainName == "", 'Simple', 'Windows'),
+            ActorUserIdType = iff (ActorUserId == "","", "SID"),
+            ActingAppType = "Process"
+        | extend
+            User = ActorUsername,
+            Dvc = DvcFQDN
+        | project-away Subject*, EventID, Computer
+  };
+  parser (disabled=disabled)

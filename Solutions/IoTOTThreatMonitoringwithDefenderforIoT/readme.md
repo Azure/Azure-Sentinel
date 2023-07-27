@@ -17,7 +17,7 @@ You can deploy the solution by clicking on the buttons below:
 5️⃣ View the Analytics Rules: Navigate to Microsoft Sentinel > Analytics > Search "IOT"
 
 ## Workbook
-The OT Threat Monitoring with Defender for IoT Workbook features OT filtering for Security Alerts, Incidents, and Asset Inventory. The workbook features a dynamic assessment of the MITRE ATT&CK for ICS matrix across your environment to analyze and respond to OT-based threats. This workbook is designed to enable SecOps Analysts, Security Engineers, and MSSPs to gain situational awareness for IT/OT security posture.
+The OT Threat Monitoring with Defender for IoT Workbook features OT filtering for Security Alerts, Incidents, Vulnerabilities and Asset Inventory. The workbook features a dynamic assessment of the MITRE ATT&CK for ICS matrix across your environment to analyze and respond to OT-based threats. This workbook is designed to enable SecOps Analysts, Security Engineers, and MSSPs to gain situational awareness for IT/OT security posture.
 
 ## Analytics Rules
 ### 1) Denial of Service (Microsoft Defender for IoT)
@@ -60,3 +60,10 @@ The following playbook will send mail to notify specific stake holders. One exam
 Normally, the authorized entity to program a PLC is the Engineering Workstation, to program a PLC attackers might create a new Engineering Workstation to create malicious programing. The following playbook will open a ticket in ServiceNow each time a new Engineering Workstation is detected. This playbook parses explicitly the IoT device entity fields. For more information, see [AD4IoT-NewAssetServiceNowTicket](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/AD4IoT-NewAssetServiceNowTicket/readme.md)
 ### 4) Update alert statuses in Defender for IoT
 This playbook updates alert statuses in Defender for IoT whenever a related alert in Microsoft Sentinel has a Status update.
+### 5) Send Email to IoT/OT Device Owner
+The playbooks automate the SOC workflow by automatically emailing the incident details to the right IoT/OT device owner (based on Defender for IoT dafinition) and allowing him to respond by email. The incident is automatically updated based on the email response from the device owner.
+### 6) Triage incidents involving Crown Jewels devices automatically
+SOC and OT engineers can stream their workflows using the playbook, which automatically updates the incident severity based on the devices involved in the incident and their importance.
+### 7) Incident with active CVEs: Auto Workflow 
+The playbook automates the SOC workflow by automatically enriching incident comments with the CVEs of the involved devices based on Defender for IoT data.
+An automated triage is performed if the CVE is critical, and the asset owner is automatically notified by email

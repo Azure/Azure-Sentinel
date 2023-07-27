@@ -1,0 +1,2416 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Rubrik IOC Scan",
+        "description":  "This playbook interacts with Rubrik Security Cloud to scan backups for specified IOCs. This playbook is used by other playbooks that leverage this capability.",
+        "prerequisites":  [
+            "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
+            "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
+            "3. Rubrik custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.",
+            "4. To perform an IOC scan the IOC YARA rule should be available as a URL.",
+            "5. Store Service account credentials in Key Vault and obtain keyvault name and tenantId",
+                "a. Create a Key Vault with unique name",
+                "b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively"
+        ],
+        "postDeployment":  [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Click the Custom Connector connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections"
+        ],
+        "prerequisitesDeployTemplateFile":  "Azure-Sentinel/Solutions/RubrikSecurityCloud/Playbooks/RubrikCustomConnector/Rubrik_custom_conn.json",
+        "lastUpdateTime":  "2022-01-20T00:00:00.000Z",
+        "entities":  ["account","url"],
+        "tags":  ["Scan","Security","Rubrik"],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Rubrik"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "RubrikIOCScan",
+            "type":  "string"
+        },
+        "Rubrik Connector name": {
+            "defaultValue": "RubrikCustomConnector",
+            "type": "String",
+            "metadata": {
+                "description": "Rubrik Custom Connector name"
+            }
+        },
+        "keyvaultName": {
+            "defaultValue": "RubrikSentinelKeyVault",
+            "type": "string"
+        },
+        "tenantId": {
+            "type": "string"
+        }
+    },
+    "variables":  {
+        "RubrikcustomconnectorConnectionName":  "[concat('Rubrikcustomconnector-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName":  "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "manual":  {
+                            "type":  "Request",
+                            "kind":  "Http",
+                            "inputs":  {
+                                "schema":  {
+                                    "properties":  {
+                                        "BaseUrl":  {
+                                            "type":  "string"
+                                        },
+                                        "ClusterId":  {
+                                            "type":  "string"
+                                        },
+                                        "EndDate":  {
+                                            "type":  "string"
+                                        },
+                                        "IOCHash":  {
+                                            "type":  "string"
+                                        },
+                                        "IOCPath":  {
+                                            "type":  "string"
+                                        },
+                                        "IOCYaraRule":  {
+                                            "type":  "string"
+                                        },
+                                        "Limit":  {
+                                            "type":  "integer"
+                                        },
+                                        "ObjectId":  {
+                                            "type":  "string"
+                                        },
+                                        "PathsToExclude":  {
+                                            "type":  "string"
+                                        },
+                                        "PathsToExempt":  {
+                                            "type":  "string"
+                                        },
+                                        "PathsToInclude":  {
+                                            "type":  "string"
+                                        },
+                                        "PollingInterval":  {
+                                            "type":  "integer"
+                                        },
+                                        "PollingTimeout":  {
+                                            "type":  "integer"
+                                        },
+                                        "RequestedHashType":  {
+                                            "type":  "string"
+                                        },
+                                        "ScanName":  {
+                                            "type":  "string"
+                                        },
+                                        "StartDate":  {
+                                            "type":  "string"
+                                        },
+                                        "TimeDelta":  {
+                                            "type":  "string"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Authentication":  {
+                            "runAfter":  {
+                                "ClientSecret":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "client_id":  "@body('ClientId')?['value']",
+                                    "client_secret":  "@body('ClientSecret')?['value']"
+                                },
+                                "headers":  {
+                                    "Content-Type":  "application/json"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['RubrikCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/api/client_token"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Check_if_limit_is_null_or_not_":  {
+                            "actions":  {
+                            },
+                            "runAfter":  {
+                                "Initialize_Input_Limit":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                    "Set_Input_Limit_variable":  {
+                                        "runAfter":  {
+                                        },
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "InputLimit",
+                                            "value":  "@int(triggerBody()?['Limit'])"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@triggerBody()?['Limit']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Check_if_limit_is_zero_or_not":  {
+                            "actions":  {
+                                "If_limit_is_less_then_or_equal_to_0_then_set_1":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "InputLimit",
+                                        "value":  1
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_error_message_of_API":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "lessOrEquals":  [
+                                            "@variables('InputLimit')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "ClientId":  {
+                            "runAfter":  {
+                                "Initialize_ObjectId_array":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['keyvault_1']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientId')}/value"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "ClientSecret":  {
+                            "runAfter":  {
+                                "ClientId":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['keyvault_1']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientSecret')}/value"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Compose_ObjectId":  {
+                            "runAfter":  {
+                                "Initialize_status_variable_to_send_it_at_the_end_in_response":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Compose",
+                            "inputs":  [
+                                "@{triggerBody()?['ObjectId']}"
+                            ]
+                        },
+                        "Final_Response":  {
+                            "runAfter":  {
+                                "Perform_IOC_Scan_until_limit_reach":  [
+                                    "Succeeded",
+                                    "Failed",
+                                    "TimedOut",
+                                    "Skipped"
+                                ]
+                            },
+                            "type":  "Response",
+                            "kind":  "Http",
+                            "inputs":  {
+                                "body":  {
+                                    "RadarIOCScan":  "@if(equals(variables('IOCScanResult'),null),null,variables('IOCScanResult'))",
+                                    "RadarIOCScanStatus":  "@if(equals(variables('RadarIOCScanStatus'),null),null,variables('RadarIOCScanStatus'))",
+                                    "RecoverableSnapshotid":  "@if(equals(variables('RecoverableSnapshotId'),null),null, variables('RecoverableSnapshotId'))",
+                                    "error":  "@if(equals(variables('ErrorMessage'),null),null,variables('ErrorMessage'))",
+                                    "isLatestInfected":  "@if(equals(variables('isLatestInfected'),null),null,variables('isLatestInfected'))"
+                                },
+                                "statusCode":  "@variables('StatusCode')"
+                            }
+                        },
+                        "Initialization_for_recoverable_snapshots":  {
+                            "runAfter":  {
+                                "initialization_RadarIOCScanStatus":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "RecoverableSnapshots",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Count":  {
+                            "runAfter":  {
+                                "save_ioc_scan_result_body_here":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Count",
+                                        "type":  "integer",
+                                        "value":  1
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_CurrentFieldDate_to_compare_snapshot_Id":  {
+                            "runAfter":  {
+                                "Initialize_Recoverable_Snapshot_Id":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "CurrentFieldDate",
+                                        "type":  "string",
+                                        "value":  "1980-07-11"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_End_Date_for_IOC_Scan":  {
+                            "runAfter":  {
+                                "Initialize_Start_Date_for_IOC_Scan":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "EndDate",
+                                        "type":  "string",
+                                        "value":  "@triggerBody()?['EndDate']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Input_Limit":  {
+                            "runAfter":  {
+                                "Initialize_indicatorsOfCompromise":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "InputLimit",
+                                        "type":  "integer",
+                                        "value":  "@null"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_LastFieldDate_to_compare_snapshot_Id":  {
+                            "runAfter":  {
+                                "Initialize_CurrentFieldDate_to_compare_snapshot_Id":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "LastFieldDate",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_ObjectId_array":  {
+                            "runAfter":  {
+                                "Compose_ObjectId":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ObjectId",
+                                        "type":  "array",
+                                        "value":  "@outputs('Compose_ObjectId')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Pending_count_for_IOC_scan":  {
+                            "runAfter":  {
+                                "Check_if_limit_is_null_or_not_":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "PendingCount",
+                                        "type":  "integer",
+                                        "value":  0
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Polling_Timeout":  {
+                            "runAfter":  {
+                                "Initialize_Count":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "PollingTimeout",
+                                        "type":  "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Recoverable_Snapshot_Id":  {
+                            "runAfter":  {
+                                "Limit_(used_inside_loop)":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "RecoverableSnapshotId",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Start_Date_for_IOC_Scan":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "StartDate",
+                                        "type":  "string",
+                                        "value":  "@triggerBody()?['StartDate']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_access_token":  {
+                            "runAfter":  {
+                                "Is_Authentication_Failed":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "access_token",
+                                        "type":  "string",
+                                        "value":  "@{body('Authentication')?['access_token']}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_error_message_of_API":  {
+                            "runAfter":  {
+                                "Initialize_isLatestInfected_":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ErrorMessage",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_indicatorsOfCompromise":  {
+                            "runAfter":  {
+                                "Initialize_End_Date_for_IOC_Scan":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "IOCAdvance",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_isLatestInfected_":  {
+                            "runAfter":  {
+                                "Initialization_for_recoverable_snapshots":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "isLatestInfected",
+                                        "type":  "boolean",
+                                        "value":  "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_status_variable_to_send_it_at_the_end_in_response":  {
+                            "runAfter":  {
+                                "initialize_epoch_value_of_end_date":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "StatusCode",
+                                        "type":  "integer",
+                                        "value":  200
+                                    }
+                                ]
+                            }
+                        },
+                        "Is_Authentication_Failed":  {
+                            "actions":  {
+                                "Response":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Response",
+                                    "kind":  "Http",
+                                    "inputs":  {
+                                        "body":  "@body('Authentication')?['message']",
+                                        "statusCode":  "@outputs('Authentication')['statusCode']"
+                                    }
+                                },
+                                "Terminate":  {
+                                    "runAfter":  {
+                                        "Response":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Terminate",
+                                    "inputs":  {
+                                        "runError":  {
+                                            "code":  "@{outputs('Authentication')?['statusCode']}",
+                                            "message":  "@{body('Authentication')?['message']}"
+                                        },
+                                        "runStatus":  "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Authentication":  [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "not":  {
+                                            "equals":  [
+                                                "@outputs('Authentication')?['statusCode']",
+                                                200
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Limit_(used_inside_loop)":  {
+                            "runAfter":  {
+                                "Check_if_limit_is_zero_or_not":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Limit",
+                                        "type":  "integer",
+                                        "value":  "@variables('InputLimit')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Perform_IOC_Scan_until_limit_reach":  {
+                            "actions":  {
+                                "Does_Start_IOC_scan_get_status_code_200":  {
+                                    "actions":  {
+                                        "Does_Start_IOC_scan_API_response_contains_errors":  {
+                                            "actions":  {
+                                                "Set_Limit_to_0_-_will_exit_the_until_loop2":  {
+                                                    "runAfter":  {
+                                                        "Set_error_message_if_Start_IOC_scan_response_contains_error":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "Limit",
+                                                        "value":  0
+                                                    }
+                                                },
+                                                "Set_error_message_if_Start_IOC_scan_response_contains_error":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "ErrorMessage",
+                                                        "value":  "@{body('Start_IOC_scan')?['errors'][0]?['message']}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                            },
+                                            "else":  {
+                                                "actions":  {
+                                                    "Parse_Start_IOC_scan_Response":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "ParseJson",
+                                                        "inputs":  {
+                                                            "content":  "@body('Start_IOC_scan')",
+                                                            "schema":  {
+                                                                "properties":  {
+                                                                    "data":  {
+                                                                        "properties":  {
+                                                                            "startThreatHunt":  {
+                                                                                "properties":  {
+                                                                                    "huntId":  {
+                                                                                        "type":  "string"
+                                                                                    },
+                                                                                    "isSyncSuccessful":  {
+                                                                                        "type":  "boolean"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            }
+                                                                        },
+                                                                        "type":  "object"
+                                                                    }
+                                                                },
+                                                                "type":  "object"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression":  {
+                                                "and":  [
+                                                    {
+                                                        "contains":  [
+                                                            "@body('Start_IOC_scan')",
+                                                            "errors"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type":  "If"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Start_IOC_scan":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Set_Limit_to_0_-_will_exit_the_until_loop":  {
+                                                "runAfter":  {
+                                                    "Set_Status_code_for_response":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "Limit",
+                                                    "value":  0
+                                                }
+                                            },
+                                            "Set_Start_IOC_scan_error_status_with_status_code_not_equal_to_200_":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "ErrorMessage",
+                                                    "value":  "StstusCode: @{outputs('Start_IOC_scan')['statusCode']}, Message: @{body('Start_IOC_scan')?['message']}"
+                                                }
+                                            },
+                                            "Set_Status_code_for_response":  {
+                                                "runAfter":  {
+                                                    "Set_Start_IOC_scan_error_status_with_status_code_not_equal_to_200_":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "StatusCode",
+                                                    "value":  "@outputs('Start_IOC_scan')['statusCode']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@outputs('Start_IOC_scan')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "Does_rubrik-radar-ioc-scan-status_get_status_code_200":  {
+                                    "actions":  {
+                                        "Does_rubrik-radar-ioc-scan-status_API_response_contains_errors":  {
+                                            "actions":  {
+                                                "Set_error_message_if_IOC_scan_status_response_has_error":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "ErrorMessage",
+                                                        "value":  "message: @{body('rubrik-radar-ioc-scan-status')?['errors'][0]?['message']}"
+                                                    }
+                                                },
+                                                "Set_limit_to_0_to_exit_the_loop":  {
+                                                    "runAfter":  {
+                                                        "Set_error_message_if_IOC_scan_status_response_has_error":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "Limit",
+                                                        "value":  0
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                            },
+                                            "else":  {
+                                                "actions":  {
+                                                    "Get_scan_results":  {
+                                                        "runAfter":  {
+                                                            "Run_IOC_scan_until_the_operation_completes":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "Http",
+                                                        "inputs":  {
+                                                            "body":  {
+                                                                "query":  "query ThreatHuntMalwareResultQuery($huntId: String!) {\r\n  threatHuntResult(huntId: $huntId) {\r\n    huntId\r\n    config {\r\n      name\r\n      indicatorsOfCompromise {\r\n        iocValue\r\n        iocKind\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    results {\r\n      object {\r\n        id\r\n        name\r\n        objectType\r\n        __typename\r\n      }\r\n      snapshotResults {\r\n        snapshotId\r\n        snapshotDate\r\n        status\r\n        lastJobId\r\n        matches {\r\n          indicatorIndex\r\n          paths {\r\n            requestedHashDetails {\r\n              hashValue\r\n              hashType\r\n              __typename\r\n            }\r\n            yaraMatchDetails {\r\n              name\r\n              tags\r\n              __typename\r\n            }\r\n            aclDetails\r\n            creationTime\r\n            modificationTime\r\n            path\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        quarantineDetails {\r\n          filesDetails {\r\n            fileName\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        scanStats {\r\n          numFiles\r\n          numFilesScanned\r\n          totalFilesScannedSizeBytes\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}",
+                                                                "variables":  {
+                                                                    "huntId":  "@{body('Parse_Start_IOC_scan_Response')?['data']?['startThreatHunt']?['huntId']}"
+                                                                }
+                                                            },
+                                                            "headers":  {
+                                                                "Authorization":  "Bearer @{variables('access_token')}",
+                                                                "Content-Type":  "application/json"
+                                                            },
+                                                            "method":  "POST",
+                                                            "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
+                                                        }
+                                                    },
+                                                    "Parse_rubrik-radar-ioc-scan-status":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "ParseJson",
+                                                        "inputs":  {
+                                                            "content":  "@body('rubrik-radar-ioc-scan-status')",
+                                                            "schema":  {
+                                                                "properties":  {
+                                                                    "data":  {
+                                                                        "properties":  {
+                                                                            "threatHuntResult":  {
+                                                                                "properties":  {
+                                                                                    "__typename":  {
+                                                                                        "type":  "string"
+                                                                                    },
+                                                                                    "config":  {
+                                                                                        "properties":  {
+                                                                                            "__typename":  {
+                                                                                                "type":  "string"
+                                                                                            },
+                                                                                            "indicatorsOfCompromise":  {
+                                                                                                "items":  {
+                                                                                                    "properties":  {
+                                                                                                        "__typename":  {
+                                                                                                            "type":  "string"
+                                                                                                        },
+                                                                                                        "iocKind":  {
+                                                                                                            "type":  "string"
+                                                                                                        },
+                                                                                                        "iocValue":  {
+                                                                                                            "type":  "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required":  [
+                                                                                                        "iocValue",
+                                                                                                        "iocKind",
+                                                                                                        "__typename"
+                                                                                                    ],
+                                                                                                    "type":  "object"
+                                                                                                },
+                                                                                                "type":  "array"
+                                                                                            },
+                                                                                            "name":  {
+                                                                                                "type":  "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "type":  "object"
+                                                                                    },
+                                                                                    "huntId":  {
+                                                                                        "type":  "string"
+                                                                                    },
+                                                                                    "results":  {
+                                                                                        "items":  {
+                                                                                            "properties":  {
+                                                                                                "__typename":  {
+                                                                                                    "type":  "string"
+                                                                                                },
+                                                                                                "object":  {
+                                                                                                    "properties":  {
+                                                                                                        "__typename":  {
+                                                                                                            "type":  "string"
+                                                                                                        },
+                                                                                                        "id":  {
+                                                                                                            "type":  "string"
+                                                                                                        },
+                                                                                                        "name":  {
+                                                                                                            "type":  "string"
+                                                                                                        },
+                                                                                                        "objectType":  {
+                                                                                                            "type":  "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type":  "object"
+                                                                                                },
+                                                                                                "snapshotResults":  {
+                                                                                                    "items":  {
+                                                                                                        "properties":  {
+                                                                                                            "__typename":  {
+                                                                                                                "type":  "string"
+                                                                                                            },
+                                                                                                            "lastJobId":  {
+                                                                                                                "type":  "string"
+                                                                                                            },
+                                                                                                            "matches":  {
+                                                                                                                "type":  "array"
+                                                                                                            },
+                                                                                                            "quarantineDetails":  {
+                                                                                                            },
+                                                                                                            "scanStats":  {
+                                                                                                                "properties":  {
+                                                                                                                    "__typename":  {
+                                                                                                                        "type":  "string"
+                                                                                                                    },
+                                                                                                                    "numFiles":  {
+                                                                                                                        "type":  "integer"
+                                                                                                                    },
+                                                                                                                    "numFilesScanned":  {
+                                                                                                                        "type":  "integer"
+                                                                                                                    },
+                                                                                                                    "totalFilesScannedSizeBytes":  {
+                                                                                                                        "type":  "integer"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "type":  "object"
+                                                                                                            },
+                                                                                                            "snapshotDate":  {
+                                                                                                                "type":  "string"
+                                                                                                            },
+                                                                                                            "snapshotId":  {
+                                                                                                                "type":  "string"
+                                                                                                            },
+                                                                                                            "status":  {
+                                                                                                                "type":  "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "required":  [
+                                                                                                            "snapshotId",
+                                                                                                            "snapshotDate",
+                                                                                                            "status",
+                                                                                                            "lastJobId",
+                                                                                                            "matches",
+                                                                                                            "quarantineDetails",
+                                                                                                            "scanStats",
+                                                                                                            "__typename"
+                                                                                                        ],
+                                                                                                        "type":  "object"
+                                                                                                    },
+                                                                                                    "type":  "array"
+                                                                                                }
+                                                                                            },
+                                                                                            "required":  [
+                                                                                                "object",
+                                                                                                "snapshotResults",
+                                                                                                "__typename"
+                                                                                            ],
+                                                                                            "type":  "object"
+                                                                                        },
+                                                                                        "type":  "array"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            }
+                                                                        },
+                                                                        "type":  "object"
+                                                                    }
+                                                                },
+                                                                "type":  "object"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Run_IOC_scan_until_the_operation_completes":  {
+                                                        "actions":  {
+                                                            "Check_how_many_pending_IOC_scan":  {
+                                                                "foreach":  "@body('Response_of_rubrik-radar-ioc-scan-results')?['data']?['threatHuntResult']?['results']",
+                                                                "actions":  {
+                                                                    "For_each_4":  {
+                                                                        "foreach":  "@items('Check_how_many_pending_IOC_scan')['snapshotResults']",
+                                                                        "actions":  {
+                                                                            "Check_status_of_every_snapshot_Id":  {
+                                                                                "actions":  {
+                                                                                    "Increment_pending_count":  {
+                                                                                        "runAfter":  {
+                                                                                        },
+                                                                                        "type":  "IncrementVariable",
+                                                                                        "inputs":  {
+                                                                                            "name":  "PendingCount",
+                                                                                            "value":  1
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "runAfter":  {
+                                                                                },
+                                                                                "expression":  {
+                                                                                    "and":  [
+                                                                                        {
+                                                                                            "contains":  [
+                                                                                                "@items('For_each_4')?['status']",
+                                                                                                "PENDING"
+                                                                                            ]
+                                                                                        }
+                                                                                    ]
+                                                                                },
+                                                                                "type":  "If"
+                                                                            }
+                                                                        },
+                                                                        "runAfter":  {
+                                                                        },
+                                                                        "type":  "Foreach"
+                                                                    }
+                                                                },
+                                                                "runAfter":  {
+                                                                    "Set_pending_count":  [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type":  "Foreach"
+                                                            },
+                                                            "Check_pending_count_and_if_0_then_set_status_equals_finished":  {
+                                                                "actions":  {
+                                                                    "Set_finished_if_pending_count_is_0":  {
+                                                                        "runAfter":  {
+                                                                        },
+                                                                        "type":  "SetVariable",
+                                                                        "inputs":  {
+                                                                            "name":  "RadarIOCScanStatus",
+                                                                            "value":  "FINISHED"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter":  {
+                                                                    "Check_how_many_pending_IOC_scan":  [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "expression":  {
+                                                                    "and":  [
+                                                                        {
+                                                                            "equals":  [
+                                                                                "@variables('PendingCount')",
+                                                                                0
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type":  "If"
+                                                            },
+                                                            "Does_rubrik-radar-ioc-scan-results_get_status_code_200":  {
+                                                                "actions":  {
+                                                                    "Does_rubrik-radar-ioc-scan-results_API_response_contains_errors":  {
+                                                                        "actions":  {
+                                                                            "Set_Limit_to_0_to_exit_the_until_loop3":  {
+                                                                                "runAfter":  {
+                                                                                    "Set_error_message_if_IOC_scan_result_response_contains_error":  [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type":  "SetVariable",
+                                                                                "inputs":  {
+                                                                                    "name":  "Limit",
+                                                                                    "value":  0
+                                                                                }
+                                                                            },
+                                                                            "Set_error_message_if_IOC_scan_result_response_contains_error":  {
+                                                                                "runAfter":  {
+                                                                                },
+                                                                                "type":  "SetVariable",
+                                                                                "inputs":  {
+                                                                                    "name":  "ErrorMessage",
+                                                                                    "value":  "@{body('rubrik-radar-ioc-scan-results')?['errors'][0]?['message']}"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "runAfter":  {
+                                                                        },
+                                                                        "else":  {
+                                                                            "actions":  {
+                                                                                "Response_of_rubrik-radar-ioc-scan-results":  {
+                                                                                    "runAfter":  {
+                                                                                    },
+                                                                                    "type":  "ParseJson",
+                                                                                    "inputs":  {
+                                                                                        "content":  "@body('rubrik-radar-ioc-scan-results')",
+                                                                                        "schema":  {
+                                                                                            "properties":  {
+                                                                                                "data":  {
+                                                                                                    "properties":  {
+                                                                                                        "threatHuntResult":  {
+                                                                                                            "properties":  {
+                                                                                                                "__typename":  {
+                                                                                                                    "type":  "string"
+                                                                                                                },
+                                                                                                                "config":  {
+                                                                                                                    "properties":  {
+                                                                                                                        "__typename":  {
+                                                                                                                            "type":  "string"
+                                                                                                                        },
+                                                                                                                        "indicatorsOfCompromise":  {
+                                                                                                                            "items":  {
+                                                                                                                                "properties":  {
+                                                                                                                                    "__typename":  {
+                                                                                                                                        "type":  "string"
+                                                                                                                                    },
+                                                                                                                                    "iocKind":  {
+                                                                                                                                        "type":  "string"
+                                                                                                                                    },
+                                                                                                                                    "iocValue":  {
+                                                                                                                                        "type":  "string"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "required":  [
+                                                                                                                                    "iocValue",
+                                                                                                                                    "iocKind",
+                                                                                                                                    "__typename"
+                                                                                                                                ],
+                                                                                                                                "type":  "object"
+                                                                                                                            },
+                                                                                                                            "type":  "array"
+                                                                                                                        },
+                                                                                                                        "name":  {
+                                                                                                                            "type":  "string"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type":  "object"
+                                                                                                                },
+                                                                                                                "huntId":  {
+                                                                                                                    "type":  "string"
+                                                                                                                },
+                                                                                                                "results":  {
+                                                                                                                    "items":  {
+                                                                                                                        "properties":  {
+                                                                                                                            "__typename":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            },
+                                                                                                                            "object":  {
+                                                                                                                                "properties":  {
+                                                                                                                                    "__typename":  {
+                                                                                                                                        "type":  "string"
+                                                                                                                                    },
+                                                                                                                                    "id":  {
+                                                                                                                                        "type":  "string"
+                                                                                                                                    },
+                                                                                                                                    "name":  {
+                                                                                                                                        "type":  "string"
+                                                                                                                                    },
+                                                                                                                                    "objectType":  {
+                                                                                                                                        "type":  "string"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type":  "object"
+                                                                                                                            },
+                                                                                                                            "snapshotResults":  {
+                                                                                                                                "items":  {
+                                                                                                                                    "properties":  {
+                                                                                                                                        "__typename":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        },
+                                                                                                                                        "lastJobId":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        },
+                                                                                                                                        "matches":  {
+                                                                                                                                            "type":  "array"
+                                                                                                                                        },
+                                                                                                                                        "quarantineDetails":  {
+                                                                                                                                        },
+                                                                                                                                        "scanStats":  {
+                                                                                                                                            "properties":  {
+                                                                                                                                                "__typename":  {
+                                                                                                                                                    "type":  "string"
+                                                                                                                                                },
+                                                                                                                                                "numFiles":  {
+                                                                                                                                                    "type":  "integer"
+                                                                                                                                                },
+                                                                                                                                                "numFilesScanned":  {
+                                                                                                                                                    "type":  "integer"
+                                                                                                                                                },
+                                                                                                                                                "totalFilesScannedSizeBytes":  {
+                                                                                                                                                    "type":  "integer"
+                                                                                                                                                }
+                                                                                                                                            },
+                                                                                                                                            "type":  "object"
+                                                                                                                                        },
+                                                                                                                                        "snapshotDate":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        },
+                                                                                                                                        "snapshotId":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        },
+                                                                                                                                        "status":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    "required":  [
+                                                                                                                                        "snapshotId",
+                                                                                                                                        "snapshotDate",
+                                                                                                                                        "status",
+                                                                                                                                        "lastJobId",
+                                                                                                                                        "matches",
+                                                                                                                                        "quarantineDetails",
+                                                                                                                                        "scanStats",
+                                                                                                                                        "__typename"
+                                                                                                                                    ],
+                                                                                                                                    "type":  "object"
+                                                                                                                                },
+                                                                                                                                "type":  "array"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "required":  [
+                                                                                                                            "object",
+                                                                                                                            "snapshotResults",
+                                                                                                                            "__typename"
+                                                                                                                        ],
+                                                                                                                        "type":  "object"
+                                                                                                                    },
+                                                                                                                    "type":  "array"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type":  "object"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type":  "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type":  "object"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression":  {
+                                                                            "and":  [
+                                                                                {
+                                                                                    "contains":  [
+                                                                                        "@body('rubrik-radar-ioc-scan-results')",
+                                                                                        "errors"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type":  "If"
+                                                                    }
+                                                                },
+                                                                "runAfter":  {
+                                                                    "rubrik-radar-ioc-scan-results":  [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "else":  {
+                                                                    "actions":  {
+                                                                        "Set_Limit_to_0_and_exit_the_until_loop_":  {
+                                                                            "runAfter":  {
+                                                                                "Set_variable_status_Code_to_pass_it_in_response":  [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "Limit",
+                                                                                "value":  0
+                                                                            }
+                                                                        },
+                                                                        "Set_error_on_failed_status_of_IOC_scan_result":  {
+                                                                            "runAfter":  {
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "ErrorMessage",
+                                                                                "value":  "Status:  @{outputs('rubrik-radar-ioc-scan-results')['statusCode']}, Message:  @{body('rubrik-radar-ioc-scan-results')?['message']}"
+                                                                            }
+                                                                        },
+                                                                        "Set_variable_status_Code_to_pass_it_in_response":  {
+                                                                            "runAfter":  {
+                                                                                "Set_error_on_failed_status_of_IOC_scan_result":  [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "StatusCode",
+                                                                                "value":  "@outputs('rubrik-radar-ioc-scan-results')['statusCode']"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression":  {
+                                                                    "and":  [
+                                                                        {
+                                                                            "equals":  [
+                                                                                "@outputs('rubrik-radar-ioc-scan-results')?['statusCode']",
+                                                                                200
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type":  "If"
+                                                            },
+                                                            "Polling_interval":  {
+                                                                "runAfter":  {
+                                                                    "Check_pending_count_and_if_0_then_set_status_equals_finished":  [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type":  "Wait",
+                                                                "inputs":  {
+                                                                    "interval":  {
+                                                                        "count":  "@if(or(empty(string(triggerBody()?['PollingInterval'])),lessOrEquals(int(triggerBody()?['PollingInterval']),0)), 5, int(triggerBody()?['PollingInterval']))",
+                                                                        "unit":  "Minute"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "Set_pending_count":  {
+                                                                "runAfter":  {
+                                                                    "Does_rubrik-radar-ioc-scan-results_get_status_code_200":  [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type":  "SetVariable",
+                                                                "inputs":  {
+                                                                    "name":  "PendingCount",
+                                                                    "value":  0
+                                                                }
+                                                            },
+                                                            "rubrik-radar-ioc-scan-results":  {
+                                                                "runAfter":  {
+                                                                },
+                                                                "type":  "Http",
+                                                                "inputs":  {
+                                                                    "body":  {
+                                                                        "query":  "query ThreatHuntMalwareResultQuery($huntId: String!) {\r\n  threatHuntResult(huntId: $huntId) {\r\n    huntId\r\n    config {\r\n      name\r\n      indicatorsOfCompromise {\r\n        iocValue\r\n        iocKind\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    results {\r\n      object {\r\n        id\r\n        name\r\n        objectType\r\n        __typename\r\n      }\r\n      snapshotResults {\r\n        snapshotId\r\n        snapshotDate\r\n        status\r\n        lastJobId\r\n        matches {\r\n          indicatorIndex\r\n          paths {\r\n            requestedHashDetails {\r\n              hashValue\r\n              hashType\r\n              __typename\r\n            }\r\n            yaraMatchDetails {\r\n              name\r\n              tags\r\n              __typename\r\n            }\r\n            aclDetails\r\n            creationTime\r\n            modificationTime\r\n            path\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        quarantineDetails {\r\n          filesDetails {\r\n            fileName\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        scanStats {\r\n          numFiles\r\n          numFilesScanned\r\n          totalFilesScannedSizeBytes\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}",
+                                                                        "variables":  {
+                                                                            "huntId":  "@{body('Parse_Start_IOC_scan_Response')?['data']?['startThreatHunt']?['huntId']}"
+                                                                        }
+                                                                    },
+                                                                    "headers":  {
+                                                                        "Authorization":  "Bearer @{variables('access_token')}",
+                                                                        "Content-Type":  "application/json"
+                                                                    },
+                                                                    "method":  "POST",
+                                                                    "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter":  {
+                                                            "Set_IOC_scan_status_":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "expression":  "@contains(variables('RadarIOCScanStatus'), 'FINISHED')",
+                                                        "limit":  {
+                                                            "timeout":  "@{if(empty(string(triggerBody()?['PollingTimeout'])), 'PT720M', concat('PT',string(triggerBody()?['PollingTimeout']),'M'))}"
+                                                        },
+                                                        "type":  "Until"
+                                                    },
+                                                    "Set_IOC_scan_status_":  {
+                                                        "runAfter":  {
+                                                            "Parse_rubrik-radar-ioc-scan-status":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "SetVariable",
+                                                        "inputs":  {
+                                                            "name":  "RadarIOCScanStatus",
+                                                            "value":  "@{body('Parse_rubrik-radar-ioc-scan-status')?['data']?['threatHuntResult']?['results'][0]?['snapshotResults'][0]?['status']}"
+                                                        }
+                                                    },
+                                                    "rubrik-radar-ioc-scan-result_get_status_code_200":  {
+                                                        "actions":  {
+                                                            "Does_rubrik-radar-ioc-scan-result_API_response_contains_errors":  {
+                                                                "actions":  {
+                                                                    "Set_error_message_if_IOC_scan_result_response_has_error":  {
+                                                                        "runAfter":  {
+                                                                        },
+                                                                        "type":  "SetVariable",
+                                                                        "inputs":  {
+                                                                            "name":  "ErrorMessage",
+                                                                            "value":  "@{body('Get_scan_results')?['errors'][0]?['message']}"
+                                                                        }
+                                                                    },
+                                                                    "Set_limit_variable_to_0":  {
+                                                                        "runAfter":  {
+                                                                            "Set_error_message_if_IOC_scan_result_response_has_error":  [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type":  "SetVariable",
+                                                                        "inputs":  {
+                                                                            "name":  "Limit",
+                                                                            "value":  0
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter":  {
+                                                                },
+                                                                "else":  {
+                                                                    "actions":  {
+                                                                        "Get_status_of_scan_result_-_Last_Array_Element":  {
+                                                                            "foreach":  "@body('Parse_Get_scan_results_response')?['data']?['threatHuntResult']?['results']",
+                                                                            "actions":  {
+                                                                                "For_each_2":  {
+                                                                                    "foreach":  "@items('Get_status_of_scan_result_-_Last_Array_Element')?['snapshotResults']",
+                                                                                    "actions":  {
+                                                                                        "Set_status":  {
+                                                                                            "runAfter":  {
+                                                                                            },
+                                                                                            "type":  "SetVariable",
+                                                                                            "inputs":  {
+                                                                                                "name":  "RadarIOCScanStatus",
+                                                                                                "value":  "@items('For_each_2')?['status']"
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "runAfter":  {
+                                                                                    },
+                                                                                    "type":  "Foreach"
+                                                                                }
+                                                                            },
+                                                                            "runAfter":  {
+                                                                                "Parse_Get_scan_results_response":  [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type":  "Foreach"
+                                                                        },
+                                                                        "Parse_Get_scan_results_response":  {
+                                                                            "runAfter":  {
+                                                                                "Set_IOC_scan_result":  [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type":  "ParseJson",
+                                                                            "inputs":  {
+                                                                                "content":  "@body('Get_scan_results')",
+                                                                                "schema":  {
+                                                                                    "properties":  {
+                                                                                        "data":  {
+                                                                                            "properties":  {
+                                                                                                "threatHuntResult":  {
+                                                                                                    "properties":  {
+                                                                                                        "__typename":  {
+                                                                                                            "type":  "string"
+                                                                                                        },
+                                                                                                        "config":  {
+                                                                                                            "properties":  {
+                                                                                                                "__typename":  {
+                                                                                                                    "type":  "string"
+                                                                                                                },
+                                                                                                                "indicatorsOfCompromise":  {
+                                                                                                                    "items":  {
+                                                                                                                        "properties":  {
+                                                                                                                            "__typename":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            },
+                                                                                                                            "iocKind":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            },
+                                                                                                                            "iocValue":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "required":  [
+                                                                                                                            "iocValue",
+                                                                                                                            "iocKind",
+                                                                                                                            "__typename"
+                                                                                                                        ],
+                                                                                                                        "type":  "object"
+                                                                                                                    },
+                                                                                                                    "type":  "array"
+                                                                                                                },
+                                                                                                                "name":  {
+                                                                                                                    "type":  "string"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type":  "object"
+                                                                                                        },
+                                                                                                        "huntId":  {
+                                                                                                            "type":  "string"
+                                                                                                        },
+                                                                                                        "results":  {
+                                                                                                            "items":  {
+                                                                                                                "properties":  {
+                                                                                                                    "__typename":  {
+                                                                                                                        "type":  "string"
+                                                                                                                    },
+                                                                                                                    "object":  {
+                                                                                                                        "properties":  {
+                                                                                                                            "__typename":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            },
+                                                                                                                            "id":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            },
+                                                                                                                            "name":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            },
+                                                                                                                            "objectType":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type":  "object"
+                                                                                                                    },
+                                                                                                                    "snapshotResults":  {
+                                                                                                                        "items":  {
+                                                                                                                            "properties":  {
+                                                                                                                                "__typename":  {
+                                                                                                                                    "type":  "string"
+                                                                                                                                },
+                                                                                                                                "lastJobId":  {
+                                                                                                                                    "type":  "string"
+                                                                                                                                },
+                                                                                                                                "matches":  {
+                                                                                                                                    "type":  "array"
+                                                                                                                                },
+                                                                                                                                "quarantineDetails":  {
+                                                                                                                                },
+                                                                                                                                "scanStats":  {
+                                                                                                                                    "properties":  {
+                                                                                                                                        "__typename":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        },
+                                                                                                                                        "numFiles":  {
+                                                                                                                                            "type":  "integer"
+                                                                                                                                        },
+                                                                                                                                        "numFilesScanned":  {
+                                                                                                                                            "type":  "integer"
+                                                                                                                                        },
+                                                                                                                                        "totalFilesScannedSizeBytes":  {
+                                                                                                                                            "type":  "integer"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    "type":  "object"
+                                                                                                                                },
+                                                                                                                                "snapshotDate":  {
+                                                                                                                                    "type":  "string"
+                                                                                                                                },
+                                                                                                                                "snapshotId":  {
+                                                                                                                                    "type":  "string"
+                                                                                                                                },
+                                                                                                                                "status":  {
+                                                                                                                                    "type":  "string"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "required":  [
+                                                                                                                                "snapshotId",
+                                                                                                                                "snapshotDate",
+                                                                                                                                "status",
+                                                                                                                                "lastJobId",
+                                                                                                                                "matches",
+                                                                                                                                "quarantineDetails",
+                                                                                                                                "scanStats",
+                                                                                                                                "__typename"
+                                                                                                                            ],
+                                                                                                                            "type":  "object"
+                                                                                                                        },
+                                                                                                                        "type":  "array"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "required":  [
+                                                                                                                    "object",
+                                                                                                                    "snapshotResults",
+                                                                                                                    "__typename"
+                                                                                                                ],
+                                                                                                                "type":  "object"
+                                                                                                            },
+                                                                                                            "type":  "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type":  "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type":  "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type":  "object"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "Set_IOC_scan_result":  {
+                                                                            "runAfter":  {
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "IOCScanResult",
+                                                                                "value":  "@body('Get_scan_results')"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression":  {
+                                                                    "and":  [
+                                                                        {
+                                                                            "contains":  [
+                                                                                "@body('Get_scan_results')",
+                                                                                "errors"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type":  "If"
+                                                            }
+                                                        },
+                                                        "runAfter":  {
+                                                            "Get_scan_results":  [
+                                                                "Succeeded",
+                                                                "Failed"
+                                                            ]
+                                                        },
+                                                        "else":  {
+                                                            "actions":  {
+                                                                "Set_Status_Code_to_pass_in_the_response_at_the_end":  {
+                                                                    "runAfter":  {
+                                                                        "Set_error_message_on_failed_status_of_IOC_scan_result_":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "SetVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "StatusCode",
+                                                                        "value":  "@outputs('Get_scan_results')['statusCode']"
+                                                                    }
+                                                                },
+                                                                "Set_error_message_on_failed_status_of_IOC_scan_result_":  {
+                                                                    "runAfter":  {
+                                                                    },
+                                                                    "type":  "SetVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "ErrorMessage",
+                                                                        "value":  "StatusCode:  @{outputs('Get_scan_results')['statusCode']}, message: @{body('Get_scan_results')?['message']}"
+                                                                    }
+                                                                },
+                                                                "Set_limit_to_0_":  {
+                                                                    "runAfter":  {
+                                                                        "Set_Status_Code_to_pass_in_the_response_at_the_end":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "SetVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "Limit",
+                                                                        "value":  0
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression":  {
+                                                            "and":  [
+                                                                {
+                                                                    "equals":  [
+                                                                        "@outputs('Get_scan_results')?['statusCode']",
+                                                                        200
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type":  "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression":  {
+                                                "and":  [
+                                                    {
+                                                        "contains":  [
+                                                            "@body('rubrik-radar-ioc-scan-status')",
+                                                            "errors"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type":  "If"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "rubrik-radar-ioc-scan-status":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Set_Error_Message_on_failed_status_of_IOC_scan_status":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "ErrorMessage",
+                                                    "value":  "Status Code: @{outputs('rubrik-radar-ioc-scan-status')?['statusCode']},  Message: \"@{body('rubrik-radar-ioc-scan-status')?['message']}\""
+                                                }
+                                            },
+                                            "Set_Limit_to_0":  {
+                                                "runAfter":  {
+                                                    "Set_variable_status_code_for_response_at_the_end":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "Limit",
+                                                    "value":  0
+                                                }
+                                            },
+                                            "Set_variable_status_code_for_response_at_the_end":  {
+                                                "runAfter":  {
+                                                    "Set_Error_Message_on_failed_status_of_IOC_scan_status":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "StatusCode",
+                                                    "value":  "@outputs('rubrik-radar-ioc-scan-status')['statusCode']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@outputs('rubrik-radar-ioc-scan-status')?['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "Is_scan_successfull":  {
+                                    "actions":  {
+                                        "Are_recoverable_snapshot_ID(s)_obtained_-_if_yes_set_the_recoverable_snapshot":  {
+                                            "foreach":  "@body('Parse_Get_scan_results_response')?['data']?['threatHuntResult']?['results']",
+                                            "actions":  {
+                                                "For_each_5":  {
+                                                    "foreach":  "@items('Are_recoverable_snapshot_ID(s)_obtained_-_if_yes_set_the_recoverable_snapshot')?['snapshotResults']",
+                                                    "actions":  {
+                                                        "Set_Last_field_date":  {
+                                                            "runAfter":  {
+                                                            },
+                                                            "type":  "SetVariable",
+                                                            "inputs":  {
+                                                                "name":  "LastFieldDate",
+                                                                "value":  "@{div(sub(ticks(variables('CurrentFieldDate')),ticks('1970-01-01Z00:00:00')),10000000)\r\n}"
+                                                            }
+                                                        },
+                                                        "check_matches_is_empty_or_not":  {
+                                                            "actions":  {
+                                                                "Append_snapshot_Id":  {
+                                                                    "runAfter":  {
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "RecoverableSnapshots",
+                                                                        "value":  "@items('For_each_5')?['snapshotId']"
+                                                                    }
+                                                                },
+                                                                "Set_current_field_date":  {
+                                                                    "runAfter":  {
+                                                                        "Append_snapshot_Id":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "SetVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "CurrentFieldDate",
+                                                                        "value":  "    @{items('For_each_5')?['snapshotDate']}"
+                                                                    }
+                                                                },
+                                                                "check_for_latest_snapshot_ID":  {
+                                                                    "actions":  {
+                                                                        "Set_isLastInfected_to_True":  {
+                                                                            "runAfter":  {
+                                                                                "set_recoverable_snapshot_ID":  [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "isLatestInfected",
+                                                                                "value":  "@true"
+                                                                            }
+                                                                        },
+                                                                        "set_recoverable_snapshot_ID":  {
+                                                                            "runAfter":  {
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "RecoverableSnapshotId",
+                                                                                "value":  "@items('For_each_5')?['snapshotId']"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter":  {
+                                                                        "Set_current_field_date":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression":  {
+                                                                        "and":  [
+                                                                            {
+                                                                                "greater":  [
+                                                                                    "@div(sub(ticks(items('For_each_5')?['snapshotDate']),ticks('1970-01-01Z00:00:00')),10000000)",
+                                                                                    "@int(variables('LastFieldDate'))"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type":  "If"
+                                                                }
+                                                            },
+                                                            "runAfter":  {
+                                                                "Set_Last_field_date":  [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "equals":  [
+                                                                            "@length(items('For_each_5')?['matches'])",
+                                                                            0
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    },
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Foreach"
+                                                }
+                                            },
+                                            "runAfter":  {
+                                            },
+                                            "type":  "Foreach"
+                                        },
+                                        "Are_there_any_recoverable_snapshots":  {
+                                            "actions":  {
+                                                "Set_variable":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "Limit",
+                                                        "value":  0
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                                "Are_recoverable_snapshot_ID(s)_obtained_-_if_yes_set_the_recoverable_snapshot":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else":  {
+                                                "actions":  {
+                                                    "Convert_end_date_to_epochs":  {
+                                                        "runAfter":  {
+                                                            "Convert_start_date_to_epochs":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "SetVariable",
+                                                        "inputs":  {
+                                                            "name":  "EpochEndDate",
+                                                            "value":  "@{div(sub(ticks(variables('EndDate')),ticks('1970-01-01Z00:00:00')),10000000)}"
+                                                        }
+                                                    },
+                                                    "Convert_start_date_to_epochs":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "SetVariable",
+                                                        "inputs":  {
+                                                            "name":  "EpochStartDate",
+                                                            "value":  "@{div(sub(ticks(variables('StartDate')),ticks('1970-01-01Z00:00:00')),10000000)}"
+                                                        }
+                                                    },
+                                                    "Decrement_variable":  {
+                                                        "runAfter":  {
+                                                            "Is_time_delta_available":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "DecrementVariable",
+                                                        "inputs":  {
+                                                            "name":  "Limit",
+                                                            "value":  1
+                                                        }
+                                                    },
+                                                    "Is_time_delta_available":  {
+                                                        "actions":  {
+                                                            "Set_variable_2":  {
+                                                                "runAfter":  {
+                                                                    "Update_the_start_date_using_time_delta":  [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type":  "SetVariable",
+                                                                "inputs":  {
+                                                                    "name":  "StartDate",
+                                                                    "value":  "@body('Update_the_start_date_using_time_delta')"
+                                                                }
+                                                            },
+                                                            "Update_the_start_date_using_time_delta":  {
+                                                                "runAfter":  {
+                                                                },
+                                                                "type":  "Expression",
+                                                                "kind":  "SubtractFromTime",
+                                                                "inputs":  {
+                                                                    "baseTime":  "@variables('StartDate')",
+                                                                    "interval":  "@triggerBody()?['TimeDelta']",
+                                                                    "timeUnit":  "Day"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter":  {
+                                                            "Update_the_end_date":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else":  {
+                                                            "actions":  {
+                                                                "Update_the_start_date":  {
+                                                                    "runAfter":  {
+                                                                    },
+                                                                    "type":  "SetVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "StartDate",
+                                                                        "value":  " @{addToTime('1970-01-01T00:00:00Z', sub(mul(int(variables('EpochStartDate')), 2), int(variables('EpochEndDate'))), 'second')}"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression":  {
+                                                            "and":  [
+                                                                {
+                                                                    "not":  {
+                                                                        "equals":  [
+                                                                            "@empty(triggerBody()?['TimeDelta'])",
+                                                                            "@true"
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type":  "If"
+                                                    },
+                                                    "Update_the_end_date":  {
+                                                        "runAfter":  {
+                                                            "Convert_end_date_to_epochs":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "SetVariable",
+                                                        "inputs":  {
+                                                            "name":  "EndDate",
+                                                            "value":  "@variables('StartDate')"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression":  {
+                                                "and":  [
+                                                    {
+                                                        "not":  {
+                                                            "equals":  [
+                                                                "@length(variables('RecoverableSnapshots'))",
+                                                                0
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type":  "If"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Does_rubrik-radar-ioc-scan-status_get_status_code_200":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Set_limit_to_zero":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "Limit",
+                                                    "value":  0
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "contains":  [
+                                                    "@variables('RadarIOCScanStatus')",
+                                                    "FINISHED"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "Start_IOC_scan":  {
+                                    "runAfter":  {
+                                        "prepared_advance_IOC_":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Http",
+                                    "inputs":  {
+                                        "body":  {
+                                            "query":  "mutation StartThreatHuntMutation($input: StartThreatHuntInput!) {\r\n    startThreatHunt(input: $input) {\r\n      huntId\r\n      isSyncSuccessful\r\n    }\r\n  }",
+                                            "variables":  {
+                                                "input":  {
+                                                    "clusterUuid":  "@{triggerBody()?['ClusterId']}",
+                                                    "fileScanCriteria":  {
+                                                        "fileSizeLimits":  {
+                                                            "maximumSizeInBytes":  10000000
+                                                        },
+                                                        "pathFilter":  {
+                                                            "exceptions":  null,
+                                                            "excludes":  null,
+                                                            "includes":  [
+                                                                "**"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "indicatorsOfCompromise":  "@variables('IOCAdvance')",
+                                                    "maxMatchesPerSnapshot":  100,
+                                                    "name":  "@{triggerBody()?['ScanName']}",
+                                                    "objectFids":  "@variables('ObjectId')",
+                                                    "snapshotScanLimit":  {
+                                                        "endTime":  "@{variables('EndDate')}",
+                                                        "maxSnapshotsPerObject":  10,
+                                                        "startTime":  "@{variables('StartDate')}"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "headers":  {
+                                            "Authorization":  "Bearer @{variables('access_token')}",
+                                            "Content-Type":  "application/json"
+                                        },
+                                        "method":  "POST",
+                                        "path":  "/api/graphql",
+                                        "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
+                                    }
+                                },
+                                "prepared_advance_IOC_":  {
+                                    "actions":  {
+                                        "Set_IOC_Hash_PATH_and_YARA_rule_to_IOC_advance":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "Compose",
+                                            "inputs":  [
+                                                {
+                                                    "iocKind":  "IOC_FILE_PATTERN",
+                                                    "iocValue":  "@{triggerBody()?['IOCPath']}"
+                                                },
+                                                {
+                                                    "iocKind":  "IOC_YARA",
+                                                    "iocValue":  "@{triggerBody()?['IOCYaraRule']}"
+                                                },
+                                                {
+                                                    "iocKind":  "IOC_HASH",
+                                                    "iocValue":  "@{triggerBody()?['IOCHash']}"
+                                                }
+                                            ]
+                                        },
+                                        "Set_variable_IOC_Advance":  {
+                                            "runAfter":  {
+                                                "Set_IOC_Hash_PATH_and_YARA_rule_to_IOC_advance":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "IOCAdvance",
+                                                "value":  "@outputs('Set_IOC_Hash_PATH_and_YARA_rule_to_IOC_advance')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Set_IOC_Advance":  {
+                                                "runAfter":  {
+                                                    "Set_IOC_PATH_and_YARA_rule_to_IOC_advance":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "IOCAdvance",
+                                                    "value":  "@outputs('Set_IOC_PATH_and_YARA_rule_to_IOC_advance')"
+                                                }
+                                            },
+                                            "Set_IOC_PATH_and_YARA_rule_to_IOC_advance":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "Compose",
+                                                "inputs":  [
+                                                    {
+                                                        "iocKind":  "IOC_FILE_PATTERN",
+                                                        "iocValue":  "@{triggerBody()?['IOCPath']}"
+                                                    },
+                                                    {
+                                                        "iocKind":  "IOC_YARA",
+                                                        "iocValue":  "@{triggerBody()?['IOCYaraRule']}"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@empty(triggerBody()?['IOCHash'])",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "rubrik-radar-ioc-scan-status":  {
+                                    "runAfter":  {
+                                        "Does_Start_IOC_scan_get_status_code_200":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Http",
+                                    "inputs":  {
+                                        "body":  {
+                                            "query":  "query ThreatHuntMalwareResultQuery($huntId: String!) {\r\n  threatHuntResult(huntId: $huntId) {\r\n    huntId\r\n    config {\r\n      name\r\n      indicatorsOfCompromise {\r\n        iocValue\r\n        iocKind\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    results {\r\n      object {\r\n        id\r\n        name\r\n        objectType\r\n        __typename\r\n      }\r\n      snapshotResults {\r\n        snapshotId\r\n        snapshotDate\r\n        status\r\n        lastJobId\r\n        matches {\r\n          indicatorIndex\r\n          paths {\r\n            requestedHashDetails {\r\n              hashValue\r\n              hashType\r\n              __typename\r\n            }\r\n            yaraMatchDetails {\r\n              name\r\n              tags\r\n              __typename\r\n            }\r\n            aclDetails\r\n            creationTime\r\n            modificationTime\r\n            path\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        quarantineDetails {\r\n          filesDetails {\r\n            fileName\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        scanStats {\r\n          numFiles\r\n          numFilesScanned\r\n          totalFilesScannedSizeBytes\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}",
+                                            "variables":  {
+                                                "huntId":  "@{body('Parse_Start_IOC_scan_Response')?['data']?['startThreatHunt']?['huntId']}"
+                                            }
+                                        },
+                                        "headers":  {
+                                            "Authorization":  "Bearer @{variables('access_token')}",
+                                            "Content-Type":  "application/json"
+                                        },
+                                        "method":  "POST",
+                                        "path":  "/api/graphql",
+                                        "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_Polling_Timeout":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  "@equals(variables('Limit'), 0)",
+                            "limit":  {
+                                "timeout":  "PT900M"
+                            },
+                            "type":  "Until"
+                        },
+                        "Set_end_date_if_not_provided":  {
+                            "actions":  {
+                                "set_default_value_of__end_date":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "EndDate",
+                                        "value":  "@{utcNow()}"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_Pending_count_for_IOC_scan":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@triggerBody()?['EndDate']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Set_limit_if_not_provided":  {
+                            "actions":  {
+                                "set_default_value_of__limit_date":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "InputLimit",
+                                        "value":  1
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_Pending_count_for_IOC_scan":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@variables('InputLimit')",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Set_start_date_if_not_provided":  {
+                            "actions":  {
+                                "Get_7_days_ago_time":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Expression",
+                                    "kind":  "GetPastTime",
+                                    "inputs":  {
+                                        "interval":  7,
+                                        "timeUnit":  "Day"
+                                    }
+                                },
+                                "set_default_value_of__start_date":  {
+                                    "runAfter":  {
+                                        "Get_7_days_ago_time":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "StartDate",
+                                        "value":  "@body('Get_7_days_ago_time')"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_Pending_count_for_IOC_scan":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@triggerBody()?['StartDate']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "initialization_RadarIOCScanStatus":  {
+                            "runAfter":  {
+                                "Set_end_date_if_not_provided":  [
+                                    "Succeeded"
+                                ],
+                                "Set_limit_if_not_provided":  [
+                                    "Succeeded"
+                                ],
+                                "Set_start_date_if_not_provided":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "RadarIOCScanStatus",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "initialize_epoch_value_of_end_date":  {
+                            "runAfter":  {
+                                "initialize_epoch_value_of_start_date":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "EpochEndDate",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "initialize_epoch_value_of_start_date":  {
+                            "runAfter":  {
+                                "Initialize_LastFieldDate_to_compare_snapshot_Id":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "EpochStartDate",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "save_ioc_scan_result_body_here":  {
+                            "runAfter":  {
+                                "Initialize_access_token":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "IOCScanResult",
+                                        "type":  "object",
+                                        "value":  {
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "RubrikCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+                                "connectionName":  "[variables('RubrikcustomconnectorConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+                            },
+                            "keyvault_1":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName":  "[variables('KeyvaultConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "RubrikIOCScan",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('RubrikcustomconnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('RubrikcustomconnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('KeyvaultConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('KeyvaultConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[parameters('tenantId')]",
+                    "token:grantType": "code",
+                    "vaultName": "[parameters('keyvaultName')]"
+                }
+            }
+        }
+    ]
+}

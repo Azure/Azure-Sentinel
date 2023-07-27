@@ -1,0 +1,69 @@
+id: d722831e-88f5-4e25-b106-4ef6e29f8c13
+name: New executable via Office FileUploaded Operation
+description: |
+  'Identifies when executable file types are uploaded to Office services such as SharePoint and OneDrive.
+  List currently includes 'exe', 'inf', 'gzip', 'cmd', 'bat' file extensions.
+  Additionally, identifies when a given user is uploading these files to another users workspace.
+  This may be indication of a staging location for malware or other malicious activity.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 8d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1105
+query: |
+  // a threshold can be enabled, see commented line below for PrevSeenCount
+  let threshold = 2;
+  let uploadOp = 'FileUploaded';
+  // Extensions that are interesting. Add/Remove to this list as you see fit
+  let execExt = dynamic(['exe', 'inf', 'gzip', 'cmd', 'bat']);
+  let starttime = 8d;
+  let endtime = 1d;
+  OfficeActivity | where TimeGenerated >= ago(endtime)
+  // Limited to File Uploads due to potential noise, comment out the Operation statement below to include any operation type
+  // Additional, but potentially noisy operation types that include Uploads and Downloads can be included by adding the following - Operation contains "upload" or Operation contains "download"
+  | where Operation =~ uploadOp
+  | where SourceFileExtension has_any (execExt)
+  | project TimeGenerated, OfficeId, OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName
+  | join kind= leftanti (
+  OfficeActivity | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | where Operation =~ uploadOp
+  | where SourceFileExtension has_any (execExt)
+  | summarize SourceRelativeUrl = make_set(SourceRelativeUrl), UserId = make_set(UserId) , PrevSeenCount = count() by SourceFileName
+  // To exclude previous matches when only above a specific count, change threshold above and uncomment the line below
+  //| where PrevSeenCount > threshold
+  | mvexpand SourceRelativeUrl, UserId
+  | extend SourceRelativeUrl = tostring(SourceRelativeUrl), UserId = tostring(UserId)
+  ) on SourceFileName, SourceRelativeUrl, UserId
+  | extend SiteUrlUserFolder = tolower(split(Site_Url, '/')[-2])
+  | extend UserIdUserFolderFormat = tolower(replace('@|\\.', '_',UserId))
+  // identify when UserId is not a match to the specific site url personal folder reference
+  | extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true , false )
+  | summarize TimeGenerated = make_list(TimeGenerated), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated),
+  UserAgents = make_list(UserAgent), OfficeIds = make_list(OfficeId), SourceRelativeUrls = make_list(SourceRelativeUrl), FileNames = make_list(SourceFileName)
+  by OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
+  | extend timestamp = StartTime, AccountCustomEntity = UserId, IPCustomEntity = ClientIP, URLCustomEntity = Site_Url
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 2.0.1
+kind: Scheduled

@@ -1,0 +1,98 @@
+id: 02ef8d7e-fc3a-4d86-a457-650fa571d8d2
+name: Successful logon from IP and failure from a different IP
+description: |
+  'Identifies when a user account successfully logs onto an Azure App from one IP and within 10 mins failed to logon to the same App via a different IP.
+  This may indicate a malicious attempt at password guessing based on knowledge of the users account. This query has also been updated to include UEBA 
+  logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
+severity: Medium 
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1110
+  - T1078
+query: |
+  let riskScoreCutoff = 20; //Adjust this based on volume of results
+  let logonDiff = 10m; let aadFunc = (tableName:string){ table(tableName)
+  | where ResultType == "0"
+  | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online") // To remove false-positives, add more Apps to this array
+  | project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, AppDisplayName, SuccessIPBlock = iff(IPAddress contains ":", strcat(split(IPAddress, ":")[0], ":", split(IPAddress, ":")[1]), strcat(split(IPAddress, ".")[0], ".", split(IPAddress, ".")[1])), Type
+  | join kind= inner (
+      table(tableName)
+      | where ResultType !in ("0", "50140")
+      | where ResultDescription !~ "Other"
+      | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
+      | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription, Type 
+  ) on UserPrincipalName, AppDisplayName
+  | where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock
+  | summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription, Type
+  | extend timestamp = SuccessLogonTime
+  | extend UserPrincipalName = tolower(UserPrincipalName)};
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+  ) on UserPrincipalName
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename FailedIPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by FailedIPAddress)
+  on FailedIPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | where  UEBARiskScore > riskScoreCutoff
+  | sort by UEBARiskScore desc 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SuccessIPAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: FailedIPAddress
+version: 2.1.3
+kind: Scheduled

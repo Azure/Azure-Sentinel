@@ -1,0 +1,86 @@
+id: 0914adab-90b5-47a3-a79f-7cdcac843aa7
+name: Azure Key Vault access TimeSeries anomaly
+description: |
+  'Indentifies a sudden increase in count of Azure Key Vault secret or vault access operations by CallerIPAddress. The query leverages a built-in KQL anomaly detection algorithm
+  to find large deviations from baseline Azure Key Vault access patterns. Any sudden increase in the count of Azure Key Vault accesses can be an
+  indication of adversary dumping credentials via automated methods. If you are seeing any noise, try filtering known source(IP/Account) and user-agent combinations.
+  TimeSeries Reference Blog: https://techcommunity.microsoft.com/t5/azure-sentinel/looking-for-unknown-anomalies-what-is-normal-time-series/ba-p/555052'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureKeyVault
+    dataTypes:
+      - KeyVaultData
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1003
+query: |
+  let starttime = 14d;
+  let timeframe = 1d;
+  let scorethreshold = 3;
+  let baselinethreshold = 25;
+  // To avoid any False Positives, filtering using AppId is recommended. For example the AppId 509e4652-da8d-478d-a730-e9d4a1996ca4 has been added in the query as it corresponds
+  // to Azure Resource Graph performing VaultGet operations for indexing and syncing all tracked resources across Azure.
+  let Allowedappid = dynamic(["509e4652-da8d-478d-a730-e9d4a1996ca4"]);
+  let OperationList = dynamic(
+  ["SecretGet", "KeyGet", "VaultGet"]);
+  let TimeSeriesData = AzureDiagnostics
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))
+  | where not((identity_claim_appid_g in (Allowedappid)) and OperationName == 'VaultGet')
+    | where ResourceType =~ "VAULTS" and ResultType =~ "Success"
+  | where OperationName in (OperationList)
+  | extend ResultType = column_ifexists("ResultType", "None"), CallerIPAddress = column_ifexists("CallerIPAddress", "None")
+  | where ResultType !~ "None" and isnotempty(ResultType)
+  | where CallerIPAddress !~ "None" and isnotempty(CallerIPAddress)
+  | project TimeGenerated, OperationName, Resource, CallerIPAddress
+  | make-series HourlyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step timeframe by CallerIPAddress;
+  //Filter anomolies against TimeSeriesData
+  let TimeSeriesAlerts = TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(HourlyCount, scorethreshold, -1, 'linefit')
+  | mv-expand HourlyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0 | extend AnomalyHour = TimeGenerated
+  | where baseline > baselinethreshold // Filtering low count events per baselinethreshold
+  | project CallerIPAddress, AnomalyHour, TimeGenerated, HourlyCount, baseline, anomalies, score;
+  let AnomalyHours = TimeSeriesAlerts | where TimeGenerated > ago(2d) | project TimeGenerated;
+  // Filter the alerts since specified timeframe
+  TimeSeriesAlerts
+  | where TimeGenerated > ago(2d)
+  // Join against base logs since specified timeframe to retrive records associated with the hour of anomoly
+  | join kind = innerunique (
+  AzureDiagnostics
+  | where TimeGenerated > ago(2d)
+  | where not((identity_claim_appid_g in (Allowedappid)) and OperationName == 'VaultGet')
+  | where ResourceType =~ "VAULTS" and ResultType =~ "Success"
+  | where OperationName in (OperationList)
+  | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
+  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
+  | extend ResultType = column_ifexists("ResultType", "NoResultType")
+  | extend requestUri_s = column_ifexists("requestUri_s", "None"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = column_ifexists("identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g", "None"),identity_claim_oid_g = column_ifexists("identity_claim_oid_g", ""),
+    identity_claim_upn_s = column_ifexists("identity_claim_upn_s", "")
+  | extend
+      CallerObjectId = iff(isempty(identity_claim_oid_g), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_oid_g),
+      CallerObjectUPN = iff(isempty(identity_claim_upn_s), identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_upn_s)
+  | extend id_s = column_ifexists("id_s", "None"), CallerIPAddress = column_ifexists("CallerIPAddress", "None"), clientInfo_s = column_ifexists("clientInfo_s", "None")
+  | summarize PerOperationCount=count(), LatestAnomalyTime = arg_max(TimeGenerated,*) by bin(TimeGenerated,1h), Resource, OperationName, id_s, CallerIPAddress, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_oid_g, requestUri_s, clientInfo_s
+  ) on CallerIPAddress
+  | extend
+      CallerObjectId = iff(isempty(identity_claim_oid_g), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_oid_g),
+      CallerObjectUPN = iff(isempty(identity_claim_upn_s), identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_upn_s)
+  | summarize EventCount=count(), OperationNameList = make_set(OperationName,1000), RequestURLList = make_set(requestUri_s, 100), AccountList = make_set(CallerObjectId, 100), AccountMax = arg_max(CallerObjectId,*) by Resource, id_s, clientInfo_s, LatestAnomalyTime
+  | extend timestamp = LatestAnomalyTime
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: ObjectGuid
+        columnName: AccountMax
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIPAddress
+version: 1.0.4
+kind: Scheduled

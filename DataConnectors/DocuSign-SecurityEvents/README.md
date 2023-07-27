@@ -1,5 +1,5 @@
 # Ingest DocuSign Security Events
-Author: Sreedhar Ande
+**Author: Sreedhar Ande**
 
 DocuSign-SecurityEvents Data connector ingests   
 	1. Security Events for your DocuSign account into Azure Log Analytics Workspace using DocuSign Monitor REST API  

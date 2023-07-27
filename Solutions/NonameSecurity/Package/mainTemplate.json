@@ -1,0 +1,400 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Noname Security - support@nonamesecurity.com",
+    "comments": "Solution template for NonameSecurity"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "nonamegate.nonamesecurity_sentinelsolution",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@nonamesecurity.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "NonameSecurityMicrosoftSentinel",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "NonameSecurityMicrosoftSentinel",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "2.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "NonameSecurity data connector with template",
+        "displayName": "NonameSecurity template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "NonameSecurity data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Noname Security for Microsoft Sentinel",
+                  "publisher": "Noname Security",
+                  "descriptionMarkdown": "Noname Security solution to POST data into a Microsoft Sentinel SIEM workspace via the Azure Monitor REST API",
+                  "graphQueries": [
+                    {
+                      "metricName": "Noname API Security Alert",
+                      "legend": "NonameAPISecurityAlert_CL",
+                      "baseQuery": "NonameAPISecurityAlert_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Noname API Security Alerts",
+                      "query": "NonameAPISecurityAlert_CL\n| where TimeGenerated >= ago(1d)\n"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "NonameAPISecurityAlert_CL",
+                      "lastDataReceivedQuery": "NonameAPISecurityAlert_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "NonameAPISecurityAlert_CL\n| summarize LastAlertReceived = max(TimeGenerated)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Configure the Sentinel workflow in the Noname integrations settings.  Find documentation at https://docs.nonamesecurity.com",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "Configure the Noname Sentinel integration."
+                    }
+                  ],
+                  "metadata": {
+                    "id": "f66a9bee-323d-4280-8c3b-e95bc66db83a",
+                    "version": "2.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "solution"
+                    },
+                    "author": {
+                      "name": "Noname Security"
+                    },
+                    "support": {
+                      "tier": "community",
+                      "name": "Noname Security",
+                      "email": "support@nonamesecurity.com",
+                      "link": "https://nonamesecurity.com/"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "NonameSecurity",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Noname Security",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "Noname Security",
+                  "email": "support@nonamesecurity.com",
+                  "link": "https://nonamesecurity.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "NonameSecurity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Noname Security",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Partner",
+          "name": "Noname Security",
+          "email": "support@nonamesecurity.com",
+          "link": "https://nonamesecurity.com/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Noname Security for Microsoft Sentinel",
+          "publisher": "Noname Security",
+          "descriptionMarkdown": "Noname Security solution to POST data into a Microsoft Sentinel SIEM workspace via the Azure Monitor REST API",
+          "graphQueries": [
+            {
+              "metricName": "Noname API Security Alert",
+              "legend": "NonameAPISecurityAlert_CL",
+              "baseQuery": "NonameAPISecurityAlert_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "NonameAPISecurityAlert_CL",
+              "lastDataReceivedQuery": "NonameAPISecurityAlert_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "NonameAPISecurityAlert_CL\n| summarize LastAlertReceived = max(TimeGenerated)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Noname API Security Alerts",
+              "query": "NonameAPISecurityAlert_CL\n| where TimeGenerated >= ago(1d)\n"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Configure the Sentinel workflow in the Noname integrations settings.  Find documentation at https://docs.nonamesecurity.com",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "Configure the Noname Sentinel integration."
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "NonameSecurity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Noname Security",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Noname Security",
+          "email": "support@nonamesecurity.com",
+          "tier": "Partner",
+          "link": "https://nonamesecurity.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-12-01",
+        "providers": [
+          "Noname Security"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

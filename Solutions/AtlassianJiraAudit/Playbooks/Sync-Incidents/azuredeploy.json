@@ -1,0 +1,464 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Sync Jira from Sentinel - Create incident",
+        "description": "This Playbook will create JIRA incidents for every Microsoft Sentinel which is created. It includes additional information such as tactics, affected user etc.",
+        "prerequisites": ["1. Deploy Azure Key Vault and add secrets for the Jira account (to perform calls on Jira).",
+            "2. After playbook is deployed, grant the playbook permissions on the Key Vault (Secret - Get) and on Microsoft Sentinel workspace (Microsoft Sentinel Reader)",
+            "3. [Full documentation](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Sync-IncidentsWithJIRA/readme.md)"],
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
+        "entities": ["Account"],
+        "tags": [ "Sync" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Thijs Lecomte"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Sync Jira from Sentinel - Create incident",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Sync-Incidents",
+            "type": "string"
+        },
+        "SecretName Jira" : {
+            "type": "String",
+            "metadata" : {
+                "description" : "Name of the Key Vault Secret that contains the Jira Secret"
+            }
+        },
+        "UserName Jira" : {
+            "type": "String",
+            "metadata" : {
+                "description" : "Username for JIRA Authentication"
+            }
+        },
+        "JIRA API URL" : {
+            "type": "String",
+            "metadata" : {
+                "description" : "Organization specific URL for API (https://company.atlassian.net/rest/api/3/issue/)"
+            }
+        },
+        "Keyvault Name": {
+            "type": "String",
+            "metadata" : {
+                "description" : "Name of the Key Vault which stores the client secrets"
+            }
+        }
+    },
+    "variables": {
+        "AzureKeyVaultConnectionName" : "[concat('azurekeyvault-', parameters('PlaybookName'))]",
+        "SentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureKeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureKeyVaultConnectionName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('Keyvault Name')]"
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "SyncJIRAIncidents",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_To_TacticList_End": {
+                            "runAfter": {
+                                "Loop_Tactics": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "TacticList",
+                                "value": "]"
+                            }
+                        },
+                        "Create TacticListDupVariableacticListDup": {
+                            "runAfter": {
+                                "Create_TacticsVariable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TacticListDup",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Create_JIRAOrganizationID_Variable": {
+                            "runAfter": {
+                                "Create_TenantName_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "JIRAOrganizationID",
+                                        "type": "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Create_JIRA_Ticket": {
+                            "runAfter": {
+                                "Switch": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret')?['value']",
+                                    "type": "Basic",
+                                    "username": "[parameters('UserName Jira')]"
+                                },
+                                "body": {
+                                    "fields": {
+                                        "customfield_10002": [
+                                            "@variables('JIRAOrganizationID')"
+                                        ],
+                                        "customfield_10145": "@{triggerBody()?['object']?['name']}",
+                                        "customfield_10149": {
+                                            "value": "@{variables('TenantName')}"
+                                        },
+                                        "customfield_10154": "@triggerBody()?['object']?['properties']?['createdTimeUtc']",
+                                        "customfield_10155": "@json(variables('TacticList'))",
+                                        "customfield_10158": {
+                                            "content": [
+                                                {
+                                                    "content": [
+                                                        {
+                                                            "text": "@{if(greater(length(variables('User List')),0),variables('User List'),'None')}",
+                                                            "type": "text"
+                                                        }
+                                                    ],
+                                                    "type": "paragraph"
+                                                }
+                                            ],
+                                            "type": "doc",
+                                            "version": 1
+                                        },
+                                        "customfield_10162": "@{triggerBody()?['workspaceInfo']?['SubscriptionId']}",
+                                        "customfield_10169": "@{triggerBody()?['workspaceInfo']?['ResourceGroupName']}",
+                                        "customfield_10170": "@{triggerBody()?['workspaceInfo']?['WorkspaceName']}",
+                                        "customfield_10172": "@{triggerBody()?['workspaceId']}",
+                                        "customfield_10173": "@{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                                        "customfield_10175": "@{triggerBody()?['object']?['id']}",
+                                        "description": {
+                                            "content": [
+                                                {
+                                                    "content": [
+                                                        {
+                                                            "text": "@triggerBody()?['object']?['properties']?['description']",
+                                                            "type": "text"
+                                                        }
+                                                    ],
+                                                    "type": "paragraph"
+                                                }
+                                            ],
+                                            "type": "doc",
+                                            "version": 1
+                                        },
+                                        "issuetype": {
+                                            "id": "10037"
+                                        },
+                                        "priority": {
+                                            "name": "@triggerBody()?['object']?['properties']?['severity']"
+                                        },
+                                        "project": {
+                                            "key": "CC"
+                                        },
+                                        "summary": "@triggerBody()?['object']?['properties']?['title']"
+                                    }
+                                },
+                                "method": "POST",
+                                "uri": "[parameters('JIRA API URL')]"
+                            }
+                        },
+                        "Create_TacticsVariable": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TacticList",
+                                        "type": "string",
+                                        "value": "[[["
+                                    }
+                                ]
+                            }
+                        },
+                        "Create_TenantName_Variable": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TenantName",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Create_UserList_Variable": {
+                            "runAfter": {
+                                "Add_To_TacticList_End": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "User List",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Loop_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName Jira'), ''')}/value')]"
+                            }
+                        },
+                        "Loop_Accounts": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Add_User_To_List": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "User List",
+                                        "value": "@{items('Loop_Accounts')?['Name']}\n"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Create_UserList_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Loop_Tactics": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['additionalData']?['tactics']",
+                            "actions": {
+                                "Add_To_TacticList": {
+                                    "runAfter": {
+                                        "Set_Variable_TacticListDup": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "TacticList",
+                                        "value": "@{if(contains(variables('TacticListDup'),'value'),',','')}{\"value\":\"@{items('Loop_Tactics')}\"}"
+                                    }
+                                },
+                                "Set_Variable_TacticListDup": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "TacticListDup",
+                                        "value": "@variables('TacticList')"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Create TacticListDupVariableacticListDup": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Switch": {
+                            "runAfter": {
+                                "Create_JIRAOrganizationID_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "Case": {
+                                    "case": "SubscriptionID Customer 1",
+                                    "actions": {
+                                        "Set_JIRAOrganizationID_Variable_1": {
+                                            "runAfter": {
+                                                "Set_TenantName_Variable_1": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "JIRAOrganizationID",
+                                                "value": 7
+                                            }
+                                        },
+                                        "Set_TenantName_Variable_1": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "TenantName",
+                                                "value": "Tenant Name Customer 1"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {}
+                            },
+                            "expression": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                            "type": "Switch"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                           "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
+                                "connectionName": "[variables('SentinelConnectionName')]",
+                                "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                                "connectionName": "[variables('AzureKeyVaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

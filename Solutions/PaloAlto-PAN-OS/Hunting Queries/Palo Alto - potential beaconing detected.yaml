@@ -1,0 +1,66 @@
+id: 2f8522fc-7807-4f0a-b53d-458296edab8d
+name: Palo Alto - potential beaconing detected
+description: |
+  'Identifies beaconing patterns from Palo Alto Network traffic logs based on recurrent timedelta patterns.
+  The query leverages various KQL functions to calculate time deltas and then compares it with total events observed in a day to find percentage of beaconing.
+  This outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.
+  Reference Blog:
+  http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/
+  https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/detect-network-beaconing-via-intra-request-time-delta-patterns/ba-p/779586'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+  - T1571
+query: |
+  let starttime = 2d;
+  let endtime = 1d;
+  let TimeDeltaThreshold = 25;
+  let TotalEventsThreshold = 30;
+  let MostFrequentTimeDeltaThreshold = 25;
+  let PercentBeaconThreshold = 80;
+  CommonSecurityLog
+  | where DeviceVendor == "Palo Alto Networks" and Activity == "TRAFFIC"
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where ipv4_is_private(DestinationIP)== false
+  | project TimeGenerated, DeviceName, SourceUserID, SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes
+  | sort by SourceIP asc,TimeGenerated asc, DestinationIP asc, DestinationPort asc
+  | serialize
+  | extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(SourceIP, 1)
+  | extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated)
+  | where SourceIP == nextSourceIP
+  //Whitelisting criteria/ threshold criteria
+  | where TimeDeltainSeconds > TimeDeltaThreshold
+  | summarize count(), sum(ReceivedBytes), sum(SentBytes)
+  by TimeDeltainSeconds, bin(TimeGenerated, 1h), DeviceName, SourceUserID, SourceIP, DestinationIP, DestinationPort
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SentBytes), TotalReceivedBytes = sum(sum_ReceivedBytes)
+  by bin(TimeGenerated, 1h), DeviceName, SourceUserID, SourceIP, DestinationIP, DestinationPort
+  | where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold
+  | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
+  | where BeaconPercent > PercentBeaconThreshold
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP, AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled

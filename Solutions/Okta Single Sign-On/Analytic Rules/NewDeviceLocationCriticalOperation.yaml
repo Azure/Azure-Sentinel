@@ -1,0 +1,57 @@
+id: 41e843a8-92e7-444d-8d72-638f1145d1e1
+name: New Device/Location sign-in along with critical operation
+description: |
+  'This query identifies users seen login from new geo location/country as well as a new device and performing critical operations'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1556
+query: |
+  let timeframe = 1h;
+  let RiskyOperations = dynamic(["policy.rule.update","policy.rule.create","policy.rule.delete", "policy.rule.deactivate", "policy.lifecycle.update", "policy.rule.modify", "policy.lifecycle.create", "policy.lifecycle.delete", "policy.lifecycle.deactivate", "policy.lifecycle.modify", "network_zone.rule.disabled", "system.api_token.create", "system.api_token.revoke", "application.policy.sign_on.update", "application.policy.sign_on.rule.delete","user.mfa.factor.deactivate", "user.mfa.factor.reset_all", "system.mfa.factor.deactivate", "user.mfa.attempt_bypass"]);
+  let UserLoginNewCountryDevice = Okta_CL
+  | where eventType_s == "user.session.start"
+  | where outcome_result_s == "SUCCESS"
+  | where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).behaviors)).["New Country"] == "POSITIVE"
+  | where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).behaviors)).["New Geo-Location"] == "POSITIVE"
+  | where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).behaviors)).["New Device"] == "POSITIVE"
+  | summarize by timekey = bin(TimeGenerated, timeframe), actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, authenticationContext_externalSessionId_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d
+  | extend Location = strcat(client_geographicalContext_city_s, "-", client_geographicalContext_country_s);
+  let RiskyOperationsObserved = Okta_CL
+  | where eventType_s in (RiskyOperations)
+  | where outcome_result_s == "SUCCESS"
+  | summarize by timekey = bin(TimeGenerated, timeframe), actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, authenticationContext_externalSessionId_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d;
+  UserLoginNewCountryDevice
+  | join kind=inner (RiskyOperationsObserved) on timekey, actor_displayName_s, client_ipAddress_s
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: client_ipAddress_s
+customDetails:
+  SessionId: authenticationContext_externalSessionId_s
+  Location:  Location
+alertDetailsOverride:
+  alertDisplayNameFormat: New Device/Location {{Location}} sign-in along with critical operation
+  alertDescriptionFormat: |
+    This query identifies users seen login from new geo location/country {{Location}} as well as a new device and performing critical operations
+version: 1.0.0
+kind: Scheduled

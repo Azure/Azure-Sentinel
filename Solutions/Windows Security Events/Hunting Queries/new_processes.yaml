@@ -1,0 +1,45 @@
+id: 513e3a11-e1bb-4cfc-8af9-451da0407e6b
+name: New processes observed in last 24 hours
+description: |
+  'These new processes could be benign new programs installed on hosts; however, especially in normally stable environments,
+  these new processes could provide an indication of an unauthorized/malicious binary that has been installed and run.
+  Reviewing the wider context of the logon sessions in which these binaries ran can provide a good starting point for identifying possible attacks.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let ProcessCreationEvents=() {
+  let processEvents=SecurityEvent
+  | where TimeGenerated between(lookback..endtime)
+  | where EventID==4688
+  | project TimeGenerated, Computer, Account, FileName=tostring(split(NewProcessName, @'')[(-1)]), NewProcessName, ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName;
+  processEvents};
+  ProcessCreationEvents
+  | where TimeGenerated between(lookback..starttime)
+  | summarize HostCount=dcount(Computer) by FileName
+  | join kind=rightanti (
+      ProcessCreationEvents
+      | where TimeGenerated between(starttime..endtime)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Computers = make_set(Computer,1000) , HostCount=dcount(Computer) by Account, NewProcessName, FileName, ProcessCommandLine, InitiatingProcessFileName
+  ) on FileName
+  | extend timestamp = StartTime
+  | extend NTDomain = tostring(split(Account,'\\',0)[0]), Name = tostring(split(Account,'\\',1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain    
+version: 2.0.1

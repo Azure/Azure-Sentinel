@@ -25,13 +25,14 @@
         ]
     },
    "parameters":{
-      "PlaybookName_AD4IoT-AutoCloseIncidents":{
+      "PlaybookName":{
          "defaultValue":"AD4IoT-AutoCloseIncidents",
          "type":"String"
       }
    },
    "variables":{
-      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName_AD4IoT-AutoCloseIncidents'))]"
+      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName'))]",
+	  "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
    },
    "resources": [
                {
@@ -48,10 +49,23 @@
                }
            }
        },
+	   	{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureMonitorLogsConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('AzureMonitorLogsConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+				}
+			}
+		},
        {
            "type": "Microsoft.Logic/workflows",
            "apiVersion": "2017-07-01",
-           "name": "[parameters('PlaybookName_AD4IoT-AutoCloseIncidents')]",
+           "name": "[parameters('PlaybookName')]",
            "location": "[resourceGroup().location]",
            "dependsOn": [
                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
@@ -171,6 +185,7 @@
                 "type": "ParseJson"
             },
             "Run_query_and_list_results": {
+				"type": "ApiConnection",
                 "inputs": {
                     "body": "_GetWatchlist(\"@{variables('WatchlistName')}\") \n| where ip_address == \"@{body('Parse_JSON')?['SourceDeviceAddress']}\"",
                     "host": {
@@ -226,6 +241,11 @@
     "parameters": {
             "$connections":{
                "value":{
+				  "azuremonitorlogs": {
+					 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+					 "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+					 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+				  },
                   "azuresentinel":{
                      "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                      "connectionName":"[variables('AzureSentinelConnectionName')]",

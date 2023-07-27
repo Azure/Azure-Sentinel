@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimAuditEventAzureActivity",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Audit Event ASIM parser for Azure administrative activity",
+            "category": "ASIM",
+            "FunctionAlias": "ASimAuditEventAzureActivity",
+            "query": "let parser=(disabled:bool=false){\n   let AzureActivityOperationLookup = datatable (op:string, EventType:string) \n  [\n    'ACTION', 'Execute',\n    'WRITE', 'Set',\n    'DELETE', 'Delete'\n  ];\n  let AzureActivityStatusLookup = datatable (ActivityStatusValue:string, ActivitySubstatusValue:string, EventResult:string, EventResultDetails:string) \n  [\n      \"Accept\",\"Accepted\",\"Success\",\"\",\n      \"Accept\",\"Created\",\"Success\",\"\",\n      \"Accept\",\"OK\",\"Success\",\"\",\n      \"Accept\",\"\",\"Success\",\"\",\n      \"Accepted\",\"\",\"Success\",\"\",\n      \"Active\",\"\",\"Success\",\"Active\",\n      \"Failed\",\"\",\"Failure\",\"\",\n      \"Failure\",\"BadRequest\",\"Failure\",\"Bad Request\",\n      \"Failure\",\"Conflict\",\"Failure\",\"Bad Request\",\n      \"Failure\",\"Forbidden\",\"Failure\",\"Unauthorized\",\n      \"Failure\",\"InternalServerError\",\"Failure\",\"Internal error\",\n      \"Failure\",\"MethodNotAllowed\",\"Failure\",\"Bad Request\",\n      \"Failure\",\"NotFound\",\"Failure\",\"Not found\",\n      \"Failure\",\"Unauthorized\",\"Failure\",\"Unauthorized\",\n      \"Failure\",\"\",\"Failure\",\"\",\n      \"In Progress\",\"\",\"Success\",\"In Progress\",\n      \"Resolved\",\"\",\"Success\",\"\",\n      \"Start\",\"\",\"Success\",\"Start\",\n      \"Started\",\"\",\"Success\",\"Start\",\n      \"Succeeded\",\"\",\"Success\",\"\",\n      \"Success\",\"Created\",\"Success\",\"\",\n      \"Success\",\"NoContent\",\"Success\",\"\",\n      \"Success\",\"OK\",\"Success\",\"\",\n      \"Success\",\"\",\"Success\",\"\",\n      \"Updated\",\"\",\"Success\",\"\",\n      \"Succeeded\",\"OK\",\"Success\",\"\",\n      \"Accepted\",\"Accepted\",\"Success\",\"\",\n      \"Accepted\",\"OK\",\"Success\",\"\",\n      \"Failed\",\"Forbidden\",\"Failure\",\"Unauthorized\",\n      \"Succeeded\",\"Created\",\"Success\",\"\",\n      \"Failed\",\"BadRequest\",\"Failure\",\"Bad request\",\n      \"Accepted\",\"Created\",\"Success\",\"\",\n      \"Failed\",\"Conflict\",\"Failure\",\"Bad request\",\n      \"Failed\",\"MethodNotAllowed\",\"Failure\",\"Bad request\",\n      \"Failure\",\"BadGateway\",\"Failure\",\"Bad request\",\n      \"Succeeded\",\"NoContent\",\"Success\",\"\",\n      \"Failure\",\"ServiceUnavailable\",\"Failure\",\"Internal error\",\n      \"Failure\",\"GatewayTimeout\",\"Failure\",\"Internal error\",\n      \"Failed\",\"NotFound\",\"Failure\",\"Not found\",\n      \"Failed\",\"BadGateway\",\"Failure\",\"Bad request\",\n      \"Failure\",\"UnsupportedMediaType\",\"Failure\",\"Bad request\",\n      \"Failed\",\"Unauthorized\",\"Failure\",\"Unauthorized\",\n      \"Cancel\",\"\",\"Failure\",\"Cancelled\"\n  ];\n  AzureActivity \n  | where not(disabled)\n  | where CategoryValue == \"Administrative\"\n  | project-away HTTPRequest, Level, SourceSystem, EventSubmissionTimestamp, TenantId, OperationId, Hierarchy, Category, ResourceId, ResourceProvider, Resource\n  | project-rename \n      Operation = OperationNameValue,\n      SrcIpAddr = CallerIpAddress,\n      EventOriginalUid = EventDataId,\n      ActorSessionId = CorrelationId,\n      EventOriginalType = CategoryValue\n  | extend\n      EventCount = int(1),\n      EventStartTime = TimeGenerated, \n      EventEndTime= TimeGenerated,\n      EventProduct = 'Azure',\n      EventVendor = 'Microsoft',\n      EventSchemaVersion = '0.1.0',\n      EventSchema = 'AuditEvent',\n      ObjectType = \"Cloud Resource\",\n      TargetAppName = \"Azure\",\n      TargetAppType = \"CSP\"\n  // --\n  // Calculate EventResult, EventResultDetails, and EventResultOriginalDetails\n  | extend\n      EventOriginalResultDetails = strcat (\n          ActivityStatusValue, \n          iff (ActivitySubstatusValue !=\"\", strcat(' [', ActivitySubstatusValue, ']'), \"\")\n      )\n  | extend \n      ActivitySubstatusValue = iff (ActivitySubstatusValue matches regex \"\\\\d+\", \"\", ActivitySubstatusValue)\n  | lookup AzureActivityStatusLookup on ActivityStatusValue, ActivitySubstatusValue\n  | extend EventResult = iff(EventResult == \"\", \"Other\", EventResult)\n  | extend EventSeverity = iff(EventResult == \"Failure\", \"Low\", \"Informational\")\n  | project-away ActivityStatus*, ActivitySubstatus*\n  // --\n  // Calculate Actor\n  | extend \n      Caller = iff(Caller == \"Microsoft.RecoveryServices\", \"\", Caller)\n  | extend \n      ActorUsernameType = iff (Caller has \"@\", \"UPN\", \"\")\n  | extend \n      ActorUsername = iff (ActorUsernameType == \"UPN\", Caller, \"\"),\n      ActorUserId = iff (ActorUsernameType != \"UPN\", Caller, \"\")\n  | extend\n      ActorUserIdType = iff  (ActorUserId != \"\", \"AADID\", \"\")\n  | project-away Caller\n  // --\n  // Calculate Object\n  | extend \n      entity = tostring(Properties_d.entity), \n      resource = tostring(Properties_d.resource),\n      entity_name = tostring(Properties_d.[\"Entity Name\"])\n  | extend Object = case ( \n          entity != \"\", entity,\n          strcat (\"/subscriptions/\", SubscriptionId, \"/resourceGroups/\", ResourceGroup, \"/providers/\", ResourceProviderValue, \"/\",resource, iff (entity_name != \"\", strcat(\"/\", entity_name), \"\"))\n      )\n  | project-away entity, resource,entity_name, _SubscriptionId, SubscriptionId, ResourceGroup, ResourceProviderValue\n  // --\n  // Calculate EventType\n  | extend op = toupper(tostring(split(Operation,\"/\")[-1]))\n  | lookup AzureActivityOperationLookup on op\n  | extend EventType = iff (EventType == \"\", \"Other\", EventType)\n  | project-away op\n  // Aliases\n  | extend AdditionalFields = pack_dictionary(\"Authorization\", Authorization_d, \"Claims\", Claims_d, \"Error\", Properties_d.statusMessage)\n  // -- Aliases\n  | extend \n      IpAddr = SrcIpAddr,\n      User = ActorUsername,\n      Application = TargetAppName,\n      Dst = TargetAppName,\n      Src = SrcIpAddr,\n  // -- Entity identifier explicit aliases\n      ActorUserUpn = ActorUsername,\n      ActorUserAadId = ActorUserId\n  | project-away OperationName, Properties*, Authorization*, Claims*\n  // -- Properties*\n};\nparser (disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -37,8 +37,8 @@ In this exercise, we will review this feature and create one example rule with a
 
 ![Select Microsoft incident creation rule](../Images/m3-microsoft-creation-rule.gif?raw=true)
 
-3. In the rule name enter **"Azure Defender only medium and high Alerts"** 
-4. In the **Microsoft security service** dropdown select **Azure Defender**
+3. In the rule name enter **"Defender for Cloud only medium and high Alerts"** 
+4. In the **Microsoft security service** dropdown select **Defender for Cloud**
 5. In the **Filter by severity** select **custom** and mark **High** and **Medium**
 
 ![Azure Defender Filter by severity](../Images/m3-microsoft-creation-rule02.gif?raw=true)
