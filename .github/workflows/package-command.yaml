@@ -11,18 +11,26 @@ env:
   ADO_TEAMPROJECT: "${{ vars.ADO_TEAMPROJECT }}"
   ADO_PARENT_LINK: "${{ vars.ADO_PARENT_LINK }}"
   GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+  PR_NUMBER: ${{ github.event.client_payload.pull_request.number && github.event.client_payload.pull_request.number || github.event.client_payload.pullRequestNumber }}
+  RUN_ID: ${{ github.run_id }}
 
 on:
   repository_dispatch:
     types: [package-command]
 jobs:
   solutionNameDetails:
+    permissions:
+      contents: read
+      pull-requests: read
     if: ${{ !github.event.pull_request.head.repo.fork }}
     uses: ./.github/workflows/getSolutionName.yaml
     secrets: inherit
 
   # BELOW JOB WILL CHECK IF WE NEED TO SKIP PACKAGE CREATION OR NOT
   checkSkipPackagingDetails:
+    permissions:
+      contents: read
+      pull-requests: read
     if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && !github.event.pull_request.head.repo.fork }}
     uses: ./.github/workflows/checkSkipPackagingInfo.yaml
     secrets: inherit
@@ -32,6 +40,9 @@ jobs:
 
   neworexistingsolution:
     needs: [solutionNameDetails, checkSkipPackagingDetails]
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/neworexistingsolution.yaml
     if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && needs.checkSkipPackagingDetails.outputs.isPackagingRequired == 'True' }} 
     with: 
@@ -44,8 +55,6 @@ jobs:
       contents: read
     needs: [solutionNameDetails, neworexistingsolution]
     env:
-      RUNID: "${{ github.run_id }}" 
-      PULL_REQUEST_NUMBER: "${{ github.event.client_payload.pull_request.number && github.event.client_payload.pull_request.number || github.event.client_payload.pullRequestNumber }}"
       SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
       SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
       SOLUTION_OFFER_ID: "${{ needs.neworexistingsolution.outputs.solutionOfferId }}"
@@ -69,12 +78,12 @@ jobs:
         name: Check & Initiate Package Creation Process
         run: |
           $instrumentationKey = "${{ env.APPINSIGHTS }}"
-          $defaultPackageVersion = "${{ vars.defaultPackageVersion }}"
+          $defaultPackageVersion = "${{ env.DEFAULTPACKAGEVERSION }}"
           $solutionSupportedBy = "${{ env.SOLUTION_SUPPORTED_BY }}"
           $solutionOfferId = "${{ env.SOLUTION_OFFER_ID }}"
-          $runId = "${{ env.RUNID }}"
-          $solutionName = "${{ needs.solutionNameDetails.outputs.solutionName }}"
-          $pullRequestNumber = "${{ github.event.client_payload.pull_request.number && github.event.client_payload.pull_request.number || github.event.client_payload.pullRequestNumber }}"
+          $runId = "${{ env.RUN_ID }}"
+          $solutionName = "${{ env.SOLUTION_NAME }}"
+          $pullRequestNumber = "${{ env.PR_NUMBER }}"
           $isNewSolution = "${{ env.IS_NEW_SOLUTION }}"
 
           Write-Host "RunId = $runId, defaultPackageVersion = $defaultPackageVersion, solutionOfferId = $solutionOfferId, SOLUTION_NAME = $solutionName, PULL_REQUEST_NUMBER = $pullRequestNumber, isNewSolution = $isNewSolution"
@@ -111,12 +120,6 @@ jobs:
         env:
           BLOBNAME: "${{ steps.step1.outputs.blobName }}"
           PACKAGE_CREATION_PATH: "${{ steps.step1.outputs.packageCreationPath }}"
-          DATA_FOLDER_PATH: "${{ steps.step1.outputs.dataFolderPath }}"
-          DATA_INPUT_FILE_NAME: "${{ steps.step1.outputs.dataInputFileName }}"
-          SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
-          SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
-          RUNID: "${{ github.run_id }}" 
-          PULL_REQUEST_NUMBER: "${{ github.event.client_payload.pull_request.number && github.event.client_payload.pull_request.number || github.event.client_payload.pullRequestNumber }}"
           IS_CREATE_PACKAGE: ${{ steps.step1.outputs.isCreatePackage }}
         if: ${{ success() && (steps.step1.outcome == 'success' && env.IS_CREATE_PACKAGE && env.PACKAGE_CREATION_PATH != '' && env.BLOBNAME != '') }}
         with: 
@@ -137,8 +140,9 @@ jobs:
   getPullRequestInfo:
     runs-on: ubuntu-latest
     needs: createpackage
-    env:
-      PULL_REQUEST_NUMBER: "${{ github.event.client_payload.pull_request.number && github.event.client_payload.pull_request.number || github.event.client_payload.pullRequestNumber }}"
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       existingPRTitle: ${{ steps.getPRDetails.outputs.existingPRTitle }}
       existingPRBody: "${{ steps.getPRDetails.outputs.existingPRBody }}"
@@ -149,8 +153,8 @@ jobs:
       run: |
         try
         {
-          $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
-          $token = "${{ secrets.GITHUB_TOKEN }}"
+          $pullRequestNumber = "${{ env.PR_NUMBER }}"
+          $token = "${{ env.GITHUB_TOKEN }}"
   
           if ($null -ne $pullRequestNumber -and $pullRequestNumber -ne '')
           {

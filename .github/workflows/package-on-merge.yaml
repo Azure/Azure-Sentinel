@@ -11,6 +11,9 @@ env:
   ADO_AREAPATH: "${{ vars.ADO_AREAPATH }}"
   ADO_TEAMPROJECT: "${{ vars.ADO_TEAMPROJECT }}"
   ADO_PARENT_LINK: "${{ vars.ADO_PARENT_LINK }}"
+  PR_NUMBER: ${{ github.event.pull_request.number }}
+  PR_TITLE: ${{ github.event.client_payload.pull_request.title}}
+
 on:
   pull_request:
     branches:
@@ -21,16 +24,25 @@ on:
       - closed
 jobs:
   checkAutomatedPR:
+    permissions:
+      pull-requests: read
+      contents: read
     if: ${{ github.event.pull_request.merged && !github.event.pull_request.head.repo.fork }}
     uses: ./.github/workflows/checkAutomatedPR.yaml
 
   solutionNameDetails:
+    permissions:
+      pull-requests: read
+      contents: read
     if: ${{ github.event.pull_request.merged && !github.event.pull_request.head.repo.fork }}
     needs: checkAutomatedPR
     uses: ./.github/workflows/getSolutionName.yaml
     secrets: inherit
 
   checkSkipPackagingDetails:
+    permissions:
+      pull-requests: read
+      contents: read
     if: ${{ github.event.pull_request.merged && !github.event.pull_request.head.repo.fork && needs.solutionNameDetails.outputs.solutionName != ''  }}
     uses: ./.github/workflows/checkSkipPackagingInfo.yaml
     secrets: inherit
@@ -39,6 +51,9 @@ jobs:
       solutionName: "${{ needs.solutionNameDetails.outputs.solutionName }}"
 
   neworexistingsolution:
+    permissions:
+      pull-requests: read
+      contents: read
     needs: [solutionNameDetails, checkSkipPackagingDetails]
     uses: ./.github/workflows/neworexistingsolution.yaml
     if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && needs.checkSkipPackagingDetails.outputs.isPackagingRequired == 'True' }} 
@@ -53,7 +68,6 @@ jobs:
     needs: [solutionNameDetails, neworexistingsolution]
     env:
       RUNID: "${{ github.event.client_payload.github.runId }}" 
-      PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
       SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
       SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
       SOLUTION_OFFER_ID: "${{ needs.neworexistingsolution.outputs.solutionOfferId }}"
@@ -77,12 +91,12 @@ jobs:
         name: Check & Initiate Package Creation Process
         run: |
           $instrumentationKey = "${{ env.APPINSIGHTS }}"
-          $defaultPackageVersion = "${{ vars.defaultPackageVersion }}"
+          $defaultPackageVersion = "${{ env.DEFAULTPACKAGEVERSION }}"
           $solutionSupportedBy = "${{ env.SOLUTION_SUPPORTED_BY }}"
           $solutionOfferId = "${{ env.SOLUTION_OFFER_ID }}"
           $runId = "${{ env.RUNID }}"
-          $solutionName = "${{ needs.solutionNameDetails.outputs.solutionName }}"
-          $pullRequestNumber = "${{ github.event.pull_request.number }}"
+          $solutionName = "${{ env.SOLUTION_NAME }}"
+          $pullRequestNumber = "${{ env.PR_NUMBER }}"
           $isNewSolution = "${{ env.IS_NEW_SOLUTION }}"
 
           Write-Host "RunId = $runId, defaultPackageVersion = $defaultPackageVersion, solutionOfferId = $solutionOfferId, SOLUTION_NAME = $solutionName, PULL_REQUEST_NUMBER = $pullRequestNumber, isNewSolution = $isNewSolution"
@@ -119,12 +133,6 @@ jobs:
         env:
           BLOBNAME: "${{ steps.step1.outputs.blobName }}"
           PACKAGE_CREATION_PATH: "${{ steps.step1.outputs.packageCreationPath }}"
-          DATA_FOLDER_PATH: "${{ steps.step1.outputs.dataFolderPath }}"
-          DATA_INPUT_FILE_NAME: "${{ steps.step1.outputs.dataInputFileName }}"
-          SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
-          SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
-          RUNID: "${{ github.event.client_payload.github.runId }}" 
-          PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
           IS_CREATE_PACKAGE: ${{ steps.step1.outputs.isCreatePackage }}
         if: ${{ success() && (steps.step1.outcome == 'success' && env.IS_CREATE_PACKAGE && env.PACKAGE_CREATION_PATH != '' && env.BLOBNAME != '') }}
         with: 
@@ -147,9 +155,9 @@ jobs:
         name: uploadartifactsEvent
         run: |
           $solutionSupportedBy = "${{ env.SOLUTION_SUPPORTED_BY }}"
-          $runId = "${{ github.event.client_payload.github.runId }}"
+          $runId = "${{ env.RUNID }}"
           $solutionName = "${{ env.SOLUTION_NAME }}"
-          $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
+          $pullRequestNumber = "${{ env.PR_NUMBER }}"
           $instrumentationKey = "${{ env.APPINSIGHTS }}"
           . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
           $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'EventName'="Upload Artifacts"; }
@@ -169,7 +177,6 @@ jobs:
       DATA_FOLDER_PATH: "${{ needs.createpackage.outputs.dataFolderPath }}"
       DATA_INPUT_FILE_NAME: "${{ needs.createpackage.outputs.dataInputFileName }}"
       SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
-      PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
       SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
       ACTOR: "${{ github.actor }}"
       ASSIGNEES: "${{ github.event.client_payload.github.actor }}"
@@ -204,17 +211,19 @@ jobs:
           delete-branch: false
           title: '[GitHub Bot] 🤖 Package Created For ${{ env.SOLUTION_NAME }} Solution'
           body: |
-            Automation have successfully generated package for solution '${{ env.SOLUTION_NAME }}' based on Pull request #${{ env.PULL_REQUEST_NUMBER }}.
+            Automation have successfully generated package for solution '${{ env.SOLUTION_NAME }}' based on Pull request #${{ env.PR_NUMBER }}.
       - shell: pwsh
         id: createPREvents
         name: createPREvents
+        env:
+          NEW_PR_NUMBER: ${{ steps.create-new-pr.outcome }}
         run: |
           . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
           $runId = "${{ env.RUNID }}"
           $solutionName = "${{ env.SOLUTION_NAME }}"
-          $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
+          $pullRequestNumber = "${{ env.PR_NUMBER }}"
           $instrumentationKey = "${{ env.APPINSIGHTS }}"
-          $previousStepSuccessValue = "${{ steps.create-new-pr.outcome }}"
+          $previousStepSuccessValue = "${{ env.NEW_PR_NUMBER }}"
           try
           {
             $customProperties = @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; 'EventName'="Create New PR"; 'create-new-pr-output'="$previousStepSuccessValue" }
@@ -230,11 +239,14 @@ jobs:
           }
 
   addCommentOnNewPRCreation:
+    permissions:
+      pull-requests: write
+      contents: write
     needs: [solutionNameDetails, createNewPR]
     if: ${{ success() && needs.createNewPR.outputs.newPRNumber != '' }}
     uses: ./.github/workflows/addComment.yaml
     with:
-      message: "@${{ github.event.client_payload.github.actor }} The requested package for the '${{ needs.solutionNameDetails.outputs.solutionName }}' solution has been generated based on Pull request #${{ github.event.client_payload.pull_request.number }}"
+      message: "@${{ github.event.client_payload.github.actor }} The requested package for the '${{ needs.solutionNameDetails.outputs.solutionName }}' solution has been generated based on Pull request #${{ github.event.pull_request.number }}"
       prNumber: "${{ needs.createNewPR.outputs.newPRNumber }}"
 
   release-project:
@@ -247,7 +259,6 @@ jobs:
       BLOBNAME: "${{ needs.createpackage.outputs.blobName }}"
       IS_CREATE_PACKAGE: ${{ needs.createpackage.outputs.isCreatePackage }}
       PACKAGE_CREATION_PATH: "${{ needs.createpackage.outputs.packageCreationPath }}"
-      PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
       RUNID: "${{ github.event.client_payload.github.runId }}"
       APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
       SOLUTION_NAME: "${{ needs.solutionNameDetails.outputs.solutionName }}"
@@ -264,7 +275,7 @@ jobs:
       run: |
         $runId = "${{ env.RUNID }}"
         $solutionName = "${{ env.SOLUTION_NAME }}"
-        $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
+        $pullRequestNumber = "${{ env.PR_NUMBER }}"
         $blobName = "${{ env.BLOBNAME }}"
         $isCreatePackage = "${{ env.IS_CREATE_PACKAGE }}"
         $packageCreationPath = "${{ env.PACKAGE_CREATION_PATH }}"
@@ -286,10 +297,13 @@ jobs:
         path: "${{ env.PACKAGE_CREATION_PATH }}"
 
   create-ado:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     needs: [solutionNameDetails, neworexistingsolution, createpackage, createNewPR, addCommentOnNewPRCreation, release-project]
     if: ${{ always() && contains(join(needs.*.result, ','), 'failure') }}
-    # if: ${{ always() && contains(needs.*.result, 'failure') }}
+    env:
+      DATA_FILE_LINK: ${{ needs.createNewPR.outputs.dataFileLink }}
     steps:
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
       - shell: pwsh 
@@ -299,9 +313,9 @@ jobs:
           $adoBaseUrl = "${{ env.ADO_BASE_URL}}"
           $adoAreaPath = "${{ env.ADO_AREAPATH}}"
           $adoTeamProject = "${{ env.ADO_TEAMPROJECT}}"
-          $prNumber = "${{ github.event.pull_request.number }}"
-          $prTitle = "${{ github.event.client_payload.pull_request.title}}"
-          $dataFileLink = "${{ needs.createNewPR.outputs.dataFileLink }}"
+          $prNumber = "${{ env.PR_NUMBER }}"
+          $prTitle = "${{ env.PR_TITLE }}"
+          $dataFileLink = "${{ env.DATA_FILE_LINK }}"
           $adoParentLink = "${{ env.ADO_PARENT_LINK }}"
           $instrumentationKey = "${{ env.APPINSIGHTS }}"
           Set-PSRepository PSGallery -InstallationPolicy Trusted

@@ -3,18 +3,25 @@ env:
   APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
   DEFAULTPACKAGEVERSION: "${{ vars.DEFAULTPACKAGEVERSION }}"
   BRANCH_NAME: ${{ github.event.pull_request.head.ref && github.event.pull_request.head.ref || github.event.client_payload.pullRequestBranchName }}
+  PR_NUMBER: ${{ github.event.pull_request.number && github.event.pull_request.number || github.event.client_payload.pullRequestNumber }}
 
 on:
   repository_dispatch:
     types: [partnercenter-command]
 jobs:
   solutionNameDetails:
+    permissions:
+      contents: read
+      pull-requests: read
     if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.head.repo.fork }}
     uses: ./.github/workflows/getSolutionName.yaml
     secrets: inherit
 
   neworexistingsolution:
     needs: solutionNameDetails
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/neworexistingsolution.yaml
     if: ${{ needs.solutionNameDetails.outputs.solutionName != '' && !github.event.pull_request.head.repo.fork }} 
     with: 
@@ -42,12 +49,12 @@ jobs:
         id: deploy
         name: Deploy Artifacts to Partner Center
         run: |
-          $instrumentationKey = "${{ vars.APPINSIGHTS }}"
-          $defaultPackageVersion = "${{ vars.defaultPackageVersion }}"
-          $offerId = 'azure-sentinel-solution-testingoffers' # "${{ env.SOLUTION_OFFER_ID }}"
+          $instrumentationKey = "${{ env.APPINSIGHTS }}"
+          $defaultPackageVersion = "${{ env.DEFAULTPACKAGEVERSION }}"
+          $offerId = 'azure-sentinel-solution-testingoffers'
           $runId = "${{ env.RUNID }}"
           $solutionName = "${{ env.SOLUTION_NAME }}"
-          $pullRequestNumber = "${{ github.event.pull_request.number && github.event.pull_request.number || github.event.client_payload.pullRequestNumber }}"
+          $pullRequestNumber = "${{ env.PR_NUMBER }}"
           $isNewSolution = "${{ env.IS_NEW_SOLUTION }}"
 
           Set-PSRepository PSGallery -InstallationPolicy Trusted
@@ -56,6 +63,9 @@ jobs:
 
   addCommentOnFailure:
     needs: deployToPartnerCenter
+    permissions:
+      contents: write
+      pull-requests: write
     if: ${{ failure() && needs.pullRequestStatus.outputs.IsPartnerCenterDeploymentSuccess == 'False' }}
     uses: ./.github/workflows/addComment.yaml
     with:
@@ -63,6 +73,9 @@ jobs:
 
   addCommentOnSuccess:
     needs: deployToPartnerCenter
+    permissions:
+      contents: write
+      pull-requests: write
     if: ${{ success() && needs.pullRequestStatus.outputs.IsPartnerCenterDeploymentSuccess == 'True' }}
     uses: ./.github/workflows/addComment.yaml
     with:
