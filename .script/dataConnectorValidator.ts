@@ -96,6 +96,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Dynamics365Activity;
   }
+  else if (dataTypes[0].name.includes("CrowdstrikeReplicatorV2"))
+  {
+    return ConnectorCategory.CrowdstrikeReplicatorV2;
+  }
   else if (dataTypes[0].name.includes("BloodHoundEnterprise"))
   {
     return ConnectorCategory.BloodHoundEnterprise;

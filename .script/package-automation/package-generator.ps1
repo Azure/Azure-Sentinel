@@ -102,7 +102,7 @@ try {
         $playbookFiles = $playbookFiles -match ([regex]::Escape(".json"))
     
         if ($playbookFiles.Count -gt 0) {
-            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' }
+            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' } | Where-Object { $_ -notlike '*function.json*' }
         }
     
         return $playbookFiles;
@@ -415,6 +415,7 @@ try {
         $dataConnectorFilesResultArray = GetValidDataConnectorFileNames($newDataConnectorFiles) | ConvertTo-Json -AsArray
         $dataConnectoryWithoutSpaceArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("DataConnectors")))
         if (!$dataConnectoryWithoutSpaceArrayAttributeExist) {
+            $dataFileContentObject.PSObject.Properties.Remove('Data Connectors')
             $dataFileContentObject | ForEach-Object {
                 $_ | Add-Member -MemberType NoteProperty -Name 'Data Connectors' -Value $dataConnectorFilesResultArray -PassThru
             }
@@ -575,7 +576,7 @@ try {
         #======================================
         #check if folder with *Connector Name present inside of Solutions folder or in playbooks folder eg: Check Point or Cisco ISE solution 
         $filterPath = "$solutionFolderPath" + "*Connector/*"
-        $playbooksDynamicCustomConnector = $filesList -like ($filterPath)
+        $playbooksDynamicCustomConnector = $filesList -like ($filterPath) | Where-Object {$_ -notlike '*/Data Connectors/*'} | Where-Object {$_ -notlike '*/DataConnectors/*'}
     
         if ($playbooksDynamicCustomConnector -ne $false -and $playbooksDynamicCustomConnector.Count -gt 0)
         {
