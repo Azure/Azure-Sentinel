@@ -1,7 +1,7 @@
-require File.expand_path('../lib/logstash/sentinel/version', __FILE__)
+require File.expand_path('../lib/logstash/sentinel_la/version', __FILE__)
 
 Gem::Specification.new do |s|
-  s.name = 'microsoft-sentinel-logstash-output-plugin'
+  s.name = 'microsoft-sentinel-log-analytics-logstash-output-plugin'
   s.version = LogStash::Outputs::MicrosoftSentinelOutputInternal::VERSION
   s.authors = ["Microsoft Sentinel"]
   s.email   = 'AzureSentinel@microsoft.com'
@@ -20,7 +20,7 @@ Gem::Specification.new do |s|
   s.metadata = { "logstash_plugin" => "true", "logstash_group" => "output" }
 
   # Gem dependencies
-  s.add_runtime_dependency "rest-client", ">= 1.8.0"
+  s.add_runtime_dependency "rest-client", ">= 2.1.0"
   s.add_runtime_dependency "logstash-core-plugin-api", ">= 1.60", "<= 2.99"
   s.add_runtime_dependency "logstash-codec-plain"
   s.add_development_dependency "logstash-devutils"

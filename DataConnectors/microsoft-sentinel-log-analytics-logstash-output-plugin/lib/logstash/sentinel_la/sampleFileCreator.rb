@@ -1,6 +1,6 @@
 # encoding: utf-8
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
-require "logstash/sentinel/eventsHandler"
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/eventsHandler"
 
 module LogStash
   module Outputs

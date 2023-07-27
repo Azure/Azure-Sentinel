@@ -1,5 +1,5 @@
 # encoding: utf-8
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 require 'rest-client'
 require 'json'
 require 'openssl'
@@ -9,16 +9,17 @@ require 'time'
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsAadTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
-    set_proxy(logstashLoganalyticsConfiguration.proxy)
     scope = CGI.escape("https://monitor.azure.com//.default")
+    @aad_uri = "https://login.microsoftonline.com"
     @token_request_body = sprintf("client_id=%s&scope=%s&client_secret=%s&grant_type=client_credentials", logstashLoganalyticsConfiguration.client_app_Id, scope, logstashLoganalyticsConfiguration.client_app_secret)
-    @token_request_uri = sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/token", logstashLoganalyticsConfiguration.tenant_id)
+    @token_request_uri = sprintf("%s/%s/oauth2/v2.0/token",@aad_uri, logstashLoganalyticsConfiguration.tenant_id)
     @token_state = {
       :access_token => nil,
       :expiry_time => nil,
       :token_details_mutex => Mutex.new,
     }
     @logger = logstashLoganalyticsConfiguration.logger
+    @logstashLoganalyticsConfiguration = logstashLoganalyticsConfiguration
   end # def initialize
 
   # Public methods
@@ -59,19 +60,23 @@ class LogAnalyticsAadTokenProvider
   # Post the given json to Azure Loganalytics
   def post_token_request()
     # Create REST request header
-    header = get_header()
-    begin
+    headers = get_header()
+    while true
+      begin
         # Post REST request 
-        response = RestClient.post(@token_request_uri, @token_request_body, header)        
+        response = RestClient::Request.execute(method: :post, url: @token_request_uri, payload: @token_request_body, headers: headers,
+                                              proxy: @logstashLoganalyticsConfiguration.proxy_aad)
+                    
         if (response.code == 200 || response.code == 201)
           return JSON.parse(response.body)
-        else
-          @logger.trace("Rest client response from ADD API ['#{response}']")
-          raise ("Failed to get AAD token: http code " + response.code.to_s)
         end
-    rescue RestClient::ExceptionWithResponse => ewr
-        @logger.trace("Rest client response from ADD API ['#{ewr.response}']")
-        raise ("Failed to get AAD token: http code " + ewr.response.code.to_s)
+      rescue RestClient::ExceptionWithResponse => ewr
+        @logger.error("Exception while authenticating with AAD API ['#{ewr.response}']")          
+      rescue Exception => ex          
+        @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
+      end
+      @logger.error("Error while authenticating with AAD ('#{@aad_uri}'), retrying in 10 seconds.")
+      sleep 10
     end
   end # def post_token_request
 
@@ -81,13 +86,6 @@ class LogAnalyticsAadTokenProvider
       'Content-Type' => 'application/x-www-form-urlencoded',
     }
   end # def get_header
-
-  # Setting proxy for the REST client.
-  # This option is not used in the output plugin and will be used 
-  #  
-  def set_proxy(proxy='')
-    RestClient.proxy = proxy.empty? ? ENV['http_proxy'] : proxy
-  end # def set_proxy
 
 end # end of class
 end ;end ;end 

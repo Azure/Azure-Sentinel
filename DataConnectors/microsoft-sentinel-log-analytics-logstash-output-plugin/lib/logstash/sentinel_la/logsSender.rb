@@ -1,8 +1,8 @@
 # encoding: utf-8
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
-require "logstash/sentinel/eventsHandler"
-require "logstash/sentinel/logStashAutoResizeBuffer"
-require "logstash/sentinel/logStashCompressedStream"
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/eventsHandler"
+require "logstash/sentinel_la/logStashAutoResizeBuffer"
+require "logstash/sentinel_la/logStashCompressedStream"
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
         class LogsSender < EventsHandler

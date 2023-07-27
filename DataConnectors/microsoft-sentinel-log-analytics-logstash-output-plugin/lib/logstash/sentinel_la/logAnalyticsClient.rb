@@ -1,5 +1,5 @@
 # encoding: utf-8
-require "logstash/sentinel/version"
+require "logstash/sentinel_la/version"
 require 'rest-client'
 require 'json'
 require 'openssl'
@@ -9,16 +9,16 @@ require 'rbconfig'
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal 
 class LogAnalyticsClient
-require "logstash/sentinel/logstashLoganalyticsConfiguration"
-require "logstash/sentinel/logAnalyticsAadTokenProvider"
+
+require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
+require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
 
 
   def initialize (logstashLoganalyticsConfiguration)
     @logstashLoganalyticsConfiguration = logstashLoganalyticsConfiguration
     @logger = @logstashLoganalyticsConfiguration.logger
 
-    set_proxy(@logstashLoganalyticsConfiguration.proxy)
-    la_api_version = "2021-11-01-preview"
+    la_api_version = "2023-01-01"
     @uri = sprintf("%s/dataCollectionRules/%s/streams/%s?api-version=%s",@logstashLoganalyticsConfiguration.data_collection_endpoint, @logstashLoganalyticsConfiguration.dcr_immutable_id, logstashLoganalyticsConfiguration.dcr_stream_name, la_api_version)
     @aadTokenProvider=LogAnalyticsAadTokenProvider::new(logstashLoganalyticsConfiguration)
     @userAgent = getUserAgent()
@@ -29,11 +29,12 @@ require "logstash/sentinel/logAnalyticsAadTokenProvider"
     raise ConfigError, 'no json_records' if body.empty?
 
     # Create REST request header
-    header = get_header()
+    headers = get_header()
 
     # Post REST request
-    response = RestClient.post(@uri, body, header)
-    return response
+
+    return RestClient::Request.execute(method: :post, url: @uri, payload: body, headers: headers,
+                                        proxy: @logstashLoganalyticsConfiguration.proxy_endpoint, timeout: 120)
   end # def post_data
 
   # Static function to return if the response is OK or else
@@ -63,12 +64,6 @@ require "logstash/sentinel/logAnalyticsAadTokenProvider"
     return headers
   end # def get_header
 
-  # Setting proxy for the REST client.
-  # This option is not used in the output plugin and will be used 
-  def set_proxy(proxy='')
-    RestClient.proxy = proxy.empty? ? ENV['http_proxy'] : proxy
-  end # def set_proxy
-  
   def ruby_agent_version()
     case RUBY_ENGINE
         when 'jruby'
