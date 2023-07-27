@@ -77,9 +77,13 @@ ParserQuery: |
     | where (array_length(src_or_any) == 0 or RawData has_any (src_or_any))
     | where (array_length(eventresultdetails_in) == 0 or RawData has_any (eventresultdetails_in))
     | project RawData, TimeGenerated, Computer, _ResourceId, Type, _ItemId
-    | where RawData has_any ("GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH")
     | where not (RawData startswith "[") 
-    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUsername " [" Date '] "' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
+    | where RawData has_any ("GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH")
+    | parse RawData with * '] ' Temp'"' *
+    | where (array_length(url_has_any) == 0 or Temp has_any (remove_protocol_from_list(url_has_any)))
+    | extend DstHostname = tostring(split(trim_end(" ",Temp),":",0)[0])
+    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUsername " [" Date ']' * '"' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
+    | project-away RawData, Date, ClientIdentity, Temp
     | where (array_length(url_has_any) == 0 or Url has_any (remove_protocol_from_list(url_has_any)))
     | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any (httpuseragent_has_any))
     | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) in (eventresultdetails_in))
@@ -90,7 +94,7 @@ ParserQuery: |
         temp_SrcMatch , "SrcIpAddr",
         "No match") 
     | where ASimMatchingIpAddr != "No match" 
-    | project-away RawData, temp_*, Date, ClientIdentity
+    | project-away temp_*
     | extend EventResult    = iff (
           toint(EventResultDetails) < 400, "Success", 
           "Failure"
@@ -98,10 +102,12 @@ ParserQuery: |
     | where (eventresult == '*' or EventResult =~ eventresult)
     | extend SrcUsername    = case(SrcUsername == "-", "", SrcUsername),
         HttpReferrer        = case(HttpReferrer == "-", "", HttpReferrer),
-        HttpUserAgent       = case(HttpUserAgent == "-", "", HttpUserAgent)    
+        HttpUserAgent       = case(HttpUserAgent == "-", "", HttpUserAgent),
+        DstHostname         = case(DstHostname == "-", "", DstHostname)    
     | extend SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
     | parse _ResourceId with * "/subscriptions/" DvcScopeId "/" *
     | project-rename 
+        Dst            = DstHostname,
         DvcHostname    = Computer,
         DvcId          = _ResourceId,
         EventUid       = _ItemId

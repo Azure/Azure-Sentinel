@@ -27,10 +27,12 @@ ParserQuery: |
     ApacheHTTPServer_CL
     | where not(disabled)
     | project  RawData, TimeGenerated, Computer, _ResourceId, Type, _ItemId
-    | where RawData has_any ("GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH")
     | where not (RawData startswith "[") 
-    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUsername " [" Date '] "' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
-    | project-away RawData, Date, ClientIdentity
+    | where RawData has_any ("GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH")
+    | parse RawData with * '] ' Temp'"' *
+    | extend DstHostname = tostring(split(trim_end(" ",Temp),":",0)[0])
+    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUsername " [" Date ']' * '"' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
+    | project-away RawData, Date, ClientIdentity, Temp
     | parse _ResourceId with * "/subscriptions/" DvcScopeId "/" *
     | project-rename 
         DvcHostname    = Computer,
@@ -53,7 +55,8 @@ ParserQuery: |
         User           = SrcUsername,
         SrcUsername    = case(SrcUsername == "-", "", SrcUsername),
         HttpReferrer   = case(HttpReferrer == "-", "", HttpReferrer),
-        HttpUserAgent  = case(HttpUserAgent == "-", "", HttpUserAgent)
+        HttpUserAgent  = case(HttpUserAgent == "-", "", HttpUserAgent),
+        DstHostname    = case(DstHostname == "-", "", DstHostname)
     | extend SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
     | project-away Protocol
     | extend
