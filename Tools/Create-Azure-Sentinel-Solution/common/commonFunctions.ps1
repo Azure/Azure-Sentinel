@@ -2521,7 +2521,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     
     }
 
-    function GenerateWatchList($json, $isPipelineRun)
+    function GenerateWatchList($json, $isPipelineRun, $watchListFileName)
     {
         $watchlistData = $json.resources[0]
 
@@ -2585,7 +2585,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                     # Add Watchlist ID to MainTemplate parameters
                     $watchlistIdParameterName = "watchlist$global:watchlistCounter-id"
-                    $watchlistIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "$($watchlistData.properties.watchlistAlias)"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
+                    $watchlistIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "$watchListFileName"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
                     $global:baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $watchlistIdParameterName -Value $watchlistIdParameter
 
                     # Replace watchlist resource id
