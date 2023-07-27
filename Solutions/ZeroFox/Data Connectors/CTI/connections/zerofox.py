@@ -12,8 +12,8 @@ class ZeroFoxClient:
         self,
         method: str,
         url_suffix: str,
-        params: Dict = None,
-        data: Dict = None,
+        params=None,
+        data=None,
         error_handler=None,
     ):
         """
@@ -58,10 +58,10 @@ class ZeroFoxClient:
             # Try to parse json error response
             error_entry = res.json()
             err_msg += f"\n{json.dumps(error_entry)}"
-            raise Exception(err_msg, res=res)
+            raise Exception(err_msg)
         except ValueError:
             err_msg += f"\n{res.text}"
-            raise Exception(err_msg, res=res)
+            raise Exception(err_msg)
 
     def _http_request(
         self,
@@ -148,7 +148,9 @@ class ZeroFoxClient:
             err_msg = (
                 "Verify that the server URL parameter"
                 " is correct and that you have access to the server from your host."
-                f"\nError Type: {err_type}\nError Number: [{exception.errno}]\nMessage: {exception.strerror}\n"
+                f"\nError Type: {err_type}\n"
+                "Error Number: [{exception.errno}]\n"
+                "Message: {exception.strerror}\n"
             )
             raise Exception(err_msg, exception)
         except requests.exceptions.RetryError as exception:
