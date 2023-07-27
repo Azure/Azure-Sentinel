@@ -9,9 +9,9 @@ class LogstashLoganalyticsOutputConfiguration
         @dcr_immutable_id = dcr_immutable_id
         @dcr_stream_name = dcr_stream_name
         @logger = logger
-	      @compress_data = compress_data
-	      @create_sample_file = create_sample_file
-	      @sample_file_path = sample_file_path
+	    @compress_data = compress_data
+	    @create_sample_file = create_sample_file
+	    @sample_file_path = sample_file_path
 
 	# Delay between each resending of a message
         @RETRANSMISSION_DELAY = 2
@@ -76,9 +76,9 @@ class LogstashLoganalyticsOutputConfiguration
 
 
     def print_missing_parameter_message_and_raise(param_name)
-        @logger.error("Missing a required setting for the microsoft-sentinel-logstash-output-plugin output plugin:
+        @logger.error("Missing a required setting for the microsoft-sentinel-log-analytics-logstash-output-plugin output plugin:
   output {
-    microsoft-sentinel-logstash-output-plugin {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
       #{param_name} => # SETTING MISSING
       ...
     }
@@ -103,8 +103,12 @@ class LogstashLoganalyticsOutputConfiguration
         @retransmission_time
     end
 
-    def proxy
-        @proxy
+    def proxy_aad
+        @proxy_aad
+    end
+
+    def proxy_endpoint
+        @proxy_endpoint
     end
 
     def logger
@@ -179,8 +183,12 @@ class LogstashLoganalyticsOutputConfiguration
         @max_items = new_max_items
     end
     
-    def proxy=(new_proxy)
-        @proxy = new_proxy
+    def proxy_aad=(new_proxy_aad)
+        @proxy_aad = new_proxy_aad
+    end
+
+    def proxy_endpoint=(new_proxy_endpoint)
+        @proxy_endpoint = new_proxy_endpoint
     end
 
     def retransmission_time=(new_retransmission_time)
