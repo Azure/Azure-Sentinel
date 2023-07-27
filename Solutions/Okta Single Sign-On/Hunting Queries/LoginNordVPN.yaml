@@ -1,0 +1,38 @@
+id: 708c33ec-22a2-4739-b248-c14919500cdd
+name: Sign-ins from Nord VPN Providers
+description: |
+  'This query searches for sign-in activity from Nord VPN providers.
+  The purpose is to identify any unfamiliar sign-in attempts from VPN providers, that are not typically observed among users in the organization.'
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+tags:
+  - Okta
+query: |
+  let nord_vpn_feed = (externaldata(id:int,ip_address: string,search_keywords: dynamic,categories:dynamic,name: string,domain:string,price:int,flag:string,country:string,location:dynamic ,load: int ,features:dynamic)
+    [@"https://raw.githubusercontent.com/microsoft/mstic/master/nordvpn-servers.csv"] with (format="csv", ignoreFirstRecord=True));
+  Okta_CL
+  | where eventType_s =~ "user.session.start"
+  | where outcome_result_s =~ "SUCCESS"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, client_geographicalContext_state_s,displayMessage_s, outcome_result_s,
+   outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s
+  | join kind= inner nord_vpn_feed on $left.client_ipAddress_s == $right.ip_address
+  | extend Account_0_Name = actor_displayName_s
+  | extend IP_0_Address = client_ipAddress_s
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: client_ipAddress_s
+version: 1.0.0
