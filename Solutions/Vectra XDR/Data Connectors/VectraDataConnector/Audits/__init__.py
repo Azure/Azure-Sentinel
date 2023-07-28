@@ -26,11 +26,11 @@ def main(mytimer: func.TimerRequest) -> None:
         audit_obj = AuditsCollector(
             applogger,
             consts.AUDITS_NAME,
-            consts.AUDIT_LOCKDOWN_CLIENT_ID,
-            consts.AUDIT_LOCKDOWN_CLIENT_SECRET,
+            consts.AUDIT_CLIENT_ID,
+            consts.AUDIT_CLIENT_SECRET,
         )
         audit_obj.validate_params(
-            "AUDIT_AND_LOCKDOWN_CLIENT_ID", "AUDIT_AND_LOCKDOWN_CLIENT_SECRET"
+            "AUDITS_CLIENT_ID", "AUDITS_CLIENT_SECRET"
         )
         applogger.info(
             "{}(method={}) : {} : Parameter validation successful.".format(

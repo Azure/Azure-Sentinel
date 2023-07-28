@@ -375,31 +375,7 @@ class BaseCollector:
                         )
                         if host_details.get("results"):
                             for each in host_details.get("results"):
-                                host_json_to_append = {}
-                                host_json_to_append["src_ip"] = each.get("src_ip", "")
-                                host_json_to_append["is_targeting_key_asset"] = str(
-                                    each.get("is_targeting_key_asset", "")
-                                )
-                                if each.get("src_host", {}):
-                                    host_json_to_append["src_host"] = {
-                                        "is_key_asset": str(
-                                            each.get("src_host", {}).get(
-                                                "is_key_asset", ""
-                                            )
-                                        )
-                                    }
-                                else:
-                                    host_json_to_append["src_host"] = {
-                                        "is_key_asset": ""
-                                    }
-                                host_json_to_append["normal_domains"] = each.get(
-                                    "normal_domains", []
-                                )
-                                host_json_to_append["summary"] = each.get("summary", {})
-                                host_json_to_append["grouped_details"] = each.get(
-                                    "grouped_details", []
-                                )
-                                merge_json[each.get("id")] = host_json_to_append
+                                merge_json[each.get("id")] = each
                         if not host_details.get("next"):
                             break
                         page += 1
@@ -409,19 +385,7 @@ class BaseCollector:
                         event.get("detection_id"), {}
                     ):
                         temp_host = merge_json.get(event.get("detection_id"), {})
-                        event["d_detection_details"] = [
-                            {
-                                "is_targeting_key_asset": str(
-                                    temp_host.get("is_targeting_key_asset", "")
-                                ),
-                                "is_key_asset": str(
-                                    temp_host.get("src_host", {}).get(
-                                        "is_key_asset", ""
-                                    )
-                                ),
-                                "normal_domains": temp_host.get("normal_domains", []),
-                            }
-                        ]
+                        event["d_detection_details"] = [temp_host]
                         event["is_targeting_key_asset"] = str(
                             temp_host.get("is_targeting_key_asset", "")
                         )
@@ -431,20 +395,7 @@ class BaseCollector:
                         event["summary"] = [temp_host.get("summary", {})]
                         event["grouped_details"] = temp_host.get("grouped_details", [])
                     elif event.get("type") == "account" and event.get("detail", {}):
-                        account_json_to_append = {}
-                        account_json_to_append["event_id"] = event.get(
-                            "detail", {}
-                        ).get("event_id", "")
-                        account_json_to_append["event_name"] = event.get(
-                            "detail", {}
-                        ).get("event_name", "")
-                        account_json_to_append["account_id"] = event.get(
-                            "detail", {}
-                        ).get("account_id", "")
-                        account_json_to_append["src_external_host"] = event.get(
-                            "detail", {}
-                        ).get("src_external_host", "")
-                        event["d_detection_details"] = [account_json_to_append]
+                        event["d_detection_details"] = [event.get("detail", {})]
                     else:
                         event["d_detection_details"] = []
                     self.applogger.debug(
@@ -488,7 +439,7 @@ class BaseCollector:
         self,
         endpoint,
         table_name,
-        hashed_events_list=[],
+        hashed_events_list=list(),
         hash_field_list=[],
         fields=None,
     ):

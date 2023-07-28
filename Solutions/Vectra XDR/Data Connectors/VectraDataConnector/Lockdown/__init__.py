@@ -26,12 +26,12 @@ def main(mytimer: func.TimerRequest) -> None:
         lockdown_obj = LockdownCollector(
             applogger,
             consts.LOCKDOWN_NAME,
-            consts.AUDIT_LOCKDOWN_CLIENT_ID,
-            consts.AUDIT_LOCKDOWN_CLIENT_SECRET,
+            consts.LOCKDOWN_CLIENT_ID,
+            consts.LOCKDOWN_CLIENT_SECRET,
         )
         lockdown_obj.validate_params(
-            "AUDIT_AND_LOCKDOWN_CLIENT_ID",
-            "AUDIT_AND_LOCKDOWN_CLIENT_SECRET",
+            "LOCKDOWN_CLIENT_ID",
+            "LOCKDOWN_CLIENT_SECRET",
             snapshot=True,
         )
         applogger.info(

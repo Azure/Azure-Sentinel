@@ -26,12 +26,12 @@ def main(mytimer: func.TimerRequest) -> None:
         entity_scoring_obj = EntityScoringCollector(
             applogger,
             consts.ENTITY_SCORING_NAME,
-            consts.ENTITY_SCORING_DETECTIONS_CLIENT_ID,
-            consts.ENTITY_SCORING_DETECTIONS_CLIENT_SECRET,
+            consts.ENTITY_SCORING_CLIENT_ID,
+            consts.ENTITY_SCORING_CLIENT_SECRET,
         )
         entity_scoring_obj.validate_params(
-            "ENTITY_SCORING_AND_DETECTIONS_CLIENT_ID",
-            "ENTITY_SCORING_AND_DETECTIONS_CLIENT_SECRET",
+            "ENTITY_SCORING_CLIENT_ID",
+            "ENTITY_SCORING_CLIENT_SECRET",
         )
         applogger.info(
             "{}(method={}) : {} : Parameter validation successful.".format(

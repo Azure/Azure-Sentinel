@@ -26,12 +26,12 @@ def main(mytimer: func.TimerRequest) -> None:
         detections_obj = DetectionsCollector(
             applogger,
             consts.DETECTIONS_NAME,
-            consts.ENTITY_SCORING_DETECTIONS_CLIENT_ID,
-            consts.ENTITY_SCORING_DETECTIONS_CLIENT_SECRET,
+            consts.DETECTIONS_CLIENT_ID,
+            consts.DETECTIONS_CLIENT_SECRET,
         )
         detections_obj.validate_params(
-            "ENTITY_SCORING_AND_DETECTIONS_CLIENT_ID",
-            "ENTITY_SCORING_AND_DETECTIONS_CLIENT_SECRET",
+            "DETECTIONS_CLIENT_ID",
+            "DETECTIONS_CLIENT_SECRET",
         )
         applogger.info(
             "{}(method={}) : {} : Parameter validation successful.".format(

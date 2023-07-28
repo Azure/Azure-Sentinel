@@ -46,10 +46,14 @@ Workspace Key  | None
 Vectra Base URL  | None
 Vectra Client Id - Health  | None
 Vectra Client Secret Key - Health  | None
-Vectra Client Id - Entity Scoring and Detections  | None
-Vectra Client Secret Key - Entity Scoring and Detections  | None
-Vectra Client Id - Audit and Lockdown  | None
-Vectra Client Secret Key - Audit and Lockdown  | None
+Vectra Client Id - Entity Scoring  | None
+Vectra Client Secret Key - Entity Scoring  | None
+Vectra Client Id - Detections  | None
+Vectra Client Secret Key - Detections  | None
+Vectra Client Id - Audits  | None
+Vectra Client Secret Key - Audits  | None
+Vectra Client Id - Lockdown  | None
+Vectra Client Secret Key - Lockdown  | None
 Start Time  | None(Last 24 Hour)
 Audits Table Name  | Audits_Data
 Detections Table Name | Detections_Data
