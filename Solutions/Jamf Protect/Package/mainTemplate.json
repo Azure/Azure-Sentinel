@@ -2013,16 +2013,16 @@
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
           "parameters": {
-            "jamfProUsername": {
+            "jamfProClientID": {
               "type": "String",
               "metadata": {
-                "description": "The Username for the Jamf Pro User"
+                "description": "The ClientID for the Jamf Pro"
               }
             },
-            "jamfProPassword": {
+            "jamfProSecret": {
               "type": "SecureString",
               "metadata": {
-                "description": "The Password for the Jamf Pro User"
+                "description": "The secret for the ClientID of Jamf Pro"
               }
             },
             "jamfProURL": {
@@ -2081,16 +2081,16 @@
                     "$connections": {
                       "type": "Object"
                     },
-                    "jamfProPassword": {
-                      "defaultValue": "[[parameters('jamfProPassword')]",
+                    "jamfProSecret": {
+                      "defaultValue": "[[parameters('jamfProSecret')]",
                       "type": "SecureString"
                     },
                     "jamfProURL": {
                       "defaultValue": "[[parameters('jamfProURL')]",
                       "type": "String"
                     },
-                    "jamfProUsername": {
-                      "defaultValue": "[[parameters('jamfProUsername')]",
+                    "jamfProClientID": {
+                      "defaultValue": "[[parameters('jamfProClientID')]",
                       "type": "String"
                     }
                   },
@@ -2150,7 +2150,8 @@
                         "Generate_a_randomised_6_digit_value": {
                           "runAfter": {
                             "Parse_JSON_for_given_computer_based_on_managementID": [
-                              "Succeeded"
+                              "Succeeded",
+                              "Failed"
                             ]
                           },
                           "type": "Compose",
@@ -2160,7 +2161,7 @@
                           "type": "Http",
                           "inputs": {
                             "headers": {
-                              "Authorization": "Bearer @{variables('bearerToken')}",
+                              "Authorization": "Bearer @{variables('accessToken')}",
                               "accept": "application/json"
                             },
                             "method": "GET",
@@ -2176,27 +2177,11 @@
                           "type": "Http",
                           "inputs": {
                             "headers": {
-                              "Authorization": "Bearer @{variables('bearerToken')}",
+                              "Authorization": "Bearer @{variables('accessToken')}",
                               "accept": "application/json"
                             },
                             "method": "GET",
                             "uri": "@{parameters('jamfProURL')}/api/v1/computers-inventory/@{body('Parse_JSON_response_for_given_computer')?['computer']?['general']?['id']}?section=GENERAL"
-                          }
-                        },
-                        "Invalidate_Jamf_Pro_BearerToken": {
-                          "runAfter": {
-                            "Add_comment_to_incident_(V3)": [
-                              "Succeeded"
-                            ]
-                          },
-                          "type": "Http",
-                          "inputs": {
-                            "headers": {
-                              "Authorization": "Bearer @{variables('bearerToken')}",
-                              "accept": "*/*"
-                            },
-                            "method": "POST",
-                            "uri": "@{parameters('jamfProURL')}/api/v1/auth/invalidate-token"
                           }
                         },
                         "Parse_JSON_for_given_computer_based_on_managementID": {
@@ -2217,17 +2202,6 @@
                                     },
                                     "enrolledViaAutomatedDeviceEnrollment": {
                                       "type": "boolean"
-                                    },
-                                    "enrollmentMethod": {
-                                      "properties": {
-                                        "id": {
-                                          "type": "string"
-                                        },
-                                        "objectType": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "type": "object"
                                     },
                                     "initialEntryDate": {
                                       "type": "string"
@@ -2280,9 +2254,6 @@
                                       "properties": {
                                         "managed": {
                                           "type": "boolean"
-                                        },
-                                        "managementUsername": {
-                                          "type": "string"
                                         }
                                       },
                                       "type": "object"
@@ -3018,11 +2989,11 @@
                           "type": "Http",
                           "inputs": {
                             "headers": {
-                              "Authorization": "Bearer @{variables('bearerToken')}",
+                              "Authorization": "Bearer @{variables('accessToken')}",
                               "accept": "application/json"
                             },
                             "method": "POST",
-                            "uri": "@{parameters('jamfProURL')}/JSSResource/computercommands/command/DeviceLock/passcode/@{outputs('Generate_a_randomised_6_digit_value')}/id/@{body('Parse_JSON_for_given_computer_based_on_managementID')?['id']}"
+                            "uri": "@{parameters('jamfProURL')}/JSSResource/computercommands/command/DeviceLock/passcode/@{outputs('Generate_a_randomised_6_digit_value')}/id/@{body('Parse_JSON_for_given_computer_based_on_managementID')?['general']?['site']?['id']}"
                           }
                         }
                       },
@@ -3033,19 +3004,15 @@
                       },
                       "type": "Foreach"
                     },
-                    "Generate_Jamf_Pro_Bearer_Token": {
+                    "Generate_Access_Token_using_API_Client": {
                       "type": "Http",
                       "inputs": {
-                        "authentication": {
-                          "password": "@parameters('jamfProPassword')",
-                          "type": "Basic",
-                          "username": "@parameters('jamfProUsername')"
-                        },
+                        "body": "client_id=@{parameters('jamfProClientID')}&client_secret=@{parameters('jamfProSecret')}&grant_type=client_credentials",
                         "headers": {
-                          "accept": "application/json"
+                          "Content-Type": "application/x-www-form-urlencoded"
                         },
                         "method": "POST",
-                        "uri": "@{parameters('jamfProURL')}/api/v1/auth/token"
+                        "uri": "@{parameters('jamfProURL')}/api/oauth/token"
                       },
                       "runtimeConfiguration": {
                         "secureData": {
@@ -3057,7 +3024,7 @@
                     },
                     "Parse_JSON_Entities_from_the_Incident": {
                       "runAfter": {
-                        "Set_bearerToken_as_variable": [
+                        "Set_accessToken_as_variable": [
                           "Succeeded"
                         ]
                       },
@@ -3104,21 +3071,27 @@
                         }
                       }
                     },
-                    "Parse_JSON_Response_from_Bearer_Token": {
+                    "Parse_JSON_Response_from_Access_Token": {
                       "runAfter": {
-                        "Generate_Jamf_Pro_Bearer_Token": [
+                        "Generate_Access_Token_using_API_Client": [
                           "Succeeded"
                         ]
                       },
                       "type": "ParseJson",
                       "inputs": {
-                        "content": "@body('Generate_Jamf_Pro_Bearer_Token')",
+                        "content": "@body('Generate_Access_Token_using_API_Client')",
                         "schema": {
                           "properties": {
-                            "expires": {
+                            "access_token": {
                               "type": "string"
                             },
-                            "token": {
+                            "expires_in": {
+                              "type": "integer"
+                            },
+                            "scope": {
+                              "type": "string"
+                            },
+                            "token_type": {
                               "type": "string"
                             }
                           },
@@ -3126,9 +3099,9 @@
                         }
                       }
                     },
-                    "Set_bearerToken_as_variable": {
+                    "Set_accessToken_as_variable": {
                       "runAfter": {
-                        "Parse_JSON_Response_from_Bearer_Token": [
+                        "Parse_JSON_Response_from_Access_Token": [
                           "Succeeded"
                         ]
                       },
@@ -3136,9 +3109,9 @@
                       "inputs": {
                         "variables": [
                           {
-                            "name": "bearerToken",
+                            "name": "accessToken",
                             "type": "string",
-                            "value": "@body('Parse_JSON_Response_from_Bearer_Token')?['token']"
+                            "value": "@body('Parse_JSON_Response_from_Access_Token')?['access_token']"
                           }
                         ]
                       }
@@ -3198,14 +3171,14 @@
             "description": "This Playbook can be used manually or in a Automation Rule to send an remote MDM command with Jamf Pro to lock the computer with an randomised 6 digit passcode.",
             "mainSteps": [
               "1. Fetches the Host entity from the Incident created based on event data from Jamf Protect",
-              "2. Generates a Bearer Token to authenticate against the Jamf Pro API",
+              "2. Generates a Access Token using a API Client to authenticate against the Jamf Pro API",
               "3. Retrieves the JSSID and ManagementUUID from Jamf Pro for given computer",
               "4. Sends a remote lock MDM command with a randomised 6 digit passcode",
               "5. Randomised passcode will be stored in the Comments section of the incident itself."
             ],
             "prerequisites": [
-              "1. Create an User in Jamf Pro that is capable of reading computers and sending remote commands and store the username and password. [learn how](https://learn.jamf.com/bundle/jamf-pro-documentation-current/page/Jamf_Pro_User_Accounts_and_Groups.html#ariaid-title3)",
-              "2. Use the Username and Password during the deployment of this Playbook"
+              "1. Create an API Client in Jamf Pro that is capable of reading computers and sending remote commands. [learn how](https://learn.jamf.com/bundle/jamf-pro-documentation-current)",
+              "2. Use the Client ID and Secret during the deployment of this Playbook"
             ],
             "lastUpdateTime": "2023-07-20T00:00:00Z",
             "tags": [
