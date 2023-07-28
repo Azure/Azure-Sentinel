@@ -3,6 +3,26 @@ $path = Read-Host "Enter solution data file path "
 $defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
+if ($path.length -eq 0)
+{
+    # path is not provided so check first file from input folder
+    $path = "$PSScriptRoot\input"
+
+    $inputFile = $(Get-ChildItem $path)
+    if ($inputFile.Count -gt 0)
+    {
+        $inputFile = $inputFile[0]
+        $inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
+
+        $contentToImport = Get-Content -Raw $inputJsonPath | Out-String | ConvertFrom-Json
+        # BELOW LINE MAKES USE OF BASEPATH FROM DATA FILE AND ADDS DATA FOLDER NAME.
+        $path = $contentToImport.BasePath + "/Data"
+    }
+    else {
+        Write-Host "Path is not specified and also input folder doesnt have input file. Please make sure to have path specified or add file in side of V3/input folder!"
+    }
+}
+
 $path = $path.Replace('\', '/')
 $indexOfSolutions = $path.IndexOf('Solutions')
 
@@ -26,7 +46,7 @@ else {
             $solutionFolderBasePath = $path.Substring(0, $dataFolderIndex)
 
             # GET DATA FOLDER FILE NAME
-            $excluded = @("parameters.json", "parameter.json")
+            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json")
             $dataFileName = Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\" -recurse -exclude $excluded | ForEach-Object -Process { [System.IO.Path]::GetFileName($_) }
 
             if ($dataFileName.Length -le 0) {
@@ -155,7 +175,9 @@ try {
                             GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails
                         }
                         elseif ($objectKeyLowercase -eq "watchlists") {
-                            GenerateWatchList -json $json -isPipelineRun $isPipelineRun
+                            $watchListFileName = Get-ChildItem $finalPath
+
+                            GenerateWatchList -json $json -isPipelineRun $isPipelineRun -watchListFileName $watchListFileName.BaseName
                         }
                     }
                     else {
