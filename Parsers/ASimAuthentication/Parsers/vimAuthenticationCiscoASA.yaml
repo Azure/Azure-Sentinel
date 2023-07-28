@@ -1,0 +1,260 @@
+Parser:
+  Title: Authentication ASIM filtering for Cisco Device Logon Events
+  Version: '0.1.0'
+  LastUpdated: July 19, 2023
+Product:
+  Name: Cisco Adaptive Security Appliance (ASA)
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: About Cisco ASA Messages
+  Link: https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/b_syslog/about.html
+- Title: Cisco ASA Messages by Severity Level
+  Link: https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/b_syslog/syslogs-sev-level.html
+Description: |
+  This ASIM parser supports normalizing authentication events, collected from Cisco ASA devices, to the ASIM Authentication schema.
+ParserName: ASimAuthenticationCiscoASA
+EquivalentBuiltInParser: _Im_Authentication_CiscoASA
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null)
+    , endtime:datetime=datetime(null)
+    , targetusername_has:string="*"
+    , disabled:bool=false
+  ) {
+    let DeviceEventClassIDLookup = datatable (DeviceEventClassID:string, EventResultDetails:string, EventType:string, EventResult:string, DvcAction:string, EventSubType:string)
+    [
+        "113004", "", "Logon", "Success", "Allowed", "Remote",
+        "113005", "Incorrect password", "Logon", "Failure", "Blocked", "Remote",
+        "113006", "Logon violates policy", "Logon", "Failure", "Blocked", "Remote",
+        "113008", "", "Logon", "Success", "Allowed", "Remote",
+        "113010", "", "Logon", "Success", "Allowed", "Remote",
+        "113012", "", "Logon", "Success", "Allowed", "Remote",
+        "113019", "", "Logoff", "Success", "Allowed", "",
+        "113039", "", "Logon", "Success", "Allowed", "Remote",
+        "315011", "", "Logoff", "Success", "Allowed", "",
+        "502103", "", "Elevate", "Success", "Allowed", "AssumeRole",
+        "605004", "Other", "Logon", "Failure", "Blocked", "Remote",
+        "605005", "", "Logon", "Success", "Allowed", "Remote",
+        "611101", "", "Logon", "Success", "Allowed", "Remote",
+        "611102", "Other", "Logon", "Failure", "Blocked", "Remote",
+        "611103", "", "Logoff", "Success", "Allowed", "",
+        "713198", "Logon violates policy", "Logon", "Failure", "Blocked", "Remote",
+        "716002", "", "Logoff", "Success", "Allowed", "",
+        "716038", "", "Logon", "Success", "Allowed", "Remote",
+        "716039", "Other", "Logon", "Failure", "Blocked", "Remote",
+        "716040", "Other", "Logon", "Failure", "Blocked", "Remote",
+        "722022", "", "Logon", "Success", "Allowed", "Remote",
+        "722023", "", "Logoff", "Success", "Allowed", "",
+        "722028", "", "Logoff", "Success", "Allowed", "",
+        "722037", "", "Logoff", "Success", "Allowed", "",
+        "772002", "", "Logon", "Success", "Allowed", "",
+        "772003", "Other", "Logon", "Failure", "Blocked", "",
+        "772004", "Other", "Logon", "Failure", "Blocked", "",
+        "772005", "", "Logon", "Success", "Allowed", "",
+        "772006", "Other", "Logon", "Failure", "Blocked", ""
+    ];
+    let FilteredDeviceEventClassID = toscalar(
+        DeviceEventClassIDLookup 
+        | summarize make_set(DeviceEventClassID)
+    );
+    let SeverityLookup = datatable (EventOriginalSeverity:string, EventSeverity:string)
+    [
+        "1", "High", // Alert,
+        "2", "High", // Critical
+        "3", "Medium", // Error
+        "4", "Low", // Warning
+        "5", "Informational", // Notification
+        "6", "Informational", // Information
+        "7", "Informational", // Debug
+    ];
+    let LogMessages = 
+    CommonSecurityLog 
+    | where not(disabled)
+    | where
+      (isnull(starttime)   or TimeGenerated >= starttime) and
+      (isnull(endtime)     or TimeGenerated <= endtime) 
+    | where DeviceVendor =~ "Cisco"
+    | where DeviceProduct == "ASA"
+    | where (targetusername_has=='*' or (Message has targetusername_has))
+    | where DeviceEventClassID in(FilteredDeviceEventClassID)
+    | extend EventOriginalSeverity = tostring(split(Message,"-",1)[0])
+    | lookup SeverityLookup on EventOriginalSeverity
+    | project TimeGenerated, Type, Computer, _ItemId, DeviceEventClassID, Message, DeviceAddress, EventOriginalSeverity, EventSeverity
+    | lookup DeviceEventClassIDLookup on DeviceEventClassID;
+    union 
+    (
+        LogMessages
+        | where DeviceEventClassID == 113005
+        | parse Message with * 'reason = ' EventOriginalResultDetails ' : server = ' TargetIpAddr ' ' * 'user = ' TargetUsername ' ' * 'user IP = ' SrcIpAddr
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 502103
+        | parse Message with * "Uname: " TargetUsername " " *
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID in(605004,605005)
+        | parse Message with * 'from ' SrcIpAddr '/' SrcPortNumber:int " to " * ":" TargetIpAddr '/' * 'user "' TargetUsername '"'
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID in(611101,611102)
+        | parse Message with * 'IP address: ' SrcIpAddr ', Uname: ' TargetUsername
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 611103
+        | parse Message with * ' Uname: ' TargetUsername
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 113004
+        | parse Message with * 'server = ' TargetIpAddr ' ' * 'user = ' TargetUsername
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID in(113008,113012)
+        | parse Message with * 'user = ' TargetUsername
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 113019
+        | parse Message with * 'Username = ' TargetUsername ', IP = ' SrcIpAddr ',' * 
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID in(113039,716002,716039,722022,722023,722028,722037)
+        | parse Message with * '> User <' TargetUsername "> IP <" SrcIpAddr ">" *
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 315011
+        | parse Message with * 'from ' SrcIpAddr ' ' * 'user "' TargetUsername '" ' * ' reason: "' EventOriginalResultDetails '" ' *
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | extend EventResultDetails = iif(EventOriginalResultDetails == "Internal error", "Other", EventResultDetails)
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 113010
+        | parse Message with * 'user ' TargetUsername ' from  server' SrcIpAddr
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 113006
+        | parse Message with * 'User ' TargetUsername ' locked' *
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 716040
+        | parse Message with * 'Denied ' TargetUsername ' login' *
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 713198
+        | parse Message with * 'Failed: ' TargetUsername ' User' *
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID == 716038
+        | parse Message with * 'User ' TargetUsername ' IP ' SrcIpAddr ' Authentication'*
+        | where (targetusername_has=='*' or (TargetUsername has targetusername_has))
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID in(772002)
+        | parse Message with * 'user ' TargetUsername ', cause: ' EventOriginalResultDetails
+        | project-away Message
+    ),
+    (
+        LogMessages
+        | where DeviceEventClassID in(772003,772004)
+        | parse Message with * 'user ' TargetUsername ', IP ' SrcIpAddr ', cause: ' EventOriginalResultDetails
+        | project-away Message
+    ), 
+    (
+        LogMessages
+        | where DeviceEventClassID in(772005)
+        | parse Message with * 'user ' TargetUsername ' passed'
+        | project-away Message
+    ),  
+    (
+        LogMessages
+        | where DeviceEventClassID in(772006)
+        | parse Message with * 'user ' TargetUsername ' failed'
+        | project-away Message
+    )
+    | project-rename 
+        DvcHostname           = Computer,
+        EventUid              = _ItemId,
+        EventOriginalType     = DeviceEventClassID,
+        DvcIpAddr             = DeviceAddress
+    | extend 
+        EventSchemaVersion = "0.1.3",
+        EventSchema        = "Authentication",
+        EventVendor        = "Cisco",
+        EventProduct       = "ASA",
+        EventCount         = int(1),
+        EventStartTime     = TimeGenerated,
+        EventEndTime       = TimeGenerated,
+        Dvc                = DvcHostname,
+        User               = TargetUsername,
+        Src                = SrcIpAddr,
+        IpAddr             = SrcIpAddr,
+        Dst                = TargetIpAddr,
+        TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+        EventResultDetails = iif(TargetUsername == "*****", "No such user or password", EventResultDetails)
+  };
+  parser (
+        starttime          = starttime
+      , endtime            = endtime
+      , targetusername_has = targetusername_has
+      , disabled           = disabled
+  ) 
