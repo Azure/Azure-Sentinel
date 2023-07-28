@@ -1,0 +1,47 @@
+id: 9f82a735-ae43-4c03-afb4-d5d153e1ace1
+name: High-Risk Admin Activity
+description: |
+  'The Okta risk engine auto-assigns risk levels to each login attempt. This query identifies admin operations originating from events associated with high-risk profiles. '
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let AdminActivity = dynamic(["iam.role.create","iam.role.permissions.add","user.session.access_admin_app","user.mfa.factor.suspend", "user.account.privilege.grant", "group.privilege.grant", "system.api_token.create", "user.session.impersonation.grant"]);
+  let AdminOperations = Okta_CL
+  | where eventType_s in (AdminActivity)
+  | where outcome_result_s =~ 'SUCCESS' 
+  | summarize  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by  actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s;
+  let HighRiskEvents = Okta_CL
+  | where eventType_s in ('policy.evaluate_sign_on' , 'user.session.start')
+  | where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).risk)).level =~ "HIGH"
+  | where outcome_result_s =~ 'SUCCESS'
+  | extend reasons = tostring(parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).risk)).reasons)
+  | summarize  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by  actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s, reasons;
+  AdminOperations
+  | join kind=inner (HighRiskEvents) on actor_displayName_s, client_ipAddress_s, authenticationContext_externalSessionId_s
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: client_ipAddress_s
+customDetails:
+  SessionId: authenticationContext_externalSessionId_s
+version: 1.0.0
+kind: Scheduled
