@@ -1,0 +1,68 @@
+id: 8898d35d-dedc-4f88-a1c1-40ef8575aaf0
+name: Abnormally Large JPEG File Downloaded from New Source
+description: |
+  'Threat actors can use JPEG files to hide malware, or other malicious code from inspection. This query looks for the downloading of abnormally large JPEG files from a source where large JPEG files have not been downloaded.
+    Ref: https://www.microsoft.com/security/blog/2022/07/27/untangling-knotweed-european-private-sector-offensive-actor-using-0-day-exploits/
+  This query has been modified to leverage the SonicWall Firewall ASIM Network Session parser (NetworkParserSonicWallFirewall). The original query can be found here:
+    Ref: https://github.com/Azure/Azure-Sentinel/blob/master/Hunting%20Queries/CommonSecurityLog/AbnormallyLargeJPEGFiledDownloadedfromNewSource.yaml
+  The SonicWall Firewall ASIM Network Session parser is available here:
+    Ref:https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession/ARM/ASimNetworkSessionSonicWallFirewall'
+requiredDataConnectors:
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: SonicWallFirewall
+    dataTypes:
+      - NetworkParserSonicWallFirewall
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1001
+  - T1001.002
+query: |
+  let percentile = 95;
+  let lookback_data = materialize(NetworkParserSonicWallFirewall
+      | where TimeGenerated between(ago(7d) .. ago(1d))
+      | where RequestURL endswith ".jpg" or RequestURL_ endswith ".jpg" or RequestURL endswith ".jpeg" or RequestURL_ endswith ".jpeg"
+      | where isnotempty(RequestURL) or isnotempty(RequestURL_));
+  let domains = lookback_data
+      | summarize by DstHostname;
+  NetworkParserSonicWallFirewall
+  | where TimeGenerated > ago(1d)
+  | where RequestURL endswith ".jpg" or RequestURL_ endswith ".jpg" or RequestURL endswith ".jpeg" or RequestURL_ endswith ".jpeg"
+  | where isnotempty(RequestURL) or isnotempty(RequestURL_)
+  | extend filename = split(RequestURL, "/")[-1]
+  | where ReceivedBytes > toscalar(lookback_data
+      | summarize percentile(ReceivedBytes, percentile))
+  | project-reorder
+      TimeGenerated,
+      filename,
+      RequestURL,
+      RequestURL_,
+      ReceivedBytes,
+      HttpUserAgent,
+      SrcUsername,
+      DstHostname,
+      RequestContext 
+  | where DstHostname !in (domains) or isempty(DstHostname)
+  | extend File_0_Name = FileIdentifier
+  | extend URL_0_Url = RequestURL
+  | extend URL2_0_Url = RequestURL_
+  | extend Account_0_FullName = SrcUsername
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: filename
+  - entityType: Url
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+  - entityType: Url
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL_
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUsername
