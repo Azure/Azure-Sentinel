@@ -7,7 +7,7 @@ function ErrorOutput {
     Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
     Write-Output "packageCreationPath=''" >> $env:GITHUB_OUTPUT
     Write-Output "blobName=''" >> $env:GITHUB_OUTPUT
-    #exit 1
+    exit 1
 }
 
 try {
@@ -88,7 +88,6 @@ try {
         foreach ($item in $datafolderFiles) {
             $paramterFileExist = $item -match ([regex]::Escape("parameters.json"))
             $paramtersFileExist = $item -match ([regex]::Escape("parameter.json"))
-            $paramtersFileExist = $item -match ([regex]::Escape("system_generated_metadata.json"))
             if ($paramterFileExist -or $paramtersFileExist) 
             { } 
             else { 
@@ -102,7 +101,7 @@ try {
         $playbookFiles = $playbookFiles -match ([regex]::Escape(".json"))
     
         if ($playbookFiles.Count -gt 0) {
-            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' } | Where-Object { $_ -notlike '*function.json*' }
+            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' }
         }
     
         return $playbookFiles;
@@ -171,7 +170,8 @@ try {
 
     $solutionFolderPath = 'Solutions/' + $solutionName + "/"
     $filesList = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
-    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
+    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" }
+
     if ($dataFolderFiles.Count -gt 0) {
         $selectFirstdataFolderFile = $dataFolderFiles | Select-Object -first 1
         $filteredString = $selectFirstdataFolderFile.Replace("$solutionFolderPath", '', 'OrdinalIgnoreCase')
@@ -191,7 +191,7 @@ try {
 
     $baseFolderPath = $inputBaseFolderPath #'/home/runner/work/packagingrepo/packagingrepo/'
     $dataFilePath = $baseFolderPath + $solutionDataFolder + $dataFolderFile
-    $dataFileLink = "https://github.com/Azure/Azure-Sentinel/master/Solutions/$solutionName/$dataFolderActualName/$dataFolderFile"
+    $dataFileLink = "https://github.com/v-amolpatil/packagingrepo/master/Solutions/$solutionName/$dataFolderActualName/$dataFolderFile"
 
     Write-Output "dataFileLink=$dataFileLink" >> $env:GITHUB_OUTPUT
     Write-Host "Data File Path $dataFilePath"
@@ -415,7 +415,6 @@ try {
         $dataConnectorFilesResultArray = GetValidDataConnectorFileNames($newDataConnectorFiles) | ConvertTo-Json -AsArray
         $dataConnectoryWithoutSpaceArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("DataConnectors")))
         if (!$dataConnectoryWithoutSpaceArrayAttributeExist) {
-            $dataFileContentObject.PSObject.Properties.Remove('Data Connectors')
             $dataFileContentObject | ForEach-Object {
                 $_ | Add-Member -MemberType NoteProperty -Name 'Data Connectors' -Value $dataConnectorFilesResultArray -PassThru
             }
@@ -568,7 +567,7 @@ try {
     
         if ($linkedTemplate.Count -gt 0)
         {
-            $playbooksFolderResult = $playbooksFolderResult | Where-Object { $_ -notlike "*$linkedTemplate" } 
+            $playbooksFolderResult = $playbooksFolderResult | Where-Object { $_ -notlike "$linkedTemplate" } 
         }
     
         $playbooksFolderResult = $playbooksFolderResult | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
@@ -576,7 +575,7 @@ try {
         #======================================
         #check if folder with *Connector Name present inside of Solutions folder or in playbooks folder eg: Check Point or Cisco ISE solution 
         $filterPath = "$solutionFolderPath" + "*Connector/*"
-        $playbooksDynamicCustomConnector = $filesList -like ($filterPath) | Where-Object {$_ -notlike '*/Data Connectors/*'} | Where-Object {$_ -notlike '*/DataConnectors/*'}
+        $playbooksDynamicCustomConnector = $filesList -like ($filterPath)
     
         if ($playbooksDynamicCustomConnector -ne $false -and $playbooksDynamicCustomConnector.Count -gt 0)
         {
@@ -605,7 +604,7 @@ try {
                 if ($linkedTemplate.Count -gt 0)
                 {
                     #REMOVE LINKED TEMPLATE
-                    $playbooksDynamicCustomConnector = $playbooksDynamicCustomConnector | Where-Object { $_ -notlike "*$linkedTemplate" }
+                    $playbooksDynamicCustomConnector = $playbooksDynamicCustomConnector | Where-Object { $_ -notlike "$linkedTemplate" }
                 }
             }
         }

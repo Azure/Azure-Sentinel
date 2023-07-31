@@ -34,11 +34,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DataConnectorFilesTestData))]
         public void Validate_DataConnectors_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.json")
-            {
-                Assert.True(true);
-                return;
-            }
             var dataConnector = ReadAndDeserializeDataConnectorJson(encodedFilePath);
             var id = (string)dataConnector.Id;
             //we ignore known issues
@@ -79,11 +74,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(HuntingQueriesYamlFilesTestData))]
         public void Validate_HuntingQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
-            {
-                Assert.True(true);
-                return;
-            }
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["id"];
 
@@ -103,11 +93,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
-            {
-                Assert.True(true);
-                return;
-            }
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["id"];
 
@@ -128,11 +113,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(HuntingQueriesYamlFilesTestData))]
         public void Validate_HuntingQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
-            {
-                Assert.True(true);
-                return;
-            }
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["id"];
 
@@ -151,11 +131,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
-            {
-                Assert.True(true);
-                return;
-            }
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["id"];
 
@@ -184,11 +159,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(ExplorationQueriesYamlFilesTestData))]
         public void Validate_ExplorationQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
-            {
-                Assert.True(true);
-                return;
-            }
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["Id"];
 
@@ -206,11 +176,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(ExplorationQueriesYamlFilesTestData))]
         public void Validate_ExplorationQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
-            {
-                Assert.True(true);
-                return;
-            }
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["Id"];
 
@@ -229,11 +194,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(ParsersYamlFilesTestData))]
         public void Validate_ParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
-            {
-                Assert.True(true);
-                return;
-            }
             Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
             var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml);
 
@@ -254,11 +214,6 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(CommonFunctionsYamlFilesTestData))]
         public void Validate_CommonFunctions_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
-            {
-                Assert.True(true);
-                return;
-            }
             Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
             var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml, "FunctionParams");
 

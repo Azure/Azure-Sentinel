@@ -14,7 +14,7 @@ try
     $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
     Write-Host "List of files in PR: $diff"
 
-    $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' }
+    $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"}
     Write-Host "Filtered Files $filteredFiles"
 
     if ($filteredFiles.Count -gt 0)
@@ -28,16 +28,11 @@ try
         {
             $solutionIndex = $currentFile.IndexOf("Solutions/")
             if ($solutionName -eq '' -and $solutionIndex -eq 0)
-            {
-                $countForwardSlashes = ($currentFile.Split('/')).count-1
-                if ($countForwardSlashes -gt 1)
-                {
-                    # identify solution Name
-                    $solutionNameWithSubstring = $currentFile.SubString($solutionIndex + 10)
-                    $firstForwardSlashIndex = $solutionNameWithSubstring.IndexOf("/")
-                    $solutionName = $solutionNameWithSubstring.SubString(0, $firstForwardSlashIndex)
-                    Write-Host "Solution Name is $solutionName"
-                }
+            {					
+                $solutionNameWithSubstring = $currentFile.SubString($solutionIndex + 10)
+                $firstForwardSlashIndex = $solutionNameWithSubstring.IndexOf("/")
+                $solutionName = $solutionNameWithSubstring.SubString(0, $firstForwardSlashIndex)
+                Write-Host "Solution Name is $solutionName"
             }
             else
             {
@@ -45,12 +40,7 @@ try
             }
         }
 
-        if ($solutionName -eq 'SAP')
-        {
-            Write-Host "Skipping Github workflow for SAP Solution as solution dont have data file and SolutionMetadata file!"
-            Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
-        }
-        elseif ($solutionName -eq '')
+        if ($solutionName -eq '')
         {
             Write-Host "Skipping Github workflow as Solution name cannot be blank."
             Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
