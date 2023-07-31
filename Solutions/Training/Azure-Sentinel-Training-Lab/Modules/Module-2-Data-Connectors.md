@@ -9,9 +9,11 @@ In this module you will learn how to install and enable Data Connectors in Micro
 
 #### Prerequisites
 
-This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as you will need an Microsoft Sentinel workspace provisioned.
+This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as you will need a Microsoft Sentinel workspace provisioned.
 
 Some of the data connectors that will be used in this lab require specific permissions on the workspace or your Azure subscription. If you don't have the appropriate permissions, you can still continue doing the rest of the labs.
+
+
 
 ### Exercise 1: Enable the Azure Activity connector
 
@@ -29,52 +31,56 @@ This exercise shows you how to enable the Azure Activity data connector. This co
 
 4. When the deployment completes, select **Data Connectors** in the **Configuration** section of your Sentinel workspace.
 
-5. In the data connectors screen, click the **Azure Activity** connector. (Note if it's only just been installed, you might need to press the Refresh button to see it.). If you already have lots of connectors, you can type **activity** in the search bar to narrow down the list.
+5. In the data connectors screen, click the **Azure Activity** connector. If you already have lots of connectors, you can type *activity* into the search bar to narrow down the list. **Note** if the connector has only just been installed, you might need to press the **Refresh** button to see it.
    
 6. Select the **Azure Activity** connector and click on **Open connector page** in the right-hand panel.
 
 ![azactivity2](../Images/azactivity2.png)
 
-7. On the Azure Activity connector page, scroll down through the Configuration instructions until you get to number 2, **Connect your subscriptions through diagnostic settings new pipeline**. This method leverages Azure Policy and it brings many improvements compared to the (now older) direct settings method (more details about these improvements can be found [here](https://techcommunity.microsoft.com/t5/azure-sentinel/moving-azure-activity-connector-to-an-improved-method/ba-p/2479552)).
+7. On the Azure Activity connector page, scroll down through the Configuration instructions until you get to number 2, **Connect your subscriptions through diagnostic settings new pipeline**. This method leverages Azure Policy and it brings many improvements compared to the (now older) direct settings method (details about these improvements can be found [here](https://techcommunity.microsoft.com/t5/azure-sentinel/moving-azure-activity-connector-to-an-improved-method/ba-p/2479552)).
 
-8. Click on the **Launch Azure Policy Assignment wizard**, which will redirect you to the policy creation page.
+8. Click on **Launch Azure Policy Assignment wizard**, which will redirect you to the policy creation page.
 
 ![azactivity3](../Images/azactivity33.png)
 
+    In *Scope*, select your subscription.
 
-On the Scope selection select your subscription.
-
-**NOTE**: Policy lets you deploy a setting to multiple possible targets - if you had owner permission at a Management Group level, you could assign a policy to configure collection of Azure Activity logs from all subscriptions under that group.
+**Note**: Policy lets you deploy a setting to multiple possible targets - for example, if you have Owner permission at a Management Group level, you can assign a policy to configure collection of Azure Activity logs from all subscriptions under that group.
 
 ![azactivity4](../Images/m2-activity-scope.png)
 
-9. Go to the **Parameters** tab. On the **Primary Log Analytics workspace** select the Microsoft Sentinel workspace:
+1. Go to the **Parameters** tab. On the **Primary Log Analytics workspace** select the Microsoft Sentinel workspace:
 
 ![azactivity8](../Images/m2-ws-target-foractivitylogs1.png)
 
-
 10. Press **Review and Create** to save this policy and **Create**.
 
-11. It is normal if you don't immediately see the connector showing as connected and in green. Also, each subscription has a maximum of 5 destinations for its activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Microsoft Sentinel workspace. If this is the case, you can use the Diagnostic Settings for the Activity Log to remove older settings directly.
+11. It is normal if you don't immediately see the connector showing as *connected* and with a green bar, as Azure Policy can take some time to apply.
 
-12. Head back to the Content Hub and click on the Azure Activity solution. You should now have a **Manage** button at the bottom of the panel on the right. Click it.
+    **Note:** each subscription has a maximum of 5 destinations for its activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Microsoft Sentinel workspace. If this is the case, you can use the Diagnostic Settings for the Activity Log to remove older settings directly. You can also use Diagnostic Settings to directly connect Activity logs to Sentinel.
+
+12. Head back to the Content Hub and click on the *Azure Activity* solution, and click the **Manage** button at the bottom of the panel on the right. 
 
 ![contentmanage1](../Images/content-manage1.png)
 
-13. The contents of the solution are displayed - any connectors, analytics rules, workbooks, hunting queries and other content are visible here. Now these are installed with the content pack, they will appear in the relevant section of the Sentinel interface (e.g. Analytics rule templates, Workbook templates and so on).
+13. From the Manage view, the contents of the solution are displayed: any connectors, analytics rules, workbooks, hunting queries and other content are visible here. Now these have been installed with the content pack, they will appear in the relevant section of the Sentinel interface (e.g. Analytics rule templates, Workbook templates and so on).
 
 ![contentmanage2](../Images/content-manage2.png)
 
+Now we've connected Activity, we'll move on to some other connectors.
+
+
+
+
 ### Exercise 2: Enable the Microsoft Defender for Cloud Data Connector
 
-This exercise shows you how to enable the **Microsoft Defender for Cloud** data connector. This connector allows you to stream security alerts from Microsoft Defender for Cloud into Microsoft Sentinel, so you can view Defender data in workbooks, query it to produce alerts, and investigate and respond to incidents.
+This exercise shows you how to enable the **Microsoft Defender for Cloud** data connector. This connector allows you to stream security alerts from Microsoft Defender for Cloud into Microsoft Sentinel, so you can incorporate Alerts from Defender, view Defender data in workbooks, and investigate and respond to incidents.
 
-**NOTE**: To do this exercise, your user must have the *Security Reader* role in the subscription of the logs you stream. If not done already, you will need to enable any of the Defender plans in Microsoft Defender for Cloud.
-
+**NOTE**: To do this exercise, your user must have the *Security Reader* role in the subscription. If not done already, you will also need to enable any of the Defender plans in Microsoft Defender for Cloud.
 
 1. Open your Microsoft Sentinel workspace and click on the **Content Hub**.
 
-2. Search for *defender* in the search bar, select the *Microsoft Defender for Cloud* content solution, and click Install.
+2. Search for *defender* in the search bar, select the *Microsoft Defender for Cloud* content solution, and click **Install**.
 
 ![azdefender1](../Images/azdefender1.png)
 
@@ -90,7 +96,11 @@ This exercise shows you how to enable the **Microsoft Defender for Cloud** data 
 
 6. From the list of subscriptions at the bottom of the page, select the desired subscription and click on *Connect*. Wait for the operation to complete. You may wish to enable bi-directional sync for the connector, which means that alerts/incidents closed in either product will be reflected in the other.
 
-You've now connected alerts from Microsoft Defender for Cloud.
+You've now connected alerts from Microsoft Defender for Cloud!
+
+**Tip:** After a few minutes, try using the *Sample Alerts* feature in Defender for Cloud to generate some sample incidents for inspection.
+
+
 
 ### Exercise 3: Enable Microsoft Defender Threat Intelligence connector
 
@@ -122,7 +132,12 @@ Threat Intelligence indicators will start being ingested into your `ThreatIntell
 
 #### Next Step
 
-If you're onboarding a custom TAXII feed, continue to the next exercise. Otherwise, you can now continue to **[Module 3 - Analytics Rules](./Module-3-Analytics-Rules.md)**
+If you're onboarding a custom TAXII feed, continue to the next exercise. 
+
+Otherwise, you can now continue to **[Module 3 - Analytics Rules](./Module-3-Analytics-Rules.md)**.
+
+
+
 
 ### Exercise 4: (optional) Enable Threat Intelligence TAXII data connector
 
@@ -138,7 +153,7 @@ This exercise shows you how to enable the Threat Intelligence - TAXII data conne
 
 4. Open the Connector page for the *Threat intelligence - TAXII* connector
 
-5. Obtain feed information and credentials for a TAXII feed. Your organization may have a subscription, or some services offer free or low-cost signup.
+5. Obtain feed information and credentials for a TAXII feed. Your organization may have a subscription, or some third-party services may offer free or low-cost signup for access to their feed(s).
 
 6. Go to your Microsoft Sentinel workspace and select *Data Connectors*, under the *Configuration* section.
 
