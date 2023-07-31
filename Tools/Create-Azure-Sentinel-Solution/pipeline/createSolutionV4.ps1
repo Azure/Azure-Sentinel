@@ -32,9 +32,8 @@ try
 			$global:baseMainTemplate.variables | Add-Member -NotePropertyName "email" -NotePropertyValue $($metadataAuthor[1])
 			$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_email" -NotePropertyValue "[variables('email')]"
 		}
-
-		$major = $contentToImport.version.split(".")[0]
-		if ($major -ge 3)
+		
+		if ($contentToImport.version -eq '3.0.0')
 		{
 			$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionName" -NotePropertyValue $solutionName
 			$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionVersion" -NotePropertyValue $contentToImport.version
@@ -173,9 +172,7 @@ try
 								GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails
 							}
 							elseif ($objectKeyLowercase -eq "watchlists") {
-								$watchListFileName = Get-ChildItem $finalPath
-
-								GenerateWatchList -json $json -isPipelineRun $isPipelineRun -watchListFileName $watchListFileName.BaseName
+								GenerateWatchList -json $json -isPipelineRun $isPipelineRun
 							}
 						}
 						else

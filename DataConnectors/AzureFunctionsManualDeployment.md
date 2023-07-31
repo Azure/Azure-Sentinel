@@ -14,27 +14,27 @@
 
 	b. **Select Subscription**: Choose the subscription to use under resources.
 	
-	![Select Subscription](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/subscription.png)
+	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/subscription.png)
 
 	c. Right click on the functions and select **Create new Function App in Azure** (Don't choose the Advanced option)
 
-	![Create new Function App in Azure](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/CreatenewFunctionApp.png)
+	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/CreatenewFunctionApp.png)
 
 	d. **Enter a globally unique name for the function app**: Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. UmbrellaXYZ).
 	
-	![Enter a globally unique name](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/globallyuniquename.png)
+	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/globallyuniquename.png)
 
 	e. **Select a runtime**: Choose Python 3.8.
 
-	![Select a runtime](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Selectaruntime.png)
+	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Selectaruntime.png)
 
 	f. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.
 
-	![Select a location for new resources](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Selectalocation.png)
+	(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Selectalocation.png)
 
 - Deployment will begin. A notification is displayed after your function app is created.
 
 - Deploy the function in Function app: Once the function app is created click on deploy button under workspace section. Select the Subcription and the function app in which function needs to be deployed.
-![Deploy the function in Function app](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Deploythefunction.png)
+(https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Deploythefunction.png)
 
 - Go to Azure Portal for the Function App configuration. 
