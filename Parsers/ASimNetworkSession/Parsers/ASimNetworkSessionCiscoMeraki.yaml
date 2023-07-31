@@ -1,21 +1,21 @@
 Parser:
   Title: Network Session ASIM parser for Cisco Meraki
-  Version: '1.0'
-  LastUpdated: May 20, 2022
+  Version: '0.1'
+  LastUpdated: Jun 20 2023
 Product:
   Name: Cisco Meraki
 Normalization:
   Schema: NetworkSession
-  Version: '0.2.2'
+  Version: '0.2.6'
 References:
-  - Title: ASIM Network Session Schema
-    Link: https://aka.ms/ASimNetworkSessionDoc
-  - Title: ASIM
-    Link: https://aka.ms/AboutASIM
-  - Title: Organization Application Security Events 
-    Link: https://developer.cisco.com/meraki/api-latest/#!get-organization-appliance-security-events
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Cisco Meraki Documentation
+  Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
 Description: |
-  This ASIM parser supports normalizing Cisco Meraki IDS Events produced by the Microsoft Sentinel Cisco Meraki Security Events connector to the ASIM Network Session normalized schema.
+  This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Network Session normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
 ParserName: ASimNetworkSessionCiscoMeraki
 EquivalentBuiltInParser: _ASim_NetworkSession_CiscoMeraki
 ParserParams:
@@ -23,24 +23,371 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-    let NWParser=(disabled:bool=false){
-      CiscoMerakiNativePoller_CL
-      | where not(disabled)
-      | where EventOriginalType == "IDS Alert"
-      | extend  
-          EventResult = iff(DvcAction == "Deny", "Failure", "Success"),
-          EventResultDetails = "",
-          NetworkDuration = toint(NetworkDuration)
-      | extend 
-          InnerVlanId = SrcVlanId,
-          OuterVlanId = DstVlanId,
-          SessionId = NetworkSessionId,
-          Hostname = DstHostname,
-          IpAddr = SrcIpAddr,
-          Duration = NetworkDuration, 
-          Dst = DstIpAddr,
-          Src = SrcIpAddr,
-          User = DstUsername
-      | project-away Url*, Http*, File*, Rule*, UserAgent, Hash
+    let EventResultDetailsLookup = datatable(reason: string, EventResultDetails: string)
+    [
+        "0", "Unknown",
+        "1", "Unknown",
+        "2", "Timeout",
+        "3", "Terminated",
+        "4", "Timeout",
+        "5", "Transient error",
+        "6", "Invalid Tunnel",
+        "7", "Invalid Tunnel",
+        "8", "Terminated",
+        "9", "Invalid Tunnel",
+        "10", "Unknown",
+        "11", "Invalid TCP",
+        "12", "Unknown",
+        "13", "Invalid TCP",
+        "14", "Invalid Tunnel",
+        "15", "Invalid TCP",
+        "16", "Timeout",
+        "17", "Invalid Tunnel",
+        "18", "Invalid TCP",
+        "19", "Invalid TCP",
+        "20", "Invalid TCP",
+        "21", "Unknown",
+        "22", "Invalid TCP",
+        "23", "Invalid Tunnel",
+        "24", "Invalid Tunnel",
+        "32", "Unknown",
+        "33", "Invalid TCP",
+        "34", "Invalid TCP",
+        "35", "Invalid TCP",
+        "36", "Unknown",
+        "37", "Unknown",
+        "38", "Unknown",
+        "39", "Timeout",
+        "40", "Invalid TCP",
+        "98", "Unknown",
+        "99", "Unknown"
+    ];
+    let NetworkIcmpTypeLookup=datatable(
+        NetworkIcmpCode_lookup: int,
+        NetworkIcmpType_lookup: string
+    )
+        [
+        0, "Reserved",
+        1, "Destination Unreachable",
+        2, "Packet Too Big",
+        3, "Time Exceeded",
+        4, "Parameter Problem",
+        100, "Private experimentation",
+        101, "Private experimentation",
+        127, "Reserved for expansion of ICMPv6 error messages",
+        128, "Echo Request",
+        129, "Echo Reply",
+        130, "Multicast Listener Query",
+        131, "Multicast Listener Report",
+        132, "Multicast Listener Done",
+        133, "Router Solicitation",
+        134, "Router Advertisement",
+        135, "Neighbor Solicitation",
+        136, "Neighbor Advertisement",
+        137, "Redirect Message",
+        138, "Router Renumbering",
+        139, "ICMP Node Information Query",
+        140, "ICMP Node Information Response",
+        141, "Inverse Neighbor Discovery Solicitation Message",
+        142, "Inverse Neighbor Discovery Advertisement Message",
+        143, "Version 2 Multicast Listener Report",
+        144, "Home Agent Address Discovery Request Message",
+        145, "Home Agent Address Discovery Reply Message",
+        146, "Mobile Prefix Solicitation",
+        147, "Mobile Prefix Advertisement",
+        148, "Certification Path Solicitation Message",
+        149, "Certification Path Advertisement Message",
+        150, "ICMP messages utilized by experimental mobility protocols such as Seamoby",
+        151, "Multicast Router Advertisement",
+        152, "Multicast Router Solicitation",
+        153, "Multicast Router Termination",
+        154, "FMIPv6 Messages",
+        155, "RPL Control Message",
+        156, "ILNPv6 Locator Update Message",
+        157, "Duplicate Address Request",
+        158, "Duplicate Address Confirmation",
+        159, "MPL Control Message",
+        160, "Extended Echo Request",
+        161, "Extended Echo Reply",
+        200, "Private experimentation",
+        201, "Private experimentation",
+        255, "Reserved for expansion of ICMPv6 informational messages"
+    ];
+    let NetworkProtocolLookup=datatable(
+        protocol: string,
+        NetworkProtocol_lookup: string,
+        NetworkProtocolVersion: string
+    )[
+        "tcp", "TCP", "",
+        "tcp/ip", "TCP", "",
+        "udp", "UDP", "",
+        "udp/ip", "UDP", "",
+        "icmp", "ICMP", "IPV4",
+        "icmp6", "ICMP", "IPV6",
+    ];
+    let EventSeverityPriorityLookup=datatable(priority: string, EventSeverity: string)[
+        "1", "High",
+        "2", "Medium",
+        "3", "Low",
+        "4", "Informational"
+    ];
+    let EventSeverityDvcActionLookup=datatable(DvcAction: string, EventSeverity: string)[
+        "Allow", "Informational",
+        "Deny", "Low"
+    ];
+    let NetworkDirectionLookup=datatable(direction: string, NetworkDirection: string)[
+        "ingress", "Inbound",
+        "egress", "Outbound",
+        "Unknown", "NA"
+    ];
+    let DvcActionLookup = datatable(pattern: string, DvcAction: string, EventResult: string)[
+        "allow", "Allow", "Success",
+        "deny", "Deny", "Failure",
+        "Blocked", "Deny", "Failure"
+    ];
+    let EventResultLookup = datatable(LogSubType: string, EventResult_type: string)[
+        "association", "Success",
+        "disassociation", "Failure",
+        "Virtual router collision", "Failure",
+    ];
+    let parser=(disabled: bool=false) {
+        let allData = union isfuzzy=true
+                (
+                meraki_CL
+                | project-rename LogMessage =  Message
+                ),
+                (
+                Syslog
+                | where Computer in (_ASIM_GetSourceBySourceType('CiscoMeraki'))
+                | project-rename LogMessage =  SyslogMessage
+                );
+        let PreFilteredData = allData
+            | where not(disabled) and (LogMessage has_any("flows", "firewall", "ids-alerts") or LogMessage has_all("security_event", "ids-alerted") or (LogMessage has "events" and (LogMessage has_any ("Blocked DHCP server response", "association") or (LogMessage has "VRRP packet" and not(LogMessage has_any ("VRRP passive", "VRRP active"))) or (LogMessage has "disassociation" and not(LogMessage has_any ("auth_neg_failed", "dhcp"))))) or (LogMessage has "airmarshal_events" and LogMessage has_any("ssid_spoofing_detected", "rogue_ssid_detected")))
+            | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
+            | extend
+                LogType = tostring(Parser[2]),
+                Substring = tostring(Parser[3]);
+        let FlowsFirewallData = PreFilteredData
+            | where LogType in ("flows", "firewall", "cellular_firewall", "vpn_firewall")
+            | parse-kv Substring as(src: string, dst: string, mac: string, sport: string, dport: string, protocol: string, type: int) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+            | parse Substring with pattern1: string " src=" temp_restmessage: string
+            | parse Substring with * "pattern: " pattern2: string " " temp_restmessage: string
+            | extend NetworkIcmpCode_lookup = iff(protocol == 'icmp6', type, int(null))
+            | extend type_icmp4 = iff(protocol == 'icmp', type, int(null))
+            | lookup NetworkIcmpTypeLookup on NetworkIcmpCode_lookup
+            | invoke _ASIM_ResolveICMPType('type_icmp4')
+            | extend NetworkIcmpCode = coalesce(NetworkIcmpCode_lookup, NetworkIcmpCode)
+            | extend NetworkIcmpType = iff(isnotempty(NetworkIcmpCode), coalesce(NetworkIcmpType_lookup, NetworkIcmpType), "")
+            | extend pattern = coalesce(pattern1, pattern2)
+            | lookup DvcActionLookup on pattern
+            | lookup EventSeverityDvcActionLookup on DvcAction
+            | extend
+                SrcMacAddr = trim('"', mac),
+                EventType = "Flow";
+        let IDSAlertData = PreFilteredData
+            | where LogType in ("ids-alerts", "security_event")
+            | parse LogMessage with * "security_event " LogSubType: string " " * "message: " message: string 
+            | where LogType == "security_event" and LogSubType == "ids-alerted" or LogType == "ids-alerts"
+            | parse-kv Substring as(priority: string, timestamp: string, direction: string, protocol: string, src: string, dst: string, signature: string, dhost: string, shost: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+            | extend EventResult = "Success"
+            | extend
+                priority = trim('"', priority),
+                direction = trim('"', direction)
+            | lookup EventSeverityPriorityLookup on priority
+            | lookup NetworkDirectionLookup on direction
+            | extend AdditionalFields = bag_pack(
+                                    "signature", trim('"', signature)
+                                )
+            | extend
+                SrcMacAddr = trim('"', shost),
+                DstMacAddr = trim('"', dhost),
+                EventMessage = trim('"', message);
+        let AirmarshalEvents = PreFilteredData
+            | where LogType in ("airmarshal_events")
+            | parse Substring with * "type=" LogSubType: string " " temp_message: string
+            | parse-kv temp_message as(src: string, dst: string, wired_mac: string, vlan_id: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+            | extend
+                SrcMacAddr = trim('"', src),
+                DstMacAddr = trim('"', dst),
+                DvcMacAddr = trim('"', wired_mac)
+            | extend
+                EventResult = "Success",
+                EventSeverity = "High";
+        let EventsData = PreFilteredData
+            | where LogType == "events";
+        let EventsData_associ = EventsData
+            | parse Substring with * "type=" LogSubType: string " " temp_message: string
+            | where LogSubType == "association" or (LogSubType == "disassociation" and not(Substring has_any ("auth_neg_failed", "dhcp")))
+            | parse-kv Substring as (last_known_client_ip: string, client_mac: string, identity: string, aid: string, duration: string, ip_src: string, dns_server: string, reason: string, rssi: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+            | extend AdditionalFields = bag_pack(
+                                    "aid", aid,
+                                    "rssi", rssi
+                                )
+            | extend SrcMacAddr = trim('"', client_mac)
+            | lookup EventResultLookup on LogSubType
+            | extend EventResult = EventResult_type
+            | lookup EventResultDetailsLookup on reason
+            | extend EventResultDetails = iff((toint(reason) >= 25 and toint(reason) <= 31) or (toint(reason) >= 25 and toint(reason) <= 31), "Unknown", EventResultDetails);
+        let EventsData_space = EventsData
+            | where Substring has "Blocked DHCP server response" or (Substring has "VRRP packet" and not(Substring in~ ("VRRP passive", "VRRP active"))) 
+            | parse Substring with LogSubType1: string " from" temp_addr1: string " on VLAN " vlan_id1: string " " restmessage
+            | parse Substring with LogSubType2: string " from" temp_addr2: string " on VLAN " vlan_id2: string
+            | extend LogSubType = coalesce(LogSubType1, LogSubType2)
+            | extend LogSubType = iff(LogSubType has "VRRP Packet", "Virtual router collision", LogSubType)
+            | extend pattern = iff(Substring has "Blocked", "Blocked", "")
+            | lookup DvcActionLookup on pattern
+            | lookup EventSeverityDvcActionLookup on DvcAction
+            | lookup EventResultLookup on LogSubType
+            | extend EventResult = coalesce(EventResult, EventResult_type)
+            | extend temp_addr = coalesce(trim('"', temp_addr1), trim('"', temp_addr2))
+            | extend vlan_id = coalesce(trim('"', vlan_id1), trim('"', vlan_id2))
+            | extend SrcMacAddr = iff(temp_addr matches regex "(([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2}))", temp_addr, "")
+            | parse temp_addr with *  "[" temp_ip "]:" temp_port 
+            | extend SrcIpAddr = case(
+                            temp_addr has ".",
+                            split(temp_addr, ":")[0],
+                            isnotempty(temp_ip),
+                            temp_ip,
+                            temp_addr
+                        )
+            | extend SrcPortNumber = toint(case(
+                                isnotempty(temp_port),
+                                temp_port,
+                                temp_addr has ".",
+                                split(temp_addr, ":")[1],
+                                ""
+                            )
+                        )
+            | extend SrcIpAddr = iff(SrcIpAddr == SrcMacAddr, "", SrcIpAddr)
+            | extend EventMessage = Substring;
+        union
+            FlowsFirewallData,
+            IDSAlertData,
+            EventsData_associ,
+            EventsData_space,
+            AirmarshalEvents
+        | lookup NetworkProtocolLookup on protocol
+        | invoke _ASIM_ResolveNetworkProtocol('protocol')
+        | extend NetworkProtocol = iff(isempty(NetworkProtocolNumber), NetworkProtocol_lookup, NetworkProtocol)
+        | extend 
+            Epoch = tostring(Parser[0]),
+            Device = tostring(Parser[1])
+        | extend
+            Epoch = iff(isnotempty(column_ifexists("timestamp", "")), timestamp, Epoch)
+        | extend
+            EpochTimestamp = split(Epoch, ".")
+        | extend
+            EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
+        | extend temp_srcipport= coalesce(src, ip_src, last_known_client_ip) 
+        | extend temp_srcipport =  trim('"', temp_srcipport)
+        | parse temp_srcipport with *  "[" temp_srcip "]:" temp_srcport
+        | extend SrcIpAddr = case(
+                            temp_srcipport has ".",
+                            split(temp_srcipport, ":")[0], 
+                            isnotempty(SrcIpAddr),
+                            SrcIpAddr,
+                            coalesce(temp_srcip, temp_srcipport)
+                        )
+        | extend SrcPortNumber = iff(isempty(SrcPortNumber), toint(coalesce(sport, temp_srcport)), SrcPortNumber)
+        | extend SrcPortNumber = toint(iff(isempty(SrcPortNumber) and SrcIpAddr has ".", split(temp_srcipport, ":")[1], SrcPortNumber))
+        | extend temp_dstipport = coalesce(dst, dns_server)
+        | extend temp_dstipport =  trim('"', temp_dstipport)
+        | parse temp_dstipport with * "[" temp_dstip "]:" temp_dstport
+        | extend DstIpAddr = iff(temp_dstipport has ".", split(temp_dstipport, ":")[0], coalesce(temp_dstip, temp_dstipport))
+        | extend DstPortNumber = toint(coalesce(dport, temp_dstport))
+        | extend DstPortNumber = toint(iff(isempty(DstPortNumber) and DstIpAddr has ".", split(temp_dstipport, ":")[1], DstPortNumber))
+        | extend SrcIpAddr = iff(SrcIpAddr == SrcMacAddr, "", SrcIpAddr)
+        | extend DstIpAddr = iff(DstIpAddr == DstMacAddr, "", DstIpAddr)
+        | extend 
+            EventMessage = iff(
+                    LogSubType has_any("Blocked DHCP server", "Virtual router collision"),
+                    Substring,
+                    coalesce(message, "")
+                ),
+            SrcUsername = trim('"', identity),
+            SrcVlanId = trim('"', vlan_id)
+        | extend
+            EventSeverity = case(
+                        isnotempty(EventSeverity),
+                        EventSeverity,
+                        EventResult == "Failure",
+                        "Low",
+                        "Informational"
+                    ),
+            EventType = iff(isnotempty(EventType), EventType, "NetworkSession"),
+            SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", "")
+        | invoke _ASIM_ResolveDvcFQDN('Device')
+        | extend
+            Dvc = DvcHostname,
+            Src = coalesce(SrcIpAddr, SrcMacAddr),
+            Dst = coalesce(DstIpAddr, DstMacAddr),
+            NetworkDuration = toint(todouble(duration) * 1000)
+        | project-rename
+            EventOriginalType = LogType,
+            EventOriginalSubType = LogSubType
+        | extend
+            EventEndTime = EventStartTime,
+            EventCount = int(1),
+            EventProduct = "Meraki",
+            EventVendor = "Cisco",
+            EventSchema = "NetworkSession",
+            EventSchemaVersion = "0.2.6",
+            Duration = NetworkDuration,
+            IpAddr = SrcIpAddr,
+            InnerVlanId = SrcVlanId,
+            EventUid = _ResourceId
+        | project-away
+            LogMessage,
+            Parser,
+            Epoch,
+            EpochTimestamp,
+            Device,
+            Substring,
+            protocol,
+            priority,
+            reason,
+            direction,
+            duration,
+            src,
+            dst,
+            dns_server,
+            sport,
+            dport,
+            *_lookup,
+            type*,
+            pattern*,
+            last_known_client_ip,
+            ip_src,
+            client_mac,
+            mac,
+            shost,
+            dhost,
+            wired_mac,
+            identity,
+            temp*,
+            vlan_id*,
+            LogSubType1,
+            LogSubType2,
+            restmessage*,
+            message,
+            rssi,
+            aid,
+            signature,
+            timestamp,
+            EventResult_type,
+            TenantId,
+            SourceSystem,
+            Computer,
+            _ResourceId,
+            MG,
+            ManagementGroupName,
+            RawData,
+            EventTime,
+            Facility,
+            HostName,
+            SeverityLevel,
+            ProcessID,
+            HostIP,
+            ProcessName
     };
-    NWParser (disabled)
+    parser(disabled=disabled)
