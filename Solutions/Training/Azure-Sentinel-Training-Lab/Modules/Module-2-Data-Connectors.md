@@ -120,7 +120,7 @@ The *Threat Intelligence* content solution includes the data connectors for all 
 
 ![ticontent2](../Images/ticontent2.png)
 
-4. Select the Microsoft Defender Threat Intelligence (preview) connector and click **Open Connector Page** at the bottom right.
+4. Select the *Microsoft Defender Threat Intelligence (preview)* connector and click **Open Connector Page** at the bottom right.
 
 ![ticontent3](../Images/ticontent3.png)
 
