@@ -35,7 +35,7 @@ try {
     Write-Host "List of files in Pull Request: $diff"
 
     # FILTER OUT FILES AND CHECK IF THERE ARE ANY CHNAGES IN FILES BY WHICH USER CAN CREATE PACKAGE.
-    $filterDataFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) }
+    $filterDataFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
 
     $filterAnalyticRuleFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Analytic Rules/*" } | Where-Object { $_ -match ([regex]::Escape(".yaml") -or ([regex]::Escape(".yml"))) }
 
