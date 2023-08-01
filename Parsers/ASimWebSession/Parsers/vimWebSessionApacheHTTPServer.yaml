@@ -1,0 +1,135 @@
+Parser:
+  Title: Web Session ASIM Filtering parser for Apache HTTP Server
+  Version: '0.1'
+  LastUpdated: Jun 19, 2023
+Product:
+  Name: Apache HTTP Server
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Apache HTTP Server 
+  Link: https://httpd.apache.org/docs/2.4/logs.html
+Description: |
+  This ASIM parser supports filtering and normalizing Apache HTTP Server logs produced by the Microsoft Sentinel Apache connector to the ASIM Web Session normalized schema.
+ParserName: vimWebSessionApacheHTTPServer
+EquivalentBuiltInParser: _vim_WebSession_ApacheHTTPServer
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Parser=(
+    starttime:datetime               = datetime(null), 
+    endtime:datetime                 = datetime(null),
+    srcipaddr_has_any_prefix:dynamic = dynamic([]),
+    ipaddr_has_any_prefix:dynamic    = dynamic([]), 
+    url_has_any:dynamic              = dynamic([]),
+    httpuseragent_has_any:dynamic    = dynamic([]),
+    eventresultdetails_in:dynamic    = dynamic([]),
+    eventresult:string               = '*',
+    disabled:bool                    = false
+  ){
+    let src_or_any                = set_union(
+      srcipaddr_has_any_prefix,
+      ipaddr_has_any_prefix
+    ); 
+    let remove_protocol_from_list = (list:dynamic)
+    {
+        print list
+        | mv-apply l = print_0 to typeof(string) on
+          ( extend l = substring(l,indexof(l,@'//')+2))
+        | project l
+    };
+    ApacheHTTPServer_CL
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime)
+    | where (array_length(url_has_any) == 0 or RawData has_any (remove_protocol_from_list(url_has_any)))
+    | where (array_length(httpuseragent_has_any) == 0 or RawData has_any (httpuseragent_has_any))
+    | where (array_length(src_or_any) == 0 or RawData has_any (src_or_any))
+    | where (array_length(eventresultdetails_in) == 0 or RawData has_any (eventresultdetails_in))
+    | project RawData, TimeGenerated, Computer, _ResourceId, Type, _ItemId
+    | where not (RawData startswith "[") 
+    | where RawData has_any ("GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH")
+    | parse RawData with * '] ' Temp'"' *
+    | where (array_length(url_has_any) == 0 or Temp has_any (remove_protocol_from_list(url_has_any)))
+    | extend DstHostname = tostring(split(trim_end(" ",Temp),":",0)[0])
+    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUsername " [" Date ']' * '"' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
+    | project-away RawData, Date, ClientIdentity, Temp
+    | where (array_length(url_has_any) == 0 or Url has_any (remove_protocol_from_list(url_has_any)))
+    | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any (httpuseragent_has_any))
+    | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) in (eventresultdetails_in))
+    | extend 
+        temp_SrcMatch = has_any_ipv4_prefix(SrcIpAddr,src_or_any)
+    | extend ASimMatchingIpAddr = case(
+        array_length(src_or_any) == 0, "-",
+        temp_SrcMatch , "SrcIpAddr",
+        "No match") 
+    | where ASimMatchingIpAddr != "No match" 
+    | project-away temp_*
+    | extend EventResult    = iff (
+          toint(EventResultDetails) < 400, "Success", 
+          "Failure"
+        )
+    | where (eventresult == '*' or EventResult =~ eventresult)
+    | extend SrcUsername    = case(SrcUsername == "-", "", SrcUsername),
+        HttpReferrer        = case(HttpReferrer == "-", "", HttpReferrer),
+        HttpUserAgent       = case(HttpUserAgent == "-", "", HttpUserAgent),
+        DstHostname         = case(DstHostname == "-", "", DstHostname)    
+    | extend SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
+    | parse _ResourceId with * "/subscriptions/" DvcScopeId "/" *
+    | project-rename 
+        Dst            = DstHostname,
+        DvcHostname    = Computer,
+        DvcId          = _ResourceId,
+        EventUid       = _ItemId
+    | extend 
+        HttpVersion    = tostring(split(Protocol,"/")[1]),
+        EventStartTime = TimeGenerated,
+        EventEndTime   = TimeGenerated,
+        DvcIdType      = iff (DvcId == "", "", "AzureResourceID")
+    | extend 
+        HttpStatusCode = EventResultDetails,
+        UserAgent      = HttpUserAgent,
+        IpAddr         = SrcIpAddr,
+        Dvc            = DvcHostname,
+        User           = SrcUsername
+    | project-away Protocol
+    | extend
+        EventType          = "WebServerSession", 
+        EventSchema        = "WebSession",
+        EventSchemaVersion = "0.2.6",
+        EventCount         = int(1),
+        EventVendor        = "Apache",
+        EventProduct       = "HTTP Server",
+        EventSeverity      = "Informational"
+  };
+  Parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
