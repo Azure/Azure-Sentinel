@@ -30,11 +30,11 @@ connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
 activities = [
+            "drive",
             "access_transparency", 
             "admin",
             "calendar",
             "chat",
-            "drive",
             "gcp",
             "gplus",
             "groups",
@@ -132,8 +132,8 @@ def GetDates(logType):
                 activity_list[activity] = newtime
             activity_list = json.dumps(activity_list)
     else:
-        logging.info("There is no last time point, trying to get events for last one day.")
-        past_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        logging.info("There is no last time point, trying to get events for last 10 minutes.")
+        past_time = (end_time - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         for activity in activities:
             activity_list[activity] = past_time[:-4] + 'Z'
         activity_list = json.dumps(activity_list)
@@ -142,25 +142,31 @@ def GetDates(logType):
     return json.loads(activity_list) if (isBlank(logType)) else (json.loads(activity_list)[logType],end_time)
 
 def get_result(activity,start_time, end_time):
-    result_activities = []
-    service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False)
-    results = service.activities().list(userKey='all', applicationName=activity,
-                                              maxResults=1000, startTime=start_time, endTime=end_time).execute()
-    next_page_token = results.get('nextPageToken', None)
-    result = results.get('items', [])
-    result_activities.extend(result)
-    while next_page_token is not None:
+    try:
+        result_activities = []
+        service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False)
         results = service.activities().list(userKey='all', applicationName=activity,
-                                            maxResults=1000, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
+                                                maxResults=1000, startTime=start_time, endTime=end_time).execute()
         next_page_token = results.get('nextPageToken', None)
         result = results.get('items', [])
         result_activities.extend(result)
-    if result_activities == None or len(result_activities) == 0:
-        logging.info("Logs not founded for {} activity".format(activity))
-        logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
-    else:
-        logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
-        return result_activities
+        logging.info("Name of Activity: {}, Number of events: {})".format(activity, len(result_activities)))
+        while next_page_token is not None:
+            results = service.activities().list(userKey='all', applicationName=activity,
+                                                maxResults=1000, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
+            next_page_token = results.get('nextPageToken', None)
+            result = results.get('items', [])
+            result_activities.extend(result)
+        logging.info("Number of events {}".format(len(result_activities)))
+        if result_activities == None or len(result_activities) == 0:
+            logging.info("Logs not founded for {} activity".format(activity))
+            logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
+        else:
+            logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
+            return result_activities
+    except Exception as err:
+        logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
+    
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
     x_headers = 'x-ms-date:' + date
