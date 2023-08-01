@@ -81,7 +81,7 @@ class ImpervaFilesHandler:
             if self.files_array is not None:
                 state = StateManager(connection_string=connection_string)
                 past_file = state.get()
-                if past_file is not None:
+                if past_file is not None and self.files_array.__contains__(past_file):
                     logging.info("The last file point is: {}".format(past_file))
                     index = self.files_array.index(past_file)
                     files_arr = self.files_array[index + 1:]
