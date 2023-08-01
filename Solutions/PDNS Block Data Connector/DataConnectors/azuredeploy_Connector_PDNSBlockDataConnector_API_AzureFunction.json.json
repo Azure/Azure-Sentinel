@@ -1,0 +1,324 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "defaultValue": "PDNS",
+            "minLength": 3,
+            "maxLength":24,
+            "type": "string"
+        },
+        "LogAnalyticsWorkspaceID": {
+            "type": "string",
+            "defaultValue": "<LogAnalyticsWorkspaceID>"
+        },
+        "LogAnalyticsSharedKey": {
+            "type": "securestring",
+            "defaultValue": "<SharedKey>"
+        },
+        "AWSKeyID": {
+            "type": "string",
+            "defaultValue": "<AccessKeyID>"
+        },
+        "AWSSecretKey": {
+            "type": "securestring",
+            "defaultValue": "<AccessKey>"
+        },
+        "S3BucketName": {
+            "type": "string",
+            "defaultValue": "<S3BucketName>"
+        },
+        "S3BucketRegion": {
+            "type": "string",
+            "defaultValue": "<S3BucketRegion>"
+        },
+        "S3ClientPrefix": {
+            "type": "string",
+            "defaultValue": "<S3ClientPrefix>"
+        },
+        "RoleARN": {
+            "type": "string",
+            "defaultValue": "<RoleARN>"
+        }
+    },
+    "variables": {
+        "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+        "StorageName": "[tolower(concat(substring(parameters('FunctionName'), 0, min(length(parameters('FunctionName')),8)), 'stg', uniqueString(resourceGroup().id)))]",
+        "ServerFarmName" : "[concat(substring(parameters('FunctionName'), 0, min(length(parameters('FunctionName')),8)), 'srv', uniqueString(resourceGroup().id))]" ,
+        "StorageSuffix": "[environment().suffixes.storage]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2022-09-01",
+            "name": "[variables('StorageName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageName'), '/default/', 'funcstatemarkershare')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('ServerFarmName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "name": "[variables('ServerFarmName')]",
+                "computeMode": "Dynamic",
+                "reserved": true
+            },
+            "kind": "linux"
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp,linux",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('ServerFarmName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageName'))]"
+            ],
+            "properties": {
+                "enabled": true,
+                "hostNameSslStates": [
+                    {
+                        "name": "pdns-block-data-connector.azurewebsites.net",
+                        "sslState": "Disabled",
+                        "hostType": "Standard"
+                    },
+                    {
+                        "name": "pdns-block-data-connector.scm.azurewebsites.net",
+                        "sslState": "Disabled",
+                        "hostType": "Repository"
+                    }
+                ],
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('ServerFarmName'))]",
+                "reserved": true,
+                "isXenon": false,
+                "hyperV": false,
+                "vnetRouteAllEnabled": false,
+                "vnetImagePullEnabled": false,
+                "vnetContentShareEnabled": false,
+                "siteConfig": {
+                    "numberOfWorkers": 1,
+                    "linuxFxVersion": "Python|3.10",
+                    "acrUseManagedIdentityCreds": false,
+                    "alwaysOn": false,
+                    "http20Enabled": false,
+                    "functionAppScaleLimit": 200,
+                    "minimumElasticInstanceCount": 0
+                },
+                "scmSiteAlsoStopped": false,
+                "clientAffinityEnabled": false,
+                "clientCertEnabled": false,
+                "clientCertMode": "Required",
+                "hostNamesDisabled": false,
+                "customDomainVerificationId": "292899094C91AD2B8A43B0463D180CBDC5B3261B1D7939DB3A9BB334FFF66D95",
+                "containerSize": 1536,
+                "dailyMemoryTimeQuota": 0,
+                "httpsOnly": true,
+                "redundancyMode": "None",
+                "publicNetworkAccess": "Enabled",
+                "storageAccountRequired": false,
+                "keyVaultReferenceIdentity": "SystemAssigned"
+            },
+            "resources": [
+                {
+                    "apiVersion": "2022-03-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('StorageName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('StorageName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "LogAnalyticsWorkspaceID": "[parameters('LogAnalyticsWorkspaceID')]",
+                        "LogAnalyticsSharedKey": "[parameters('LogAnalyticsSharedKey')]",
+                        "AWSKeyID": "[parameters('AWSKeyID')]",
+                        "AWSSecretKey": "[parameters('AWSSecretKey')]",
+                        "RoleARN": "[parameters('RoleARN')]",
+                        "S3BucketName": "[parameters('S3BucketName')]",
+                        "S3BucketRegion": "[parameters('S3BucketRegion')]",
+                        "S3ClientPrefix": "[parameters('S3ClientPrefix')]"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+            "apiVersion": "2022-03-01",
+            "name": "[concat(variables('FunctionName'), '/ftp')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "allow": true
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+            "apiVersion": "2022-03-01",
+            "name": "[concat(variables('FunctionName'), '/scm')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "allow": true
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/config",
+            "apiVersion": "2022-03-01",
+            "name": "[concat(variables('FunctionName'), '/web')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "numberOfWorkers": 1,
+                "defaultDocuments": [
+                    "Default.htm",
+                    "Default.html",
+                    "Default.asp",
+                    "index.htm",
+                    "index.html",
+                    "iisstart.htm",
+                    "default.aspx",
+                    "index.php"
+                ],
+                "netFrameworkVersion": "v4.0",
+                "linuxFxVersion": "Python|3.10",
+                "requestTracingEnabled": false,
+                "remoteDebuggingEnabled": false,
+                "remoteDebuggingVersion": "VS2019",
+                "httpLoggingEnabled": false,
+                "acrUseManagedIdentityCreds": false,
+                "logsDirectorySizeLimit": 35,
+                "detailedErrorLoggingEnabled": false,
+                "publishingUsername": "$PDNS-Block-Data-Connector",
+                "scmType": "None",
+                "use32BitWorkerProcess": false,
+                "webSocketsEnabled": false,
+                "alwaysOn": false,
+                "managedPipelineMode": "Integrated",
+                "virtualApplications": [
+                    {
+                        "virtualPath": "/",
+                        "physicalPath": "site\\wwwroot",
+                        "preloadEnabled": false
+                    }
+                ],
+                "loadBalancing": "LeastRequests",
+                "experiments": {
+                    "rampUpRules": []
+                },
+                "autoHealEnabled": false,
+                "vnetRouteAllEnabled": false,
+                "vnetPrivatePortsCount": 0,
+                "publicNetworkAccess": "Enabled",
+                "cors": {
+                    "allowedOrigins": [
+                        "https://portal.azure.com"
+                    ],
+                    "supportCredentials": false
+                },
+                "localMySqlEnabled": false,
+                "ipSecurityRestrictions": [
+                    {
+                        "ipAddress": "Any",
+                        "action": "Allow",
+                        "priority": 2147483647,
+                        "name": "Allow all",
+                        "description": "Allow all access"
+                    }
+                ],
+                "scmIpSecurityRestrictions": [
+                    {
+                        "ipAddress": "Any",
+                        "action": "Allow",
+                        "priority": 2147483647,
+                        "name": "Allow all",
+                        "description": "Allow all access"
+                    }
+                ],
+                "scmIpSecurityRestrictionsUseMain": false,
+                "http20Enabled": false,
+                "minTlsVersion": "1.2",
+                "scmMinTlsVersion": "1.2",
+                "ftpsState": "FtpsOnly",
+                "preWarmedInstanceCount": 0,
+                "functionAppScaleLimit": 200,
+                "functionsRuntimeScaleMonitoringEnabled": false,
+                "minimumElasticInstanceCount": 0,
+                "azureStorageAccounts": {}
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/hostNameBindings",
+            "apiVersion": "2022-03-01",
+            "name": "[concat(variables('FunctionName'), '/', variables('FunctionName'), '.azurewebsites.net')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "siteName": "PDNS-Block-Data-Connector",
+                "hostNameType": "Verified"
+            }
+        }
+    ]
+}
