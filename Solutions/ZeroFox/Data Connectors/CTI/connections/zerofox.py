@@ -44,7 +44,7 @@ class ZeroFoxClient:
         for result in response["results"]:
             yield result
         while response["next"]:
-            response = response = self._http_request(
+            response = self._http_request(
                 method="GET",
                 headers=headers,
                 full_address=response["next"],

@@ -10,7 +10,8 @@ from connections.zerofox import ZeroFoxClient
 
 def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = (
-        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        .isoformat()
     )
 
     if mytimer.past_due:
@@ -28,7 +29,7 @@ def main(mytimer: func.TimerRequest) -> None:
     zf_client = get_zf_client()
 
     results = get_cti_credit_cards(
-        zf_client, created_After=query_from, created_before=query_to
+        zf_client, created_after=query_from, created_before=query_to
     )
 
     logging.debug("Trigger function retrieved results")

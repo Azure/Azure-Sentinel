@@ -10,16 +10,14 @@ from connections.zerofox import ZeroFoxClient
 
 def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = (
-        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        .isoformat()
     )
 
     if mytimer.past_due:
         logging.info("The timer is past due!")
 
-    # Update the customer ID to your Log Analytics workspace ID
     customer_id = os.environ.get("WorkspaceID")
-
-    # For the shared key, use either the primary or the secondary Connected Sources client authentication key
     shared_key = os.environ.get("WorkspaceKey")
 
     query_from = mytimer.schedule_status["Last"]
@@ -27,7 +25,8 @@ def main(mytimer: func.TimerRequest) -> None:
 
     zf_client = get_zf_client()
 
-    results = get_cti_advanced_dark_web(zf_client, created_after = query_from, created_before = query_to)
+    results = get_cti_advanced_dark_web(
+        zf_client, created_after=query_from, created_before=query_to)
 
     logging.debug("Trigger function retrieved results")
 
@@ -50,12 +49,11 @@ def get_zf_client():
     return ZeroFoxClient(user, token)
 
 
-def get_cti_advanced_dark_web(client: ZeroFoxClient, created_from, created_after):
-        url_suffix = "advanced-dark-web/"
-        params = dict(created_after=created_after, created_before=created_from)
-        return client.cti_request(
-            "GET",
-            url_suffix,
-            params=params,
-        )
-
+def get_cti_advanced_dark_web(client: ZeroFoxClient, created_before, created_after):
+    url_suffix = "advanced-dark-web/"
+    params = dict(created_after=created_after, created_before=created_before)
+    return client.cti_request(
+        "GET",
+        url_suffix,
+        params=params,
+    )

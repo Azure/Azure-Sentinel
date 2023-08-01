@@ -10,7 +10,8 @@ from connections.zerofox import ZeroFoxClient
 
 def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = (
-        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        .isoformat()
     )
 
     if mytimer.past_due:
@@ -27,7 +28,8 @@ def main(mytimer: func.TimerRequest) -> None:
 
     zf_client = get_zf_client()
 
-    results = get_cti_botnet_compromised_credentials(zf_client, created_after = query_from, created__before = query_to)
+    results = get_cti_botnet_compromised_credentials(
+        zf_client, created_after=query_from, created_before=query_to)
 
     logging.debug("Trigger function retrieved results")
 
@@ -50,12 +52,12 @@ def get_zf_client():
     return ZeroFoxClient(user, token)
 
 
-def get_cti_botnet_compromised_credentials(client: ZeroFoxClient, created_from, created_after):
-        url_suffix = "botnet-compromised-credentials/"
-        params = dict(created_after=created_after, created_before=created_from)
-        return client.cti_request(
-            "GET",
-            url_suffix,
-            params=params,
-        )
-
+def get_cti_botnet_compromised_credentials(client: ZeroFoxClient,
+                                           created_before, created_after):
+    url_suffix = "botnet-compromised-credentials/"
+    params = dict(created_after=created_after, created_before=created_before)
+    return client.cti_request(
+        "GET",
+        url_suffix,
+        params=params,
+    )
