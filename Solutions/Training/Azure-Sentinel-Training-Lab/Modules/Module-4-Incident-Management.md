@@ -7,7 +7,7 @@ This module guides you through the SOC Analyst experience using Microsoft Sentin
 
 #### Prerequisites
 
-This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as the data and the artifacts that we will be using in this module need to be deployed on your Microsoft Sentinel instance.
+This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as the data and the artifacts that we will be using in this module need to be deployed in your Microsoft Sentinel instance.
 
 ### Exercise 1: Review Microsoft Sentinel incident tools and capabilities
 
@@ -138,6 +138,9 @@ M5-close-incident
 
 ![incident2](../Images/raw-events.png)
 
+
+
+
 ### Exercise 4: Hunting for more evidence
 
 1. As a next step, you would like to identify the hosts that might have been compromised. As part of your research, you find the following [guidance from Microsoft](https://techcommunity.microsoft.com/t5/azure-sentinel/solarwinds-post-compromise-hunting-with-azure-sentinel/ba-p/1995095). In this article, you can find a query that will do a SolarWinds inventory check query. We will use this query to find any other affected hosts.
@@ -171,6 +174,9 @@ M5-close-incident
 ![incident9](../Images/incident9.png)
 
 9. At this point you can ask the Operations team to isolate the hosts affected by this incident.
+
+
+
 
 ### Exercise 5: Add IOC to Threat Intelligence
 Now, we will add the IP address related to the incident to our list of IOCs, so we can capture any new occurrences of this IOC in our logs.
