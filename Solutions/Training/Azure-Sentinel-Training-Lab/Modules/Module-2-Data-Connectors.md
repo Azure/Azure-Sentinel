@@ -37,33 +37,39 @@ This exercise shows you how to enable the Azure Activity data connector. This co
 
 ![azactivity2](../Images/azactivity2.png)
 
-7. On the Azure Activity connector page, scroll down through the Configuration instructions until you get to number 2, **Connect your subscriptions through diagnostic settings new pipeline**. This method leverages Azure Policy and it brings many improvements compared to the (now older) direct settings method (details about these improvements can be found [here](https://techcommunity.microsoft.com/t5/azure-sentinel/moving-azure-activity-connector-to-an-improved-method/ba-p/2479552)).
+7. On the Azure Activity connector page, scroll down through the Configuration instructions until you get to number 2, **Connect your subscriptions through diagnostic settings new pipeline**. This method leverages Azure Policy and it brings many improvements compared to the older direct settings method (details about these improvements can be found [here](https://techcommunity.microsoft.com/t5/azure-sentinel/moving-azure-activity-connector-to-an-improved-method/ba-p/2479552)).
 
 8. Click on **Launch Azure Policy Assignment wizard**, which will redirect you to the policy creation page.
 
 ![azactivity3](../Images/azactivity33.png)
 
-    In *Scope*, select your subscription.
+9. In *Scope*, select your **subscription**.
 
-**Note**: Policy lets you deploy a setting to multiple possible targets - for example, if you have Owner permission at a Management Group level, you can assign a policy to configure collection of Azure Activity logs from all subscriptions under that group.
+    **Note**: Policy lets you deploy a setting to multiple possible targets - for example, if you have Owner permission at a Management Group level, you can assign a policy to configure collection of Azure Activity logs from all subscriptions under that group.
 
-![azactivity4](../Images/m2-activity-scope.png)
+    ![azactivity4](../Images/m2-activity-scope.png)
 
-1. Go to the **Parameters** tab. On the **Primary Log Analytics workspace** select the Microsoft Sentinel workspace:
+10. Go to the **Parameters** tab. On the **Primary Log Analytics workspace** select the Microsoft Sentinel workspace:
 
-![azactivity8](../Images/m2-ws-target-foractivitylogs1.png)
+    ![azactivity8](../Images/m2-ws-target-foractivitylogs1.png)
 
-10. Press **Review and Create** to save this policy and **Create**.
+11. We'll use the *deployIfNotExists* (DINE) feature of Azure Policy to deploy the setting directly to any Activity logs in scope.
+    To do this, tick **Create a remediation task**. 
+    Leave the *Managed Identity* set to a *System Managed Identity*, and pick a region proximate to your subscription. 
 
-11. It is normal if you don't immediately see the connector showing as *connected* and with a green bar, as Azure Policy can take some time to apply.
+    ![azactivityLogPolicy](../Images/m2-ws-activitylogpolicy.png)
 
-    **Note:** each subscription has a maximum of 5 destinations for its activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Microsoft Sentinel workspace. If this is the case, you can use the Diagnostic Settings for the Activity Log to remove older settings directly. You can also use Diagnostic Settings to directly connect Activity logs to Sentinel.
+12. Press **Review and Create**, and then **Create** to save the policy.
 
-12. Head back to the Content Hub and click on the *Azure Activity* solution, and click the **Manage** button at the bottom of the panel on the right. 
+13. It is normal if you don't immediately see the connector showing as *connected* and with a green bar, as Azure Policy can take some time to apply.
 
-![contentmanage1](../Images/content-manage1.png)
+    **Note:** each Subscription has a maximum of 5 destinations for its Azure Activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Microsoft Sentinel workspace. If this is the case, you can use the Diagnostic Settings for the Activity Log to remove older settings directly. You can also use Diagnostic Settings to directly connect Activity logs to Sentinel.
 
-13. From the Manage view, the contents of the solution are displayed: any connectors, analytics rules, workbooks, hunting queries and other content are visible here. Now these have been installed with the content pack, they will appear in the relevant section of the Sentinel interface (e.g. Analytics rule templates, Workbook templates and so on).
+14. Head back to the Content Hub and click on the *Azure Activity* solution, and click the **Manage** button at the bottom of the panel on the right. 
+
+    ![contentmanage1](../Images/content-manage1.png)
+    
+15. From the *Manage* view, the contents of the solution are displayed: any connectors, analytics rules, workbooks, hunting queries and other content included in the solution pack are visible here. Now these have been installed, they will each appear in the relevant section of the Sentinel interface (e.g. Analytics rule templates, Workbook templates and so on).
 
 ![contentmanage2](../Images/content-manage2.png)
 
@@ -96,11 +102,7 @@ This exercise shows you how to enable the **Microsoft Defender for Cloud** data 
 
 6. From the list of subscriptions at the bottom of the page, select the desired subscription and click on *Connect*. Wait for the operation to complete. You may wish to enable bi-directional sync for the connector, which means that alerts/incidents closed in either product will be reflected in the other.
 
-You've now connected alerts from Microsoft Defender for Cloud!
-
-**Tip:** After a few minutes, try using the *Sample Alerts* feature in Defender for Cloud to generate some sample incidents for inspection.
-
-
+You've now connected alerts from Microsoft Defender for Cloud. This connector populates the `SecurityAlerts` table when a Defender for Cloud alert is raised, but at this stage, that alert *won't* be promoted into an Incident. We'll cover a rule to promote the alerts in the next module.
 
 ### Exercise 3: Enable Microsoft Defender Threat Intelligence connector
 
@@ -124,7 +126,7 @@ The *Threat Intelligence* content solution includes the data connectors for all 
 
 ![ticontent3](../Images/ticontent3.png)
 
-5. On the Connector page, select an option for which indicators to import, or leave the default "All available" selected, and click **Connect**.
+5. On the Connector page, from the *Import indicators* list, select an option for which indicators to import, or leave the default "All available" selected, and click **Connect**.
 
 ![ticontent4](../Images/ticontent4.png)
 
