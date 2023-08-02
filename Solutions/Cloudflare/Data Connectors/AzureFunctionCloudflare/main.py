@@ -162,7 +162,7 @@ class AzureBlobStorageConnector:
                                     line, blob['name'], str(e)))
                                 raise e
                             await sentinel.send(event)
-                s = line
+                    s = line
             if s:
                 try:
                     event = json.loads(s)
