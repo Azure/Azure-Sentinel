@@ -173,7 +173,9 @@ try
 								GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails
 							}
 							elseif ($objectKeyLowercase -eq "watchlists") {
-								GenerateWatchList -json $json -isPipelineRun $isPipelineRun
+								$watchListFileName = Get-ChildItem $finalPath
+
+								GenerateWatchList -json $json -isPipelineRun $isPipelineRun -watchListFileName $watchListFileName.BaseName
 							}
 						}
 						else
