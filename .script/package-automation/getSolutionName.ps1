@@ -28,16 +28,11 @@ try
         {
             $solutionIndex = $currentFile.IndexOf("Solutions/")
             if ($solutionName -eq '' -and $solutionIndex -eq 0)
-            {
-                $countForwardSlashes = ($currentFile.Split('/')).count-1
-                if ($countForwardSlashes -gt 1)
-                {
-                    # identify solution Name
-                    $solutionNameWithSubstring = $currentFile.SubString($solutionIndex + 10)
-                    $firstForwardSlashIndex = $solutionNameWithSubstring.IndexOf("/")
-                    $solutionName = $solutionNameWithSubstring.SubString(0, $firstForwardSlashIndex)
-                    Write-Host "Solution Name is $solutionName"
-                }
+            {					
+                $solutionNameWithSubstring = $currentFile.SubString($solutionIndex + 10)
+                $firstForwardSlashIndex = $solutionNameWithSubstring.IndexOf("/")
+                $solutionName = $solutionNameWithSubstring.SubString(0, $firstForwardSlashIndex)
+                Write-Host "Solution Name is $solutionName"
             }
             else
             {

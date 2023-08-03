@@ -14,12 +14,24 @@ tactics:
   - InitialAccess
 relevantTechniques:
 query: |
-  JamfProtect
-  | where EventProduct == "Jamf Protect - Threat Events Stream"
-      and EventResult == "Blocked"
-      and isnotempty(EventSeverity)
+  jamfprotect_CL
+  | where event_metadata_product_s == "Threat Events Stream"
+      and event_action_s == "Blocked"
+      and isnotempty(event_severity_d)
+  | extend severity = case(event_severity_d == 2, "Informational", event_severity_d == 4, "Low", event_severity_d == 6, "Medium", event_severity_d == 8, "High", event_severity_d == 10, "High", "Informational")
+  | extend Category =  event_eventType_description_s
+  | extend AlertURL = event_eventUrl_s
+  | extend User = event_user_name_s
+  | extend Email = event_user_email_s
+  | extend Hostname = event_device_userDeviceName_s
+  | extend Destination_IPs = event_destination_ip_s
+  | extend Destination = event_destination_name_s
   | extend Tactics = "Initial Access"
   | extend Techniques = "T1566"
+  | extend Action = event_action_s
+  | extend ProviderName = "Jamf"
+  | extend ProductName = "Jamf Protect"
+  | extend ProductNameComponentName = "Network Threat Prevention"
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -30,43 +42,43 @@ incidentConfiguration:
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 alertDetailsOverride:
-  alertDisplayNameFormat: "Network Threat detected on {{DvcHostname}}"
-  alertDescriptionFormat: "A Network Threat has been {{EventResult}} on {{DvcHostname}}"
+  alertDisplayNameFormat: "Network Threat detected on {{Hostname}}"
+  alertDescriptionFormat: "A Network Threat has been {{Action}} on {{Hostname}}"
   alertTacticsColumnName: Tactics
-  alertSeverityColumnName: EventSeverity
+  alertSeverityColumnName: severity
   alertDynamicProperties:
     - alertProperty: AlertLink
-      value: EventReportUrl
+      value: AlertURL
     - alertProperty: ProviderName
-      value: EventVendor
+      value: ProviderName
     - alertProperty: ProductName
-      value: EventProduct
+      value: ProductName
     - alertProperty: RemediationSteps
-      value: EventResult
+      value: Action
     - alertProperty: Techniques
       value: Techniques
 customDetails:
-  Category: ThreatCategory
+  Category: Category
 entityMappings:
 - entityType: Host
   fieldMappings:
   - identifier: HostName
     columnName: Hostname
-  - identifier: OSFamily
-    columnName: DvcOs
+  - identifier: OSVersion
+    columnName: event_device_os_s
 - entityType: IP
   fieldMappings:
   - identifier: Address
-    columnName: DstIpAddr
+    columnName: Destination_IPs
 - entityType: Account
   fieldMappings:
   - identifier: AadUserId
-    columnName: SrcUsermail
+    columnName: Email
   - identifier: FullName
-    columnName: SrcUsername
+    columnName: User
 - entityType: URL
   fieldMappings:
   - identifier: Url
-    columnName: DnsQueryName
-version: 1.0.3
+    columnName: Destination
+version: 1.0.2
 kind: NRT

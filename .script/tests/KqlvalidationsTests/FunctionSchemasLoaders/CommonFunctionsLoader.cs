@@ -10,7 +10,13 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
     {
         public IEnumerable<FunctionSchema> Load()
         {
-            List<string> commonFunctionsYamlFiles = (new CommonFunctionsYamlFilesLoader()).GetFilesNames(true);
+            List<string> commonFunctionsYamlFiles = (new CommonFunctionsYamlFilesLoader()).GetFilesNames();
+
+            if (commonFunctionsYamlFiles.Count == 1 && commonFunctionsYamlFiles[0] == "NoFile.yaml")
+            {
+                return Enumerable.Empty<FunctionSchema>(); // Return an empty collection
+            }
+
             return commonFunctionsYamlFiles.Select(GetFunction).ToList();
         }
 
@@ -23,7 +29,7 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         private FunctionSchema GetFunction(string fileName)
         {
             var deserializer = new DeserializerBuilder().Build();
-            var yaml = deserializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(fileName));
+            var yaml = deserializer.Deserialize<Dictionary<string, object>> (File.ReadAllText(fileName));
             return new FunctionSchema((string)yaml["EquivalentBuiltInFunction"], (string)yaml["FunctionQuery"], GetFunctionParameters(yaml));
         }
 

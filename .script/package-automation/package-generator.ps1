@@ -102,7 +102,7 @@ try {
         $playbookFiles = $playbookFiles -match ([regex]::Escape(".json"))
     
         if ($playbookFiles.Count -gt 0) {
-            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' } | Where-Object { $_ -notlike '*function.json*' }
+            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' }
         }
     
         return $playbookFiles;
@@ -576,7 +576,7 @@ try {
         #======================================
         #check if folder with *Connector Name present inside of Solutions folder or in playbooks folder eg: Check Point or Cisco ISE solution 
         $filterPath = "$solutionFolderPath" + "*Connector/*"
-        $playbooksDynamicCustomConnector = $filesList -like ($filterPath) | Where-Object {$_ -notlike '*/Data Connectors/*'} | Where-Object {$_ -notlike '*/DataConnectors/*'}
+        $playbooksDynamicCustomConnector = $filesList -like ($filterPath)
     
         if ($playbooksDynamicCustomConnector -ne $false -and $playbooksDynamicCustomConnector.Count -gt 0)
         {
