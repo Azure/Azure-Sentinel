@@ -2,7 +2,7 @@ id: 779731f7-8ba0-4198-8524-5701b7defddc
 name: M365D Alerts Correlation to non-Microsoft Network device network activity involved in successful sign-in Activity
 description: |
   'This content is employed to correlate with Microsoft 365 Defender phishing-related alerts. It focuses on instances where a user successfully connects to a phishing URL from a non-Microsoft network device and subsequently makes successful sign-in attempts from the phishing IP address.'
-severity:	Medium
+severity: Medium
 requiredDataConnectors:
   - connectorId:  OfficeATP
     dataTypes:
@@ -18,7 +18,7 @@ requiredDataConnectors:
     - CommonSecurityLog (CheckPoint)
   - connectorId:  Zscaler
     dataTypes:
-    - CommonSecurityLog (Zscaler)   
+    - CommonSecurityLog (Zscaler)
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -29,13 +29,13 @@ relevantTechniques:
   - T1078
 query: |
     let Alert_List= dynamic([
-    "Phishing link click observed in Network Traffic", 
+    "Phishing link click observed in Network Traffic",
     "Phish delivered due to an IP allow policy",
     "A potentially malicious URL click was detected",
     "High Risk Sign-in Observed in Network Traffic",
     "A user clicked through to a potentially malicious URL",
-    "Suspicious network connection to AitM phishing site", 
-    "Messages containing malicious entity not removed after delivery", 
+    "Suspicious network connection to AitM phishing site",
+    "Messages containing malicious entity not removed after delivery",
     "Email messages containing malicious URL removed after delivery",
     "Email reported by user as malware or phish",
     "Phish delivered due to an ETR override",
@@ -44,7 +44,7 @@ query: |
     | where AlertName in~ (Alert_List)
     //Findling Alerts which has the URL
     | where Entities has "url"
-    //extracting Entities 
+    //extracting Entities
     | extend Entities = parse_json(Entities)
     | mv-apply Entity = Entities on
         (
@@ -56,10 +56,10 @@ query: |
         AlertTime= min(TimeGenerated),
         make_set(SystemAlertId, 100)
         by ProductName, AlertName
-    // matching with 3rd party network logs and 3p Alerts 
+    // matching with 3rd party network logs and 3p Alerts
     | join kind= inner (CommonSecurityLog
         | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
-        | where DeviceProduct startswith "FortiGate" or DeviceProduct startswith  "PAN" or DeviceProduct startswith  "VPN" or DeviceProduct startswith "FireWall" or DeviceProduct startswith  "NSSWeblog" or DeviceProduct startswith "URL"        
+        | where DeviceProduct startswith "FortiGate" or DeviceProduct startswith  "PAN" or DeviceProduct startswith  "VPN" or DeviceProduct startswith "FireWall" or DeviceProduct startswith  "NSSWeblog" or DeviceProduct startswith "URL"
         | where DeviceAction != "Block"
         | where isnotempty(RequestURL)
         | project
@@ -78,7 +78,7 @@ query: |
             SourceUserID,
             SourceHostName)
         on $left.Url == $right.RequestURL
-    // matching successful Login from suspicious IP 
+    // matching successful Login from suspicious IP
     | join kind=inner (SigninLogs
         //filtering the Successful Login
         | where ResultType == 0
@@ -98,8 +98,8 @@ query: |
             UserPrincipalName=tostring(tolower(UserPrincipalName)),
             Name = tostring(split(UserPrincipalName, "@")[0]),
             UPNSuffix =tostring(split(UserPrincipalName, "@")[1]))
-        on $left.DestinationIP == $right.IPAddress and $left.SourceUserName == $right.UserPrincipalName  
-    | where SigniningTime between ((AlertTime - 6h) .. (AlertTime + 6h)) and 3plogTime between ((AlertTime - 6h) .. (AlertTime + 6h))      
+        on $left.DestinationIP == $right.IPAddress and $left.SourceUserName == $right.UserPrincipalName
+    | where SigniningTime between ((AlertTime - 6h) .. (AlertTime + 6h)) and 3plogTime between ((AlertTime - 6h) .. (AlertTime + 6h))
 entityMappings:
     - entityType: Account
       fieldMappings:
@@ -114,7 +114,7 @@ entityMappings:
     - entityType: DNS
       fieldMappings:
       - identifier: DomainName
-        columnName: DestinationHostName	
+        columnName: DestinationHostName
     - entityType: Host
       fieldMappings:
       - identifier: FullName
@@ -124,4 +124,4 @@ entityMappings:
       - identifier: Url
         columnName: RequestURL
 kind: Scheduled
-version: 1.0.1
+version: 1.0.2
