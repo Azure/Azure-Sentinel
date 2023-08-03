@@ -77,7 +77,8 @@ def create_parameters_string(parser_file):
     return ','.join(paramsList)
 
 
-# Creating a string of the values in the list with colons between them
+# Creating a string of the values in the list with commas between them
+# Example: for a list: ['ab', 'cd', 'ef'] the output will be: 'ab','cd','ef'
 def create_values_string(values_list):
     joined_string = ','.join([f"'{val}'" for val in values_list])
     return joined_string
@@ -103,9 +104,13 @@ def create_execution_strings_with_one_parameter(parameter, value, column_name):
 
 def get_prefix(str, query_response, current_list):
     '''
-    Returning the prefix of a string until its last dot if this prefix is not in the list ("current_list") and if this prefix is not contained in all of the values in the query response.
-    If there is no dot in the string or if one of the above conditions is false, the string itself is returned.
-    The string is meant to be a value from the query response.
+    Returns the prefix of a string until its last dot, under certain conditions:
+    - The prefix is not present in the 'current_list'.
+    - The prefix is not contained in all of the values in the 'query_response' logs query results.
+    If the string does not contain a dot or fails to meet the conditions above, the original string is returned.
+    Example:
+        str = "example.com.subdomain"
+        output = "example.com"
     '''
     last_dot_index = str.rfind('.')
     # If there is no dot in the string, return the string
@@ -127,9 +132,13 @@ def get_prefix(str, query_response, current_list):
 
 def get_postfix(str, query_response, current_list):
     '''
-    Returning the postfix of a string from after its first dot if this postfix is not in the list ("current_list") and if this postfix is not contained in all of the values in the query response.
-    If there is no dot in the string or if one of the above conditions is false, the string itself is returned.
-    The string is meant to be a value from the query response.
+    Returns the postfix of a string following its first dot, under certain conditions:
+    - The postfix is not present in the 'current_list'.
+    - The postfix is not contained in all of the values in the 'query_response' logs query results.
+    If the string does not contain a dot or fails to meet the conditions above, the original string is returned.
+    Example:
+        str = "example.com.subdomain"
+        output = "com.subdomain"
     '''
     first_dot_index = str.find('.')
     # If there is no dot in the string, return the string
@@ -273,27 +282,30 @@ class FilteringTest(unittest.TestCase):
             self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
 
         
-    # Returning an array of at most two values from the query response, each string in the returned array is not contained in the other
+    # Return an array of at most two values from query_response. Each string in the returned array is not a substring of all values in query_response.
     def get_values_for_dynamic_tests(self, query_response):
+        # If the query response has only one row, return the value in that row if it is not an empty string
         if len(query_response.tables[0].rows) == 1:
             if query_response.tables[0].rows[0][0] == "":
                 return []
             return [query_response.tables[0].rows[0][0]]
+            # If the query response has two rows, return only one value if one string is contained in the other. Otherwise, return both values in the array.
         if len(query_response.tables[0].rows) == 2:
-            # Returning only one value in the array if one string is contained in the second
+            # Returning only one value in the array if one string is contained in the other
             if query_response.tables[0].rows[0][0] in query_response.tables[0].rows[0][1]:
                 return [query_response.tables[0].rows[0][1]]
             if query_response.tables[0].rows[0][1] in query_response.tables[0].rows[0][0]:
                 return [query_response.tables[0].rows[0][0]]
             return [query_response.tables[0].rows[0][0], query_response.tables[0].rows[1][0]]
         values = []
-        # Searching values in the query response which are not contained in at least one other value
+        # If the query response has more than two values, search for values in the response that are not substrings of all other values.
         for row in query_response.tables[0].rows:
             value = row[0]
             if value == "":
                 continue
             for row2 in query_response.tables[0].rows:
                 value2 = row2[0]
+                # Check if the value is not a substring of all other values
                 if value not in value2:
                     values.append(value)
                     break
@@ -323,20 +335,20 @@ class FilteringTest(unittest.TestCase):
 
     def add_substring_to_list(self, query_response, substrings_list, num_of_substrings):
         '''
-        The function adds at most "num_of_substrings" substrings of values from "query_response" to "substrings_list".
-        A substring of a value will be either its postfix from after the first dot in the value or its prefix until the first dot in the value.
+        Adds at most "num_of_substrings" substrings of values from "query_response" to "substrings_list".
+        A substring of a value is either its postfix after the first dot or its prefix until the first dot.
         '''
 
-        # Looking for values with substrings that can be appended to the list
+        # Look for values with substrings that can be appended to the list
         for row in query_response.tables[0].rows:
             value = row[0]
             post = get_postfix(value, query_response, substrings_list)
-            # Post will equal value if: value dont contain a dot, post is in the list, post is contained in an item in the list.
+            # If post is equal to value, it means either value doesn't contain a dot, or post is already in the list or is a substring of an item in the list.
             if post != value:
                 substrings_list.append(post)
             else:
                 pre = get_prefix(value, query_response, substrings_list)
-                # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
+            # If pre is equal to value, it means either value doesn't contain a dot, or pre is already in the list or is a substring of an item in the list.
                 if pre != value:
                     substrings_list.append(pre)
             if len(substrings_list) == num_of_substrings:
@@ -349,15 +361,15 @@ class FilteringTest(unittest.TestCase):
 
     def add_prefix_to_list(self, query_response, prefix_list, num_of_prefixes):
         '''
-        The function adds at most "num_of_prefixes" prefixes of values from "query_response" to "prefix_list".
-        A prefix of a value will be the prefix until the first dot in the value (including the dot).
+        Adds at most "num_of_prefixes" prefixes of values from "query_response" to "prefix_list".
+        A prefix of a value is the portion of the value before the last dot (including the dot).
         '''
 
-        # Looking for values with prefix that can be appended to the list
+        # Look for values with prefixes that can be appended to the list
         for row in query_response.tables[0].rows:
             value = row[0]
             pre = get_prefix(value, query_response, prefix_list)
-            # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
+            # If pre is equal to value, it means either value doesn't contain a dot, or pre is already in the list or is a prefix of an item in the list.
             if pre != value:
                 prefix_list.append(f"{pre}.")
             if len(prefix_list) == num_of_prefixes:
