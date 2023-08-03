@@ -30,55 +30,41 @@
     }
   },
   "variables": {
+    "_solutionName": "Citrix ADC",
+    "_solutionVersion": "3.0.0",
     "solutionId": "azuresentinel.azure-sentinel-solution-citrixadc",
     "_solutionId": "[variables('solutionId')]",
-    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "uiConfigId1": "CitrixADC",
     "_uiConfigId1": "[variables('uiConfigId1')]",
     "dataConnectorContentId1": "CitrixADC",
     "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
     "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
     "_dataConnectorId1": "[variables('dataConnectorId1')]",
-    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
-    "dataConnectorVersion1": "1.0.0",
-    "parserVersion1": "1.0.0",
-    "parserContentId1": "CitrixADCEvent-Parser",
-    "_parserContentId1": "[variables('parserContentId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))),variables('dataConnectorVersion1')))]",
+    "dataConnectorVersion1": "1.0.1",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
     "parserName1": "CitrixADCEvent",
     "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
     "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
     "_parserId1": "[variables('parserId1')]",
-    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1'))),variables('parserVersion1')))]",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "CitrixADCEvent-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "_parsercontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('_parserContentId1'),'-', variables('parserVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
     {
-      "type": "Microsoft.Resources/templateSpecs",
-      "apiVersion": "2021-05-01",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('dataConnectorTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
-      "tags": {
-        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "DataConnector"
-      },
-      "properties": {
-        "description": "Citrix ADC data connector with template",
-        "displayName": "Citrix ADC template"
-      }
-    },
-    {
-      "type": "Microsoft.Resources/templateSpecs/versions",
-      "apiVersion": "2021-05-01",
-      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
-      "location": "[parameters('workspace-location')]",
-      "tags": {
-        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "DataConnector"
-      },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Citrix ADC data connector with template version 2.0.1",
+        "description": "Citrix ADC data connector with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -96,7 +82,7 @@
                   "id": "[variables('_uiConfigId1')]",
                   "title": "Citrix ADC (former NetScaler)",
                   "publisher": "Citrix",
-                  "descriptionMarkdown": "The [Citrix ADC (former NetScaler)](https://www.citrix.com/products/citrix-adc/) data connector provides the capability to ingest Citrix ADC logs into Microsoft Sentinel.",
+                  "descriptionMarkdown": "The [Citrix ADC (former NetScaler)](https://www.citrix.com/products/citrix-adc/) data connector provides the capability to ingest Citrix ADC logs into Microsoft Sentinel. If you want to ingest Citrix WAF logs into Microsoft Sentinel, refer this [documentation](https://learn.microsoft.com/azure/sentinel/data-connectors/citrix-waf-web-app-firewall)",
                   "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution.",
                   "graphQueries": [
                     {
@@ -113,7 +99,7 @@
                   ],
                   "dataTypes": [
                     {
-                      "name": "CommonSecurityLog (Citrix ADC)",
+                      "name": "Syslog",
                       "lastDataReceivedQuery": "CitrixADCEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
                     }
                   ],
@@ -121,7 +107,7 @@
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "CitrixADCEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                        "CitrixADCEvent\n |  where TimeGenerated > ago(3d)\n    | take 1\n | project IsConnected = true"
                       ]
                     }
                   ],
@@ -133,100 +119,93 @@
                     "resourceProvider": [
                       {
                         "provider": "Microsoft.OperationalInsights/workspaces",
-                        "permissionsDisplayText": "read and write permissions are required.",
+                        "permissionsDisplayText": "write permission is required.",
                         "providerDisplayName": "Workspace",
                         "scope": "Workspace",
                         "requiredPermissions": {
                           "write": true,
-                          "read": true,
                           "delete": true
-                        }
-                      },
-                      {
-                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                        "providerDisplayName": "Keys",
-                        "scope": "Workspace",
-                        "requiredPermissions": {
-                          "action": true
                         }
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
-                      "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias CitrixADCEvent and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20ADC/Parsers/CitrixADCEvent.txt), this function maps Citrix ADC (former NetScaler) events to Advanced Security Information Model [ASIM](https://docs.microsoft.com/azure/sentinel/normalization). The function usually takes 10-15 minutes to activate after solution installation/update."
+                      "description": ">**NOTE:** 1. This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias CitrixADCEvent and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20ADC/Parsers/CitrixADCEvent.txt), this function maps Citrix ADC (former NetScaler) events to Advanced Security Information Model [ASIM](https://docs.microsoft.com/azure/sentinel/normalization). The function usually takes 10-15 minutes to activate after solution installation/update. \n\n>**NOTE:** 2. This parser requires a watchlist named **`Sources_by_SourceType`** with fields **`SourceType`** and **`Source`**. To create this watchlist and populate it with SourceType and Source data, follow the instructions [here](https://learn.microsoft.com/azure/sentinel/normalization-manage-parsers#configure-the-sources-relevant-to-a-source-specific-parser). \n\n> The SourceType value for CitrixADC is **`CitrixADC`**."
                     },
                     {
-                      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
-                      "innerSteps": [
-                        {
-                          "title": "1.1 Select or create a Linux machine",
-                          "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
-                        },
-                        {
-                          "title": "1.2 Install the CEF collector on the Linux machine",
-                          "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
-                          "instructions": [
-                            {
-                              "parameters": {
-                                "fillWith": [
-                                  "WorkspaceId",
-                                  "PrimaryKey"
-                                ],
-                                "label": "Run the following command to install and apply the CEF collector:",
-                                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
-                              },
-                              "type": "CopyableLabel"
-                            }
-                          ]
-                        }
-                      ],
-                      "title": "1. Linux Syslog agent configuration"
-                    },
-                    {
-                      "description": "At the command prompt type the following command: \n\n>**set appfw settings CEFLogging on**",
-                      "title": "2. Configure Citrix ADC to use CEF logging"
-                    },
-                    {
-                      "description": "3.1 Navigate to **Configuration tab > System > Auditing > Syslog > Servers tab**\n\n 3.2 Specify **Syslog action name**.\n\n 3.3 Set IP address of remote Syslog server and port.\n\n 3.4 Set **Transport type** as **TCP** or **UDP** depending on your remote Syslog server configuration.",
-                      "title": "3. Configure Citrix ADC to forward logs via Syslog"
-                    },
-                    {
-                      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+                      "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
                       "instructions": [
                         {
                           "parameters": {
-                            "fillWith": [
-                              "WorkspaceId"
-                            ],
-                            "label": "Run the following command to validate your connectivity:",
-                            "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                            "title": "Choose where to install the agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
                           },
-                          "type": "CopyableLabel"
+                          "type": "InstructionStepsGroup"
                         }
                       ],
-                      "title": "4. Validate connection"
+                      "title": "1. Install and onboard the agent for Linux"
                     },
                     {
-                      "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
-                      "title": "5. Secure your machine "
+                      "description": "Configure the facilities you want to collect and their severities.\n 1. Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n 2. Select **Apply below configuration to my machines** and select the facilities and severities.\n 3.  Click **Save**.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenSyslogSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "2. Configure the logs to be collected"
+                    },
+                    {
+                      "description": "3.1 Navigate to **Configuration tab > System > Auditing > Syslog > Servers tab**\n\n 3.2 Specify **Syslog action name**.\n\n 3.3 Set IP address of remote Syslog server and port.\n\n 3.4 Set **Transport type** as **TCP** or **UDP** depending on your remote Syslog server configuration.\n\n 3.5 You can refer Citrix ADC (former NetScaler) [documentation](https://docs.netscaler.com/) for more details.",
+                      "title": "3. Configure Citrix ADC to forward logs via Syslog"
+                    },
+                    {
+                      "description": "Open Log Analytics to check if the logs are received using the Syslog schema.\n\n>**NOTE:** It may take up to 15 minutes before new logs will appear in Syslog table.",
+                      "title": "4. Check logs in Microsoft Sentinel"
                     }
                   ],
                   "metadata": {
                     "id": "c546d5dd-dfec-41fb-a680-af0c66531adc",
-                    "version": "1.0.0",
+                    "version": "1.0.1",
                     "kind": "dataConnector",
                     "source": {
-                      "kind": "community"
+                      "kind": "solution"
                     },
                     "author": {
-                      "name": "Citrix"
+                      "name": "Microsoft"
                     },
                     "support": {
-                      "name": "Citrix ADC (former NetScaler)",
-                      "link": "https://www.citrix.com/support/",
-                      "tier": "developer"
+                      "name": "Microsoft",
+                      "link": "https://support.microsoft.com/",
+                      "tier": "Microsoft"
                     }
                   }
                 }
@@ -234,7 +213,7 @@
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-              "apiVersion": "2022-01-01-preview",
+              "apiVersion": "2023-04-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
               "properties": {
                 "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
@@ -258,12 +237,23 @@
               }
             }
           ]
-        }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Citrix ADC (former NetScaler)",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2022-01-01-preview",
+      "apiVersion": "2023-04-01-preview",
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
       "dependsOn": [
         "[variables('_dataConnectorId1')]"
@@ -300,7 +290,7 @@
         "connectorUiConfig": {
           "title": "Citrix ADC (former NetScaler)",
           "publisher": "Citrix",
-          "descriptionMarkdown": "The [Citrix ADC (former NetScaler)](https://www.citrix.com/products/citrix-adc/) data connector provides the capability to ingest Citrix ADC logs into Microsoft Sentinel.",
+          "descriptionMarkdown": "The [Citrix ADC (former NetScaler)](https://www.citrix.com/products/citrix-adc/) data connector provides the capability to ingest Citrix ADC logs into Microsoft Sentinel. If you want to ingest Citrix WAF logs into Microsoft Sentinel, refer this [documentation](https://learn.microsoft.com/azure/sentinel/data-connectors/citrix-waf-web-app-firewall)",
           "graphQueries": [
             {
               "metricName": "Total data received",
@@ -310,7 +300,7 @@
           ],
           "dataTypes": [
             {
-              "name": "CommonSecurityLog (Citrix ADC)",
+              "name": "Syslog",
               "lastDataReceivedQuery": "CitrixADCEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
             }
           ],
@@ -318,7 +308,7 @@
             {
               "type": "IsConnectedQuery",
               "value": [
-                "CitrixADCEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                "CitrixADCEvent\n |  where TimeGenerated > ago(3d)\n    | take 1\n | project IsConnected = true"
               ]
             }
           ],
@@ -336,84 +326,77 @@
             "resourceProvider": [
               {
                 "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "read and write permissions are required.",
+                "permissionsDisplayText": "write permission is required.",
                 "providerDisplayName": "Workspace",
                 "scope": "Workspace",
                 "requiredPermissions": {
                   "write": true,
-                  "read": true,
                   "delete": true
-                }
-              },
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                "providerDisplayName": "Keys",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "action": true
                 }
               }
             ]
           },
           "instructionSteps": [
             {
-              "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias CitrixADCEvent and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20ADC/Parsers/CitrixADCEvent.txt), this function maps Citrix ADC (former NetScaler) events to Advanced Security Information Model [ASIM](https://docs.microsoft.com/azure/sentinel/normalization). The function usually takes 10-15 minutes to activate after solution installation/update."
+              "description": ">**NOTE:** 1. This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias CitrixADCEvent and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20ADC/Parsers/CitrixADCEvent.txt), this function maps Citrix ADC (former NetScaler) events to Advanced Security Information Model [ASIM](https://docs.microsoft.com/azure/sentinel/normalization). The function usually takes 10-15 minutes to activate after solution installation/update. \n\n>**NOTE:** 2. This parser requires a watchlist named **`Sources_by_SourceType`** with fields **`SourceType`** and **`Source`**. To create this watchlist and populate it with SourceType and Source data, follow the instructions [here](https://learn.microsoft.com/azure/sentinel/normalization-manage-parsers#configure-the-sources-relevant-to-a-source-specific-parser). \n\n> The SourceType value for CitrixADC is **`CitrixADC`**."
             },
             {
-              "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
-              "innerSteps": [
-                {
-                  "title": "1.1 Select or create a Linux machine",
-                  "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
-                },
-                {
-                  "title": "1.2 Install the CEF collector on the Linux machine",
-                  "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
-                  "instructions": [
-                    {
-                      "parameters": {
-                        "fillWith": [
-                          "WorkspaceId",
-                          "PrimaryKey"
-                        ],
-                        "label": "Run the following command to install and apply the CEF collector:",
-                        "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
-                      },
-                      "type": "CopyableLabel"
-                    }
-                  ]
-                }
-              ],
-              "title": "1. Linux Syslog agent configuration"
-            },
-            {
-              "description": "At the command prompt type the following command: \n\n>**set appfw settings CEFLogging on**",
-              "title": "2. Configure Citrix ADC to use CEF logging"
-            },
-            {
-              "description": "3.1 Navigate to **Configuration tab > System > Auditing > Syslog > Servers tab**\n\n 3.2 Specify **Syslog action name**.\n\n 3.3 Set IP address of remote Syslog server and port.\n\n 3.4 Set **Transport type** as **TCP** or **UDP** depending on your remote Syslog server configuration.",
-              "title": "3. Configure Citrix ADC to forward logs via Syslog"
-            },
-            {
-              "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
               "instructions": [
                 {
                   "parameters": {
-                    "fillWith": [
-                      "WorkspaceId"
-                    ],
-                    "label": "Run the following command to validate your connectivity:",
-                    "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                    "title": "Choose where to install the agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
                   },
-                  "type": "CopyableLabel"
+                  "type": "InstructionStepsGroup"
                 }
               ],
-              "title": "4. Validate connection"
+              "title": "1. Install and onboard the agent for Linux"
             },
             {
-              "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
-              "title": "5. Secure your machine "
+              "description": "Configure the facilities you want to collect and their severities.\n 1. Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n 2. Select **Apply below configuration to my machines** and select the facilities and severities.\n 3.  Click **Save**.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            },
+            {
+              "description": "3.1 Navigate to **Configuration tab > System > Auditing > Syslog > Servers tab**\n\n 3.2 Specify **Syslog action name**.\n\n 3.3 Set IP address of remote Syslog server and port.\n\n 3.4 Set **Transport type** as **TCP** or **UDP** depending on your remote Syslog server configuration.\n\n 3.5 You can refer Citrix ADC (former NetScaler) [documentation](https://docs.netscaler.com/) for more details.",
+              "title": "3. Configure Citrix ADC to forward logs via Syslog"
+            },
+            {
+              "description": "Open Log Analytics to check if the logs are received using the Syslog schema.\n\n>**NOTE:** It may take up to 15 minutes before new logs will appear in Syslog table.",
+              "title": "4. Check logs in Microsoft Sentinel"
             }
           ],
           "id": "[variables('_uiConfigId1')]",
@@ -422,33 +405,15 @@
       }
     },
     {
-      "type": "Microsoft.Resources/templateSpecs",
-      "apiVersion": "2021-05-01",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('parserTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
-      "tags": {
-        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "Parser"
-      },
-      "properties": {
-        "description": "CitrixADCEvent Data Parser with template",
-        "displayName": "CitrixADCEvent Data Parser template"
-      }
-    },
-    {
-      "type": "Microsoft.Resources/templateSpecs/versions",
-      "apiVersion": "2021-05-01",
-      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
-      "location": "[parameters('workspace-location')]",
-      "tags": {
-        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "Parser"
-      },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CitrixADCEvent Data Parser with template version 2.0.1",
+        "description": "CitrixADCEvent Data Parser with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserVersion1')]",
@@ -457,7 +422,7 @@
           "resources": [
             {
               "name": "[variables('_parserName1')]",
-              "apiVersion": "2020-08-01",
+              "apiVersion": "2022-10-01",
               "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -465,7 +430,8 @@
                 "displayName": "CitrixADCEvent",
                 "category": "Samples",
                 "functionAlias": "CitrixADCEvent",
-                "query": "\nCommonSecurityLog\r\n| where DeviceVendor =~ \"Citrix\" \r\n| where DeviceProduct =~ \"NetScaler\"\r\n| extend EventCount = int(1)\r\n        ,EventType = coalesce(\r\n                Activity,\r\n                column_ifexists(\"DeviceEventCategory\", \"\"),\r\n                extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\r\n                \"\"\r\n                )\r\n        ,HttpRequestMethod = coalesce(\r\n                RequestMethod,\r\n                extract(@'method=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\r\n                \"\"\r\n                )\r\n        ,OriginalLogSeverity = DeviceCustomString4\r\n| project-rename  EventVendor=DeviceVendor\r\n                , EventProduct=DeviceProduct\r\n                , EventProductVersion=DeviceVersion\r\n                , EventSeverity=LogSeverity\r\n                , Module=DeviceEventClassID\r\n                , DvcAction=DeviceAction\r\n                , UrlOriginal=RequestURL\r\n                , SrcIpAddr=SourceIP\r\n                , SrcPortNumber=SourcePort\r\n                , EventOriginalType=DeviceCustomNumber1\r\n                , HttpTransactionId=DeviceCustomNumber2\r\n                , ProfileName=DeviceCustomString1\r\n                , PPEId=DeviceCustomString2\r\n                , SessionId=DeviceCustomString3\r\n                , EventYear=DeviceCustomString5\r\n| project-away Activity\r\n            ,  AdditionalExtensions\r\n            ,  ApplicationProtocol\r\n            ,  DestinationDnsDomain\r\n            ,  DestinationServiceName\r\n            ,  DestinationTranslatedAddress\r\n            ,  DestinationTranslatedPort\r\n            ,  CommunicationDirection\r\n            ,  DeviceDnsDomain\r\n            ,  DeviceExternalID\r\n            ,  DeviceFacility\r\n            ,  DeviceInboundInterface\r\n            ,  DeviceNtDomain\r\n            ,  DeviceOutboundInterface\r\n            ,  DevicePayloadId\r\n            ,  ProcessName\r\n            ,  DeviceTranslatedAddress\r\n            ,  DestinationHostName\r\n            ,  DestinationMACAddress\r\n            ,  DestinationNTDomain\r\n            ,  DestinationProcessId\r\n            ,  DestinationUserPrivileges\r\n            ,  DestinationProcessName\r\n            ,  DestinationPort\r\n            ,  DestinationIP\r\n            ,  DeviceTimeZone\r\n            ,  DestinationUserID\r\n            ,  DestinationUserName\r\n            ,  DeviceAddress\r\n            ,  DeviceName\r\n            ,  DeviceMacAddress\r\n            ,  ProcessID\r\n            ,  EndTime\r\n            ,  ExternalID\r\n            ,  FileCreateTime\r\n            ,  FileHash\r\n            ,  FileID\r\n            ,  FileModificationTime\r\n            ,  FilePath\r\n            ,  FilePermission\r\n            ,  FileType\r\n            ,  FileName\r\n            ,  FileSize\r\n            ,  SimplifiedDeviceAction\r\n            ,  ReceivedBytes\r\n            ,  Message\r\n            ,  OldFileCreateTime\r\n            ,  OldFileHash\r\n            ,  OldFileID\r\n            ,  OldFileModificationTime\r\n            ,  OldFileName\r\n            ,  OldFilePath\r\n            ,  OldFilePermission\r\n            ,  OldFileSize\r\n            ,  OldFileType\r\n            ,  SentBytes\r\n            ,  Protocol\r\n            ,  RequestClientApplication\r\n            ,  RequestContext\r\n            ,  RequestCookies\r\n            ,  RequestMethod\r\n            ,  ReceiptTime\r\n            ,  SourceHostName\r\n            ,  SourceMACAddress\r\n            ,  SourceNTDomain\r\n            ,  SourceDnsDomain\r\n            ,  SourceServiceName\r\n            ,  SourceTranslatedAddress\r\n            ,  SourceTranslatedPort\r\n            ,  SourceProcessId\r\n            ,  SourceUserPrivileges\r\n            ,  SourceProcessName\r\n            ,  StartTime\r\n            ,  SourceUserID\r\n            ,  SourceUserName\r\n            ,  DeviceCustomIPv6Address1\r\n            ,  DeviceCustomIPv6Address1Label\r\n            ,  DeviceCustomIPv6Address2\r\n            ,  DeviceCustomIPv6Address2Label\r\n            ,  DeviceCustomIPv6Address3\r\n            ,  DeviceCustomIPv6Address3Label\r\n            ,  DeviceCustomIPv6Address4\r\n            ,  DeviceCustomIPv6Address4Label\r\n            ,  DeviceCustomFloatingPoint1\r\n            ,  DeviceCustomFloatingPoint1Label\r\n            ,  DeviceCustomFloatingPoint2\r\n            ,  DeviceCustomFloatingPoint2Label\r\n            ,  DeviceCustomFloatingPoint3\r\n            ,  DeviceCustomFloatingPoint3Label\r\n            ,  DeviceCustomFloatingPoint4\r\n            ,  DeviceCustomFloatingPoint4Label\r\n            ,  DeviceCustomNumber1Label\r\n            ,  DeviceCustomNumber2Label\r\n            ,  DeviceCustomNumber3\r\n            ,  DeviceCustomNumber3Label\r\n            ,  DeviceCustomString1Label\r\n            ,  DeviceCustomString2Label\r\n            ,  DeviceCustomString3Label\r\n            ,  DeviceCustomString4\r\n            ,  DeviceCustomString4Label\r\n            ,  DeviceCustomString5Label\r\n            ,  DeviceCustomString6\r\n            ,  DeviceCustomString6Label\r\n            ,  DeviceCustomDate1\r\n            ,  DeviceCustomDate1Label\r\n            ,  DeviceCustomDate2\r\n            ,  DeviceCustomDate2Label\r\n            ,  FlexDate1\r\n            ,  FlexDate1Label\r\n            ,  FlexNumber1\r\n            ,  FlexNumber1Label\r\n            ,  FlexNumber2\r\n            ,  FlexNumber2Label\r\n            ,  FlexString1\r\n            ,  FlexString1Label\r\n            ,  FlexString2\r\n            ,  FlexString2Label\r\n            ,  RemoteIP\r\n            ,  RemotePort\r\n            ,  MaliciousIP\r\n            ,  ThreatSeverity\r\n            ,  IndicatorThreatType\r\n            ,  ThreatDescription\r\n            ,  ThreatConfidence\r\n            ,  ReportReferenceLink\r\n            ,  MaliciousIPLongitude\r\n            ,  MaliciousIPLatitude\r\n            ,  MaliciousIPCountry",
+                "query": "\n\r\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'CitrixADC' | project Source);\r\nlet EventData = Syslog\r\n| where Computer in (datasource);\r\nlet AllData = EventData\r\n| parse SyslogMessage with DateTime \" \" TimeZone \" \" HostName \" \" * \" : \" * \" \" Feature \" \" MessageType \" \" RequestId:long \" \" * \" : \" MessageRemaining1\r\n| parse MessageRemaining1 with \"Context \" Context \" - SessionId: \" SessionId:long \" \" MessageRemaining  \r\n| extend MessageRemaining = coalesce(MessageRemaining, MessageRemaining1);\r\nlet BotData = AllData\r\n| where Feature =~ \"BOT\"\r\n| parse MessageRemaining with BotType \".\" FieldMapping\r\n| parse-kv FieldMapping as (URL:string, LogMsg:string, Category:string, [\"User-Agent\"]:string, Type:string, NewlyaddedRules:int, DeletedRules:int) with (pair_delimiter=':', kv_delimiter=' ', quote=\"'\");\r\nlet ALGData = AllData\r\n| where Feature =~ \"ALG\"\r\n| parse-kv MessageRemaining as (Errmsg:string, Group:string, Call_ID:string, Transport:string, Source_IP:string, Source_port:int, Destination_IP:string, Destination_port:int, Natted_IP:string, Natted_port:int, Method:string, Sequence_Number:int, Register:string, Content_Type:string, Error:string, Error_line:string, Caller_user_name:string, Callee_user_name:string, Caller_domain_name:string, Callee_domain_name:string, Error_Code:int, Infomsg:string, Session_ID:string ) with (pair_delimiter='-', kv_delimiter=':', quote=\"'\");\r\nlet RemainingData = AllData \r\n| where not(Feature has_any (\"BOT\", \"APPFW_RESP\", \"APPFW\", \"ALG\"))\r\n| parse MessageRemaining with * \"User \" User \" \" *\r\n| parse-kv MessageRemaining as (Client_ip:string, Browser:string, Failure_reason:string, Vserver:string, SSLVPN_client_type:string, [\"Group(s)\"]:string, Nat_ip:string, Browser_type:string, Start_time:string, End_time:string, Duration:string, Http_resources_accessed:int, NonHttp_services_accessed:int, Total_TCP_connections:int, Total_UDP_flows:int, Total_policies_allowed:int,  Total_policies_denied:int, Total_bytes_send:int, Total_bytes_recv:int, Total_compressedbytes_send:int, Total_compressedbytes_recv:int, Compression_ratio_send:string, Compression_ratio_recv:string, LogoutMethod:string, Destination:string, customername:string, applicationName:string, connectionId:string, startTime:string, endTime:string, Source:string, Access:string, Last_contact:string, Denied_by_policy:string, ClientIP:string, Client_security_expression:string, Clientsecuritycheck:string, Xdata:string, Vserver_ip:string, Errmsg:string, State:string, Remote_ip:string, Command:string, Status:string, DelinkTime:string, ClosureReason:string, ProtocolICMP:string, Type:string, Code:int, TimeStamp:string, Hitcount:int, HitRule:string, Action:string, Category:string, Domain:string, Session:string, FailureReason:string, Categorygroup:string, Reputation:string, Policyaction:string, ICAPServer:string, [\"Content-Type\"]:string, Mode:string, Service:string, Response:string, ID:int, Protocol:string, URL:string, BytesSent:int, BytesReceived:int, OriginServer:string, RequestBytesSent:int, ResponseBytesSent:int, License_limit:int, Xdatalen:int, BackendSPCBId:int, ServerIP:string,ServerPort:int, ProtocolVersion:string, CipherSuite:string, CertificateKeyPair:string, DaysToExpire:int, IssuerName:string, SubjectName:string, crl_name:string, server_port:int, [\"methodLDAP-ldapscope\"]:string, Client:string, Profile:string, into:string, FailedtoparserequestURL:string, Header:string, Value:string, PCREerrorcode:int, Failedtowrite:string, session_guid:string, device_serial_number:int, [\"flags\"]:long, session_setup_time:string, client_type:int, client_launcher:int, client_version:string, client_hostname:string, domain_name:string, server_name:string, connection_priority:int, access_type:int, status:int, username:string, client_cookie:string, channel_update_begin:string, channel_update_end:string, channel_id_1:int, channel_id_1_val:int, channel_id_2:int, channel_id_2_val:int, channel_id_3:int, channel_id_3_val:int, channel_id_4:int, channel_id_4_val:int, channel_id_5:int, channel_id_5_val:int, nsica_session_status:int, nsica_session_client_ip:string, nsica_session_client_port:int, nsica_session_server_ip:string, nsica_session_server_port:int, nsica_session_reconnect_count:int, nsica_session_acr_count:int, timestamp:string,  nsica_status:int, L7LatencyThresholdFactor:int, L7LatencyWaittime:int, L7LatencyNotifyInterval:int, L7LatencyMaxNotifyCount:int, L7ThresholdBreachAvgClientsideLatency:int, L7ThresholdBreachMaxClientsideLatency:int, L7ThresholdBreachAvgServersideLatency:int, L7ThresholdBreachMaxServersideLatency:int, MinL7Latency:int, session_end_time:int, ica_rtt:int, clientside_rxbytes:int, clientside_txbytes:int, clientside_packet_retransmits:int, serverside_packet_retransmits:int, clientside_rtt:int, serverside_rtt:int, clientside_jitter:int, serverside_jitter:int, startup_duration:int, launch_mechanism:int, app_launch_time:string, app_process_id:int, app_name:string, module_path:string, app_termination_type:int, app_termination_time:string,Total_bytes_wire_send:long, Total_bytes_wire_recv:long) with (pair_delimiter='-', kv_delimiter=' ', quote='\"')\r\n| project-rename Groups_1 = [\"Group(s)\"], User_1 = User, Command_1 = Command, Vserver_1 = Vserver, Source_1 = Source\r\n| parse-kv MessageRemaining as (Extracted_groups:string, Command:string, [\"Group(s)\"]:string, Vserver:string, [\"SSO is\"]:string, SAVECONFIG:string, User:string, Device:string, Source:string, domainname:string) with (pair_delimiter=':', kv_delimiter=' ', quote=\"'\", quote='\"')\r\n| extend Groups = coalesce([\"Group(s)\"], Groups_1), User = coalesce(User_1, User), Command = coalesce(Command_1, Command), Vserver = coalesce(Vserver, Vserver_1), Source = coalesce(Source_1, Source)\r\n| parse-kv MessageRemaining as (client_cookie:string, UserName:string ) with (pair_delimiter='-', kv_delimiter=':', quote=\"'\")\r\n| project-away *_1, MessageRemaining1, MessageRemaining;\r\nunion BotData,ALGData,RemainingData",
+                "functionParameters": "",
                 "version": 1,
                 "tags": [
                   {
@@ -504,12 +470,23 @@
               }
             }
           ]
-        }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_parserContentId1')]",
+        "contentKind": "Parser",
+        "displayName": "CitrixADCEvent",
+        "contentProductId": "[variables('_parsercontentProductId1')]",
+        "id": "[variables('_parsercontentProductId1')]",
+        "version": "[variables('parserVersion1')]"
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
-      "apiVersion": "2021-06-01",
+      "apiVersion": "2022-10-01",
       "name": "[variables('_parserName1')]",
       "location": "[parameters('workspace-location')]",
       "properties": {
@@ -517,8 +494,15 @@
         "displayName": "CitrixADCEvent",
         "category": "Samples",
         "functionAlias": "CitrixADCEvent",
-        "query": "\nCommonSecurityLog\r\n| where DeviceVendor =~ \"Citrix\" \r\n| where DeviceProduct =~ \"NetScaler\"\r\n| extend EventCount = int(1)\r\n        ,EventType = coalesce(\r\n                Activity,\r\n                column_ifexists(\"DeviceEventCategory\", \"\"),\r\n                extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\r\n                \"\"\r\n                )\r\n        ,HttpRequestMethod = coalesce(\r\n                RequestMethod,\r\n                extract(@'method=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\r\n                \"\"\r\n                )\r\n        ,OriginalLogSeverity = DeviceCustomString4\r\n| project-rename  EventVendor=DeviceVendor\r\n                , EventProduct=DeviceProduct\r\n                , EventProductVersion=DeviceVersion\r\n                , EventSeverity=LogSeverity\r\n                , Module=DeviceEventClassID\r\n                , DvcAction=DeviceAction\r\n                , UrlOriginal=RequestURL\r\n                , SrcIpAddr=SourceIP\r\n                , SrcPortNumber=SourcePort\r\n                , EventOriginalType=DeviceCustomNumber1\r\n                , HttpTransactionId=DeviceCustomNumber2\r\n                , ProfileName=DeviceCustomString1\r\n                , PPEId=DeviceCustomString2\r\n                , SessionId=DeviceCustomString3\r\n                , EventYear=DeviceCustomString5\r\n| project-away Activity\r\n            ,  AdditionalExtensions\r\n            ,  ApplicationProtocol\r\n            ,  DestinationDnsDomain\r\n            ,  DestinationServiceName\r\n            ,  DestinationTranslatedAddress\r\n            ,  DestinationTranslatedPort\r\n            ,  CommunicationDirection\r\n            ,  DeviceDnsDomain\r\n            ,  DeviceExternalID\r\n            ,  DeviceFacility\r\n            ,  DeviceInboundInterface\r\n            ,  DeviceNtDomain\r\n            ,  DeviceOutboundInterface\r\n            ,  DevicePayloadId\r\n            ,  ProcessName\r\n            ,  DeviceTranslatedAddress\r\n            ,  DestinationHostName\r\n            ,  DestinationMACAddress\r\n            ,  DestinationNTDomain\r\n            ,  DestinationProcessId\r\n            ,  DestinationUserPrivileges\r\n            ,  DestinationProcessName\r\n            ,  DestinationPort\r\n            ,  DestinationIP\r\n            ,  DeviceTimeZone\r\n            ,  DestinationUserID\r\n            ,  DestinationUserName\r\n            ,  DeviceAddress\r\n            ,  DeviceName\r\n            ,  DeviceMacAddress\r\n            ,  ProcessID\r\n            ,  EndTime\r\n            ,  ExternalID\r\n            ,  FileCreateTime\r\n            ,  FileHash\r\n            ,  FileID\r\n            ,  FileModificationTime\r\n            ,  FilePath\r\n            ,  FilePermission\r\n            ,  FileType\r\n            ,  FileName\r\n            ,  FileSize\r\n            ,  SimplifiedDeviceAction\r\n            ,  ReceivedBytes\r\n            ,  Message\r\n            ,  OldFileCreateTime\r\n            ,  OldFileHash\r\n            ,  OldFileID\r\n            ,  OldFileModificationTime\r\n            ,  OldFileName\r\n            ,  OldFilePath\r\n            ,  OldFilePermission\r\n            ,  OldFileSize\r\n            ,  OldFileType\r\n            ,  SentBytes\r\n            ,  Protocol\r\n            ,  RequestClientApplication\r\n            ,  RequestContext\r\n            ,  RequestCookies\r\n            ,  RequestMethod\r\n            ,  ReceiptTime\r\n            ,  SourceHostName\r\n            ,  SourceMACAddress\r\n            ,  SourceNTDomain\r\n            ,  SourceDnsDomain\r\n            ,  SourceServiceName\r\n            ,  SourceTranslatedAddress\r\n            ,  SourceTranslatedPort\r\n            ,  SourceProcessId\r\n            ,  SourceUserPrivileges\r\n            ,  SourceProcessName\r\n            ,  StartTime\r\n            ,  SourceUserID\r\n            ,  SourceUserName\r\n            ,  DeviceCustomIPv6Address1\r\n            ,  DeviceCustomIPv6Address1Label\r\n            ,  DeviceCustomIPv6Address2\r\n            ,  DeviceCustomIPv6Address2Label\r\n            ,  DeviceCustomIPv6Address3\r\n            ,  DeviceCustomIPv6Address3Label\r\n            ,  DeviceCustomIPv6Address4\r\n            ,  DeviceCustomIPv6Address4Label\r\n            ,  DeviceCustomFloatingPoint1\r\n            ,  DeviceCustomFloatingPoint1Label\r\n            ,  DeviceCustomFloatingPoint2\r\n            ,  DeviceCustomFloatingPoint2Label\r\n            ,  DeviceCustomFloatingPoint3\r\n            ,  DeviceCustomFloatingPoint3Label\r\n            ,  DeviceCustomFloatingPoint4\r\n            ,  DeviceCustomFloatingPoint4Label\r\n            ,  DeviceCustomNumber1Label\r\n            ,  DeviceCustomNumber2Label\r\n            ,  DeviceCustomNumber3\r\n            ,  DeviceCustomNumber3Label\r\n            ,  DeviceCustomString1Label\r\n            ,  DeviceCustomString2Label\r\n            ,  DeviceCustomString3Label\r\n            ,  DeviceCustomString4\r\n            ,  DeviceCustomString4Label\r\n            ,  DeviceCustomString5Label\r\n            ,  DeviceCustomString6\r\n            ,  DeviceCustomString6Label\r\n            ,  DeviceCustomDate1\r\n            ,  DeviceCustomDate1Label\r\n            ,  DeviceCustomDate2\r\n            ,  DeviceCustomDate2Label\r\n            ,  FlexDate1\r\n            ,  FlexDate1Label\r\n            ,  FlexNumber1\r\n            ,  FlexNumber1Label\r\n            ,  FlexNumber2\r\n            ,  FlexNumber2Label\r\n            ,  FlexString1\r\n            ,  FlexString1Label\r\n            ,  FlexString2\r\n            ,  FlexString2Label\r\n            ,  RemoteIP\r\n            ,  RemotePort\r\n            ,  MaliciousIP\r\n            ,  ThreatSeverity\r\n            ,  IndicatorThreatType\r\n            ,  ThreatDescription\r\n            ,  ThreatConfidence\r\n            ,  ReportReferenceLink\r\n            ,  MaliciousIPLongitude\r\n            ,  MaliciousIPLatitude\r\n            ,  MaliciousIPCountry",
-        "version": 1
+        "query": "\n\r\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'CitrixADC' | project Source);\r\nlet EventData = Syslog\r\n| where Computer in (datasource);\r\nlet AllData = EventData\r\n| parse SyslogMessage with DateTime \" \" TimeZone \" \" HostName \" \" * \" : \" * \" \" Feature \" \" MessageType \" \" RequestId:long \" \" * \" : \" MessageRemaining1\r\n| parse MessageRemaining1 with \"Context \" Context \" - SessionId: \" SessionId:long \" \" MessageRemaining  \r\n| extend MessageRemaining = coalesce(MessageRemaining, MessageRemaining1);\r\nlet BotData = AllData\r\n| where Feature =~ \"BOT\"\r\n| parse MessageRemaining with BotType \".\" FieldMapping\r\n| parse-kv FieldMapping as (URL:string, LogMsg:string, Category:string, [\"User-Agent\"]:string, Type:string, NewlyaddedRules:int, DeletedRules:int) with (pair_delimiter=':', kv_delimiter=' ', quote=\"'\");\r\nlet ALGData = AllData\r\n| where Feature =~ \"ALG\"\r\n| parse-kv MessageRemaining as (Errmsg:string, Group:string, Call_ID:string, Transport:string, Source_IP:string, Source_port:int, Destination_IP:string, Destination_port:int, Natted_IP:string, Natted_port:int, Method:string, Sequence_Number:int, Register:string, Content_Type:string, Error:string, Error_line:string, Caller_user_name:string, Callee_user_name:string, Caller_domain_name:string, Callee_domain_name:string, Error_Code:int, Infomsg:string, Session_ID:string ) with (pair_delimiter='-', kv_delimiter=':', quote=\"'\");\r\nlet RemainingData = AllData \r\n| where not(Feature has_any (\"BOT\", \"APPFW_RESP\", \"APPFW\", \"ALG\"))\r\n| parse MessageRemaining with * \"User \" User \" \" *\r\n| parse-kv MessageRemaining as (Client_ip:string, Browser:string, Failure_reason:string, Vserver:string, SSLVPN_client_type:string, [\"Group(s)\"]:string, Nat_ip:string, Browser_type:string, Start_time:string, End_time:string, Duration:string, Http_resources_accessed:int, NonHttp_services_accessed:int, Total_TCP_connections:int, Total_UDP_flows:int, Total_policies_allowed:int,  Total_policies_denied:int, Total_bytes_send:int, Total_bytes_recv:int, Total_compressedbytes_send:int, Total_compressedbytes_recv:int, Compression_ratio_send:string, Compression_ratio_recv:string, LogoutMethod:string, Destination:string, customername:string, applicationName:string, connectionId:string, startTime:string, endTime:string, Source:string, Access:string, Last_contact:string, Denied_by_policy:string, ClientIP:string, Client_security_expression:string, Clientsecuritycheck:string, Xdata:string, Vserver_ip:string, Errmsg:string, State:string, Remote_ip:string, Command:string, Status:string, DelinkTime:string, ClosureReason:string, ProtocolICMP:string, Type:string, Code:int, TimeStamp:string, Hitcount:int, HitRule:string, Action:string, Category:string, Domain:string, Session:string, FailureReason:string, Categorygroup:string, Reputation:string, Policyaction:string, ICAPServer:string, [\"Content-Type\"]:string, Mode:string, Service:string, Response:string, ID:int, Protocol:string, URL:string, BytesSent:int, BytesReceived:int, OriginServer:string, RequestBytesSent:int, ResponseBytesSent:int, License_limit:int, Xdatalen:int, BackendSPCBId:int, ServerIP:string,ServerPort:int, ProtocolVersion:string, CipherSuite:string, CertificateKeyPair:string, DaysToExpire:int, IssuerName:string, SubjectName:string, crl_name:string, server_port:int, [\"methodLDAP-ldapscope\"]:string, Client:string, Profile:string, into:string, FailedtoparserequestURL:string, Header:string, Value:string, PCREerrorcode:int, Failedtowrite:string, session_guid:string, device_serial_number:int, [\"flags\"]:long, session_setup_time:string, client_type:int, client_launcher:int, client_version:string, client_hostname:string, domain_name:string, server_name:string, connection_priority:int, access_type:int, status:int, username:string, client_cookie:string, channel_update_begin:string, channel_update_end:string, channel_id_1:int, channel_id_1_val:int, channel_id_2:int, channel_id_2_val:int, channel_id_3:int, channel_id_3_val:int, channel_id_4:int, channel_id_4_val:int, channel_id_5:int, channel_id_5_val:int, nsica_session_status:int, nsica_session_client_ip:string, nsica_session_client_port:int, nsica_session_server_ip:string, nsica_session_server_port:int, nsica_session_reconnect_count:int, nsica_session_acr_count:int, timestamp:string,  nsica_status:int, L7LatencyThresholdFactor:int, L7LatencyWaittime:int, L7LatencyNotifyInterval:int, L7LatencyMaxNotifyCount:int, L7ThresholdBreachAvgClientsideLatency:int, L7ThresholdBreachMaxClientsideLatency:int, L7ThresholdBreachAvgServersideLatency:int, L7ThresholdBreachMaxServersideLatency:int, MinL7Latency:int, session_end_time:int, ica_rtt:int, clientside_rxbytes:int, clientside_txbytes:int, clientside_packet_retransmits:int, serverside_packet_retransmits:int, clientside_rtt:int, serverside_rtt:int, clientside_jitter:int, serverside_jitter:int, startup_duration:int, launch_mechanism:int, app_launch_time:string, app_process_id:int, app_name:string, module_path:string, app_termination_type:int, app_termination_time:string,Total_bytes_wire_send:long, Total_bytes_wire_recv:long) with (pair_delimiter='-', kv_delimiter=' ', quote='\"')\r\n| project-rename Groups_1 = [\"Group(s)\"], User_1 = User, Command_1 = Command, Vserver_1 = Vserver, Source_1 = Source\r\n| parse-kv MessageRemaining as (Extracted_groups:string, Command:string, [\"Group(s)\"]:string, Vserver:string, [\"SSO is\"]:string, SAVECONFIG:string, User:string, Device:string, Source:string, domainname:string) with (pair_delimiter=':', kv_delimiter=' ', quote=\"'\", quote='\"')\r\n| extend Groups = coalesce([\"Group(s)\"], Groups_1), User = coalesce(User_1, User), Command = coalesce(Command_1, Command), Vserver = coalesce(Vserver, Vserver_1), Source = coalesce(Source_1, Source)\r\n| parse-kv MessageRemaining as (client_cookie:string, UserName:string ) with (pair_delimiter='-', kv_delimiter=':', quote=\"'\")\r\n| project-away *_1, MessageRemaining1, MessageRemaining;\r\nunion BotData,ALGData,RemainingData",
+        "functionParameters": "",
+        "version": 1,
+        "tags": [
+          {
+            "name": "description",
+            "value": "CitrixADCEvent"
+          }
+        ]
       }
     },
     {
@@ -551,13 +535,20 @@
       }
     },
     {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.1",
+        "version": "3.0.0",
         "kind": "Solution",
-        "contentSchemaVersion": "2.0.0",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Citrix ADC",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> <em>There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</em></p>\n<p>The <a href=\"https://www.citrix.com/products/citrix-adc/\">Citrix ADC</a> (formerly NetScaler) enables you to ingest Citrix ADC logs into Microsoft Sentinel. Refer the <a href=\"https://support.citrix.com/article/CTX227560\">Citrix ADC log collection guide</a> for more details.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><a href=\"https://docs.microsoft.com/azure/sentinel/connect-syslog\">Agent-based log collection (Syslog) </a></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/citrix-logo-circle-black.svg\"width=\"75px\" height=\"75px\">",
         "contentId": "[variables('_solutionId')]",
         "parentId": "[variables('_solutionId')]",
         "source": {
