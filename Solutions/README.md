@@ -39,58 +39,36 @@ Use the following steps to create your content structure:
 
 4. Store sample data in the [sample data folder](https://github.com/Azure/Azure-Sentinel/tree/master/Sample%20Data), within the relevant content type folder, depending on your data connector type.
 
-5. Submit a PR with all of your solution content. The PR will go through automated GitHub validation. [Address potential errors](https://github.com/Azure/Azure-Sentinel/wiki#test-your-contribution) as needed. 
+
+## Step 2 - Prepare for packaging
+
+Solution packages are now auto-created and will be available in the Master branch within the solution folder created in Step 1 after technical reviews are completed. Automated pipelines require certain inputs for creating a solution package in addition to the content created in Step 1. The following guidance will help preparing all requisites.
+
+1. **Get your Publisher ID**.
+Microsoft Sentinel solution publishing experience is powered by the [Microsoft Partner Center](https://docs.microsoft.com/partner-center/overview). If you or your company is a first-time app publisher on Azure Marketplace, [follow the steps](https://docs.microsoft.com/azure/marketplace/partner-center-portal/create-account) to register and create a [Commercial Marketplace](https://docs.microsoft.com/azure/marketplace/overview) account in Partner Center. This process provides you with a unique **Publisher ID** and access to the Commercial Marketplace authoring and publishing experience, where you'll create, certify, and publish your solution.
+
+2. **Get your Offer ID**.
+[Create an Azure application type offer](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer) and configure the offer setup details as per the relevant  guidance.
+> Ensure that the OfferID contains the keyword "sentinel". Consider using the format: `microsoft-sentinel-solution-<productname>`
+
+3. Prepare the Solution Metadata by following the guidance [here](https://github.com/Azure/Azure-Sentinel/blob/d2ee5ef22728fa7feb607a56450400712c8eaee2/Tools/Create-Azure-Sentinel-Solution/pipeline/README.md#create-solution-metadata-file). Use the PublisherID and OfferID created in #1 and #2 above. SolutionMetadata.json must be placed in solution folder created in **Step 1**. 
+
+4. Prepare the input data file based on guidance available [here](https://github.com/Azure/Azure-Sentinel/blob/d2ee5ef22728fa7feb607a56450400712c8eaee2/Tools/Create-Azure-Sentinel-Solution/pipeline/README.md#create-input-file). The file must be placed inside the Data folder within the solution folder created in **Step 1**.
+
+
+## Step 3 - Create a Pull Request
+
+Submit a Pull Request (PR) with all of your solution content created in Step 1 and Step 2. The PR will go through automated GitHub validation. [Address potential errors](https://github.com/Azure/Azure-Sentinel/wiki#test-your-contribution) as needed.
 
 After your content has been succesfully validated, the Microsoft Sentinel team will review your PR and reply with any feedback as needed. You can expect an initial response within five business days.
 
-The PR will be approved and merged after any feedback has been incorportated and the full review is successful.
+The PR will be approved and merged after any/all feedback has been incorportated and the full review is successful. After this PR is merged, a package will be auto-generated and an automated PR is raised for adding the package to the master branch to make it avalable for publishing. The package will then go through quality assurance and depending on the results, the automated PR may or may not be auto-merged.
 
-## Step 2 – Package your content
+## Step 4 - Publish your solution
 
-The solution content package is called a *solution template*, and has the following files:
+1.	Sign in to [Partner Center](https://partner.microsoft.com/dashboard/home). Search and open the Offer that was created in **Step 2**.
 
-* **mainTemplate.json**: The Azure Resource Manager (ARM) template that includes the resources offered by the solution. Each piece of content that you want to package in your solution must first be converted to ARM format. The `mainTemplate` file is the overall ARM template file that combines each invididual ARM content file. 
-
-* **createUIDefinition.json**: The deployment experience definition provided to customers installing your solution. This is a step-by-step wizard experience.
-
-For more information, see the [solution template documentation](https://docs.microsoft.com/azure/marketplace/plan-azure-app-solution-template) (deployment package).
-
-After creating both the `mainTemplate.json` and the `createUIDefinition.json` files, validate them, and package them into a .zip file that you can upload as part of the publishing process (Step 3).
-
-Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V2) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V2/README.md) to use the tool and package your content.
-
-### Updating your solution
-
-If you already have an Microsoft Sentinel solution and want to update your package, use the package creation tool with updated content to create a new version of the package.
-
-For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `1.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
-
-When updating your package, make sure to raise the version value, regardless of how small or trivial the change is, including typo fixes in a content or solution definition file.
-
-For example, if your original package version is `1.0.1`, you might update your versions as follows:
-
-* **Major updates** have a new version of 2.0.0 - this is usually reserved for major tooling or package level changes
-* **Minor updates**, for changes in content of the package, might have a new version of `1.1.0`
-* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `1.0.2`
-
-Since solutions use ARM templates, you can customize the solution text as well as tabs as needed to cater to specific scenarios.
-
-## Step 3 – Publish your solution
-
-The Microsoft Sentinel solution publishing experience is powered by the [Microsoft Partner Center](https://docs.microsoft.com/partner-center/overview).
-
-### Registration (one-time)
-
-If you or your company is a first-time app publisher on Azure Marketplace, [follow the steps](https://docs.microsoft.com/azure/marketplace/partner-center-portal/create-account) to register and create a [Commercial Marketplace](https://docs.microsoft.com/azure/marketplace/overview) account in Partner Center. This process provides you with a unique **Publisher ID** and access to the Commercial Marketplace authoring and publishing experience, where you'll create, certify, and publish your solution.
-
-### Author and publish a solution offer
-
-The following steps reference the Partner Center's more detailed documentation.
-
-1.	[Create an Azure application type offer](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer) and configure the offer setup details as per the relevant  guidance.
-> Ensure that the OfferID contains the keyword "sentinel". Consider using the format: `microsoft-sentinel-solution-<productname>`
-
-2.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
+2. [Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
 
 3.	Configure the [Offer listing details](https://docs.microsoft.com/azure/marketplace/azure-app-offer-listing), including the title, description, pictures, videos, support information, and so on. 
     * As one of your search keywords, add `f1de974b-f438-4719-b423-8bf704ba2aef` to have your solution appear in the Microsoft Sentinel content hub.
@@ -108,13 +86,13 @@ The following steps reference the Partner Center's more detailed documentation.
 
 8.	After the validation passes, [publish the offer live](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish#publish-your-offer-live). This will trigger the certification process, which can take up to 3 business days. 
 
-**Note:** The Microsoft Sentinel team will need to modify your files so that your solution appears in the Microsoft Sentinel content hub. Therefore, before going live, email the  [Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with your solutions offer ID and your **Publisher ID** so that we can make the required changes.
+**Note:** The Microsoft Sentinel team will need to modify your files so that your solution appears in the Microsoft Sentinel content hub. Therefore, before going live, email the  [Microsoft Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with your solutions offer ID and your **Publisher ID** so that we can make the required changes.
 
 **Note:** You must make the offer public in order for it to show up in the Microsoft Sentinel content hub so that customers can find it.
 
 ## Feedback
 
-[Email Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with any feedback on this process, for new scenarios not covered in this guide, or with any constraints you may encounter. 
+[Email Microsoft Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with any feedback on this process, for new scenarios not covered in this guide, or with any constraints you may encounter. 
 
 ## FAQs
 
@@ -137,5 +115,3 @@ You are **not** joining the CSP program.  Each offer is individually enabled or 
 
 #### What will happen if you do not enable “CSP opt-in” for your Microsoft Sentinel solution offer?
 If the customer, who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 
-
-
