@@ -249,6 +249,30 @@ namespace Kqlvalidations.Tests
             ValidateKql(parserName, queryStr, false);
         }
 
+        [Theory]
+        [ClassData(typeof(SolutionParsersYamlFilesTestData))]
+        public void Validate_SolutionParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            if (fileName == "NoFile.yaml")
+            {
+                Assert.True(true);
+                return;
+            }
+            Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
+            var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml, "FunctionParams");
+
+            //Ignore known issues
+            yaml.TryGetValue("Id", out object id);
+            if (id != null && ShouldSkipTemplateValidation((string)yaml["Id"]))
+            {
+                return;
+            }
+
+            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
+            var parserName = (string)yaml["FunctionName"];
+            ValidateKql(parserName, queryStr, false);
+        }
+
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(CommonFunctionsYamlFilesTestData))]
