@@ -1,0 +1,92 @@
+id: 7d2ed1c7-da26-45fd-b4ea-b6f2bbeccea7
+name: Detect threat information in web requests (ASIM Web Session)
+description: |
+  'This rule would generate an alert if EvenSeverity is 'High' or 'ThreatRiskLevel' or 'ThreatOriginalConfidence' value is greater than 90.
+severity: High
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let lookback= 5m;
+  _Im_WebSession(starttime=ago(lookback))
+  | project
+      EventSeverity,
+      ThreatName,
+      ThreatCategory,
+      ThreatRiskLevel,
+      ThreatOriginalConfidence,
+      ThreatField,
+      TimeGenerated,
+      SrcIpAddr,
+      SrcUsername,
+      SrcHostname,
+      Url,
+      DstIpAddr
+  | where ThreatRiskLevel >= 90
+      or toint(ThreatOriginalConfidence) >= 90
+      or EventSeverity =~ "High"
+  | summarize
+      EventCount = count(),
+      EventStartTime=min(TimeGenerated),
+      EvenEndTime=max(TimeGenerated)
+      by
+      SrcIpAddr,
+      SrcUsername,
+      SrcHostname,
+      Url,
+      DstIpAddr,
+      ThreatName,
+      ThreatCategory,
+      ThreatRiskLevel,
+      ThreatOriginalConfidence,
+      ThreatField
+  | extend
+      Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+      UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  ThreatCategory: ThreatCategory
+  ThreatConfidence: ThreatOriginalConfidence
+  ThreatName: ThreatName
+  EventStartTime: EventStartTime
+  EvenEndTime: EvenEndTime
+  EventCount: EventCount
+alertDetailsOverride:
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with IP address '{{SrcIpAddr}}' has been identified as being associated with a threat named '{{ThreatName}}'"
+version: 1.0.0
+kind: Scheduled

@@ -2,12 +2,19 @@ id: bfacf634-c75e-4291-998c-ecbc0323d943
 name: Risky Sign-in with new MFA method
 description: |
   'Looks for a new MFA method added to an account that was preceded by medium or high risk
-  sign-in session for the same user within maximum 6h timeframe'
+  sign-in session for the same user within maximum 6h timeframe.  This query has also been updated 
+  to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AuditLogs
       - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 tactics:
   - Persistence
 relevantTechniques:
@@ -39,16 +46,49 @@ query: |
   | join riskySignins on AccountObjectId 
   | where  MfaAddedTimestamp - SignInTimestamp < timeDelta //Time delta between risky sign-in and device registration less than 6h 
   | project-away AccountObjectId1
-  | extend timestamp = MfaAddedTimestamp, AccountCustomEntity = AccountUpn, IPCustomEntity = IPAddress
+  | extend timestamp = MfaAddedTimestamp, AccountCustomEntity = tolower(AccountUpn), IPCustomEntity = IPAddress
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+      | project-rename AccountCustomEntity = AccountUPN
+  ) on AccountCustomEntity
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename IPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPAddress)
+  on IPAddress
+  | extend Account_0_Name = AccountCustomEntity
+  | extend Account_0_AadUserId = AccountObjectId
+  | extend IP_0_Address = IPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | sort by UEBARiskScore desc 
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountUpn
+      - identifier: Name
+        columnName: AccountCustomEntity
       - identifier: AadUserId
         columnName: AccountObjectId
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.0
+version: 2.0.0

@@ -1,0 +1,57 @@
+  Parser:
+    Title: Registry Event ASIM parser for CrowdStrike Falcon Data Replicator
+    Version: '0.1'
+    LastUpdated: Jun 8, 2023
+  Product:
+    Name: Falcon Data Replicator
+  Normalization:
+    Schema: RegistryEvent
+    Version: '0.1.2'
+  References:
+    - Title: ASIM Registry Event Schema
+      Link: https://aka.ms/ASimRegistryEventDoc
+    - Title: ASIM
+      Link: https://aka.ms/AboutASIM
+  Description: |
+    This ASIM parser supports normalizing CrowdStrike Falcon Data Replicator logs produced by the Microsoft Sentinel AWS S3 connector to the ASIM Registry Event normalized schema.
+  ParserName: ASimRegistryEventCrowdStrikeFalcon
+  ParserParams:
+    - Name: disabled
+      Type: bool
+      Default: false
+  ParserQuery: |
+      let EventTypeLookup = parse_json('{"1": "RegistryValueSet","2": "RegistryValueDeleted","3": "RegistryKeyCreated","4": "RegistryKeyDeleted","5": "RegistryValueSet","6": "RegistryKeyCreated","7": "RegistryKeyRenamed","8": "Others","9": "Others","101": "RegistryValueSet","102": "RegistryValueDeleted"}');
+      let RegistryValueTypeLookup = parse_json('{"0": "Reg_None","1": "Reg_Sz","2": "Reg_Expand_Sz","3": "Reg_Expand","4": "Reg_Dword","5": "Reg_Dword_Big_Endian","6": "Reg_Link","7": "Reg_Multi_Sz","8": "Reg_Resource_List","9": "Reg_Full_Resource_Descriptor","10": "Reg_Resource_Requirements_List","11": "Reg_Qword"}');
+      source
+      | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01')),
+               contextDatetime = datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01'))
+      | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())
+      | project-rename
+          DvcIpAddr = aip,
+          DvcId = aid,
+          EventOriginalType = name,
+          EventOriginalUid = id,
+          EventProductVersion = ConfigBuild,
+          ActingProcessId = ContextProcessId,
+          RegistryKey = RegObjectName,
+          RegistryValue = RegValueName
+      | extend
+          AdditionalFields = todynamic(AdditionalFields),
+          DvcOs = case(event_platform == "Win", "Windows", 
+                      event_platform == "Mac", "Macintosh",
+                      event_platform == "Lin", "Linux", 
+                      ""),
+          RegistryValueData = case(isnotempty(RegStringValue),RegStringValue,
+                                    isnotempty(RegNumericValue),RegNumericValue,
+                                    isnotempty(RegBinaryValue),RegBinaryValue,
+                                    ""),
+          RegistryValueType = tostring(RegistryValueTypeLookup[RegType]),
+          EventStartTime = iff(isnotempty(contextDatetime),contextDatetime,TimeGenerated)
+      | extend EventEndTime = EventStartTime,
+               EventType = tostring(EventTypeLookup[RegOperationType]),
+               EventCount = toint(1),
+               EventSchemaVersion = "0.2.1",
+               EventVendor = "CrowdStrike",
+               EventProduct = "Falcon Data Replicator",
+               EventResult = "Success",
+               EventSeverity = "Informational"
