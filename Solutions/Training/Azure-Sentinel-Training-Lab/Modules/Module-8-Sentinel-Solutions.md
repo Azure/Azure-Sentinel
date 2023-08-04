@@ -103,8 +103,6 @@ This exercise explains how to install a new solution into your Microsoft Sentine
 
 ![azsolutions](../Images/azsolutions11.png)
 
-### ADD Workspace Usage
-
 
 ## Summary
 
