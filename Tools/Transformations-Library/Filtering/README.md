@@ -68,7 +68,6 @@ This will of course vary for each implementation and data type, but this gives a
 
 * Microsoft.Insights/dataCollectionRules must be deployed in same location than their target Azure Logs Analytics.
 * From a syntax perspective
-  * transformKql seems to always start with "source", not the targeted table name
   * Targeted table name is defined by streams value (Microsoft-Table-AWSVPCFlow, Microsoft-Syslog...). See documentation for supported values.
 
 
