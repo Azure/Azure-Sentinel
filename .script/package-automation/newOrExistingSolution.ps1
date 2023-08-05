@@ -39,23 +39,23 @@ else {
         $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
         Write-Host "List of files in PR: $diff"
 
-        $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"}
+        $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' }
         Write-Host "Filtered Files $filteredFiles"
 
         if ($filteredFiles.Count -le 0)
         {
             Write-Host 'Skipping as changes not in Solutions folder!'
             Write-Output "isNewSolution=$isNewSolution" >> $env:GITHUB_OUTPUT
-            Write-Output "solutionSupportedBy=''" >> $env:GITHUB_OUTPUT
-            Write-Output "solutionOfferId=''" >> $env:GITHUB_OUTPUT
-            Write-Output "solutionPublisherId=''" >> $env:GITHUB_OUTPUT
+            Write-Output "solutionSupportedBy=" >> $env:GITHUB_OUTPUT
+            Write-Output "solutionOfferId=" >> $env:GITHUB_OUTPUT
+            Write-Output "solutionPublisherId=" >> $env:GITHUB_OUTPUT
         }
         else 
         {
             $offerId = ''
             $publisherId = ''
             $solutionFolderPath = 'Solutions/' + $solutionName
-            $filesList = git ls-files | Where-Object { $_ -like "Solutions/$solutionName/*" } | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"}
+            $filesList = git ls-files | Where-Object { $_ -like "Solutions/$solutionName/*" } | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' }
 
             Write-Host "List of files changed $filesList"
             try {
@@ -155,9 +155,9 @@ else {
         Write-Host "isNewSolution : $isNewSolution, solutionSupportedBy is ''"
         Write-Host "Error occured in catch NewOrExistingSolution : Error details $_"
         Write-Output "isNewSolution=$isNewSolution" >> $env:GITHUB_OUTPUT
-        Write-Output "solutionSupportedBy=''" >> $env:GITHUB_OUTPUT
-        Write-Output "solutionOfferId=''" >> $env:GITHUB_OUTPUT
-        Write-Output "solutionPublisherId=''" >> $env:GITHUB_OUTPUT
+        Write-Output "solutionSupportedBy=" >> $env:GITHUB_OUTPUT
+        Write-Output "solutionOfferId=" >> $env:GITHUB_OUTPUT
+        Write-Output "solutionPublisherId=" >> $env:GITHUB_OUTPUT
 
         if ($instrumentationKey -ne '')
         {
