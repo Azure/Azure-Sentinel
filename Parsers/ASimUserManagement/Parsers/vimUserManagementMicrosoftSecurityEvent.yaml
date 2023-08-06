@@ -12,6 +12,8 @@ References:
   Link: https://aka.ms/ASimUserManagementDoc
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
+- Title: Audit User Account Management
+  Link: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/audit-user-account-management
 Description: |
   This ASIM parser supports normalizing Microsoft Security Event logs delivered using AMA to the ASIM UserManagement normalized schema.
 ParserName: ASimUserManagementMicrosoftSecurityEvent
@@ -79,7 +81,7 @@ ParserQuery: |
           "4767", "UserLocked", "UserModified", "", 
           "4781", "UserModified", "UserModified", "" 
       ];
-      let UserTypeLookup = datatable (AccountType:string, ActorOriginalUserType:string)
+      let UserTypeLookup = datatable (ActorOriginalUserType:string, ActorUserType:string)
       [
           'Machine', 'Machine',
           'User', 'Regular'
@@ -116,7 +118,8 @@ ParserQuery: |
               SubjectUserName = tostring(EventData.SubjectUserName),
               TargetDomain = tostring(EventData.TargetDomainName),
               TargetUserId = tostring(EventData.TargetSid),
-              TargetUsername = tostring(EventData.TargetUserName)
+              TargetUsername = tostring(EventData.TargetUserName),
+              EventMessage = tostring(EventData.Activity)
           | where (targetusername_has=='*' or (TargetUsername has targetusername_has)) and
               (actorusername_has=='*' or (SubjectUserName has actorusername_has)) and
               (targetdomain_has=='*' or (TargetDomain has targetdomain_has)) and
@@ -126,7 +129,7 @@ ParserQuery: |
               PreviousPropertyValue = OldTargetUserName
           | extend 
               TargetUsername = coalesce(TargetUsername, PreviousPropertyValue)
-          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue
+          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue, EventMessage
           | extend
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
@@ -146,7 +149,8 @@ ParserQuery: |
               ActorUserId = SubjectUserSid,
               TargetDomain = TargetDomainName,
               TargetUserId = TargetSid,
-              TargetUsername = TargetUserName
+              TargetUsername = TargetUserName,
+              EventMessage = Activity
           | parse-kv EventData as 
               (
                   OldTargetUserName:string,
@@ -158,7 +162,7 @@ ParserQuery: |
               PreviousPropertyValue = OldTargetUserName
           | extend 
               TargetUsername = coalesce(TargetUsername, PreviousPropertyValue)
-          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue
+          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue, SourceComputerId, EventMessage
           | extend
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
@@ -184,7 +188,8 @@ ParserQuery: |
               NewTargetUserName = tostring(EventData.NewTargetUserName),
               OldTargetUserName = tostring(EventData.OldTargetUserName),
               SubjectDomainName = tostring(EventData.SubjectDomainName),
-              SubjectUserName = tostring(EventData.SubjectUserName)
+              SubjectUserName = tostring(EventData.SubjectUserName),
+              EventMessage = tostring(EventData.Activity)
           | where (targetusername_has=='*' or (NewTargetUserName has targetusername_has) or (OldTargetUserName has targetusername_has) or (MemberName has targetusername_has)) and
               (actorusername_has=='*' or (SubjectUserName has actorusername_has)) and
               (targetdomain_has=='*' or (GroupDomain has targetdomain_has)) and
@@ -193,7 +198,7 @@ ParserQuery: |
               GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName)),
               TargetUserId = MemberSid,
               TargetUsername = MemberName
-          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId
+          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, EventMessage
           | extend 
               GroupIdType = iif(isnotempty(GroupId), "SID","")
       ),(
@@ -213,7 +218,8 @@ ParserQuery: |
               ActorUserId = SubjectUserSid,
               GroupDomain = TargetDomainName,
               GroupId = TargetSid,
-              GroupName = TargetUserName
+              GroupName = TargetUserName,
+              EventMessage = Activity
           | extend GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName))
           | parse-kv EventData as 
               (
@@ -225,7 +231,7 @@ ParserQuery: |
           | project-rename 
               TargetUserId = MemberSid,
               TargetUsername = MemberName
-          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId
+          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, SourceComputerId, EventMessage
           | extend 
               GroupIdType = iif(isnotempty(GroupId), "SID","")
       ),(
@@ -259,7 +265,8 @@ ParserQuery: |
               ActorUserId = SubjectUserSid,
               GroupDomain = TargetDomainName,
               GroupId = TargetSid,
-              GroupName = TargetUserName
+              GroupName = TargetUserName,
+              EventMessage = Activity
           | extend GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName))
           | parse-kv EventData as 
               (
@@ -271,22 +278,23 @@ ParserQuery: |
           | project-rename 
               TargetUserId = MemberSid,
               TargetUsername = MemberName
-          | project TimeGenerated, Type, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId
+          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, SourceComputerId, EventMessage
           | extend 
               GroupIdType = iif(isnotempty(GroupId), "SID","")
       )
   | lookup EventIDLookup on EventID
+  | extend UpdatedPropertyName = EventSubtype
   | invoke _ASIM_ResolveDvcFQDN ("Computer")
   | lookup UserTypeLookup on ActorOriginalUserType
+  | extend DvcId = coalesce(_ResourceId, SourceComputerId)
   | project-rename 
-      DvcId = _ResourceId,
       EventUid = _ItemId
   | extend 
       ActorDomain = SubjectDomainName,
       ActorUserIdType = iif(isnotempty(ActorUserId), "SID",""),
       ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
       Dvc = DvcHostname,
-      DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
+      DvcIdType = iff (isnotempty(_ResourceId), "AzureResourceID", ""),
       DvcOs = "Windows",
       EventCount = int(1),
       EventEndTime = TimeGenerated,
@@ -299,7 +307,7 @@ ParserQuery: |
       EventStartTime = TimeGenerated,
       EventVendor = 'Microsoft',
       Hostname = DvcHostname
-  | project-away Subject*
+  | project-away Subject*, Computer, _ResourceId, SourceComputerId
   | extend
       ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
       GroupNameType = _ASIM_GetUsernameType(GroupName),
