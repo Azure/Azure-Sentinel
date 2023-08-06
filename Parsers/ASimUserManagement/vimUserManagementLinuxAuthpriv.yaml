@@ -12,6 +12,8 @@ References:
   Link: https://aka.ms/ASimUserManagementDoc
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
+- Title: Red Hat remote logging
+  Link: https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/system_administrators_guide/s1-basic_configuration_of_rsyslog 
 Description: |
   This ASIM parser supports normalizing Linux authpriv logs delivered using Syslog to the ASIM UserManagement normalized schema.
 ParserName: ASimUserManagementLinuxAuthpriv
@@ -40,8 +42,14 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (
-      disabled:bool = false
-  ) {
+        starttime:datetime=datetime(null), 
+        endtime:datetime=datetime(null),
+        targetusername_has:string="*", 
+        actorusername_has:string="*",
+        targetdomain_has:string="*",
+        anydomain_has:string="*",
+        disabled:bool=false
+    ) {
   let ActionLookup = datatable (Action:string, EventType:string)
   [
       "added",  "UserAddedToGroup",
@@ -61,10 +69,20 @@ ParserQuery: |
   union (
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "useradd"
           and  SyslogMessage startswith "new user: name="
       | parse SyslogMessage with "new user: name=" TargetUsername ", UID=" TargetUserId ", GID=" GroupId ", " *
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has)) and
+          actorusername_has == '*' and 
+          targetdomain_has == '*' and
+          anydomain_has == '*'
       | extend 
           EventType   = "UserCreated", 
           EventResult = "Success"
@@ -72,10 +90,17 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "useradd"
           and SyslogMessage startswith "failed adding user '"
       | parse SyslogMessage with "failed adding user '" TargetUsername "', exit code: " EventOriginalResultDetails
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType          = "UserCreated", 
           EventResult        = "Failure",
@@ -84,7 +109,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "useradd"
           and SyslogMessage startswith "new group: name="
       | parse SyslogMessage with "new user: name=" GroupName ", GID=" GroupId
@@ -95,7 +126,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "useradd"
           and SyslogMessage startswith "cannot open login definitions"
       | extend EventType     = "UserCreated", 
@@ -105,10 +142,17 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName =="useradd" 
           and SyslogMessage startswith "add '"
       | parse SyslogMessage with "add '" TargetUsername "'" * "group '" GroupName "'" 
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType   = "UserCreated",
           EventResult = "Success"
@@ -116,10 +160,17 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "usermod"
           and SyslogMessage startswith "change user name '"
       | parse SyslogMessage with "change user name '" TargetUsername "'" *
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType   = "UserModified",
           EventResult = "Success"
@@ -127,10 +178,17 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName =="usermod" 
           and SyslogMessage startswith "add '"
       | parse SyslogMessage with "add '" TargetUsername "'" * "group '" GroupName "'" 
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType   = "UserAddedToGroup",
           EventResult = "Success"
@@ -138,11 +196,18 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "usermod"
           and SyslogMessage startswith "change user '"
           and not (SyslogMessage endswith "' password")
       | parse SyslogMessage with "change user '" TargetUsername "' " EventSubType " from '" PreviousPropertyValue "' to '" NewPropertyValue "'"
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType = case (
               EventSubType == "expiration" and PreviousPropertyValue == "never", "UserDisabled",
@@ -154,7 +219,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "usermod"
           and SyslogMessage startswith "cannot open login definitions"
       | extend 
@@ -165,11 +236,18 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "usermod"
           and SyslogMessage startswith "change user '"
           and SyslogMessage endswith "password"
       | parse SyslogMessage with "change user '" TargetUsername "' " EventSubType
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType   = "PasswordChanged",
           EventResult = "Success"
@@ -177,11 +255,18 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "usermod"
           and SyslogMessage startswith "lock user '"
           and SyslogMessage endswith "' password"
       | parse SyslogMessage with "lock user '" TargetUsername "' password"
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType   = "UserLocked",
           EventResult = "Success"
@@ -189,10 +274,17 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "userdel"
           and SyslogMessage startswith "delete '"
       | parse SyslogMessage with "delete '" TargetUsername "'" * "group '" GroupName "'" *
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType   = "UserDeleted",
           EventResult = "Success"
@@ -200,10 +292,17 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "userdel"
           and SyslogMessage startswith "delete user '"
       | parse SyslogMessage with "delete user '" TargetUsername "'" *
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType   = "UserDeleted",
           EventResult = "Success"
@@ -211,11 +310,18 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "userdel"
           and (SyslogMessage startswith "removed group '" 
           or SyslogMessage startswith "removed shadow group '")
       | parse SyslogMessage with "removed" * "group '" GroupName "' owned by '" TargetUsername "'"
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has))
       | extend 
           EventType   = "UserDeleted",
           EventResult = "Success"
@@ -223,7 +329,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "groupadd"
           and SyslogMessage startswith "group added to "
           and SyslogMessage has "GID="
@@ -235,7 +347,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "groupadd"
           and SyslogMessage startswith "group added to "
           and not(SyslogMessage has "GID=")
@@ -247,7 +365,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "groupadd"
           and SyslogMessage startswith "new group: name="
       | parse SyslogMessage with "new group: name=" GroupName ", GID=" GroupId
@@ -258,7 +382,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "groupadd"
           and SyslogMessage startswith "cannot open login definitions"
       | extend 
@@ -269,7 +399,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "groupmod"
           and SyslogMessage startswith "group changed in "
       | parse SyslogMessage with "group changed in " * " (group " Temp_GroupName ", new name: " *
@@ -286,7 +422,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "groupmod"
           and SyslogMessage startswith "failed to change "
       | parse SyslogMessage with "failed to change " * " (group " Temp_GroupName ", new name: " *
@@ -302,7 +444,13 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (actorusername_has == '*' and 
+          anydomain_has == '*' and          
+          targetdomain_has == '*' and
+          targetusername_has == '*' or (SyslogMessage has targetusername_has))
       | where ProcessName == "groupdel"
       | parse SyslogMessage with "group '" GroupName "' removed" *
       | extend 
@@ -312,9 +460,19 @@ ParserQuery: |
   ),(
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Facility == "authpriv"
+      | where (targetusername_has == '*' or (SyslogMessage has targetusername_has)) and 
+          (actorusername_has =='*' or (SyslogMessage has actorusername_has)) and 
+          (targetdomain_has == '*' or (SyslogMessage has targetdomain_has)) and
+          (anydomain_has == '*' or (SyslogMessage has anydomain_has))
       | where ProcessName == "gpasswd"
       | parse SyslogMessage with "user " TargetUsername " " Action " by " ActorUsername " " * " group " GroupName
+      | where (targetusername_has == '*' or (TargetUsername has targetusername_has)) and
+          (actorusername_has == '*' or (ActorUsername has actorusername_has)) and
+          targetdomain_has == '*' and
+          anydomain_has == '*'
       | lookup ActionLookup on Action
       | project-away Action
       | extend 
@@ -325,7 +483,6 @@ ParserQuery: |
   | invoke _ASIM_ResolveDvcFQDN ("Computer")
   | lookup SeverityLookup on SeverityLevel
   | project-rename 
-      EventVendor   = SourceSystem,
       ActiveAppName = ProcessName,
       DvcId         = _ResourceId
   | extend
@@ -336,11 +493,12 @@ ParserQuery: |
       EventSchemaVersion  = "0.1.1",
       EventSeverity       = "Informational",
       EventStartTime      = TimeGenerated,
+      EventVendor         = "Linux",
       ActingAppType       = "Process",
       Hostname            = DvcHostname,
       DvcIdType           = iff (DvcId == "", "", "AzureResourceID"),
       DvcIpAddr           = iif(HostIP == "Unknown IP","",HostIP),
-      DvcOs               = EventVendor,
+      DvcOs               = "Linux",
       UpdatedPropertyName = EventSubType,
       ActingAppId         = tostring(ProcessID),
       TargetUserIdType    = iif(isnotempty(TargetUserId), "UID", ""),
