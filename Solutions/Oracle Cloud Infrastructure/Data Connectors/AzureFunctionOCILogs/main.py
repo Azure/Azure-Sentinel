@@ -119,26 +119,28 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
             return
 
         for message in get_response.data:
-            event = b64decode(message.value.encode()).decode()
-            event = json.loads(event)
-            if "data" in event:
-                if "request" in event["data"]:
-                    if "headers" in event["data"]["request"]:
-                        event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
-                    if "parameters" in event["data"]["request"]:
-                        event["data"]["request"]["parameters"] = json.dumps(
-                            event["data"]["request"]["parameters"])
-                if "response" in event["data"]:
-                    if "headers" in event["data"]["response"]:
-                        event["data"]["response"]["headers"] = json.dumps(event["data"]["response"]["headers"])
-                if "additionalDetails" in event["data"]:
-                    event["data"]["additionalDetails"] = json.dumps(event["data"]["additionalDetails"])
-                if "stateChange" in event["data"]:
-                    logging.info("In data.stateChange : {}".format(event["data"]["stateChange"]))
-                    if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
-                        event["data"]["stateChange"]["current"] = json.dumps(
-                            event["data"]["stateChange"]["current"])
-            sentinel.send(event)
+            if message:
+                event = b64decode(message.value.encode()).decode()
+                logging.info('event details {}'.format(event))
+                event = json.loads(event)
+                if "data" in event:
+                    if "request" in event["data"]:
+                        if "headers" in event["data"]["request"]:
+                            event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
+                        if "parameters" in event["data"]["request"]:
+                            event["data"]["request"]["parameters"] = json.dumps(
+                                event["data"]["request"]["parameters"])
+                    if "response" in event["data"]:
+                        if "headers" in event["data"]["response"]:
+                            event["data"]["response"]["headers"] = json.dumps(event["data"]["response"]["headers"])
+                    if "additionalDetails" in event["data"]:
+                        event["data"]["additionalDetails"] = json.dumps(event["data"]["additionalDetails"])
+                    if "stateChange" in event["data"]:
+                        logging.info("In data.stateChange : {}".format(event["data"]["stateChange"]))
+                        if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
+                            event["data"]["stateChange"]["current"] = json.dumps(
+                                event["data"]["stateChange"]["current"])
+                sentinel.send(event)
 
         sentinel.flush()
         if check_if_script_runs_too_long(start_ts):
