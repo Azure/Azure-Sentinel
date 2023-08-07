@@ -390,7 +390,7 @@ class FilteringTest(unittest.TestCase):
             self.dynamic_tests_helper(param_name, query_definition, no_filter_rows, column_name_in_table, selected_substrings, "substrings")
         
 
-    def add_prefix_to_list(self, rows, num_of_prefixes):
+    def get_prefix_list(self, rows, num_of_prefixes):
         '''
         The function return a list with at most "num_of_prefixes" prefixes of values from "rows" to "prefix_list".
         A prefix of a value will be the prefix until the first dot in the value (including the dot).
@@ -422,7 +422,7 @@ class FilteringTest(unittest.TestCase):
         column_name_in_table : The name of the column in the query response on which the parameter performs filtering
         """
         # Getting prefixes that will be the values of the filtering parameters
-        selected_prefixes = self.add_prefix_to_list(no_filter_rows, 2)
+        selected_prefixes = self.get_prefix_list(no_filter_rows, 2)
         with self.subTest():
             self.dynamic_tests_helper(param_name, query_definition, no_filter_rows, column_name_in_table, selected_prefixes, "prefixes")
             
