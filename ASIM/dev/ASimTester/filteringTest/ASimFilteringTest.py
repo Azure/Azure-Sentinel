@@ -300,8 +300,8 @@ class FilteringTest(unittest.TestCase):
                 continue
                 
             for row_to_compare_with in rows:
-                valueToCompareWith = row_to_compare_with[0]
-                if value not in valueToCompareWith:
+                value_to_compare_with = row_to_compare_with[0]
+                if value not in value_to_compare_with:
                     values.append(value)
                     # if we found one value that satisfy the condition, we can continue to the next one
                     break
@@ -349,7 +349,7 @@ class FilteringTest(unittest.TestCase):
                 if pre != value:
                     copy_substrings_list.append(pre)
             
-            return copy_substrings_list
+        return copy_substrings_list
         
 
     def has_any_test(self, param_name, query_definition, no_filter_response, column_name_in_table):
