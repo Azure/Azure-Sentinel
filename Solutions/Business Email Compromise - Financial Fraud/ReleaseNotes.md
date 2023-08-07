@@ -23,4 +23,3 @@
 |             |                                |     UserAccounts-UnusualLogonTimes                                 |
 |             |                                |     UserDetectPrivilegeGroup                                       |
 |             |                                |     UserLoginIPAddressTeleportation                                |
-|-------------|--------------------------------|--------------------------------------------------------------------|
