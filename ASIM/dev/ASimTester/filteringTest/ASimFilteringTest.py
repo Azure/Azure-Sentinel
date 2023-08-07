@@ -307,81 +307,155 @@ class FilteringTest(unittest.TestCase):
                     break
         return values
         
-    
+
     # Performing assertions for dynamic tests with parameter filtering. Values for the parameter are taken from values_list
-    def dynamic_tests_assertions(self, param_name, query_definition, column_name_in_table, values_list, no_filter_response):
-        pass #TODO will be added in next PR
+    def dynamic_tests_assertions(self, param_name, query_definition, column_name_in_table, values_list, no_filter_rows):
+        val_str = create_values_string(values_list)
+        query_with_filter = query_definition + create_execution_strings_with_one_parameter(param_name,f"dynamic([{val_str}])" ,column_name_in_table)
+        filtered_response = self.send_query(query_with_filter)
+        filtered_rows = filtered_response.tables[0].rows
+        with self.subTest():
+            self.assertNotEqual(0, len(filtered_rows), f"Parameter: {param_name} - Got no results at all after filtering. Filtered by value: {val_str}")  
+        with self.subTest():
+            self.assertLess(len(filtered_rows), len(no_filter_rows),  f"Parameter: {param_name} - Expected to have less results after filtering. Filtered by value: {val_str}")
 
 
     # Performing filtering with one and two values (if possible) for dynamic parameters.
-    def dynamic_tests_helper(self, param_name, query_definition, no_filter_response, column_name_in_table, values_list, test_type):
-        pass #TODO will be added in next PR
-    
-    # Performing filtering for dynamic parameters with full values from no_filter_response (similar test will be done for substrings/prefixes)
-    def dynamic_full_values_tests(self, param_name, query_definition, no_filter_response, column_name_in_table):
-        pass #TODO will be added in next PR
+    def dynamic_tests_helper(self, param_name, query_definition, no_filter_rows, column_name_in_table, values_list, test_type):
+        if len(values_list) == 0:
+            self.fail(f"Parameter: {param_name} - Unable to find substrings to perform {test_type} tests")
+        # Performing filtering with one value in the parameter
+        self.dynamic_tests_assertions(param_name, query_definition, column_name_in_table, [values_list[0]], no_filter_rows )
 
+        # Performing filtering with two values in the parameter if possible
+        if len(values_list) == 1:
+            self.fail("Parameter: {param_name} - Not enough data to perform two values {test_type} tests")
+        else:
+            self.dynamic_tests_assertions(param_name,query_definition, column_name_in_table, values_list, no_filter_rows)
+
+    
+    # Performing filtering for dynamic parameters with values from no_filter_rows. "full values" because similar test are done for substrings/prefixes of values.
+    def dynamic_full_values_tests(self, param_name, query_definition, no_filter_rows, column_name_in_table):
+        selected_values = self.get_values_for_dynamic_tests(no_filter_rows)
+        with self.subTest():
+            self.dynamic_tests_helper(param_name, query_definition, no_filter_rows, column_name_in_table, selected_values, "full values")
 
     # Performing a query with a non-existing value, expecting to return no results
     def dynamic_tests_check_fictive_value(self, param_name, query_definition, column_name_in_table):
-        pass #TODO will be added in next PR
+        no_results_query = query_definition + create_execution_strings_with_one_parameter(param_name,f"dynamic([{DUMMY_VALUE}])" ,column_name_in_table)
+        no_results_response = self.send_query(no_results_query)
+        with self.subTest():
+            self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
 
 
-    def add_substring_to_list(self, rows, substrings_list, num_of_substrings):
+    def get_substrings_list(self, rows, num_of_substrings):
         '''
-        The function return a list with at most "num_of_substrings" substrings of values from "rows" to "substrings_list".
+        The function return a list with at most "num_of_substrings" substrings of values from "rows" to substrings_list.
         A substring of a value will be either its postfix from after the first dot in the value or its prefix until the first dot in the value.
         '''
-        copy_substrings_list = substrings_list[:]
+        substrings_list = []
         # Looking for values with substrings that can be appended to the list
         for row in rows:
-            if len(copy_substrings_list) == num_of_substrings:
+            if len(substrings_list) == num_of_substrings:
                 break
 
             value = row[0]
-            post = get_postfix(value, rows, copy_substrings_list)
+            post = get_postfix(value, rows, substrings_list)
             # Post will equal value if: value dont contain a dot, post is in the list, post is contained in an item in the list.
             if post != value:
-                copy_substrings_list.append(post)
+                substrings_list.append(post)
             else:
-                pre = get_prefix(value, rows, copy_substrings_list)
+                pre = get_prefix(value, rows, substrings_list)
                 # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
                 if pre != value:
-                    copy_substrings_list.append(pre)
+                    substrings_list.append(pre)
             
-        return copy_substrings_list
+        return substrings_list
         
 
-    def has_any_test(self, param_name, query_definition, no_filter_response, column_name_in_table):
-        pass #TODO will be added in next PR     
+    def has_any_test(self, param_name, query_definition, no_filter_rows, column_name_in_table):
+        """
+        Test for dynamic parameters with a name that ends with "has_any". Filtering is made with substrings of values from no_filter_rows.   
+        
+        Parameters
+        ----------
+        param_name : A name of a parameter
+        query_definition : A definition of the parser's query
+        no_filter_rows : The rows from a response for the parser query with no filter applied
+        column_name_in_table : The name of the column in the query response on which the parameter performs filtering
+        """
+        # Getting substrings that will be the values of the filtering parameters
+        selected_substrings = self.get_substrings_list(no_filter_rows, 2)
+        with self.subTest():
+            self.dynamic_tests_helper(param_name, query_definition, no_filter_rows, column_name_in_table, selected_substrings, "substrings")
+        
 
-
-    def add_prefix_to_list(self, rows, prefix_list, num_of_prefixes):
+    def add_prefix_to_list(self, rows, num_of_prefixes):
         '''
         The function return a list with at most "num_of_prefixes" prefixes of values from "rows" to "prefix_list".
         A prefix of a value will be the prefix until the first dot in the value (including the dot).
         '''
-        copy_prefix_list = prefix_list[:]
+        prefix_list = []
         # Looking for values with prefix that can be appended to the list
         for row in rows:
-            if len(copy_prefix_list) == num_of_prefixes:
+            if len(prefix_list) == num_of_prefixes:
                 break
     
             value = row[0]
-            pre = get_prefix(value, rows, copy_prefix_list)
+            pre = get_prefix(value, rows, prefix_list)
             # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
             if pre != value:
-                copy_prefix_list.append(f"{pre}.")
+                prefix_list.append(f"{pre}.")
     
-        return copy_prefix_list
+        return prefix_list
 
 
-    def has_any_prefix_test(self, param_name, query_definition, no_filter_response, column_name_in_table):
-        pass #TODO will be added in next PR        
-
+    def has_any_prefix_test(self, param_name, query_definition, no_filter_rows, column_name_in_table):
+        """
+        Test for dynamic parameters with a name that ends with "has_any_prefix". Filtering is made with prefixes of values from no_filter_rows.   
+        
+        Parameters
+        ----------
+        param_name : A name of a parameter
+        query_definition : A definition of the parser's query
+        no_filter_rows : The rows from a response for the parser query with no filter applied
+        column_name_in_table : The name of the column in the query response on which the parameter performs filtering
+        """
+        # Getting prefixes that will be the values of the filtering parameters
+        selected_prefixes = self.add_prefix_to_list(no_filter_rows, 2)
+        with self.subTest():
+            self.dynamic_tests_helper(param_name, query_definition, no_filter_rows, column_name_in_table, selected_prefixes, "prefixes")
+            
 
     def dynamic_test(self, param, query_definition, column_name_in_table):
-        pass #TODO will be added in next PR
+        """
+        Test for dynamic parameters. Dynamic parameter receive as value an array of strings.
+
+        Parameters
+        ----------
+        param : A parameter field from the parser yaml file
+        query_definition : A definition of the parser's query
+        column_name_in_table : The name of the column in the query response on which the parameter performs filtering
+        """
+        param_name = param['Name']
+        no_filter_query = query_definition + create_execution_string_without_parameters(column_name_in_table)
+        no_filter_response = self.send_query(no_filter_query)
+        no_filter_rows = no_filter_response.tables[0].rows
+        self.assertNotEqual(len(no_filter_rows) , 0 , f"No data for parameter:{param_name}")
+        with  self.subTest():
+            self.assertNotEqual(len(no_filter_rows), 1, f"Only one value exists for parameter: {param_name} - validations for this parameter are partial" )
+
+        # Testing with full values from the response (not substring or prefixes)
+        self.dynamic_full_values_tests(param_name, query_definition, no_filter_rows, column_name_in_table)
+
+        # Specific tests for "has_any" or "has_any_prefix" parameters
+        if param_name.endswith('has_any'):
+            self.has_any_test(param_name, query_definition,no_filter_rows, column_name_in_table)
+        elif param_name.endswith('has_any_prefix'):
+            self.has_any_prefix_test(param_name, query_definition, no_filter_rows, column_name_in_table)
+
+         # Performing a query with a non-existing value, expecting to return no results
+        self.dynamic_tests_check_fictive_value(param_name, query_definition, column_name_in_table)
 
 
     def disabled_test(self, query_definition):
