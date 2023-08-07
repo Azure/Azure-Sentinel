@@ -77,6 +77,13 @@ def create_parameters_string(parser_file):
     return ','.join(paramsList)
 
 
+# Creating a string of the values in the list with commas between them
+# Example: for a list: ['ab', 'cd', 'ef'] the output will be: 'ab','cd','ef'
+def create_values_string(values_list):
+    joined_string = ','.join([f"'{val}'" for val in values_list])
+    return joined_string
+    
+
 # Taking the query string from a parser file and returning a string with a definition of a KQL function
 def create_query_definition_string(parser_file):
     params_str = create_parameters_string(parser_file) 
@@ -92,6 +99,63 @@ def create_execution_string_without_parameters(column_name):
 # Returning a string representing a call for a KQL function with one parameter
 def create_execution_strings_with_one_parameter(parameter, value, column_name):
     return f"query({parameter}={value}) | summarize count() by {column_name}\n"
+
+
+def get_substring_or_default(default, substring, rows, current_list):
+    '''
+    Returning the substring of a string if this substring is not in the list ("current_list") and if this substring is not contained in all of the values in rows.
+    If the substring is not in the list and not contained in all of the values in rows, the substring is returned.
+    If the substring is in the list or contained in all of the values in rows, the default value is returned.
+    '''
+    if substring in current_list:
+        return default
+    # This prefix is the only possible prefix and thus, it is returned
+    if len(rows) == 1:
+        return substring
+    # Checking if there is at least one value in rows that the substring is not contained in.
+    for row in rows:
+        value = row[0]
+        if substring not in value:
+            return substring
+    return default
+
+
+def get_prefix(str, rows, current_list):
+    '''
+    Returns the prefix of a string until its last dot, under certain conditions:
+    - The prefix is not present in the 'current_list'.
+    - The prefix is not contained in all of the values in rows.
+    If the string does not contain a dot or fails to meet the conditions above, the original string is returned.
+    Example:
+        str = "example.com.subdomain"
+        output = "example.com"
+    '''
+    last_dot_index = str.rfind('.')
+    # If there is no dot in the string, return the string
+    if last_dot_index == -1:
+        return str
+    
+    substring = str[:last_dot_index]
+    return get_substring_or_default(str, substring, rows, current_list)
+
+
+def get_postfix(str, rows, current_list):
+    '''
+    Returns the postfix of a string following its first dot, under certain conditions:
+    - The postfix is not present in the 'current_list'.
+    - The postfix is not contained in all of the values in rows.
+    If the string does not contain a dot or fails to meet the conditions above, the original string is returned.
+    Example:
+        str = "example.com.subdomain"
+        output = "com.subdomain"
+    '''
+    first_dot_index = str.find('.')
+    # If there is no dot in the string, return the string
+    if first_dot_index == -1:
+        return str
+    
+    substring = str[first_dot_index + 1:]
+    return get_substring_or_default(str, substring, rows, current_list)
 
 
 class FilteringTest(unittest.TestCase):
@@ -145,7 +209,7 @@ class FilteringTest(unittest.TestCase):
         elif (param_type == "datetime"):
             pass #TODO add test for datetime
         elif (param_type == "dynamic"):
-            pass #TODO add tests for dynamic
+            self.dynamic_test(param, query_definition, column_name_in_table)
         else:
             self.scalar_test(param, query_definition, column_name_in_table)
 
@@ -218,6 +282,108 @@ class FilteringTest(unittest.TestCase):
             self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
 
         
+    # Return an array of at most two values from rows. Each string in the returned array is not a substring of all values in rows.
+    def get_values_for_dynamic_tests(self, rows):
+        # If rows has only one row, return the value in that row if it is not an empty string
+        if len(rows) == 1:
+            return [] if rows[0][0] == "" else [rows[0][0]]
+        values = []
+        # Searching values in rows which are not contained in at least one other value
+        for row in rows:
+            # if we already found two values that satisfy the conditions we can return them 
+            if len(values) == 2:
+                break
+
+            value = row[0]
+            # if the value in an empty string we want to skip it
+            if value == "":
+                continue
+                
+            for row_to_compare_with in rows:
+                value_to_compare_with = row_to_compare_with[0]
+                if value not in value_to_compare_with:
+                    values.append(value)
+                    # if we found one value that satisfy the condition, we can continue to the next one
+                    break
+        return values
+        
+    
+    # Performing assertions for dynamic tests with parameter filtering. Values for the parameter are taken from values_list
+    def dynamic_tests_assertions(self, param_name, query_definition, column_name_in_table, values_list, no_filter_response):
+        pass #TODO will be added in next PR
+
+
+    # Performing filtering with one and two values (if possible) for dynamic parameters.
+    def dynamic_tests_helper(self, param_name, query_definition, no_filter_response, column_name_in_table, values_list, test_type):
+        pass #TODO will be added in next PR
+    
+    # Performing filtering for dynamic parameters with full values from no_filter_response (similar test will be done for substrings/prefixes)
+    def dynamic_full_values_tests(self, param_name, query_definition, no_filter_response, column_name_in_table):
+        pass #TODO will be added in next PR
+
+
+    # Performing a query with a non-existing value, expecting to return no results
+    def dynamic_tests_check_fictive_value(self, param_name, query_definition, column_name_in_table):
+        pass #TODO will be added in next PR
+
+
+    def add_substring_to_list(self, rows, substrings_list, num_of_substrings):
+        '''
+        The function return a list with at most "num_of_substrings" substrings of values from "rows" to "substrings_list".
+        A substring of a value will be either its postfix from after the first dot in the value or its prefix until the first dot in the value.
+        '''
+        copy_substrings_list = substrings_list[:]
+        # Looking for values with substrings that can be appended to the list
+        for row in rows:
+            if len(copy_substrings_list) == num_of_substrings:
+                break
+
+            value = row[0]
+            post = get_postfix(value, rows, copy_substrings_list)
+            # Post will equal value if: value dont contain a dot, post is in the list, post is contained in an item in the list.
+            if post != value:
+                copy_substrings_list.append(post)
+            else:
+                pre = get_prefix(value, rows, copy_substrings_list)
+                # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
+                if pre != value:
+                    copy_substrings_list.append(pre)
+            
+        return copy_substrings_list
+        
+
+    def has_any_test(self, param_name, query_definition, no_filter_response, column_name_in_table):
+        pass #TODO will be added in next PR     
+
+
+    def add_prefix_to_list(self, rows, prefix_list, num_of_prefixes):
+        '''
+        The function return a list with at most "num_of_prefixes" prefixes of values from "rows" to "prefix_list".
+        A prefix of a value will be the prefix until the first dot in the value (including the dot).
+        '''
+        copy_prefix_list = prefix_list[:]
+        # Looking for values with prefix that can be appended to the list
+        for row in rows:
+            if len(copy_prefix_list) == num_of_prefixes:
+                break
+    
+            value = row[0]
+            pre = get_prefix(value, rows, copy_prefix_list)
+            # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
+            if pre != value:
+                copy_prefix_list.append(f"{pre}.")
+    
+        return copy_prefix_list
+
+
+    def has_any_prefix_test(self, param_name, query_definition, no_filter_response, column_name_in_table):
+        pass #TODO will be added in next PR        
+
+
+    def dynamic_test(self, param, query_definition, column_name_in_table):
+        pass #TODO will be added in next PR
+
+
     def disabled_test(self, query_definition):
         """
         Test for "disabled" parameter. The two checked values for this parameter are True and False.
