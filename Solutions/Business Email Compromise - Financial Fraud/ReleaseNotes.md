@@ -1,8 +1,8 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 3.0.0       |     07-08-2023                 | Initial Release; includes the following OOTB content:              |                       |
+| 3.0.0       |     07-08-2023                 | Initial Release; includes the following OOTB content:              |                   
 |             |                                | 7x Analytic Rule                                                   |
-|             |                                |        AccountElevatedtoNewRole                                       |
+|             |                                |     AccountElevatedtoNewRole                                       |
 |             |                                |     AuthenticationMethodChangedforPrivilegedAccount                |
 |             |                                |     BEC_MailboxRule                                                |
 |             |                                |     PrivilegedAccountPermissionsChanged                            |                            
