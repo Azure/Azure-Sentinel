@@ -101,12 +101,30 @@ def create_execution_strings_with_one_parameter(parameter, value, column_name):
     return f"query({parameter}={value}) | summarize count() by {column_name}\n"
 
 
+def get_substring_or_default(default, substring, rows, current_list):
+    '''
+    Returning the substring of a string if this substring is not in the list ("current_list") and if this substring is not contained in all of the values in rows.
+    If the substring is not in the list and not contained in all of the values in rows, the substring is returned.
+    If the substring is in the list or contained in all of the values in rows, the default value is returned.
+    '''
+    if substring in current_list:
+        return default
+    # This prefix is the only possible prefix and thus, it is returned
+    if len(rows) == 1:
+        return substring
+    # Checking if there is at least one value in rows that the substring is not contained in.
+    for row in rows:
+        value = row[0]
+        if substring not in value:
+            return substring
+    return default
 
-def get_prefix(str, query_response, current_list):
+
+def get_prefix(str, rows, current_list):
     '''
     Returns the prefix of a string until its last dot, under certain conditions:
     - The prefix is not present in the 'current_list'.
-    - The prefix is not contained in all of the values in the 'query_response' logs query results.
+    - The prefix is not contained in all of the values in rows.
     If the string does not contain a dot or fails to meet the conditions above, the original string is returned.
     Example:
         str = "example.com.subdomain"
@@ -116,25 +134,16 @@ def get_prefix(str, query_response, current_list):
     # If there is no dot in the string, return the string
     if last_dot_index == -1:
         return str
+    
     substring = str[:last_dot_index]
-    # This prefix is the only possible prefix and thus, it is returned
-    if len(query_response.tables[0].rows) == 1 and len(current_list) == 0:
-        return substring
-    if substring in current_list:
-        return str
-    # Checking if there is at least one value in the query response that the prefix is not contained in.
-    for row in query_response.tables[0].rows:
-        value = row[0]
-        if substring not in value:
-            return substring
-    return str
+    return get_substring_or_default(str, substring, rows, current_list)
 
 
-def get_postfix(str, query_response, current_list):
+def get_postfix(str, rows, current_list):
     '''
     Returns the postfix of a string following its first dot, under certain conditions:
     - The postfix is not present in the 'current_list'.
-    - The postfix is not contained in all of the values in the 'query_response' logs query results.
+    - The postfix is not contained in all of the values in rows.
     If the string does not contain a dot or fails to meet the conditions above, the original string is returned.
     Example:
         str = "example.com.subdomain"
@@ -144,18 +153,9 @@ def get_postfix(str, query_response, current_list):
     # If there is no dot in the string, return the string
     if first_dot_index == -1:
         return str
+    
     substring = str[first_dot_index + 1:]
-    # This postfix is the only possible postfix and thus, it is returned
-    if len(query_response.tables[0].rows) == 1 and len(current_list) == 0:
-        return substring
-    if substring in current_list:
-        return str
-    # Checking if there is at least one value in the query response that the postfix is not contained in.
-    for row in query_response.tables[0].rows:
-        value = row[0]
-        if substring not in value:
-            return substring
-    return str
+    return get_substring_or_default(str, substring, rows, current_list)
 
 
 class FilteringTest(unittest.TestCase):
@@ -282,35 +282,29 @@ class FilteringTest(unittest.TestCase):
             self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
 
         
-    # Return an array of at most two values from query_response. Each string in the returned array is not a substring of all values in query_response.
-    def get_values_for_dynamic_tests(self, query_response):
-        # If the query response has only one row, return the value in that row if it is not an empty string
-        if len(query_response.tables[0].rows) == 1:
-            if query_response.tables[0].rows[0][0] == "":
-                return []
-            return [query_response.tables[0].rows[0][0]]
-            # If the query response has two rows, return only one value if one string is contained in the other. Otherwise, return both values in the array.
-        if len(query_response.tables[0].rows) == 2:
-            # Returning only one value in the array if one string is contained in the other
-            if query_response.tables[0].rows[0][0] in query_response.tables[0].rows[0][1]:
-                return [query_response.tables[0].rows[0][1]]
-            if query_response.tables[0].rows[0][1] in query_response.tables[0].rows[0][0]:
-                return [query_response.tables[0].rows[0][0]]
-            return [query_response.tables[0].rows[0][0], query_response.tables[0].rows[1][0]]
+    # Return an array of at most two values from rows. Each string in the returned array is not a substring of all values in rows.
+    def get_values_for_dynamic_tests(self, rows):
+        # If rows has only one row, return the value in that row if it is not an empty string
+        if len(rows) == 1:
+            return [] if rows[0][0] == "" else [rows[0][0]]
         values = []
-        # If the query response has more than two values, search for values in the response that are not substrings of all other values.
-        for row in query_response.tables[0].rows:
-            value = row[0]
-            if value == "":
-                continue
-            for row2 in query_response.tables[0].rows:
-                value2 = row2[0]
-                # Check if the value is not a substring of all other values
-                if value not in value2:
-                    values.append(value)
-                    break
+        # Searching values in rows which are not contained in at least one other value
+        for row in rows:
+            # if we already found two values that satisfy the conditions we can return them 
             if len(values) == 2:
                 break
+
+            value = row[0]
+            # if the value in an empty string we want to skip it
+            if value == "":
+                continue
+                
+            for row_to_compare_with in rows:
+                valueToCompareWith = row_to_compare_with[0]
+                if value not in valueToCompareWith:
+                    values.append(value)
+                    # if we found one value that satisfy the condition, we can continue to the next one
+                    break
         return values
         
     
@@ -333,47 +327,53 @@ class FilteringTest(unittest.TestCase):
         pass #TODO will be added in next PR
 
 
-    def add_substring_to_list(self, query_response, substrings_list, num_of_substrings):
+    def add_substring_to_list(self, rows, substrings_list, num_of_substrings):
         '''
-        Adds at most "num_of_substrings" substrings of values from "query_response" to "substrings_list".
-        A substring of a value is either its postfix after the first dot or its prefix until the first dot.
+        The function return a list with at most "num_of_substrings" substrings of values from "rows" to "substrings_list".
+        A substring of a value will be either its postfix from after the first dot in the value or its prefix until the first dot in the value.
         '''
-
-        # Look for values with substrings that can be appended to the list
-        for row in query_response.tables[0].rows:
-            value = row[0]
-            post = get_postfix(value, query_response, substrings_list)
-            # If post is equal to value, it means either value doesn't contain a dot, or post is already in the list or is a substring of an item in the list.
-            if post != value:
-                substrings_list.append(post)
-            else:
-                pre = get_prefix(value, query_response, substrings_list)
-            # If pre is equal to value, it means either value doesn't contain a dot, or pre is already in the list or is a substring of an item in the list.
-                if pre != value:
-                    substrings_list.append(pre)
-            if len(substrings_list) == num_of_substrings:
+        copy_substrings_list = substrings_list[:]
+        # Looking for values with substrings that can be appended to the list
+        for row in rows:
+            if len(copy_substrings_list) == num_of_substrings:
                 break
+
+            value = row[0]
+            post = get_postfix(value, rows, copy_substrings_list)
+            # Post will equal value if: value dont contain a dot, post is in the list, post is contained in an item in the list.
+            if post != value:
+                copy_substrings_list.append(post)
+            else:
+                pre = get_prefix(value, rows, copy_substrings_list)
+                # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
+                if pre != value:
+                    copy_substrings_list.append(pre)
+            
+            return copy_substrings_list
         
 
     def has_any_test(self, param_name, query_definition, no_filter_response, column_name_in_table):
         pass #TODO will be added in next PR     
 
 
-    def add_prefix_to_list(self, query_response, prefix_list, num_of_prefixes):
+    def add_prefix_to_list(self, rows, prefix_list, num_of_prefixes):
         '''
-        Adds at most "num_of_prefixes" prefixes of values from "query_response" to "prefix_list".
-        A prefix of a value is the portion of the value before the last dot (including the dot).
+        The function return a list with at most "num_of_prefixes" prefixes of values from "rows" to "prefix_list".
+        A prefix of a value will be the prefix until the first dot in the value (including the dot).
         '''
-
-        # Look for values with prefixes that can be appended to the list
-        for row in query_response.tables[0].rows:
-            value = row[0]
-            pre = get_prefix(value, query_response, prefix_list)
-            # If pre is equal to value, it means either value doesn't contain a dot, or pre is already in the list or is a prefix of an item in the list.
-            if pre != value:
-                prefix_list.append(f"{pre}.")
-            if len(prefix_list) == num_of_prefixes:
+        copy_prefix_list = prefix_list[:]
+        # Looking for values with prefix that can be appended to the list
+        for row in rows:
+            if len(copy_prefix_list) == num_of_prefixes:
                 break
+    
+            value = row[0]
+            pre = get_prefix(value, rows, copy_prefix_list)
+            # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
+            if pre != value:
+                copy_prefix_list.append(f"{pre}.")
+    
+        return copy_prefix_list
 
 
     def has_any_prefix_test(self, param_name, query_definition, no_filter_response, column_name_in_table):
