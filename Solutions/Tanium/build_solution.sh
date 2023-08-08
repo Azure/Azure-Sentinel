@@ -116,9 +116,10 @@ check-command() {
 check-new-version() {
   local declared_version
   declared_version=$(jq -r ".Version" Solutions/Tanium/Data/Solution_Tanium.json)
+  DECLARED_VERSION=$declared_version
 
   if [[ "$_REBUILD" -eq 1 ]]; then
-    rm "Solutions/Tanium/Package/$declared_version.zip"
+    rm "Solutions/Tanium/Package/$declared_version.zip" || true
   fi
 
   if find Solutions/Tanium/Package -name '*.zip' | grep -q "$declared_version"; then
@@ -132,11 +133,44 @@ check-new-version() {
   fi
 }
 
+check-matching-playbook-declarations() {
+  local playbook_json_files
+  local declared_playbook_json_files
+  local undeclared_playbook_json_files
+  local missing_playbook_json_files
+
+  playbook_json_files=$(find Solutions/Tanium/Playbooks -name "azuredeploy.json" | sort | sed -e 's|Solutions/Tanium/||')
+  declared_playbook_json_files=$(jq -r ".Playbooks[]" Solutions/Tanium/Data/Solution_Tanium.json | sort)
+
+  # comm -23 : omit lines in common and lines only in the second file
+  undeclared_playbook_json_files=$(comm -23 <(echo "$playbook_json_files") <(echo "$declared_playbook_json_files"))
+  if [[ -n "$undeclared_playbook_json_files" ]]; then
+    _msg_error "Found undeclared playbook json files:"
+    _msg "$undeclared_playbook_json_files"
+    _msg
+    _msg "Did you forget to add them to Solutions/Tanium/Data/Solution_Tanium.json?"
+    _msg
+    exit 1
+  fi
+
+  # comm -13 : omit lines in common and lines only in the first file
+  missing_playbook_json_files=$(comm -13 <(echo "$playbook_json_files") <(echo "$declared_playbook_json_files"))
+  if [[ -n "$missing_playbook_json_files" ]]; then
+    _msg_error "Found declared playbook json files in Data/Solution_Tanium.json but missing the actual file:"
+    _msg "$missing_playbook_json_files"
+    _msg
+    _msg "Did you forget to add them to Solutions/Tanium/Playbooks?"
+    _msg
+    exit 1
+  fi
+}
+
 check-prerequisites() {
   check-command "jq"
   check-command "git"
   check-command "pwsh" "powershell"
   check-new-version
+  check-matching-playbook-declarations
 }
 
 usage() {
@@ -159,7 +193,7 @@ main() {
     done
 
     check-prerequisites
-    _shout "Building Solutions/Tanium using $_TOOL_DIRECTORY"
+    _shout "Building Solutions/Tanium $DECLARED_VERSION using $_TOOL_DIRECTORY"
     declare logfile="/tmp/tanium_sentinel_create_package.log"
     declare tmpdir
     tmpdir=$(mktemp -d)
