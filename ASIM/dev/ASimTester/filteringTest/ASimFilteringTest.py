@@ -78,7 +78,7 @@ def create_parameters_string(parser_file):
 
 
 # Creating a string of the values in the list with commas between them
-# Example: for a list: ['ab', 'cd', 'ef'] the output will be: 'ab','cd','ef'
+# Example: for a list: ['ab', 'cd', 'ef'] the output will be: "'ab','cd','ef'"
 def create_values_string(values_list):
     joined_string = ','.join([f"'{val}'" for val in values_list])
     return joined_string
@@ -308,44 +308,56 @@ class FilteringTest(unittest.TestCase):
         return values
         
 
-    # Performing assertions for dynamic tests with parameter filtering. Values for the parameter are taken from values_list
-    def dynamic_tests_assertions(self, param_name, query_definition, column_name_in_table, values_list, no_filter_rows):
-        val_str = create_values_string(values_list)
-        query_with_filter = query_definition + create_execution_strings_with_one_parameter(param_name,f"dynamic([{val_str}])" ,column_name_in_table)
-        filtered_response = self.send_query(query_with_filter)
-        filtered_rows = filtered_response.tables[0].rows
+    # Performing assertions for dynamic tests with parameter filtering. Values for the parameter are taken from values_list. Refer to dynamic_tests_helper function for parameters description.
+    def dynamic_tests_assertions(self, parameter_name, query_definition, column_name_in_table, values_list, num_of_rows_when_no_filters_in_query):
+        filter_parameters = create_values_string(values_list)
+        query_with_filter = query_definition + create_execution_strings_with_one_parameter(parameter_name,f"dynamic([{filter_parameters}])" ,column_name_in_table)
+        
+        query_response = self.send_query(query_with_filter)
+        num_of_rows_with_filter_in_query = len(query_response.tables[0].rows)
         with self.subTest():
-            self.assertNotEqual(0, len(filtered_rows), f"Parameter: {param_name} - Got no results at all after filtering. Filtered by value: {val_str}")  
+            self.assertNotEqual(0, num_of_rows_with_filter_in_query, f"Parameter: {parameter_name} - Got no results at all after filtering. Filtered by value: {filter_parameters}")  
         with self.subTest():
-            self.assertLess(len(filtered_rows), len(no_filter_rows),  f"Parameter: {param_name} - Expected to have less results after filtering. Filtered by value: {val_str}")
+            self.assertLess(num_of_rows_with_filter_in_query, num_of_rows_when_no_filters_in_query,  f"Parameter: {parameter_name} - Expected to have less results after filtering. Filtered by value: {filter_parameters}")
 
 
-    # Performing filtering with one and two values (if possible) for dynamic parameters.
-    def dynamic_tests_helper(self, param_name, query_definition, no_filter_rows, column_name_in_table, values_list, test_type):
+    def dynamic_tests_helper(self, parameter_name, query_definition, num_of_rows_when_no_filters_in_query, column_name_in_table, values_list, test_type):
+        """
+        Performing filtering with one and two values (if possible) for dynamic parameters.
+
+        Parameters
+        ----------
+        parameter_name : Name of a parser's parameter
+        query_definition : A definition of the parser's query
+        num_of_rows_when_no_filters_in_query : The number of rows in a response of parser's query without performing any filtering. With filtering, we expect to have less rows.
+        column_name_in_table : The name of the column in the query response on which the parameter performs filtering
+        values_list : List of at most two values that will be used to perform filtering.
+        test_type : Name of the specific tests performed. It can be default testing or specific testing for  has_any/has_any_prefix parameters
+        """
         if len(values_list) == 0:
-            self.fail(f"Parameter: {param_name} - Unable to find substrings to perform {test_type} tests")
+            self.fail(f"Parameter: {parameter_name} - Unable to find substrings to perform {test_type} tests")
+        filtering_with_one_value_list = [values_list[0]]
         # Performing filtering with one value in the parameter
-        self.dynamic_tests_assertions(param_name, query_definition, column_name_in_table, [values_list[0]], no_filter_rows )
+        self.dynamic_tests_assertions(parameter_name, query_definition, column_name_in_table, filtering_with_one_value_list, num_of_rows_when_no_filters_in_query )
 
         # Performing filtering with two values in the parameter if possible
         if len(values_list) == 1:
-            self.fail("Parameter: {param_name} - Not enough data to perform two values {test_type} tests")
-        else:
-            self.dynamic_tests_assertions(param_name,query_definition, column_name_in_table, values_list, no_filter_rows)
+            self.fail(f"Parameter: {parameter_name} - Not enough data to perform two values {test_type} tests")
+        self.dynamic_tests_assertions(parameter_name,query_definition, column_name_in_table, values_list, num_of_rows_when_no_filters_in_query)
 
     
-    # Performing filtering for dynamic parameters with values from no_filter_rows. "full values" because similar test are done for substrings/prefixes of values.
-    def dynamic_full_values_tests(self, param_name, query_definition, no_filter_rows, column_name_in_table):
+    # Performing filtering for dynamic parameters with values which taken from no_filter_rows. Refer to has_any_test function for parameters description.
+    def dynamic_default_tests(self, parameter_name, query_definition, no_filter_rows, column_name_in_table):
         selected_values = self.get_values_for_dynamic_tests(no_filter_rows)
         with self.subTest():
-            self.dynamic_tests_helper(param_name, query_definition, no_filter_rows, column_name_in_table, selected_values, "full values")
+            self.dynamic_tests_helper(parameter_name, query_definition, len(no_filter_rows), column_name_in_table, selected_values, "default")
 
-    # Performing a query with a non-existing value, expecting to return no results
-    def dynamic_tests_check_fictive_value(self, param_name, query_definition, column_name_in_table):
-        no_results_query = query_definition + create_execution_strings_with_one_parameter(param_name,f"dynamic([{DUMMY_VALUE}])" ,column_name_in_table)
+    # Performing a query with a non-existing value, expecting to return no results. Refer to has_any_test function for parameters description.
+    def dynamic_tests_check_fictive_value(self, parameter_name, query_definition, column_name_in_table):
+        no_results_query = query_definition + create_execution_strings_with_one_parameter(parameter_name,f"dynamic([{DUMMY_VALUE}])" ,column_name_in_table)
         no_results_response = self.send_query(no_results_query)
         with self.subTest():
-            self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
+            self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {parameter_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
 
 
     def get_substrings_list(self, rows, num_of_substrings):
@@ -373,13 +385,13 @@ class FilteringTest(unittest.TestCase):
         return substrings_list
         
 
-    def has_any_test(self, param_name, query_definition, no_filter_rows, column_name_in_table):
+    def has_any_test(self, parameter_name, query_definition, no_filter_rows, column_name_in_table):
         """
         Test for dynamic parameters with a name that ends with "has_any". Filtering is made with substrings of values from no_filter_rows.   
         
         Parameters
         ----------
-        param_name : A name of a parameter
+        parameter_name : Name of a parser's parameter
         query_definition : A definition of the parser's query
         no_filter_rows : The rows from a response for the parser query with no filter applied
         column_name_in_table : The name of the column in the query response on which the parameter performs filtering
@@ -387,7 +399,7 @@ class FilteringTest(unittest.TestCase):
         # Getting substrings that will be the values of the filtering parameters
         selected_substrings = self.get_substrings_list(no_filter_rows, 2)
         with self.subTest():
-            self.dynamic_tests_helper(param_name, query_definition, no_filter_rows, column_name_in_table, selected_substrings, "substrings")
+            self.dynamic_tests_helper(parameter_name, query_definition, len(no_filter_rows), column_name_in_table, selected_substrings, "has_any")
         
 
     def get_prefix_list(self, rows, num_of_prefixes):
@@ -410,13 +422,13 @@ class FilteringTest(unittest.TestCase):
         return prefix_list
 
 
-    def has_any_prefix_test(self, param_name, query_definition, no_filter_rows, column_name_in_table):
+    def has_any_prefix_test(self, parameter_name, query_definition, no_filter_rows, column_name_in_table):
         """
         Test for dynamic parameters with a name that ends with "has_any_prefix". Filtering is made with prefixes of values from no_filter_rows.   
         
         Parameters
         ----------
-        param_name : A name of a parameter
+        parameter_name : Name of a parser's parameter
         query_definition : A definition of the parser's query
         no_filter_rows : The rows from a response for the parser query with no filter applied
         column_name_in_table : The name of the column in the query response on which the parameter performs filtering
@@ -424,10 +436,10 @@ class FilteringTest(unittest.TestCase):
         # Getting prefixes that will be the values of the filtering parameters
         selected_prefixes = self.get_prefix_list(no_filter_rows, 2)
         with self.subTest():
-            self.dynamic_tests_helper(param_name, query_definition, no_filter_rows, column_name_in_table, selected_prefixes, "prefixes")
+            self.dynamic_tests_helper(parameter_name, query_definition, len(no_filter_rows), column_name_in_table, selected_prefixes, "has_any_prefix")
             
 
-    def dynamic_test(self, param, query_definition, column_name_in_table):
+    def dynamic_test(self, parameter, query_definition, column_name_in_table):
         """
         Test for dynamic parameters. Dynamic parameter receive as value an array of strings.
 
@@ -437,25 +449,26 @@ class FilteringTest(unittest.TestCase):
         query_definition : A definition of the parser's query
         column_name_in_table : The name of the column in the query response on which the parameter performs filtering
         """
-        param_name = param['Name']
+        parameter_name = parameter['Name']
         no_filter_query = query_definition + create_execution_string_without_parameters(column_name_in_table)
         no_filter_response = self.send_query(no_filter_query)
         no_filter_rows = no_filter_response.tables[0].rows
-        self.assertNotEqual(len(no_filter_rows) , 0 , f"No data for parameter:{param_name}")
+        self.assertNotEqual(len(no_filter_rows) , 0 , f"No data for parameter:{parameter_name}")
         with  self.subTest():
-            self.assertNotEqual(len(no_filter_rows), 1, f"Only one value exists for parameter: {param_name} - validations for this parameter are partial" )
+            self.assertNotEqual(len(no_filter_rows), 1, f"Only one value exists for parameter: {parameter_name} - validations for this parameter are partial" )
 
-        # Testing with full values from the response (not substring or prefixes)
-        self.dynamic_full_values_tests(param_name, query_definition, no_filter_rows, column_name_in_table)
+
+        # Default testing applied for every dynamic parameter
+        self.dynamic_default_tests(parameter_name, query_definition, no_filter_rows, column_name_in_table)
 
         # Specific tests for "has_any" or "has_any_prefix" parameters
-        if param_name.endswith('has_any'):
-            self.has_any_test(param_name, query_definition,no_filter_rows, column_name_in_table)
-        elif param_name.endswith('has_any_prefix'):
-            self.has_any_prefix_test(param_name, query_definition, no_filter_rows, column_name_in_table)
+        if parameter_name.endswith('has_any'):
+            self.has_any_test(parameter_name, query_definition,no_filter_rows, column_name_in_table)
+        elif parameter_name.endswith('has_any_prefix'):
+            self.has_any_prefix_test(parameter_name, query_definition, no_filter_rows, column_name_in_table)
 
          # Performing a query with a non-existing value, expecting to return no results
-        self.dynamic_tests_check_fictive_value(param_name, query_definition, column_name_in_table)
+        self.dynamic_tests_check_fictive_value(parameter_name, query_definition, column_name_in_table)
 
 
     def disabled_test(self, query_definition):
