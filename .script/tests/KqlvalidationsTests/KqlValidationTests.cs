@@ -262,8 +262,8 @@ namespace Kqlvalidations.Tests
             var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml, "FunctionParams");
 
             //Ignore known issues
-            yaml.TryGetValue("Id", out object id);
-            if (id != null && ShouldSkipTemplateValidation((string)yaml["Id"]))
+            yaml.TryGetValue("id", out object id);
+            if (id != null && ShouldSkipTemplateValidation((string)yaml["id"]))
             {
                 return;
             }
