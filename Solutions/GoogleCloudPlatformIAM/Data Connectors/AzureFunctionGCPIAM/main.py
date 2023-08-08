@@ -21,7 +21,7 @@ LOG_TYPE = 'GCP_IAM'
 # interval of script execution
 SCRIPT_EXECUTION_INTERVAL_MINUTES = 5
 # if ts of last processed file is older than "now - MAX_PERIOD_MINUTES" then script will get events from last time stamp +1 day
-MAX_PERIOD_MINUTES = 60 * 6
+MAX_PERIOD_MINUTES = 60 * 1
 
 LOG_ANALYTICS_URI =  os.environ.get('logAnalyticsUri')
 
