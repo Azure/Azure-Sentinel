@@ -1,5 +1,5 @@
 # SlashNext Security Events for Microsoft Sentinel
-<img src="./logo/slashnext-logo.svg" alt="drawing" width="50%"/><br>
+<img src="./logo/slashnext-logo.png" alt="drawing" width="50%"/><br>
 
 ## Overview
 
@@ -25,8 +25,7 @@ The Playbook will get list of events occurred to a customer and log them in Log 
     * Enable Web Incidents: To enable web incidents logging.
     * Enable SMS Incidents: To enable SMS/Mobile incidents logging.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSlashNext%20SIEM%2FPlaybook%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSlashNext%20SIEM%2FPlaybook%2Fazuredeploy.json)
+
 
 ### Post-Deployment Instructions - Deployment from market place
 It will deploy two Template Spec
