@@ -37,7 +37,7 @@ Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The 
 ![](Images/2023-06-26-10-04-42.png)
 
 ## Risk lists
-Are curated lists that contain Indicators of Compromise (IOCs), such as IP addresses, domains, file hashes, or URLs associated with malicious activity. These lists are generated based on a wide array of Recorded Future intelligence sources, including open web, dark web, and technical sources.
+Risk lists are curated lists that contain Indicators of Compromise (IOCs), such as IP addresses, domains, file hashes, or URLs associated with malicious activity. These lists are generated based on a wide array of Recorded Future intelligence sources, including open web, dark web, and other technical sources.
 
 * [Manage Risk Lists](https://www.recordedfuture.com/support/install-configure-manage-risk-lists)
 * [About Risk Lists](https://support.recordedfuture.com/hc/en-us/articles/115000897248-Recorded-Future-Risk-Lists) (requires login)
@@ -63,8 +63,9 @@ The Recorded Future solution uses the following connectors:
 
 Recorded Future connectors requires APIKeys to communicate with the Recorded Future API. To obtain APIKeys, please visit [Recorded Future Requesting API Tokens](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens)(Require Recorded Future Login) and request API token for Recorded Future for Microsoft Sentinel or/and ecorded Future Sandbox for Microsoft Sentinel.
 
-- **/microsoftgraphsecurity** - [Documenation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/)
 - **/azuresentinel** - [Documentation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/azuresentinel/)
+
+- **/microsoftgraphsecurity** - [Documenation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/). The playbooks using this API is being DEPRECATED and will transition to new playbooks using azuresentinel api.
 
 ## Ingestion and Operational costs
 Playbook(Logic apps) may result in additional ingestion or operational costs:
@@ -97,7 +98,6 @@ To use the workbooks, playbooks and analytic rules, install them inside of Senti
 To install individual playbooks one by one, use the buttons next to the descriptions of the individual playbooks further down in this document.
 
 > **Due to internal dependencies, please deploy and activate the ImportToSentinel playbook before any of the IndicatorProcessor/TIProcessor playbooks.**
-
 
 # Upgrade from version 1
 If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Reinstall all IndicatorProcessor/TIProcessor and enrichment -playbooks. Select a different name than the once already installed and  reauthenticate them. After validating that the new playbooks works as expected you can deactivate the V1 versions. 
@@ -169,61 +169,78 @@ Automatically enrich IOCs in incidents by following the steps below:
 The Recorded Future playbook is now configured to run when incidents are triggered, and it will enrich the following IOC types: IP, Domain, URL, or Hash.
 
 # Playbooks
-This section lists all available Recorded Future Playbooks 
+This section lists all available Recorded Future Playbooks. 
 
-## RecordedFuture-ImportToSentinel
+## RecordedFuture-ThreatIntelligenceImport
 Type: Detection
 Included in Recorded Future Intelligence Solution: Yes
 
-Retrieves all Risk Lists (IOCs), and adds them to the ThreatIntelligenceIndicator table. All TIProcessor playbooks use this playbook.
+Retrieves Indicators Of Compromise (IoCs) from one of the indicator import logic apps, and store them in the ThreatIntelligenceIndicator table. All IndicatorImport playbooks use this playbook for batching. 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ImportToSentinel%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ImportToSentinel%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ThreatIntelligenceImport%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ThreatIntelligenceImport%2Fazuredeploy.json)
 
-## RecordedFuture-IP-Actively_Comm_C2_Server-TIProcessor
+## RecordedFuture-Domain-IndicatorImport
 Type: Detection
 Included in Recorded Future Intelligence Solution: Yes
 
-Retrieves the [ Risk List - Actively Communicating C&C IPs](https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules) (requires login),  and adds the IOCs to the ThreatIntelligenceIndicator table.
+Retrieves the [Microsoft Sentinel Domain Default Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules) (requires login), Domain IOC with risk greater than 65 and adds the IOCs to the ThreatIntelligenceIndicator table.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IP-Actively_Comm_C2_Server-IndicatorProcessor%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IP-Actively_Comm_C2_Server-IndicatorProcessor%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FDomain-IndicatorImport%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FDomain-IndicatorImport%2Fazuredeploy.json)
 
-## RecordedFuture-DOMAIN-C2_DNS_Name-TIProcessor
-Type: Detection 
-Included in Recorded Future Intelligence Solution: Yes
 
-Retrieves the [Risk List – C&C DNS Name Domain](https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-DOMAIN-C2_DNS_Name-IndicatorProcessor%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-DOMAIN-C2_DNS_Name-IndicatorProcessor%2Fazuredeploy.json)
-
-## RecordedFuture-URL-Recent_Rep_by_Insikt-TIProcessor
-Type: Detection 
-Included in Recorded Future Intelligence Solution: Yes
-
-Retrieves the [ Risk List – Recently Reported by Insikt Group URL](https://support.recordedfuture.com/hc/en-us/articles/115010052768-URL-Risk-Rules) (requires login) and adds the IOCs to the ThreatIntelligenceIndicator table.
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-URL-Recent_Rep_by_Insikt_Group-IndicatorProcessor%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-URL-Recent_Rep_by_Insikt_Group-IndicatorProcessor%2Fazuredeploy.json)
-
-## RecordedFuture-HASH-Obs_in_Underground-TIProcessor
-Type: Detection 
-Included in Recorded Future Intelligence Solution: Yes
-
-Retrieves the[ Risk List – Observed in Underground Virus Testing Sites Hash](https://support.recordedfuture.com/hc/en-us/articles/115000846167-Hash-Risk-Rules) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-HASH-Observed_in_Underground_Virus_Test_Sites-IndicatorProcessor%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-HASH-Observed_in_Underground_Virus_Test_Sites-IndicatorProcessor%2Fazuredeploy.json)
-
-## RecordedFuture-Ukraine-IndicatorProcessor
+## RecordedFuture-Hash-IndicatorImport
 Type: Detection
 Included in Recorded Future Intelligence Solution: Yes
 
-Retrieves the [Risk List – Ukraine Threat List of Related IOCs](https://support.recordedfuture.com/hc/en-us/articles/4484981411475-Resource-Center-on-the-Ukraine-Conflict) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
+Retrieves the [Microsoft Sentinel Hash Observed in Underground Testing Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115000846167-Hash-Risk-Rules) (requires login), Hashes based on the observedMalwareTesting Risk Rule and adds the IOCs to the ThreatIntelligenceIndicator table.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FPlaybooks%2FRecordedFuture-Ukraine-IndicatorProcessor%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FPlaybooks%2FRecordedFuture-Ukraine-IndicatorProcessor%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Hash-IndicatorImport%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Hash-IndicatorImport%2Fazuredeploy.json)
+
+## RecordedFuture-IP-IndicatorImport
+Type: Detection
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves the [Microsoft Sentinel IP default Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules) (requires login), IPs with risk grater than 65 and adds the IOCs to the ThreatIntelligenceIndicator table.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IP-IndicatorImport%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IP-IndicatorImport%2Fazuredeploy.json)
+
+## RecordedFuture-URL-IndicatorImport
+Type: Detection
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves the [Microsoft Sentinel URL Recently Reported by Insikt Group Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules) (requires login), URLs based on the Recently Reported by Insikt Group rule and adds the IOCs to the ThreatIntelligenceIndicator table.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-URL-IndicatorImport%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-URL-IndicatorImport%2Fazuredeploy.json)
+
+## RecordedFuture-Alert-Importer
+Type: Alerting
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves Alerts and stores them in a custom log in the Log Analytic Workspace. More information on [Alerts](https://support.recordedfuture.com/hc/en-us/articles/115002151327-Setting-up-Event-Alerts) (requires login)
+
+The Alert importer playbook also creates incidents when receiving alerts. Its possible to turn off incident generation by setting the logic app parameter create_incident to false
+
+![](Images/2023-08-09-18-05-46.png)
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Alert-Importer%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Alert-Importer%2Fazuredeploy.json)
+
+
+## RecordedFuture-Playbook-Alert-Importer
+Type: Alerting
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves Playbook Alerts and stores them in a custom log in the Log Analytic Workspace. More information on [Playbook Alerts](https://support.recordedfuture.com/hc/en-us/articles/13152506878739-Playbook-Alerting-Rules-) (requires login)
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Playbook-Alert-Importer%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Playbook-Alert-Importer%2Fazuredeploy.json)
+
+__________________________________________________________
 
 ## RecordedFuture-Sandbox_Enrichment-Url
 Type: Response
@@ -321,3 +338,66 @@ The Recorded Future Intelligence Cloud aggregates data related to Sigma Rules an
 [Click here to learn more](https://support.recordedfuture.com/hc/en-us/articles/11633413141779) (Require Recorded Future Login)
 
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/IntelligenceCloudParameter.png)
+
+
+# DEPRECATED Playbooks
+These playbooks will be removed in future version on Recorder Future Solution. 
+## RecordedFuture-ImportToSentinel
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
+Type: Detection
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves all Risk Lists (IOCs), and adds them to the ThreatIntelligenceIndicator table. All TIProcessor playbooks use this playbook.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ImportToSentinel%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ImportToSentinel%2Fazuredeploy.json)
+
+## RecordedFuture-IP-Actively_Comm_C2_Server-TIProcessor
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
+Type: Detection
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves the [ Risk List - Actively Communicating C&C IPs](https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules) (requires login),  and adds the IOCs to the ThreatIntelligenceIndicator table.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IP-Actively_Comm_C2_Server-IndicatorProcessor%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IP-Actively_Comm_C2_Server-IndicatorProcessor%2Fazuredeploy.json)
+
+## RecordedFuture-DOMAIN-C2_DNS_Name-TIProcessor
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
+Type: Detection 
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves the [Risk List – C&C DNS Name Domain](https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-DOMAIN-C2_DNS_Name-IndicatorProcessor%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-DOMAIN-C2_DNS_Name-IndicatorProcessor%2Fazuredeploy.json)
+
+## RecordedFuture-URL-Recent_Rep_by_Insikt-TIProcessor
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
+Type: Detection 
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves the [ Risk List – Recently Reported by Insikt Group URL](https://support.recordedfuture.com/hc/en-us/articles/115010052768-URL-Risk-Rules) (requires login) and adds the IOCs to the ThreatIntelligenceIndicator table.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-URL-Recent_Rep_by_Insikt_Group-IndicatorProcessor%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-URL-Recent_Rep_by_Insikt_Group-IndicatorProcessor%2Fazuredeploy.json)
+
+## RecordedFuture-HASH-Obs_in_Underground-TIProcessor
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
+Type: Detection 
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves the[ Risk List – Observed in Underground Virus Testing Sites Hash](https://support.recordedfuture.com/hc/en-us/articles/115000846167-Hash-Risk-Rules) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-HASH-Observed_in_Underground_Virus_Test_Sites-IndicatorProcessor%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-HASH-Observed_in_Underground_Virus_Test_Sites-IndicatorProcessor%2Fazuredeploy.json)
+
+## RecordedFuture-Ukraine-IndicatorProcessor
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
+Type: Detection
+Included in Recorded Future Intelligence Solution: Yes
+
+Retrieves the [Risk List – Ukraine Threat List of Related IOCs](https://support.recordedfuture.com/hc/en-us/articles/4484981411475-Resource-Center-on-the-Ukraine-Conflict) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FPlaybooks%2FRecordedFuture-Ukraine-IndicatorProcessor%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FPlaybooks%2FRecordedFuture-Ukraine-IndicatorProcessor%2Fazuredeploy.json)
