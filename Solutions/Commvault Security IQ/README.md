@@ -44,6 +44,9 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
 - **User Compromised:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a compromised Commvault/Metallic user. 
 - **Data Aging:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a request to disable data aging on a specific Commvault/Metallic client. 
 
+Note:- The Commvault-Logic-App mentioned below in the documentation can either be created manually by following the steps mentioned or it can be imported from the file **Playbooks/Commvault-Logic-App-ARM-Template.json**.
+To import the logic app from the azure portal go to "Custom Deployment" -> "Build your own template in the editor" -> "Load File" -> Use the json present under **Playbooks/Commvault-Logic-App-ARM-Template.json**.
+Please have the keyvault and the automation account ready prior to deploying the logic app and also give the neccessary permissions as mentioned in the documentation post the deployment of the logic app.
 
 
 ## Installation
