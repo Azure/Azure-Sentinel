@@ -4,12 +4,15 @@
     "metadata": {
         "title": "AusCtisExportTaggedIndicators",
         "description": "This playbook gets triggered every hour and perform the following actions:\n 1. Get all the threat intelligence indicators from Sentinel Workspace with given tag.\n 2. Filter all the indicators whose export in not completed.\n 3. Export the indicators to provided TAXII server. ",
-        "prerequisites": ["1. Have TAXII Server Url, Collection ID, Username and Password handy before the deployment of the Playbook",
-        "2. Tag the indicators that need to be exported, by default this playbook exports the indicators with tag 'ACSC Export', this can be changes during the deployment of playbook. Details on how to tag can be found [here](https://learn.microsoft.com/azure/sentinel/understand-threat-intelligence#view-and-manage-your-threat-indicators)"],
-        "postDeployment": ["This playbook needs contributor role on Log Analytics, to read and update threat indicator tags. 1. Go to Log Analytics Workspace resource --> 2. Select Access control (IAM) tab -->3. Add role assignments --> 4. Select Contributor role --> 5. In the Members tab choose 'Assign access to' Managed Identity --> 6. Click on 'Select members' --> 7. Provide correct Subscription and Managed Identity  --> 8. Provide the playbook name in 'Search by name' textbox --> 9. Select the correct identity and click on Select --> 10. Click on 'Review + assign' "
+        "prerequisites": [
+            "1. Have TAXII Server Url, Collection ID, Username and Password handy before the deployment of the Playbook",
+            "2. Tag the indicators that need to be exported, by default this playbook exports the indicators with tag 'ACSC Export', this can be changes during the deployment of playbook. Details on how to tag can be found [here](https://learn.microsoft.com/azure/sentinel/understand-threat-intelligence#view-and-manage-your-threat-indicators)"
+        ],
+        "postDeployment": [
+            "This playbook needs contributor role on Log Analytics, to read and update threat indicator tags. 1. Go to Log Analytics Workspace resource --> 2. Select Access control (IAM) tab -->3. Add role assignments --> 4. Select Contributor role --> 5. In the Members tab choose 'Assign access to' Managed Identity --> 6. Click on 'Select members' --> 7. Provide correct Subscription and Managed Identity  --> 8. Provide the playbook name in 'Search by name' textbox --> 9. Select the correct identity and click on Select --> 10. Click on 'Review + assign' "
         ],
         "prerequisitesDeployTemplateFile": "",
-        "lastUpdateTime": "2022-11-15T12:00:38Z",
+        "lastUpdateTime": "2023-08-10T12:00:38Z",
         "entities": [
         ],
         "tags": [
@@ -75,7 +78,7 @@
     "variables": {
         "SubscriptionID": "[subscription().subscriptionId]",
         "ResourceGroup": "[resourceGroup().name]",
-		"azure": "[concat('https://management','.azure','.com')]"
+        "azure": "[concat('https://management','.azure','.com')]"
     },
     "resources": [
         {
@@ -161,13 +164,802 @@
                                 "where": "@not(contains(item()?['properties']?['threatIntelligenceTags'], parameters('Tag for indicator export completion')))"
                             }
                         },
-                        "For_each_filtered_indicator": {
+                        "For_each_Indicator": {
+                            "actions": {
+                                "Append_to_array_Indicators": {
+                                    "inputs": {
+                                        "name": "Indicators",
+                                        "value": "@variables('Indicator')"
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'killChainPhases'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable"
+                                },
+                                "Compose_mandatory_properties": {
+                                    "inputs": {
+                                        "created": "@formatDateTime(string(items('For_each_Indicator')?['properties']?['created']), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                        "id": "indicator--@{guid()}",
+                                        "modified": "@formatDateTime(string(items('For_each_Indicator')?['properties']?['lastUpdatedTimeUtc']), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                        "pattern": "@items('For_each_Indicator')?['properties']?['pattern']",
+                                        "pattern_type": "@if(contains(createArray('stix', 'pcre', 'sigma', 'snort', 'suricata', 'yara'), string(items('For_each_Indicator')?['properties']?['patternType'])), string(items('For_each_Indicator')?['properties']?['patternType']), 'stix')",
+                                        "spec_version": "2.1",
+                                        "type": "indicator",
+                                        "valid_from": "@formatDateTime(string(items('For_each_Indicator')?['properties']?['validFrom']), 'yyyy-MM-ddTHH:mm:ss.ffffffK')"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Compose"
+                                },
+                                "Condition_to_check_if_'confidence'_property_exist": {
+                                    "actions": {
+                                        "Compose_'confidence'_property": {
+                                            "inputs": "@addProperty(variables('Indicator'), 'confidence', item()?['properties']?['confidence'])",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Set_variable_Indicator_with_'confidence'_property": {
+                                            "inputs": {
+                                                "name": "Indicator",
+                                                "value": "@outputs('Compose_''confidence''_property')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_'confidence'_property": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['confidence']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_Indicator_with_mandatory_properties": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'createdByRef'_property_exist": {
+                                    "actions": {
+                                        "Condition_to_chek_if_'createdByRef'_in_STIIX_format": {
+                                            "actions": {
+                                                "Compose_'created_by_ref'_property": {
+                                                    "inputs": "@addProperty(variables('Indicator'), 'created_by_ref', item()?['properties']?['createdByRef'])",
+                                                    "runAfter": {},
+                                                    "type": "Compose"
+                                                },
+                                                "Set_variable_Indicator_with_'created_by_ref'_property": {
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''created_by_ref''_property')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Compose_'created_by_ref'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@startsWith(item()?['properties']?['createdByRef'], 'indicator--')",
+                                                            "@true"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['createdByRef']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'displayName'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'description'_property_exist": {
+                                    "actions": {
+                                        "Compose_'description'_property": {
+                                            "inputs": "@addProperty(variables('Indicator'), 'description', item()?['properties']?['description'])",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Set_variable_Indicator_with_'description'_property": {
+                                            "inputs": {
+                                                "name": "Indicator",
+                                                "value": "@outputs('Compose_''description''_property')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_'description'_property": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['description']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'confidence'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'displayName'_property_exist": {
+                                    "actions": {
+                                        "Compose_'name'_property": {
+                                            "inputs": "@addProperty(variables('Indicator'), 'name', item()?['properties']?['displayName'])",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Set_variable_Indicator_with_'name'_property": {
+                                            "inputs": {
+                                                "name": "Indicator",
+                                                "value": "@outputs('Compose_''name''_property')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_'name'_property": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['displayName']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'language'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'extensions'_property_exist": {
+                                    "actions": {
+                                        "Condition_to_check_if_extension_definition_exist": {
+                                            "actions": {
+                                                "Compose_'extensions'_property": {
+                                                    "inputs": "@addProperty(variables('Indicator'), 'extensions', item()?['properties']?['extensions'])",
+                                                    "runAfter": {},
+                                                    "type": "Compose"
+                                                },
+                                                "Set_variable_Indicator_with_'extensions'_property": {
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''extensions''_property')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Compose_'extensions'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@indexOf(string(item()?['properties']?['extensions']), 'extension-definition--')",
+                                                                -1
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['extensions']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'granularMarkings'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'externalReferences'_property_exist": {
+                                    "actions": {
+                                        "Condition_to_check_if__externalReferences_is_empty_array": {
+                                            "actions": {
+                                                "Compose_'external_references'_property": {
+                                                    "inputs": "@addProperty(variables('Indicator'), 'external_references', item()?['properties']?['externalReferences'])",
+                                                    "runAfter": {},
+                                                    "type": "Compose"
+                                                },
+                                                "Set_variable_Indicator_with_'external_references'_property": {
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''external_references''_property')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Compose_'external_references'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@length(item()?['properties']?['externalReferences'])",
+                                                                0
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['externalReferences']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'revoked'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'granularMarkings'_property_exist": {
+                                    "actions": {
+                                        "Condition_to_check_if_granularMarkings_is_empty_array": {
+                                            "actions": {
+                                                "Compose_'granular_markings'_property": {
+                                                    "inputs": "@addProperty(variables('Indicator'), 'granular_markings', item()?['properties']?['granularMarkings'])",
+                                                    "runAfter": {},
+                                                    "type": "Compose"
+                                                },
+                                                "Set_variable_Indicator_with_'granular_markings'_property": {
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''granular_markings''_property')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Compose_'granular_markings'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@length(item()?['properties']?['granularMarkings'])",
+                                                                0
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['granular_markings']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'objectMarkingRefs'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'indicatorTypes'_property_exist": {
+                                    "actions": {
+                                        "Condition_to_check_if_indicatorTypes_is_empty_array": {
+                                            "actions": {
+                                                "Compose_'indicator_types'_property": {
+                                                    "inputs": "@addProperty(variables('Indicator'), 'indicator_types', item()?['properties']?['indicatorTypes'])",
+                                                    "runAfter": {},
+                                                    "type": "Compose"
+                                                },
+                                                "Set_variable_Indicator_with_'indicator_types'_property": {
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''indicator_types''_property')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Compose_'indicator_types'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@length(item()?['properties']?['indicatorTypes'])",
+                                                                0
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['indicatorTypes']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'extensions'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'killChainPhases'_property_exist": {
+                                    "actions": {
+                                        "Condition_to_check_if_killChainPhases_is_empty_array": {
+                                            "actions": {
+                                                "Compose_'kill_chain_phases'_property": {
+                                                    "inputs": "@addProperty(variables('Indicator'), 'kill_chain_phases', item()?['properties']?['killChainPhases'])",
+                                                    "runAfter": {},
+                                                    "type": "Compose"
+                                                },
+                                                "Set_variable_Indicator_with_'kill_chain_phases'_property": {
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''kill_chain_phases''_property')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Compose_'kill_chain_phases'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@length(item()?['properties']?['killChainPhases'])",
+                                                                0
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['killChainPhases']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'validUntil'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'labels'_property_exist": {
+                                    "actions": {
+                                        "Condition_to_check_if_labels_is_empty_array": {
+                                            "actions": {
+                                                "Compose_'labels'_property": {
+                                                    "inputs": "@addProperty(variables('Indicator'), 'labels', item()?['properties']?['labels'])",
+                                                    "runAfter": {},
+                                                    "type": "Compose"
+                                                },
+                                                "Set_variable_Indicator_with_'labels'_property": {
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''labels''_property')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Compose_'labels'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@length(item()?['properties']?['labels'])",
+                                                                0
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['labels']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'createdByRef'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'language'_property_exist": {
+                                    "actions": {
+                                        "Compose_'lang'_property": {
+                                            "inputs": "@addProperty(variables('Indicator'), 'lang', item()?['properties']?['language'])",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Set_variable_Indicator_with_'lang'_property": {
+                                            "inputs": {
+                                                "name": "Indicator",
+                                                "value": "@outputs('Compose_''lang''_property')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_'lang'_property": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['language']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'description'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'objectMarkingRefs'_property_exist": {
+                                    "actions": {
+                                        "Condition_to_check_if_objectMarkingRefs_is_empty_array": {
+                                            "actions": {
+                                                "Compose_'object_marking_refs'_property": {
+                                                    "inputs": "@addProperty(variables('Indicator'), 'object_marking_refs', item()?['properties']?['objectMarkingRefs'])",
+                                                    "runAfter": {},
+                                                    "type": "Compose"
+                                                },
+                                                "Set_variable_Indicator_with_'object_marking_refs'_property": {
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''object_marking_refs''_property')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Compose_'object_marking_refs'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@length(item()?['properties']?['objectMarkingRefs'])",
+                                                                0
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['objectMarkingRefs']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'externalReferences'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'patternVersion'_property_exist": {
+                                    "actions": {
+                                        "Compose_'pattern_version'_property": {
+                                            "inputs": "@addProperty(variables('Indicator'), 'pattern_version', item()?['properties']?['patternVersion'])",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Set_variable_Indicator_with_'pattern_version'_property": {
+                                            "inputs": {
+                                                "name": "Indicator",
+                                                "value": "@outputs('Compose_''pattern_version''_property')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_'pattern_version'_property": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['patternVersion']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'indicatorTypes'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'revoked'_property_exist": {
+                                    "actions": {
+                                        "Compose_'revoked'_property": {
+                                            "inputs": "@addProperty(variables('Indicator'), 'revoked', item()?['properties']?['revoked'])",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Set_variable_Indicator_with_'revoked'_property": {
+                                            "inputs": {
+                                                "name": "Indicator",
+                                                "value": "@outputs('Compose_''revoked''_property')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_'revoked'_property": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['revoked']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'labels'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_to_check_if_'validUntil'_property_exist": {
+                                    "actions": {
+                                        "Compose_'valid_until'_property": {
+                                            "inputs": "@addProperty(variables('Indicator'), 'valid_until', formatDateTime(string(item()?['properties']?['validUntil']), 'yyyy-MM-ddTHH:mm:ss.ffffffK'))",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Set_variable_Indicator_with_'valid_until'_property": {
+                                            "inputs": {
+                                                "name": "Indicator",
+                                                "value": "@outputs('Compose_''valid_until''_property')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_'valid_until'_property": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_Indicator')?['properties']?['validUntil']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'patternVersion'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Reset_variable_Indicator": {
+                                    "inputs": {
+                                        "name": "Indicator",
+                                        "value": {}
+                                    },
+                                    "runAfter": {
+                                        "Append_to_array_Indicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "Set_variable_Indicator_with_mandatory_properties": {
+                                    "inputs": {
+                                        "name": "Indicator",
+                                        "value": "@outputs('Compose_mandatory_properties')"
+                                    },
+                                    "runAfter": {
+                                        "Compose_mandatory_properties": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                }
+                            },
                             "foreach": "@body('Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete')",
+                            "runAfter": {
+                                "Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_filtered_indicator": {
                             "actions": {
                                 "HTTP_appendTags_request": {
-                                    "runAfter": {
-                                    },
-                                    "type": "Http",
                                     "inputs": {
                                         "authentication": {
                                             "type": "ManagedServiceIdentity"
@@ -178,10 +970,13 @@
                                             ]
                                         },
                                         "method": "POST",
-                                        "uri": "[uriComponentToString(uri(variables('azure'),'subscriptions/@{parameters(''SubscriptionID'')}/resourceGroups/@{parameters(''ResourceGroup'')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters(''Workspace'')}/providers/Microsoft.SecurityInsights/threatIntelligence/main/indicators/@{items(''For_each_filtered_indicator'')?[''name'']}/appendTags?api-version=2021-10-01'))]"
-                                    }
+                                        "uri": "https://management.azure.com/subscriptions/@{parameters('SubscriptionID')}/resourceGroups/@{parameters('ResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('Workspace')}/providers/Microsoft.SecurityInsights/threatIntelligence/main/indicators/@{items('For_each_filtered_indicator')?['name']}/appendTags?api-version=2021-10-01"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
                                 }
                             },
+                            "foreach": "@body('Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete')",
                             "runAfter": {
                                 "HTTP_POST_stix_bundle_to_TAXII_server": [
                                     "Succeeded"
@@ -216,6 +1011,9 @@
                         },
                         "HTTP_queryIndicators_request": {
                             "runAfter": {
+                                "Initialize_variable_Indicator": [
+                                    "Succeeded"
+                                ]
                             },
                             "type": "Http",
                             "inputs": {
@@ -239,22 +1037,51 @@
                                 "uri": "[uriComponentToString(uri(variables('azure'),'subscriptions/@{parameters(''SubscriptionID'')}/resourceGroups/@{parameters(''ResourceGroup'')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters(''Workspace'')}/providers/Microsoft.SecurityInsights/threatIntelligence/main/queryIndicators?api-version=2022-06-01-preview'))]"
                             }
                         },
-                        "Initialize_variable_for_STIX_bundle_JSON": {
+                        "Initialize_array_Indicators": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Indicators",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_Indicator": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Indicator",
+                                        "type": "object",
+                                        "value": {}
+                                    }
+                                ]
+                            },
                             "runAfter": {
-                                "Select_indicators_into_STIX_format": [
+                                "Initialize_array_Indicators": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "InitializeVariable",
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_for_STIX_bundle_JSON": {
                             "inputs": {
                                 "variables": [
                                     {
                                         "name": "StixBundle",
                                         "type": "string",
-                                        "value": "{\n    \"type\": \"bundle\",\n    \"id\": \"bundle--1736e032-a96a-41e9-8302-126677d4d781\",\n    \"objects\": @{body('Select_indicators_into_STIX_format')}\n}"
+                                        "value": "{\n    \"type\": \"bundle\",\n    \"id\": \"bundle--1736e032-a96a-41e9-8302-126677d4d781\",\n    \"objects\": @{string(variables('Indicators'))}\n}"
                                     }
                                 ]
-                            }
+                            },
+                            "runAfter": {
+                                "For_each_Indicator": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
                         },
                         "Parse_JSON_queryIndicators_response": {
                             "runAfter": {
@@ -421,41 +1248,6 @@
                                         }
                                     },
                                     "type": "object"
-                                }
-                            }
-                        },
-                        "Select_indicators_into_STIX_format": {
-                            "runAfter": {
-                                "Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Select",
-                            "inputs": {
-                                "from": "@body('Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete')",
-                                "select": {
-                                    "confidence": "@if(not(equals(item()?['properties']?['confidence'], null)), item()?['properties']?['confidence'], '')",
-                                    "created": "@if(not(equals(item()?['properties']?['created'], null)), item()?['properties']?['created'], '')",
-                                    "created_by_ref": "",
-                                    "description": "@if(not(equals(item()?['properties']?['description'], null)), item()?['properties']?['description'], '')",
-                                    "external_references": "",
-                                    "granular_markings": "",
-                                    "id": "indicator--@{if(not(equals(item()?['name'], null)), item()?['name'], '')}",
-                                    "indicator_types": "@if(not(equals(item()?['properties']?['threatTypes'], null)), item()?['properties']?['threatTypes'], '')",
-                                    "kill_chain_phases": "",
-                                    "labels": "@if(not(equals(item()?['properties']?['threatIntelligenceTags'], null)), item()?['properties']?['threatIntelligenceTags'], '')",
-                                    "lang": "",
-                                    "modified": "@if(not(equals(item()?['properties']?['lastUpdatedTimeUtc'], null)), item()?['properties']?['lastUpdatedTimeUtc'], '')",
-                                    "name": "@if(not(equals(item()?['properties']?['displayName'], null)), item()?['properties']?['displayName'], '')",
-                                    "object_marking_refs": "@if(not(equals(item()?['properties']?['objectMarkingRefs'], null)), item()?['properties']?['objectMarkingRefs'], '')",
-                                    "pattern": "@if(not(equals(item()?['properties']?['pattern'], null)), item()?['properties']?['pattern'], '')",
-                                    "pattern_type": "@if(not(equals(item()?['properties']?['patternType'], null)), item()?['properties']?['patternType'], '')",
-                                    "pattern_version": "2.1",
-                                    "revoked": "@if(not(equals(item()?['properties']?['revoked'], null)), item()?['properties']?['revoked'], '')",
-                                    "spec_version": "2.1",
-                                    "type": "indicator",
-                                    "valid_from": "@if(not(equals(item()?['properties']?['validFrom'], null)), item()?['properties']?['validFrom'], '')",
-                                    "valid_until": "@if(not(equals(item()?['properties']?['validUntil'], null)), item()?['properties']?['validUntil'], '')"
                                 }
                             }
                         }
