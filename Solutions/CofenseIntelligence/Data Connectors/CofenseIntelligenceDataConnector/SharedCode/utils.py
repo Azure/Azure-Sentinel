@@ -6,10 +6,14 @@ from .logger import applogger
 from ..SharedCode import consts
 import time
 from requests.compat import quote_plus
+from cryptography.fernet import Fernet
 
 
 class Utils:
     """This class contains helper methods."""
+
+    key = Fernet.generate_key()
+    f = Fernet(key)
 
     def __init__(self, azure_function_name) -> None:
         """Initialize instance variable for class.
@@ -114,7 +118,7 @@ class Utils:
         required_params = {
             "BaseURL": consts.COFENSE_BASE_URL,
             "AzureClientId": consts.AZURE_CLIENT_ID,
-            "AzureClientSecret": consts.AZURE_CLIENT_SECRET,
+            "AzureClientSecret": "" if consts.AZURE_CLIENT_SECRET is None or consts.AZURE_CLIENT_SECRET == "" else self.f.encrypt(bytes(consts.AZURE_CLIENT_SECRET, 'utf-8')),
             "AzureTenantId": consts.AZURE_TENANT_ID,
             "AzureResourceGroup": consts.AZURE_RESOURCE_GROUP,
             "AzureWorkspaceName": consts.AZURE_WORKSPACE_NAME,
@@ -122,7 +126,7 @@ class Utils:
             "ConnectionString": consts.CONNECTION_STRING,
             "Schedule": consts.SCHEDULE,
             "Cofense_username": consts.COFENSE_USERNAME,
-            "Cofense_password": consts.COFENSE_PASSWORD,
+            "Cofense_password": "" if consts.COFENSE_PASSWORD is None or consts.COFENSE_PASSWORD == "" else self.f.encrypt(bytes(consts.COFENSE_PASSWORD, 'utf-8')),
             "LogLevel": consts.LOG_LEVEL,
             "WorkspaceID": consts.WORKSPACE_ID,
             "WorkspaceKey": consts.WORKSPACE_KEY,
