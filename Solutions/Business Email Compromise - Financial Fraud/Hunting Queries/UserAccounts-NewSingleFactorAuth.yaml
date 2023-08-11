@@ -1,0 +1,70 @@
+id: 8eace93b-f38c-47b7-a21d-739556d31db6
+name: User Accounts - New Single Factor Auth
+description: |
+  'Identifies users whose single Factor Auth Events in scenarios where it has not been seen before, or where only multi factor auth has been observed.
+  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-successful-unusual-sign-ins
+  This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+tags:
+  - AADSecOpsGuide
+query: |
+
+  let starttime = totimespan('{{StartTimeISO}}');
+  let endtime = totimespan('{{EndTimeISO}}');
+  let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
+  let lookback = starttime - 7d;
+  let behaviorAnalyticsData = materialize(
+   BehaviorAnalytics
+        | where ActivityType in ("FailedLogOn", "LogOn")
+        | where isnotempty(SourceIPAddress)
+        | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+        | project-rename IPAddress = SourceIPAddress
+        | summarize
+            UsersInsights = make_set(UsersInsights, 1000),
+            DevicesInsights = make_set(DevicesInsights, 1000),
+            IPInvestigationPriority = sum(InvestigationPriority)
+        by IPAddress
+  );
+  let aadFunc = (tableName:string){
+    table(tableName)
+    | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+    | where not(Identity matches regex isGUID)
+    | where ResultType == 0
+    | where AuthenticationDetails != "[]"
+    | extend AuthenticationMethod = tostring(todynamic(AuthenticationDetails)[0].authenticationMethod)
+    | where AuthenticationMethod != "Previously satisfied"
+    | join kind=leftouter (
+        behaviorAnalyticsData
+    ) on IPAddress
+    | summarize count(), make_set(AuthenticationRequirement, 1000), make_set(AuthenticationMethod, 1000), make_set(IPAddress, 1000), make_set(Location, 1000), LastLogin = max(TimeGenerated), IPInvestigationPriority = sum(IPInvestigationPriority) by UserPrincipalName
+    | extend noofAuthMehods = array_length(set_AuthenticationMethod), noofAuthReqs = array_length(set_AuthenticationRequirement)
+    | where noofAuthMehods > 1 or noofAuthReqs > 1
+    | extend timestamp = LastLogin, Account_0_Name = UserPrincipalName
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt 
+  | sort by IPInvestigationPriority desc
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+version: 1.0.0
