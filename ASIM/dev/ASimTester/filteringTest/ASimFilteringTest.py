@@ -10,7 +10,6 @@ from datetime import datetime, timedelta, timezone
 from azure.monitor.query import LogsQueryClient, LogsQueryStatus
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import HttpResponseError
-from azure.identity import DefaultAzureCredential
 from schemasParameters import all_schemas_parameters
 
 
@@ -341,7 +340,7 @@ class FilteringTest(unittest.TestCase):
         self.dynamic_tests_assertions(parameter_name, query_definition, column_name_in_table, filtering_with_one_value_list, num_of_rows_when_no_filters_in_query )
 
         # Performing filtering with two values in the parameter if possible
-        if len(values_list) == 1:
+        if len(values_list) == 1 or num_of_rows_when_no_filters_in_query <= 2:
             self.fail(f"Parameter: {parameter_name} - Not enough data to perform two values {test_type} tests")
         self.dynamic_tests_assertions(parameter_name,query_definition, column_name_in_table, values_list, num_of_rows_when_no_filters_in_query)
 
