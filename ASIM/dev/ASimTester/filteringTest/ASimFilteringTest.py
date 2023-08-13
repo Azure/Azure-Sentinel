@@ -14,7 +14,7 @@ from schemasParameters import all_schemas_parameters
 
 
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
-
+MAX_FILTERING_PARAMETERS = 2
 
 argparse_parser = argparse.ArgumentParser()
 argparse_parser.add_argument("ws_id", help = "workspace ID")
@@ -290,7 +290,7 @@ class FilteringTest(unittest.TestCase):
         # Searching values in rows which are not contained in at least one other value
         for row in rows:
             # if we already found two values that satisfy the conditions we can return them 
-            if len(values) == 2:
+            if len(values) == MAX_FILTERING_PARAMETERS:
                 break
 
             value = row[0]
@@ -336,11 +336,11 @@ class FilteringTest(unittest.TestCase):
         if len(values_list) == 0:
             self.fail(f"Parameter: {parameter_name} - Unable to find substrings to perform {test_type} tests")
         filtering_with_one_value_list = [values_list[0]]
-        # Performing filtering with one value in the parameter
+        # Performing filtering with one value
         self.dynamic_tests_assertions(parameter_name, query_definition, column_name_in_table, filtering_with_one_value_list, num_of_rows_when_no_filters_in_query )
 
-        # Performing filtering with two values in the parameter if possible
-        if len(values_list) == 1 or num_of_rows_when_no_filters_in_query <= 2:
+        # Performing filtering with two values if possible
+        if len(values_list) == 1 or num_of_rows_when_no_filters_in_query <= MAX_FILTERING_PARAMETERS:
             self.fail(f"Parameter: {parameter_name} - Not enough data to perform two values {test_type} tests")
         self.dynamic_tests_assertions(parameter_name,query_definition, column_name_in_table, values_list, num_of_rows_when_no_filters_in_query)
 
@@ -396,7 +396,7 @@ class FilteringTest(unittest.TestCase):
         column_name_in_table : The name of the column in the query response on which the parameter performs filtering
         """
         # Getting substrings that will be the values of the filtering parameters
-        selected_substrings = self.get_substrings_list(no_filter_rows, 2)
+        selected_substrings = self.get_substrings_list(no_filter_rows, MAX_FILTERING_PARAMETERS)
         with self.subTest():
             self.dynamic_tests_helper(parameter_name, query_definition, len(no_filter_rows), column_name_in_table, selected_substrings, "has_any")
         
@@ -433,7 +433,7 @@ class FilteringTest(unittest.TestCase):
         column_name_in_table : The name of the column in the query response on which the parameter performs filtering
         """
         # Getting prefixes that will be the values of the filtering parameters
-        selected_prefixes = self.get_prefix_list(no_filter_rows, 2)
+        selected_prefixes = self.get_prefix_list(no_filter_rows, MAX_FILTERING_PARAMETERS)
         with self.subTest():
             self.dynamic_tests_helper(parameter_name, query_definition, len(no_filter_rows), column_name_in_table, selected_prefixes, "has_any_prefix")
             
