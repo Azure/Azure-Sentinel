@@ -6,7 +6,7 @@ import argparse
 import sys
 from distutils.version import StrictVersion
 
-SCRIPT_VERSION = 2.3
+SCRIPT_VERSION = 2.31
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
@@ -873,7 +873,7 @@ def main():
         (IncomingEventsVerifications(), "Starting validation tests for capturing incoming events")]
     print_notice("\nStarting to run the validation script for the {} scenario".format(STREAM_SCENARIO))
     time.sleep(1)
-    print_notice("Please validate you are sending CEF messages to the agent machine")
+    print_notice("Please validate you are sending messages to the agent machine")
     for class_test in class_tests_array:
         print_notice("\n----- {} {}".format(class_test[1], '-' * (60 - len(class_test[1]))))
         verification_object = class_test[0]
@@ -886,9 +886,9 @@ def main():
         print_error("\nTotal amount of failed tests is: " + str(FAILED_TESTS_COUNT))
     else:
         print_ok("All tests passed successfully")
-        print_notice("This script generated an output file located here - {}"
-                     "\nPlease review it if you would like to get more information on failed tests.".format(
-            LOG_OUTPUT_FILE))
+    print_notice("This script generated an output file located here - {}"
+                 "\nPlease review it if you would like to get more information on failed tests.".format(
+        LOG_OUTPUT_FILE))
     if not args.collect:
         print_notice(
             "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
