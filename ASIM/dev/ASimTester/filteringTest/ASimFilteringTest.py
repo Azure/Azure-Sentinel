@@ -354,10 +354,6 @@ class FilteringTest(unittest.TestCase):
                 self.assertLess(num_of_rows_with_filter_in_query, num_of_rows_when_no_filters_in_query,  f"Parameter: {parameter_name} - Expected to have less results after filtering. Filtered by value: {filter_parameters}")
 
 
-    def dynamic_test_for_response_with_one_row(self, parameter_name, query_definition, column_name_in_table):
-        pass
-
-
     def dynamic_tests_helper(self, parameter_name, query_definition, num_of_rows_when_no_filters_in_query, column_name_in_table, values_list, test_type):
         """
         Performing filtering with one and two values (if possible) for dynamic parameters.
