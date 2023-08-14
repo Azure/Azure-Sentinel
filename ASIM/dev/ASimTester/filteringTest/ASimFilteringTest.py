@@ -577,6 +577,7 @@ all_schemas_parameters = {
     },
     "Authentication" : 
     {
+        "disabled" : "",
         "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
         "targetusername_has" : "TargetUsername"
