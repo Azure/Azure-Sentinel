@@ -14,6 +14,7 @@ from azure.core.exceptions import HttpResponseError
 
 
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
+INT_DUMMY_VALUE = -967799
 MAX_FILTERING_PARAMETERS = 2
 
 argparse_parser = argparse.ArgumentParser()
@@ -293,7 +294,7 @@ class FilteringTest(unittest.TestCase):
         self.scalar_test_check_filtering(param_name, query_with_filter, value_to_filter)
 
         # Performing a query with a non-existing value, expecting to return no results
-        self.scalar_test_check_fictive_value(param_name, query_definition, column_name_in_table )
+        self.scalar_test_check_fictive_value(param_name, query_definition, column_name_in_table, param['Type'])
 
 
     def scalar_test_check_filtering(self, param_name, query_with_filter, value_to_filter ):
@@ -304,11 +305,12 @@ class FilteringTest(unittest.TestCase):
             self.assertEqual(1, len(filtered_response.tables[0].rows), f"Parameter: {param_name} - Expected to have results for only one value after filtering. Filtered by value: {value_to_filter}")
         
 
-    def scalar_test_check_fictive_value(self, param_name, query_definition, column_name_in_table):
-        no_results_query = query_definition + create_execution_strings_with_one_parameter(param_name, DUMMY_VALUE, column_name_in_table)
+    def scalar_test_check_fictive_value(self, parameter_name, query_definition, column_name_in_table, parameter_type):
+        fictive_value = INT_DUMMY_VALUE if parameter_type == "int" else DUMMY_VALUE
+        no_results_query = query_definition + create_execution_strings_with_one_parameter(parameter_name, fictive_value, column_name_in_table)
         no_results_response = self.send_query(no_results_query)
         with self.subTest():
-            self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {param_name} - Returned results for non existing filter value. Filtered by value: {DUMMY_VALUE}")
+            self.assertEqual(0, len(no_results_response.tables[0].rows), f"Parameter: {parameter_name} - Returned results for non existing filter value. Filtered by value: {fictive_value}")
 
         
     # Return an array of at most two values from rows. Each string in the returned array is not a substring of all values in rows.
