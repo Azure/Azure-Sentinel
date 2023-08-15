@@ -106,16 +106,17 @@ Thanks to the published ARM template the deployment of the [Azure Function App](
 1. Click to **Deploy the template / Deploy to Azure** below.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json)
 
 2. Now it is time to use the noted details from previous steps.  
 - Select the right **Subscription**, **Resource Group** and **Region** where you what to deploy the Azure Function App.  
 - Fill the Instance Details **Client ID**, **Client Secret**, **Tenant Domain**, **Publisher Guid**.  
 - There is also a need of **Workspace ID** and **Workspace Key** from where Azure Sentinel is deployed. 
 - The Content Types you can leave as default with **Audit.General**, or you can also add **DLP.All** as well. Or use only **DLP.All**. 
-![Deployment](./images/picture9.png)
+![Deployment](./images/Picture9.png)
 3. Click to **Review + create**, review the configuration and click **Create**. 
 4. Now the deployment of ARM template is completed. 
-![Complete](./images/picture10.png)
+![Complete](./images/Picture10.png)
 
 ### Post Configuration Steps for the Azure Function App 
 1. For the final configuration of Azure Function App open the Azure Portal and navigate to **Azure Function App** > The name of the Function App > **Configuration**.<br>

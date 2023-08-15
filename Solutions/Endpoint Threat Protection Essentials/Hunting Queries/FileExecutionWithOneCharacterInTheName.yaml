@@ -14,23 +14,34 @@ relevantTechniques:
   - T1059
 query: |
   Event
-  | where EventLog == "Microsoft-Windows-Sysmon/Operational" and EventID==1
+  | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID==1
   | parse EventData with * 'CommandLine">' CommandLine "<" *
   | where CommandLine matches regex @'\\[a-zA-Z0-9]\.[a-zA-Z0-9]{2,5}["]{1}'
   | parse EventData with * 'ProcessGuid">' ProcessGuid "<" * 'Image">' Image "<" * 'Description">' Description "<" * 'OriginalFileName">' OriginalFileName "<" * 'CommandLine">' CommandLine "<" * 'CurrentDirectory">' CurrentDirectory "<" * 'User">' User "<" * 'LogonGuid">' LogonGuid "<" * 'IntegrityLevel">' IntegrityLevel "<" * 'Hashes">' Hashes "<" * 'ParentProcessGuid">' ParentProcessGuid "<" * 'ParentImage">' ParentImage "<" * 'ParentCommandLine">' ParentCommandLine "<" * 'ParentUser">' ParentUser "<" *
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description, OriginalFileName, CurrentDirectory, Hashes
+  | extend NTDomain = tostring(split(User, '\\', 0)[0]), UserName = tostring(split(User, '\\', 1)[0])
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = UserName
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend File_0_Name = Image
 entityMappings:
 - entityType: Account
   fieldMappings:
-    - identifier: FullName
-      columnName: User
+    - identifier: Name
+      columnName: UserName
+    - identifier: NTDomain
+      columnName: NTDomain
 - entityType: Host
   fieldMappings:
-    - identifier: FullName
-      columnName: Computer
+    - identifier: HostName
+      columnName: HostName
+    - identifier: DnsDomain
+      columnName: DnsDomain
 - entityType: File
   fieldMappings:
     - identifier: Name
       columnName: Image
-version: 1.0.0
-kind: Scheduled
+version: 1.0.1
+

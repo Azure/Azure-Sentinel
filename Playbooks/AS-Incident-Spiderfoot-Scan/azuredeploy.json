@@ -1,0 +1,479 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Incident-Spiderfoot-Scan", 
+        "description": "This playbook will pull email addresses from the account entities in a Microsoft Sentinel incident and use them as targets in a Spiderfoot scan. By default, the scan is created using the HaveIBeenPwned module. The resulting report of that scan will be emailed to a recipient specified upon deployment.",
+        "prerequisites": "1. A Spiderfoot account is needed, along with an API key for this account. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Incident-Spiderfoot-Scan",
+        "lastUpdateTime": "2023-04-21T1:38:11Z",
+        "entities": ["Account"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Spiderfoot"], 
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Incident-Spiderfoot-Scan",
+            "type": "string"
+        },
+        "SpiderfootSubdomain": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the name of your unique Spiderfoot subdomain"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the name of the key vault that stores your Spiderfoot API key"
+            }
+        },
+        "KeySecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of the key vault Secret that contains the value of your Spiderfoot API key"
+            }
+        },
+        "RecipientEmail": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the email address you would like the Spiderfoot report sent to"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]",
+        "office365": "[concat('office365-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('office365')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                "[resourceId('Microsoft.Web/connections', variables('office365'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Secret_API_Key": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeySecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "Initialize_variable-_Scan_Targets_Final": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_each-_Account": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Append_to_string_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Scan Targets Initial",
+                                                "value": "@{concat(items('For_each-_Account')?['Name'], '@', items('For_each-_Account')?['UPNSuffix'])},"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each-_Account')?['Name']",
+                                                        ""
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each-_Account')?['UPNSuffix']",
+                                                        ""
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP-_Start_Scan": {
+                            "runAfter": {
+                                "Set_variable-_Remove_Last_Comma_From_Loop": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "[concat('https://', parameters('SpiderfootSubdomain'), '.hx.spiderfoot.net/api?func=scanstart&apikey=@{body(''Get_Secret_API_Key'')?[''value'']}&name=ScanFromSentinel@{formatDateTime(utcNow(), ''MMddyyyy'')}&target=@{variables(''Scan Targets'')}&options=iterate_names=0,correlations=1&modules=sfp_haveibeenpwned')]"
+                            }
+                        },
+                        "Initialize_variable-_Scan_Status": {
+                            "runAfter": {
+                                "Initialize_variable_-_Scan_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Scan Status",
+                                        "type": "string",
+                                        "value": "STARTED"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable-_Scan_Targets_Final": {
+                            "runAfter": {
+                                "Initialize_variable-_Scan_Targets_Initial": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Scan Targets",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable-_Scan_Targets_Initial": {
+                            "runAfter": {
+                                "Get_Secret_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Scan Targets Initial",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable-_Scan_Values": {
+                            "runAfter": {
+                                "Initialize_variable-_Scan_Status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Scan Values",
+                                        "type": "array",
+                                        "value": [
+                                            "STARTED",
+                                            "STARTING",
+                                            "RUNNING",
+                                            "POST",
+                                            "PROCESSING",
+                                            "ANALYSIS"
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_Scan_ID": {
+                            "runAfter": {
+                                "Parse_JSON-_Scan_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Scan ID",
+                                        "type": "string",
+                                        "value": "@{body('Parse_JSON-_Scan_ID')?[1]}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON-_Scan_ID": {
+                            "runAfter": {
+                                "HTTP-_Start_Scan": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP-_Start_Scan')",
+                                "schema": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Send_an_email_(V2)": {
+                            "runAfter": {
+                                "Until": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "[concat('<p>Scan on the following targets is complete:<br>\n@{variables(''Scan Targets'')}<br>\n<br>\n<br>\nThese entities were run against the following modules:<br>\nHaveIBeenPwned<br>\n<br>\nSpiderfoot report:<br>\nhttps://', parameters('SpiderfootSubdomain'), '/scaninfo?id=@{variables(''Scan ID'')}<br>\n</p>')]",
+                                    "Subject": "Spiderfoot Scan Report ",
+                                    "To": "[parameters('RecipientEmail')]"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        },
+                        "Set_variable-_Remove_Last_Comma_From_Loop": {
+                            "runAfter": {
+                                "For_each-_Account": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "Scan Targets",
+                                "value": "@{substring(variables('Scan Targets Initial'), 0, lastIndexOf(variables('Scan Targets Initial'), ','))}"
+                            }
+                        },
+                        "Until": {
+                            "actions": {
+                                "HTTP-_Scan_Status": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "GET",
+                                        "uri": "[concat('https://', parameters('SpiderfootSubdomain'), '.hx.spiderfoot.net/api?func=scanstatus&apikey=@{body(''Get_Secret_API_Key'')?[''value'']}&id=@{variables(''Scan ID'')}')]"
+                                    }
+                                },
+                                "Parse_JSON-_Status": {
+                                    "runAfter": {
+                                        "HTTP-_Scan_Status": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP-_Scan_Status')",
+                                        "schema": {
+                                            "properties": {
+                                                "created_time": {
+                                                    "type": "string"
+                                                },
+                                                "end_time": {
+                                                    "type": "string"
+                                                },
+                                                "scan_name": {
+                                                    "type": "string"
+                                                },
+                                                "scan_status": {
+                                                    "type": "string"
+                                                },
+                                                "scan_target": {
+                                                    "type": "string"
+                                                },
+                                                "start_time": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Parse_JSON-_Status": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Scan Status",
+                                        "value": "@body('Parse_JSON-_Status')?['scan_status']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable-_Scan_Values": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@not(contains(variables('Scan Values'), variables('Scan Status')))",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('office365'))]",
+                                "connectionName": "[variables('office365')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

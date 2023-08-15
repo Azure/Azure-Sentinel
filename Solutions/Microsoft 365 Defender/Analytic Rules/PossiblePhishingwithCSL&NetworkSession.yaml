@@ -62,13 +62,13 @@ tags:
 query: |
     //SuspiciousUrlClicked
     AlertEvidence
-    | where ServiceSource == "Microsoft Defender for Office 365"
-    | where EntityType == "Url"
+    | where ServiceSource =~ "Microsoft Defender for Office 365"
+    | where EntityType =~ "Url"
     | project AlertId, RemoteUrl
     | join (
     AlertEvidence
-    | where ServiceSource == "Microsoft Defender for Office 365"
-    | where EntityType == "MailMessage"
+    | where ServiceSource =~ "Microsoft Defender for Office 365"
+    | where EntityType =~ "MailMessage"
     | project AlertId, NetworkMessageId
     )
     on AlertId
@@ -79,7 +79,7 @@ query: |
     | distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, AccountSID
     | join kind = inner  
     (DeviceEvents
-    | where ActionType == "BrowserLaunchedToOpenUrl"| where isnotempty(RemoteUrl)
+    | where ActionType =~ "BrowserLaunchedToOpenUrl"| where isnotempty(RemoteUrl)
     | project  UrlClickedByUserSid = RemoteUrl,
     InitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName
     )
@@ -91,7 +91,7 @@ query: |
     //Suspicious url clicked found in common security logs
     CommonSecurityLog
     | project TimeGenerated, DeviceVendor, DeviceProduct, DeviceAction, DestinationDnsDomain, DestinationIP, RequestURL, SourceIP, SourceHostName, RequestClientApplication
-    ) on $left.RemoteUrl== $right.RequestURL 
+    ) on $left.RemoteUrl== $right.RequestURL
     |  join kind=inner
     (
     //Find the relevant network sessions
@@ -101,26 +101,29 @@ query: |
     | project TimeGenerated, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes
     ) on  $left.DestinationIP == $right.DstIpAddr //The relevant network session being projected 
     | summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountName, DeviceName, InitiatingProcessFileName,DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication
-    | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName
-    | extend UPNSuffix = InitiatingProcessAccountName
+    | extend HostName = iff(DeviceName has '.', substring(DeviceName,0,indexof(DeviceName,'.')),DeviceName)
+    | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName,indexof(DeviceName,'.')+1),"")
+    | extend Name = tostring(split(InitiatingProcessAccountName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: AccountCustomEntity
+        columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SrcIpAddr
+        columnName: SourceIP
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: DstIpAddr
-version: 1.0.0
+        columnName: DestinationIP
+version: 1.0.1
 kind: Scheduled

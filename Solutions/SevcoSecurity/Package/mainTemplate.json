@@ -1,0 +1,403 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Sevco Security - support@sevco.io",
+    "comments": "Solution template for SevcoSecurity"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@sevco.io",
+    "_email": "[variables('email')]",
+    "_solutionName": "SevcoSecurity",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-sevcosecurity",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "SevcoDevices",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "SevcoDevices",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))),variables('dataConnectorVersion1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SevcoSecurity data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Sevco Platform - Devices",
+                  "publisher": "Sevco Security",
+                  "descriptionMarkdown": "The Sevco Platform - Devices connector allows you to easily connect your Sevco Device Assets with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s assets and improves your security operation capabilities.\n\n[For more information >​](https://docs.sev.co/docs/microsoft-sentinel-inventory)",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Sevco Devices CL",
+                      "baseQuery": "Sevco_Devices_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Summarize by local IP address",
+                      "query": "Sevco_Devices_CL​\n\n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n| extend IPs = parse_json(asset_attributes_ips_s), asset_attributes_hostname_s\n\n| mv-expand IPs\n\n| summarize count() by tostring(IPs)"
+                    },
+                    {
+                      "description": "Summarize by public IP address",
+                      "query": "Sevco_Devices_CL\n\n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n| extend source = parse_json(asset_source_ids_s), asset_attributes_hostname_s\n\n| mv-expand source\n\n| summarize count() by tostring(source)"
+                    },
+                    {
+                      "description": "Most recent inventory",
+                      "query": "Sevco_Devices_CL​\n\n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "Sevco_Devices_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Sevco_Devices_CL",
+                      "lastDataReceivedQuery": "Sevco_Devices_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "The Sevco Platform can integrate with and export assets directly to Microsoft Sentinel..​\n\n1.  Go to [Sevco - Microsoft Sentinel Integration](https://docs.sev.co/docs/microsoft-sentinel-inventory), and follow the instructions, using the parameters below to set up the connection:.\n\n",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "Configure and connect to Sevco"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SevcoSecurity",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Sevco Security",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Sevco Platform - Devices",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SevcoSecurity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Sevco Security",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Sevco Platform - Devices",
+          "publisher": "Sevco Security",
+          "descriptionMarkdown": "The Sevco Platform - Devices connector allows you to easily connect your Sevco Device Assets with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s assets and improves your security operation capabilities.\n\n[For more information >​](https://docs.sev.co/docs/microsoft-sentinel-inventory)",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Sevco Devices CL",
+              "baseQuery": "Sevco_Devices_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Sevco_Devices_CL",
+              "lastDataReceivedQuery": "Sevco_Devices_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "Sevco_Devices_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Summarize by local IP address",
+              "query": "Sevco_Devices_CL​\n\n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n| extend IPs = parse_json(asset_attributes_ips_s), asset_attributes_hostname_s\n\n| mv-expand IPs\n\n| summarize count() by tostring(IPs)"
+            },
+            {
+              "description": "Summarize by public IP address",
+              "query": "Sevco_Devices_CL\n\n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n| extend source = parse_json(asset_source_ids_s), asset_attributes_hostname_s\n\n| mv-expand source\n\n| summarize count() by tostring(source)"
+            },
+            {
+              "description": "Most recent inventory",
+              "query": "Sevco_Devices_CL​\n\n| summarize arg_max(TimeGenerated, *) by asset_id_g\n\n"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "The Sevco Platform can integrate with and export assets directly to Microsoft Sentinel..​\n\n1.  Go to [Sevco - Microsoft Sentinel Integration](https://docs.sev.co/docs/microsoft-sentinel-inventory), and follow the instructions, using the parameters below to set up the connection:.\n\n",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "Configure and connect to Sevco"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "SevcoSecurity",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> <em>There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</em></p>\n<p>The Sevco Platform - Devices connector allows you to easily connect your Sevco Device Assets with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s assets and improves your security operation capabilities.</p>\n<p><a href=\"https://docs.sev.co/docs/microsoft-sentinel-inventory\">For more information &gt;​</a></p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/sevcosecurity.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SevcoSecurity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Sevco Security",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-05-01",
+        "providers": [
+          "Sevco Security"
+        ],
+        "categories": {
+          "domains": [
+            "IT Operations",
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -24,20 +24,23 @@ query: |
   // ex: dynamic(["UPN1", "upn123"])
   let nonapproved_users = dynamic([]);
   AuditLogs
-  | where OperationName == "Add user" or OperationName == "Delete user"
-  | where Result == "success"
-  | extend InitiatingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | where OperationName =~ "Add user" or OperationName =~ "Delete user"
+  | where Result =~ "success"
+  | extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName)
   | where InitiatingUser has_any (nonapproved_users)
   | project-reorder TimeGenerated, ResourceId, OperationName, InitiatingUser, TargetResources
-  | extend AccountCustomEntity = InitiatingUser, IPCustomEntity = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | extend InitiatedUserIpAddress = tostring(InitiatedBy.user.ipAddress)
+  | extend Name = tostring(split(InitiatingUser,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUser,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.1
+        columnName: InitiatedUserIpAddress
+version: 1.0.2
 kind: Scheduled

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationSu",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Authentication ASIM filtering parser for Linux su",
+            "category": "ASIM",
+            "FunctionAlias": "vimAuthenticationSu",
+            "query": "let parser = (\n      starttime:datetime          = datetime(null), \n      endtime:datetime            = datetime(null),\n      targetusername_has:string   = \"*\", \n      disabled:bool               = false\n  ) {\n  let prefilter = (T:(SyslogMessage:string, TimeGenerated:datetime)) {\n      T\n      | where \n          (isnull(starttime)           or TimeGenerated >= starttime) \n          and (isnull(endtime)         or TimeGenerated <= endtime)\n          and (targetusername_has=='*' or (SyslogMessage has targetusername_has))\n  };\n  let SyslogProjects = Syslog | project TimeGenerated, Computer, SyslogMessage, ProcessName, ProcessID, HostIP, Type, _ItemId, _ResourceId, _SubscriptionId;\n  //\n  // -- Sucessful SU\n  // Parses the event \"Successful su for <user> by <user>\"\n  let SuSignInAuthorized=(disabled:bool=false) {\n      SyslogProjects \n      | where not(disabled)\n      | where ProcessName == \"su\" and SyslogMessage startswith \"Successful su for\"\n      | invoke prefilter()\n      | parse SyslogMessage with * \"for \" TargetUsername:string \" by \" ActorUsername:string\n      | extend\n          EventType = 'Elevation'\n      | project-away SyslogMessage, ProcessName\n  };\n  // \n  // -- SU end\n  // Parsers the event \"pam_unix(su[-l]:session): session closed for user <user>\"\n  let SuDisconnect=(disabled:bool=false) {\n      SyslogProjects \n      | where not(disabled)\n      | where ProcessName == \"su\" and SyslogMessage has_all ('pam_unix(su', 'session): session closed for user')\n      | invoke prefilter()\n      | parse SyslogMessage with * \"for user \" TargetUsername:string\n      | extend\n          EventType = 'Logoff'\n      | project-away SyslogMessage, ProcessName\n  };\n  union isfuzzy=false \n      SuSignInAuthorized (disabled = disabled)\n      , SuDisconnect(disabled = disabled)\n  | where targetusername_has=='*' or (TargetUsername has targetusername_has)\n  | invoke _ASIM_ResolveDvcFQDN ('Computer')\n  | extend\n      EventVendor             = 'Linux'\n      , EventProduct          = 'su'\n      , DvcOs                 = 'Linux'\n      , TargetDvcOs           = 'Linux'\n      , EventCount            = int(1)\n      , EventSchema           = 'Authentication'\n      , EventSchemaVersion    = '0.1.2'\n      , EventResult           = 'Success'\n      , EventStartTime        = TimeGenerated\n      , EventEndTime          = TimeGenerated\n      , ActorUsernameType     = 'Simple'\n      , TargetUsernameType    = 'Simple'\n      , EventSeverity         = 'Informational'\n      , ActingAppType         = 'Process'\n      , DvcIdType             = iff (isnotempty(_ResourceId), \"AzureResourceId\", \"\")\n      , ActingAppId           = tostring(ProcessID)\n  | project-away Computer, ProcessID\n  | project-rename \n      EventUid                = _ItemId\n      , DvcScopeId            = _SubscriptionId\n      , DvcId                 = _ResourceId\n      , DvcIpAddr             = HostIP\n  //\n  // -- Aliases\n  | extend\n      User                    = TargetUsername\n      , Dvc                   = DvcHostname\n      , Dst                   = coalesce (DvcFQDN, DvcHostname, DvcIpAddr)\n      , TargetDomain          = DvcDomain\n      , TargetFQDN            = DvcFQDN\n      , TargetDomainType      = DvcDomainType\n      , TargetHostname        = DvcHostname\n      , TargetDvcId           = DvcId\n      , TargetDvcScopeId      = DvcScopeId\n      , TargetDvcIdType       = DvcDomainType\n      , IpAddr                = DvcIpAddr\n      , TargetIpAddr          = DvcIpAddr\n};\nparser (\n      disabled            = disabled,\n      starttime           = starttime, \n      endtime             = endtime,\n      targetusername_has  = targetusername_has\n)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),targetusername_has:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

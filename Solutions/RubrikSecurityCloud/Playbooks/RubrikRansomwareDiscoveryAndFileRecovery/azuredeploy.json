@@ -7,11 +7,13 @@
         "prerequisites":  [
             "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
             "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
-            "3. To perform an IOC scan the IOC YARA rule should be available.",
-            "4. Obtain Teams GroupId and ChannelId",
-            "5. Store Service account credentials in Key Vault and obtain keyvault name and tenantId",
+            "3. Rubrik custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.",
+            "4. To perform an IOC scan the IOC YARA rule should be available.",
+            "5. Obtain Teams GroupId and ChannelId",
+            "6. Store Service account credentials in Key Vault and obtain keyvault name and tenantId",
                 "a. Create a Key Vault with unique name",
-                "b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively"
+                "b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively",
+            "7. Make sure that RubrikIOCScan and RubrikPollAsyncResult playbook is deployed before deploying RubrikRansomwareDiscoveryAndFileRecovery playbook."
         ],
         "postDeployment":  [
             "**a. Authorize connections**",
@@ -24,7 +26,7 @@
             "6. Repeat steps for other connections"
         ],
         "prerequisitesDeployTemplateFile": "Azure-Sentinel/Solutions/RubrikSecurityCloud/Playbooks/RubrikCustomConnector/Rubrik_custom_conn.json",
-        "lastUpdateTime": "2022-09-26T00:00:00.000Z",
+        "lastUpdateTime":  "2022-01-20T00:00:00.000Z",
         "entities":  ["account","url"],
         "tags":  ["Recovery","Ransomware Discovery","Security","Rubrik"],
         "support":  {
@@ -32,7 +34,7 @@
             "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
         },
         "author":  {
-            "name": "Rubrik"
+            "name":  "Rubrik"
         }
     },
     "parameters":  {
@@ -273,7 +275,7 @@
                             "type":  "Http",
                             "inputs":  {
                                 "body":  {
-                                    "query":  "mutation TakeVSphereSnapshotMutation($snappableId: UUID!, $slaID: String) {\r\n    vsphereOnDemandSnapshot(snappableFid: $snappableId, slaID: $slaID) {\r\n      id\r\n      status\r\n    }\r\n  }",
+                                    "query":  "mutation TakeVSphereSnapshotMutation($snappableId: String!, $slaID: String) {\r\n    vsphereOnDemandSnapshot(input: { id: $snappableId, config: {slaId: $slaID} }) {\r\n      id\r\n      status\r\n    }\r\n  }",
                                     "variables":  {
                                         "snappableId":  "@{variables('ObjectId')}"
                                     }
@@ -561,6 +563,19 @@
                                         }
                                     },
                                     "runAfter":  {
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Set_success_for_list_all_snapshots":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "ListSnapshotsStatus",
+                                                    "value":  "Obtained all snapshots for given objectId."
+                                                }
+                                            }
+                                        }
                                     },
                                     "expression":  {
                                         "and":  [
@@ -1146,7 +1161,7 @@
                                                                                                     "body":  {
                                                                                                         "BaseUrl":  "@triggerBody()?['BaseUrl']",
                                                                                                         "ClusterId":  "@variables('ClusterId')",
-                                                                                                        "PollingInterval":  "@body('Collect_Recovery_Data')?['data']?['polling interval for recovery ']",
+                                                                                                        "PollingInterval":  "@if(or(empty(string(body('Collect_Recovery_Data')?['data']?['polling interval for recovery '])),lessOrEquals(int(body('Collect_Recovery_Data')?['data']?['polling interval for recovery ']),0)),5,int(body('Collect_Recovery_Data')?['data']?['polling interval for recovery ']))",
                                                                                                         "PollingTimeout":  "@variables('PollingTimeoutRecovery')",
                                                                                                         "RequestId":  "@body('Parse_JSON_for_recover_snapshot_files')?['data']?['vsphereVMRecoverFilesNew']?['id']"
                                                                                                     },
@@ -1197,7 +1212,7 @@
                                                                                                 {
                                                                                                     "not":  {
                                                                                                         "equals":  [
-                                                                                                            "@empty(body('Parse_JSON_for_recover_snapshot_files')?['data']?['vsphereVMRecoverFilesNew']?['id'])",
+                                                                                                            "@empty(body('Parse_JSON_for_recover_snapshot_files')?['data']?['vsphereVmRecoverFilesNew']?['id'])",
                                                                                                             true
                                                                                                         ]
                                                                                                     }
@@ -1216,12 +1231,15 @@
                                                                                                 "properties":  {
                                                                                                     "data":  {
                                                                                                         "properties":  {
-                                                                                                            "vsphereVMRecoverFilesNew":  {
+                                                                                                            "vsphereVmRecoverFilesNew":  {
                                                                                                                 "properties":  {
                                                                                                                     "__typename":  {
                                                                                                                         "type":  "string"
                                                                                                                     },
                                                                                                                     "id":  {
+                                                                                                                        "type":  "string"
+                                                                                                                    },
+                                                                                                                    "status":  {
                                                                                                                         "type":  "string"
                                                                                                                     }
                                                                                                                 },
@@ -1332,11 +1350,13 @@
                                                                     "type":  "Http",
                                                                     "inputs":  {
                                                                         "body":  {
-                                                                            "query":  "mutation VsphereVMRecoverFilesNew($clusterUuid: UUID!, $vsphereVmRecoverFilesNewId: String!, $config: RestoreFilesJobConfigInput!) {\r\n  vsphereVMRecoverFilesNew(clusterUuid: $clusterUuid, id: $vsphereVmRecoverFilesNewId, config: $config) {\r\n    endTime\r\n    error {\r\n      message\r\n    }\r\n    id\r\n    links {\r\n      href\r\n      rel\r\n    }\r\n    nodeId\r\n    progress\r\n    startTime\r\n    status\r\n  }\r\n}",
+                                                                            "query":  "mutation RecoverVSphereVMFilesMutation($input: VsphereVmRecoverFilesNewInput!) {\r\n  vsphereVmRecoverFilesNew(input: $input) {\r\n    id\r\n    status\r\n    __typename\r\n  }\r\n}",
                                                                             "variables":  {
-                                                                                "clusterUuid":  "@{variables('ClusterId')}",
-                                                                                "config":  "@variables('config')",
-                                                                                "vsphereVmRecoverFilesNewId":  "@{body('Parse_JSON_of_RubrikIOCScan')?['RecoverableSnapshotid']}"
+                                                                                "input":  {
+                                                                                    "clusterUuid":  "@{variables('ClusterId')}",
+                                                                                    "config":  "@variables('config')",
+                                                                                    "id":  "@{body('Parse_JSON_of_RubrikIOCScan')?['RecoverableSnapshotid']}"
+                                                                                }
                                                                             }
                                                                         },
                                                                         "headers":  {
@@ -1363,16 +1383,16 @@
                                                                     "inputs":  {
                                                                         "name":  "config",
                                                                         "value":  {
-                                                                            "destObjectId":  " @{body('Collect_Recovery_Data')?['data']?['destination object ID to restore file']}",
-                                                                            "domainName":  null,
+                                                                            "destObjectId":  "@body('Collect_Recovery_Data')?['data']?['destination object ID to restore file']",
+                                                                            "domainName":  "",
                                                                             "guestCredentialId":  null,
                                                                             "ignoreErrors":  null,
-                                                                            "password":  null,
+                                                                            "password":  "",
                                                                             "restoreConfig":  "@variables('RestoreConfig')",
                                                                             "shouldRestoreXAttrs":  null,
-                                                                            "shouldSaveCredentials":  null,
-                                                                            "shouldUseAgent":  null,
-                                                                            "username":  null
+                                                                            "shouldSaveCredentials":  false,
+                                                                            "shouldUseAgent":  true,
+                                                                            "username":  ""
                                                                         }
                                                                     }
                                                                 },
@@ -1609,11 +1629,11 @@
                             "type":  "Http",
                             "inputs":  {
                                 "body":  {
-                                    "query":  "query GetVSphereVmSnapshotInfoQuery($id: UUID!, $snapshotGroupBy: CdmSnapshotGroupByEnum!, $missedSnapshotGroupBy: MissedSnapshotGroupByEnum!, $timeRange: TimeRangeInput!, $timezoneOffset: Float!, $clusterConnected: Boolean!) {\r\n  snappable: vSphereVmNew(fid: $id) {\r\n    id\r\n    missedSnapshotGroupByConnection(\r\n      groupBy: $missedSnapshotGroupBy\r\n      filter: {timeRange: $timeRange}\r\n      timezoneOffset: $timezoneOffset\r\n    ) @include(if: $clusterConnected) {\r\n      nodes {\r\n        groupByInfo {\r\n          ... on TimeRangeWithUnit {\r\n            unit\r\n            start\r\n            end\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        missedSnapshotConnection {\r\n          count\r\n          nodes {\r\n            date\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    snapshotGroupByConnection(\r\n      groupBy: $snapshotGroupBy\r\n      filter: {timeRange: $timeRange}\r\n      timezoneOffset: $timezoneOffset\r\n    ) {\r\n      nodes {\r\n        groupByInfo {\r\n          ... on TimeRangeWithUnit {\r\n            unit\r\n            start\r\n            end\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        snapshotConnection {\r\n          count\r\n          nodes {\r\n            id\r\n            isIndexed\r\n            isUnindexable\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}",
+                                    "query":  "query GetVSphereVmSnapshotInfoQuery($id: UUID!, $snapshotGroupBy: CdmSnapshotGroupByEnum!, $missedSnapshotGroupBy: MissedSnapshotGroupByTime!, $timeRange: TimeRangeInput!, $timezoneOffset: Float!, $clusterConnected: Boolean!) {\r\n  snappable: vSphereVmNew(fid: $id) {\r\n    id\r\n    missedSnapshotGroupByConnection(\r\n      groupBy: $missedSnapshotGroupBy\r\n      filter: {timeRange: $timeRange}\r\n      timezoneOffset: $timezoneOffset\r\n    ) @include(if: $clusterConnected) {\r\n      nodes {\r\n        groupByInfo {\r\n          ... on TimeRangeWithUnit {\r\n            unit\r\n            start\r\n            end\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        missedSnapshotConnection {\r\n          count\r\n          nodes {\r\n            date\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    snapshotGroupByConnection(\r\n      groupBy: $snapshotGroupBy\r\n      filter: {timeRange: $timeRange}\r\n      timezoneOffset: $timezoneOffset\r\n    ) {\r\n      nodes {\r\n        groupByInfo {\r\n          ... on TimeRangeWithUnit {\r\n            unit\r\n            start\r\n            end\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        snapshotConnection {\r\n          count\r\n          nodes {\r\n            id\r\n            isIndexed\r\n            isUnindexable\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}",
                                     "variables":  {
                                         "clusterConnected":  true,
                                         "id":  "@{variables('ObjectId')}",
-                                        "missedSnapshotGroupBy":  "Day",
+                                        "missedSnapshotGroupBy":  "DAY",
                                         "snapshotGroupBy":  "Day",
                                         "timeRange":  {
                                             "end":  "@{utcNow()}",

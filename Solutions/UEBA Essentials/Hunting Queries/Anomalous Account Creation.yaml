@@ -1,7 +1,7 @@
 id: 0454c8d8-d0a6-42a4-8d03-f5b4fdcbd173
 name: Anomalous AAD Account Creation
 description: |
-  'Adversaries may create a cloud account to maintain access to victim systems. With a sufficient level of access, such accounts may be used to establish secondary credentialed access that does not require persistent remote access tools to be deployed on the system. The query below generates an output of all the users performing user creation where one or more features of the activitiy deviates from the user, his peers or the tenant profile.'
+  'Adversaries may create a cloud account to maintain access to victim systems. With a sufficient level of access, such accounts may be used to establish secondary credentialed access that does not require persistent remote access tools to be deployed on the system. The query below generates an output of all the users performing user creation where one or more features of the activity deviate from the user, his peers, or the tenant profile.'
 requiredDataConnectors:
   - connectorId: BehaviorAnalytics
     dataTypes:
@@ -14,11 +14,10 @@ tactics:
 relevantTechniques:
   - T1136
 query: |
-
  BehaviorAnalytics
- | where ActionType == "Add user"
+ | where ActionType =~ "Add user"
  | where ActivityInsights has "True"
- | join(
+ | join kind=inner(
  AuditLogs
  ) on $left.SourceRecordId == $right._ItemId
  | mv-expand TargetResources
@@ -28,12 +27,18 @@ query: |
  UserName = iff(UserName has "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserName)
  | sort by TimeGenerated desc	
  | project TimeGenerated, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, ["TargetUser"]=Target, ActivityInsights, SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights, ResourceId
- | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = SourceIPAddress, ResourceCustomEntity = ResourceId
+ | extend Name=split(UserPrincipalName, "@")[0], UPNSuffix=split(UserPrincipalName, "@")[1]
+ | extend Account_0_Name = Name
+ | extend Account_0_UPNSuffix = UPNSuffix
+ | extend IP_0_Address = SourceIPAddress
+ | extend AzureResource_0_ResourceId = ResourceId
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -42,3 +47,4 @@ entityMappings:
     fieldMappings:
       - identifier: ResourceId
         columnName: ResourceId
+version: 2.0.0

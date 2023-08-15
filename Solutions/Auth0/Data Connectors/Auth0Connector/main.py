@@ -17,7 +17,7 @@ WORKSPACE_ID = os.environ['WorkspaceID']
 SHARED_KEY = os.environ['WorkspaceKey']
 
 FILE_SHARE_CONNECTION_STRING = os.environ['AzureWebJobsStorage']
-LOG_TYPE = 'Auth0'
+LOG_TYPE = 'Auth0AM'
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)

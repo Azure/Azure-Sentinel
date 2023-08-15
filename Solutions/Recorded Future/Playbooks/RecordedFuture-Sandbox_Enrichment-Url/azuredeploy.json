@@ -1,0 +1,318 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "RecordedFuture-Sandbox_Enrichment-Url",
+        "description": "This playbook will enrich url entities in an incident and send them to Recorded Future Sandbox. The result will be written as a incident comment.",
+        "prerequisites": "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the documentation https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials",
+        "postDeployment": [
+            "After deployment you have to open the playbook to configure all connections and press save."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2023-03-24T00:00:00.000Z",
+        "entities": [
+            "url"
+        ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Recorded Future"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-Sandbox_Enrichment-Url",
+            "type": "string"
+        },
+        "Sandbox API Key": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Sandbox API Key. Retrive API Key from [Recorded Future Portal](https://sandbox.recordedfuture.com/account)"
+            }
+        }
+    },
+    "variables": {
+        "RecordedfutureConnectionName": "[concat('', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Sandbox API Key": {
+                            "defaultValue": "[parameters('Sandbox API Key')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Get_the_full_report": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('Get_the_full_report')?['html_report']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Get_the_full_report": {
+                                    "runAfter": {
+                                        "Wait_for_sandbox_report": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "headers": {
+                                            "SandboxToken": "@parameters('Sandbox API Key')"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['recordedfuturesandbo']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/samples/@{encodeURIComponent(body('Get_the_full_summary')?['id'])}/overview.json"
+                                    }
+                                },
+                                "Initialize_Sandbox_status": {
+                                    "runAfter": {
+                                        "Submit_url_samples": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "sandbox_status",
+                                        "value": "@body('Submit_url_samples')?['status']"
+                                    }
+                                },
+                                "Submit_url_samples": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "url": "@items('For_each')?['Url']"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json",
+                                            "SandboxToken": "@parameters('Sandbox API Key')"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['recordedfuturesandbo']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/samples/url"
+                                    }
+                                },
+                                "Wait_for_sandbox_report": {
+                                    "actions": {
+                                        "Delay": {
+                                            "runAfter": {
+                                                "Set_sandbox_status": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Wait",
+                                            "inputs": {
+                                                "interval": {
+                                                    "count": 2,
+                                                    "unit": "Minute"
+                                                }
+                                            }
+                                        },
+                                        "Get_the_full_summary": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "headers": {
+                                                    "SandboxToken": "@parameters('Sandbox API Key')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['recordedfuturesandbo']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/samples/@{encodeURIComponent(body('Submit_url_samples')?['id'])}"
+                                            }
+                                        },
+                                        "Set_sandbox_status": {
+                                            "runAfter": {
+                                                "Get_the_full_summary": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "sandbox_status",
+                                                "value": "@body('Get_the_full_summary')?['status']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Initialize_Sandbox_status": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": "@equals(variables('sandbox_status'), 'reported')",
+                                    "limit": {
+                                        "count": 60,
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "Define_sandbox_status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Define_sandbox_status": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sandbox_status",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "recordedfuturesandbo": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedfutureConnectionName'))]",
+                                "connectionName": "recordedfuturesandbo",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/recordedfuturesandbo')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "RecordedFuture-Sandbox_Enrichment-Url",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('RecordedfutureConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('RecordedfutureConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('RecordedfutureConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/recordedfuturesandbo')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}
