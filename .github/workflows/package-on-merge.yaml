@@ -23,6 +23,7 @@ jobs:
   checkAutomatedPR:
     if: ${{ github.event.pull_request.merged && !github.event.pull_request.head.repo.fork }}
     uses: ./.github/workflows/checkAutomatedPR.yaml
+    secrets: inherit
 
   solutionNameDetails:
     if: ${{ github.event.pull_request.merged && !github.event.pull_request.head.repo.fork }}
@@ -68,10 +69,20 @@ jobs:
       solutionBaseFolderPath: "${{ steps.step1.outputs.solutionBaseFolderPath }}"
       dataInputFileName: "${{ steps.step1.outputs.dataInputFileName }}"
     steps:
+      - name: Generate a token
+        id: generate_token
+        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92
+        with:
+          app_id: ${{ secrets.APPLICATION_ID }}
+          private_key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
+
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        env:
+          APPToken: ${{ steps.generate_token.outputs.token }}
         with:
           fetch-depth: 2
-          ref: ${{ env.BRANCH_NAME }} 
+          ref: ${{ env.BRANCH_NAME }}
+          token: ${{ env.APPToken }} 
       - shell: pwsh
         id: step1
         name: Check & Initiate Package Creation Process
@@ -172,14 +183,24 @@ jobs:
       PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
       SOLUTION_SUPPORTED_BY: "${{ needs.neworexistingsolution.outputs.solutionSupportedBy }}"
       ACTOR: "${{ github.actor }}"
-      ASSIGNEES: "${{ github.event.client_payload.github.actor }}"
+      ASSIGNEES: "${{ github.event.client_payload.github.actor || github.event.pull_request.assignee.login }}"
       CURRENT_BRANCH_NAME: "${{ github.event.pull_request.head.ref }}"
       RUNID: "${{ github.event.client_payload.github.runId }}"
       APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
     outputs:
       newPRNumber: ${{ steps.create-new-pr.outputs.pull-request-number }}
     steps:
+      - name: Generate a token
+        id: generate_token
+        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92
+        with:
+          app_id: ${{ secrets.APPLICATION_ID }}
+          private_key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
+
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+
       - uses: actions/download-artifact@e9ef242655d12993efdcda9058dee2db83a2cb9b
         with:
           name : "${{ env.BLOBNAME }}"
@@ -195,8 +216,9 @@ jobs:
         if: ${{ success() && (env.IS_CREATE_PACKAGE && env.PACKAGE_CREATION_PATH != '' && env.BLOBNAME != '') }}
         uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5
         with:
+          token: ${{ steps.generate_token.outputs.token }}
           committer: GitHub <noreply@github.com>
-          author: "v-atulyadav@microsoft.com>"
+          author: v-atulyadav <v-atulyadav@microsoft.com>
           assignees: "${{ env.ASSIGNEES }}"
           signoff: false
           branch: "${{ env.CURRENT_BRANCH_NAME }}-automated-pr"
@@ -236,6 +258,7 @@ jobs:
     with:
       message: "@${{ github.event.client_payload.github.actor }} The requested package for the '${{ needs.solutionNameDetails.outputs.solutionName }}' solution has been generated based on Pull request #${{ github.event.client_payload.pull_request.number }}"
       prNumber: "${{ needs.createNewPR.outputs.newPRNumber }}"
+    secrets: inherit
 
   release-project:
     name: Publish-Artifacts

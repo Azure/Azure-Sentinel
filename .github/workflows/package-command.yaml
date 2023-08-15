@@ -10,12 +10,15 @@ env:
   ADO_AREAPATH: "${{ vars.ADO_AREAPATH }}"
   ADO_TEAMPROJECT: "${{ vars.ADO_TEAMPROJECT }}"
   ADO_PARENT_LINK: "${{ vars.ADO_PARENT_LINK }}"
-  GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-  PAT_TOKEN: ${{ secrets.PAT }}
 
 on:
   repository_dispatch:
     types: [package-command, Package-command, PACKAGE-command]
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   solutionNameDetails:
     if: ${{ !github.event.pull_request.head.repo.fork }}
@@ -61,11 +64,20 @@ jobs:
       solutionBaseFolderPath: "${{ steps.step1.outputs.solutionBaseFolderPath }}"
       dataInputFileName: "${{ steps.step1.outputs.dataInputFileName }}"
     steps:
+      - name: Generate a token
+        id: generate_token
+        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92
+        with:
+          app_id: ${{ secrets.APPLICATION_ID }}
+          private_key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
+
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        env:
+          APPToken: ${{ steps.generate_token.outputs.token }}
         with:
           fetch-depth: 2
           ref: ${{ env.BRANCH_NAME }}
-          token: ${{ env.PAT_TOKEN }}
+          token: ${{ env.APPToken }}
       - shell: pwsh
         id: step1
         name: Check & Initiate Package Creation Process

@@ -2,21 +2,24 @@ name: Slash Command Dispatch
 env:
     REPO_OWNER: "${{ vars.REPO_OWNER }}"
     REPO_NAME: "${{ vars.REPO_NAME }}"
-    GITHUB_TOKEN: "${{ secrets.PAT }}"
 on:
   issue_comment:
     types: [created]
   pull_request:
     types: [ closed ]
 
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   checkAutomatedPR:
-    if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && (contains(github.event.comment.body, '/package') || contains(github.event.comment.body, '/Package')) }}
+    if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && (contains(github.event.comment.body, '/package') || contains(github.event.comment.body, '/Package') || contains(github.event.comment.body, '/PACKAGE')) }}
     uses: ./.github/workflows/checkAutomatedPR.yaml
 
   pullRequestStatus:
     needs: checkAutomatedPR
-    if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && (contains(github.event.comment.body, '/package') || contains(github.event.comment.body, '/Package')) }}
+    if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && (contains(github.event.comment.body, '/package') || contains(github.event.comment.body, '/Package') || contains(github.event.comment.body, '/PACKAGE')) }}
     uses: ./.github/workflows/pullRequestStatus.yaml
 
   slashCommandDispatch:
@@ -24,10 +27,17 @@ jobs:
     needs: [pullRequestStatus, checkAutomatedPR]
     if: ${{ needs.pullRequestStatus.outputs.isPullRequestMerged == 'False' && needs.checkAutomatedPR.outputs.isAutomatedPR == 'False' && !github.event.pull_request.head.repo.fork}}
     steps:
+      - name: Generate a token
+        id: generate_token
+        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92
+        with:
+          app_id: ${{ secrets.APPLICATION_ID }}
+          private_key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
+
       - name: Slash Command Dispatch
         uses: peter-evans/slash-command-dispatch@67dfeb76529b35541a7c536976cba367cd2d364b
         with:
-          token: ${{ env.GITHUB_TOKEN }}
+          token: ${{ steps.generate_token.outputs.token }}
           commands: |
             package
             Package
