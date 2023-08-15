@@ -3018,7 +3018,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
                 category      = $isyaml ? "$($yaml.Category)" : "Samples"
                 functionAlias = "$($displayDetails.functionAlias)"
                 query         = $isyaml ? "$($yaml.FunctionQuery)" : "$content"
-                functionParameters = $isyaml ? "$(ConvertHashTo-StringData $yaml.FunctionParams)" : ""
+                functionParameters = $isyaml -and $null -ne $yaml.FunctionParams ? "$(ConvertHashTo-StringData $yaml.FunctionParams)" : ""
                 version       = $isyaml ? 2 : 1
                 tags          = @([PSCustomObject]@{
                     "name"  = "description"
@@ -3115,7 +3115,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
                 category      = $isyaml ? "$($yaml.Category)" :"Samples"
                 functionAlias = "$($displayDetails.functionAlias)"
                 query         = $isyaml ? "$($yaml.FunctionQuery)" : "$content"
-                functionParameters = $isyaml ? "$(ConvertHashTo-StringData $yaml.FunctionParams)" : ""
+                functionParameters = $isyaml -and $null -ne $yaml.FunctionParams ? "$(ConvertHashTo-StringData $yaml.FunctionParams)" : ""
                 version       = $isyaml ? 2 : 1
                 tags          = @([PSCustomObject]@{
                     "name"  = "description"

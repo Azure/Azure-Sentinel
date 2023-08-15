@@ -1,0 +1,317 @@
+Parser:
+  Title: Web Session ASIM parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing Barracuda WAF logs to the ASIM Web Session normalized schema.
+ParserName: ASimWebSessionBarracudaWAF
+EquivalentBuiltInParser: _ASim_WebSession_BarracudaWAF
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let barracudaSchema = datatable(
+      ServerIP_s: string,
+      UnitName_s: string,
+      HTTPStatus_s: string,
+      Action_s: string,
+      Severity_s: string,
+      DeviceReceiptTime_s: string,
+      LogType_s: string,
+      ClientIP_s: string,
+      host_s: string,
+      HostIP_s: string,
+      BytesReceived_d: real,
+      ServerPort_d: real,
+      Cookie_s: string,
+      Referer_s: string,
+      Method_s: string,
+      BytesSent_d: real,
+      SessionID_s: string,
+      ClientPort_d: real,
+      AuthenticatedUser_s: string,
+      CertificateUser_s: string,
+      UserAgent_s: string,
+      URL_s: string,
+      CacheHit_d: real,
+      ProxyIP_s: string,
+      ProxyPort_d: real,
+      RuleType_s: string,
+      ServiceIP_s: string,
+      TimeTaken_d: real,
+      ServicePort_d: real,
+      ProtocolVersion_s: string,
+      _ResourceId: string,
+      RawData: string,
+      SourceIP: string,
+      Message: string,
+      Computer: string,
+      MG: string,
+      ManagementGroupName: string,
+      TenantId: string,
+      SourceSystem: string
+  )[];
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+    [
+      0, "High", 
+      1, "High", 
+      2, "High", 
+      3, "Medium",
+      4, "Low",
+      5, "Low", 
+      6, "Informational",
+      7, "Informational" 
+  ];
+  let EventResultWFLookup = datatable (
+      Action_s: string,
+      EventResult_WF: string,
+      DvcAction: string
+  )
+      [
+      "LOG", "Success", "Allow",
+      "DENY", "Failure", "Deny",
+      "WARNING", "Success", "Allow"
+  ];
+  let EventTypeLookup = datatable (
+      LogType_s: string,
+      EventType_lookup: string,
+      EventOriginalType: string
+  )
+      [
+      "WF", "HTTPsession", "Web Firewall",
+      "TR", "WebServerSession", "Access"
+  ];
+  let parser = (disabled: bool=false)
+  {
+  let BarracudaCustom = 
+      union isfuzzy=true
+          barracudaSchema,
+          barracuda_CL
+      | where not(disabled) and (LogType_s in ("WF", "TR"))
+      | lookup EventResultWFLookup on Action_s
+      | lookup EventTypeLookup on LogType_s
+      | extend
+          EventType = EventType_lookup,
+          severity = toint(Severity_s)
+      | lookup SeverityLookup on severity
+      | extend
+          Dst = iff(LogType_s == "WF", ServiceIP_s, ServerIP_s),
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.6",
+          EventVendor = "Barracuda",
+          status_code = toint(HTTPStatus_s)
+      | extend
+          EventResult_TR = case(
+                      status_code between (200 .. 299),
+                      "Success", 
+                      status_code between (400 .. 599),
+                      "Failure",
+                      status_code between (300 .. 399),
+                      "Partial",
+                      "NA"
+                  ),
+          RuleName = RuleType_s
+      | extend
+          Dvc = UnitName_s,
+          EventResult = iff(LogType_s == "TR", EventResult_TR, EventResult_WF),
+          EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)-tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))),
+          DstIpAddr = ServerIP_s,
+          SrcIpAddr = ClientIP_s,
+          DstBytes = tolong(BytesReceived_d),
+          DstPortNumber = toint(coalesce(ServerPort_d,ServicePort_d)),
+          HttpCookie = Cookie_s,
+          HttpReferrer = Referer_s,
+          HttpRequestBodyBytes = tolong(BytesReceived_d),
+          HttpRequestMethod = Method_s,
+          HttpResponseBodyBytes = tolong(BytesSent_d),
+          NetworkDuration = toint(TimeTaken_d),
+          HttpUserAgent = UserAgent_s,
+          NetworkSessionId = SessionID_s,
+          Rule = RuleName,
+          SrcPortNumber = toint(ClientPort_d),
+          SrcUsername = CertificateUser_s,
+          DstUsername = AuthenticatedUser_s,
+          Url = URL_s,
+          HttpResponseCacheControl = iff(
+                                CacheHit_d == 0,
+                                "Response from the server",
+                                "Response from the cache"
+                            ),
+          AdditionalFields = bag_pack(
+                        "ProxyIP",
+                        ProxyIP_s,
+                        "ProxyPort",
+                        ProxyPort_d
+                    ),
+          DvcHostname = host_s,
+          DvcIpAddr = HostIP_s,
+          EventResultDetails = HTTPStatus_s,
+          HttpVersion = ProtocolVersion_s
+      | extend 
+          SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
+          DstUsernameType = iff(isnotempty(DstUsername), "Simple", "")
+      | extend
+          Duration = NetworkDuration,
+          SessionId = NetworkSessionId,
+          EventEndTime = EventStartTime,
+          UserAgent = HttpUserAgent,
+          User = SrcUsername,
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          HttpStatusCode = EventResultDetails
+      | project-away
+          *_d,
+          *_s,
+          _ResourceId,
+          severity,
+          status_code,
+          RawData,
+          EventResult_*,
+          SourceIP,
+          Message,
+          EventType_lookup,
+          Computer,
+          MG,
+          ManagementGroupName,
+          TenantId,
+          SourceSystem;
+  let BarracudaCEF = 
+      CommonSecurityLog
+      | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
+      | where DeviceEventCategory in ("WF", "TR")
+      | lookup EventResultWFLookup on $left.DeviceAction == $right.Action_s
+      | lookup EventTypeLookup on $left.DeviceEventCategory == $right.LogType_s
+      | extend
+          EventType = EventType_lookup,
+          severity = toint(LogSeverity)
+      | lookup SeverityLookup on severity
+      | extend
+          Dst = DestinationIP,
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.6",
+          EventVendor = "Barracuda",
+          status_code = toint(EventOutcome)
+      | extend
+          EventResult_TR = case(
+                      status_code between (200 .. 299),
+                      "Success", 
+                      status_code between (400 .. 599),
+                      "Failure",
+                      status_code between (300 .. 399),
+                      "Partial",
+                      "NA"
+                  ),
+          RuleName = iff(DeviceEventCategory == "WF", DeviceCustomString3, "")
+      | extend
+          Dvc = DeviceName,
+          EventResult = iff(DeviceEventCategory == "TR", EventResult_TR, EventResult_WF),
+          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
+          DstIpAddr = DestinationIP,
+          SrcIpAddr = SourceIP,
+          DstBytes = tolong(ReceivedBytes),
+          DstPortNumber = toint(coalesce(DestinationPort,FieldDeviceCustomNumber1)),
+          HttpCookie = RequestCookies,
+          HttpReferrer = RequestContext,
+          HttpRequestBodyBytes = tolong(ReceivedBytes),
+          HttpRequestMethod = RequestMethod,
+          HttpResponseBodyBytes = tolong(SentBytes),
+          NetworkDuration = toint(FlexNumber2),
+          HttpUserAgent = RequestClientApplication,
+          NetworkSessionId = SourceUserID,
+          Rule = RuleName,
+          SrcPortNumber = toint(SourcePort),
+          SrcUsername = SourceUserName,
+          DstUsername = DestinationUserName,
+          Url = RequestURL,
+          HttpResponseCacheControl = iff(
+                                FieldDeviceCustomNumber2 == 0,
+                                "Response from the server",
+                                "Response from the cache"
+                            ),
+          AdditionalFields = bag_pack(
+                        "ProxyIP",
+                        iff(DeviceEventCategory == "WF", DeviceCustomString5, DeviceCustomString3),
+                        "ProxyPort",
+                        FieldDeviceCustomNumber3
+                    ),
+          DvcHostname = DeviceName,
+          DvcIpAddr = DeviceAddress,
+          EventResultDetails = EventOutcome,
+          HttpVersion = FlexString1
+      | extend 
+          SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
+          DstUsernameType = iff(isnotempty(DstUsername), "Simple", "")
+      | extend
+          Duration = NetworkDuration,
+          SessionId = NetworkSessionId,
+          EventEndTime = EventStartTime,
+          UserAgent = HttpUserAgent,
+          User = SrcUsername,
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          HttpStatusCode = EventResultDetails
+      | project-away
+          ThreatConfidence,
+          CommunicationDirection,
+          AdditionalExtensions,
+          Device*,
+          Source*,
+          Destination*,
+          Activity,
+          LogSeverity,
+          ApplicationProtocol,
+          ProcessID,
+          ExtID,
+          Protocol,
+          Reason,
+          ReceiptTime,
+          SimplifiedDeviceAction,
+          OriginalLogSeverity,
+          ProcessName,
+          EndTime,
+          ExternalID,
+          File*,
+          ReceivedBytes,
+          Message,
+          Old*,
+          EventOutcome,
+          Request*,
+          StartTime,
+          Field*,
+          Flex*,
+          Remote*,
+          Malicious*,
+          severity,
+          ThreatSeverity,
+          IndicatorThreatType,
+          ThreatDescription,
+          _ResourceId,
+          SentBytes,
+          ReportReferenceLink,
+          Computer,
+          EventResult_*,
+          status_code,
+          EventType_lookup,
+          TenantId;
+  union isfuzzy = true 
+      BarracudaCustom,
+      BarracudaCEF
+  };
+  parser(disabled=disabled)
