@@ -14,8 +14,12 @@ from azure.core.exceptions import HttpResponseError
 
 
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
-INT_DUMMY_VALUE = -967799
 MAX_FILTERING_PARAMETERS = 2
+
+# Negative value as it is cannot be a port number and less likely to be an ID of some event. Also, the absolute value is greater than the maximal possible port number.
+INT_DUMMY_VALUE = -967799
+# The index of the column with the value from a query response.
+COLUMN_INDEX_IN_ROW = 0
 
 argparse_parser = argparse.ArgumentParser()
 argparse_parser.add_argument("ws_id", help = "workspace ID")
@@ -114,7 +118,7 @@ def get_substring_or_default(default, substring, rows, current_list):
         return substring
     # Checking if there is at least one value in rows that the substring is not contained in.
     for row in rows:
-        value = row[0]
+        value = row[COLUMN_INDEX_IN_ROW]
         if substring not in value:
             return substring
     return default
@@ -168,20 +172,18 @@ def get_non_word_character_from_rows(rows):
         output = '.' (as '.' appearers in the values of rows more than '/' and '-')
     '''
     character_count = {}
-    i = 0
     number_of_rows_to_check = 5
     # Counting each occurrence of a non-word character
-    for row in rows:
-        if i == number_of_rows_to_check:
+    for index, row in enumerate(rows):
+        if index == number_of_rows_to_check:
             break
-        value = row[0]
+        value = row[COLUMN_INDEX_IN_ROW]
         # Getting a list of all non-word characters in value using regex
         non_words_characters_list = re.findall(r'\W', value)
         # Incrementing the count for each non-word character by one
         for character in non_words_characters_list:
             character_count[character] = character_count.get(character, 0) + 1
-        i+=1
-    
+
     # Return the character with maximal count. If no non-word character was found return space by default.
     return max(character_count, key=character_count.get) if len(character_count) > 0 else ' '
         
@@ -325,7 +327,7 @@ class FilteringTest(unittest.TestCase):
             if len(values) == MAX_FILTERING_PARAMETERS:
                 break
 
-            value = row[0]
+            value = row[COLUMN_INDEX_IN_ROW]
             # if the value in an empty string we want to skip it
             if value == "":
                 continue
@@ -348,12 +350,11 @@ class FilteringTest(unittest.TestCase):
         num_of_rows_with_filter_in_query = len(query_response.tables[0].rows)
         with self.subTest():
             self.assertNotEqual(0, num_of_rows_with_filter_in_query, f"Parameter: {parameter_name} - Got no results at all after filtering. Filtered by value: {filter_parameters}")  
-        if (num_of_rows_when_no_filters_in_query == 1):
-            with self.subTest():
+        with self.subTest():
+            if (num_of_rows_when_no_filters_in_query == 1):
                     self.assertEqual(1, num_of_rows_when_no_filters_in_query,  f"Parameter: {parameter_name} - Expected to have one result after filtering. Filtered by value: {filter_parameters}")
-        else:
-            with self.subTest():
-                self.assertLess(num_of_rows_with_filter_in_query, num_of_rows_when_no_filters_in_query,  f"Parameter: {parameter_name} - Expected to have less results after filtering. Filtered by value: {filter_parameters}")
+            else:
+                    self.assertLess(num_of_rows_with_filter_in_query, num_of_rows_when_no_filters_in_query,  f"Parameter: {parameter_name} - Expected to have less results after filtering. Filtered by value: {filter_parameters}")
 
 
     def dynamic_tests_helper(self, parameter_name, query_definition, num_of_rows_when_no_filters_in_query, column_name_in_table, values_list, test_type):
@@ -406,7 +407,7 @@ class FilteringTest(unittest.TestCase):
             if len(substrings_list) == num_of_substrings:
                 break
 
-            value = row[0]
+            value = row[COLUMN_INDEX_IN_ROW]
             post = get_postfix(value, rows, substrings_list, delimiter)
             # Post will equal value if: value dont contain the delimiter, post is in the list, post is contained in an item in the list.
             if post != value:
@@ -449,7 +450,7 @@ class FilteringTest(unittest.TestCase):
             if len(prefix_list) == num_of_prefixes:
                 break
     
-            value = row[0]
+            value = row[COLUMN_INDEX_IN_ROW]
             pre = get_prefix(value, rows, prefix_list, delimiter)
             # pre will equal value if: value dont contain a dot, pre is in the list, pre is contained in an item in the list.
             if pre != value:
