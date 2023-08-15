@@ -1,7 +1,7 @@
 id: 532f62c1-fba6-4baa-bbb6-4a32a4ef32fa
 name: TI map Domain entity to Syslog
 description: |
-  'Identifies a match in Syslog table from any Domain IOC from TI'
+  Identifies a match in Syslog table from any Domain IOC from TI
 severity: Medium
 requiredDataConnectors:
   - connectorId: Syslog
@@ -23,55 +23,51 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-  let dt_lookBack = 1h;
-  let ioc_lookBack = 14d;
-  let IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True);
-  //Create a list of TLDs in our threat feed for later validation
+  let dt_lookBack = 1h;  // Define the time range to look back for syslog data (1 hour)
+  let ioc_lookBack = 14d;  // Define the time range to look back for threat intelligence indicators (14 days)
+  // Create a list of top-level domains (TLDs) from the threat feed for later validation
   let list_tlds = ThreatIntelligenceIndicator
-  | where TimeGenerated > ago(ioc_lookBack)
-  | where isnotempty(DomainName)
-  | extend parts = split(DomainName, '.')
-  | extend tld = parts[(array_length(parts)-1)]
-  | summarize count() by tostring(tld)
-  | summarize make_list(tld);
-  let Domain_Indicators = (union isfuzzy=true
-  (ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  // Picking up only IOC's that contain the entities we want
-  | where isnotempty(DomainName)
-  | extend TI_DomainEntity = DomainName
-  ),
-  (IoCList
-  | where IoC_Type =~ 'domainname'
-  | where ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC
-  | where Active =~ 'True'
-  | extend TI_DomainEntity = IoC
-  | project-away  IoC_Type
-  )
-  );
+    | where TimeGenerated > ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | where isnotempty(DomainName)
+    | extend parts = split(DomainName, '.')
+    | extend tld = parts[(array_length(parts)-1)]
+    | summarize count() by tostring(tld)
+    | summarize make_list(tld);
+  // Fetch the latest active domain indicators from the threat intelligence data within the specified time range
+  let Domain_Indicators = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | where isnotempty(DomainName)
+    | extend TI_DomainEntity = DomainName;
+  // Join the threat intelligence indicators with syslog data on matching domain entities
   Domain_Indicators
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-  Syslog
-  | where TimeGenerated > ago(dt_lookBack)
-  //Extract domain patterns from syslog message
-  | extend domain = extract("(([a-z0-9]+(-[a-z0-9]+)*\\.)+[a-z]{2,})",1, tolower(SyslogMessage))
-  | where isnotempty(domain)
-  | extend parts = split(domain, '.')
-  //Split out the TLD
-  | extend tld = parts[(array_length(parts)-1)]
-  //Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
-  | where tld in~ (list_tlds)
-  | extend Syslog_TimeGenerated = TimeGenerated
-  ) on $left.TI_DomainEntity==$right.domain
-  | where Syslog_TimeGenerated < ExpirationDateTime
-  | summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by IndicatorId, domain, IoC
-  | project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, domain, HostIP, Url, Type, IoC, TI_DomainEntity
-  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
-  | extend timestamp = Syslog_TimeGenerated
+    | join kind=innerunique (
+      Syslog
+      | where TimeGenerated > ago(dt_lookBack)
+      // Extract domain patterns from syslog messages
+      | extend domain = extract("(([a-z0-9]+(-[a-z0-9]+)*\\.)+[a-z]{2,})",1, tolower(SyslogMessage))
+      | where isnotempty(domain)
+      | extend parts = split(domain, '.')
+      // Split out the top-level domain (TLD)
+      | extend tld = parts[(array_length(parts)-1)]
+      // Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
+      | where tld in~ (list_tlds)
+      | extend Syslog_TimeGenerated = TimeGenerated
+    ) on $left.TI_DomainEntity==$right.domain
+    | where Syslog_TimeGenerated < ExpirationDateTime
+    // Retrieve the latest syslog timestamp for each indicator and domain combination
+    | summarize Syslog_TimeGenerated = arg_max(Syslog_TimeGenerated, *) by IndicatorId, domain
+    // Select the desired columns for the final result set
+    | project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, domain, HostIP, Url, Type, TI_DomainEntity
+    // Extract the hostname from the Computer field
+    | extend HostName = tostring(split(Computer, '.', 0)[0])
+    // Extract the DNS domain from the Computer field
+    | extend DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+    // Assign the Syslog_TimeGenerated value to the timestamp field
+    | extend timestamp = Syslog_TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -87,5 +83,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.3.3
+version: 1.4.0
 kind: Scheduled
