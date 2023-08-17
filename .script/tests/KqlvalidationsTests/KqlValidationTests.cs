@@ -17,6 +17,7 @@ namespace Kqlvalidations.Tests
         private readonly IKqlQueryAnalyzer _queryValidator;
         private const int TestFolderDepth = 3;
         private const string UserMessageTemplate = "Template Id:{0} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.";
+        private const int TestFolderDepthForSolutionParsers = 6;
 
         public KqlValidationTests()
         {
@@ -270,23 +271,24 @@ namespace Kqlvalidations.Tests
 
             var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
             var parserName = (string)yaml["FunctionName"];
-            ValidateKql(parserName, queryStr, false);
+            ValidateKql(id.ToString(), queryStr, false);
         }
 
         [Fact]
-        public void Validate_AllSolutionParsersAreYamls()
+        public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
         {
-            var basePath = Utils.GetTestDirectory(6);
+            var basePath = Utils.GetTestDirectory(TestFolderDepthForSolutionParsers);
             var solutionDirectories = Path.Combine(basePath, "Solutions");
             var parserFolders = Directory.GetDirectories(solutionDirectories, "Parsers", SearchOption.AllDirectories);
 
-            var allNonYamlFiles = parserFolders
+            var allNonYamlMdFiles = parserFolders
                 .SelectMany(parserFolder => Directory.GetFiles(parserFolder, "*", SearchOption.AllDirectories))
-                .Where(file => !file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+                .Where(file => !file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            Assert.True(!allNonYamlFiles.Any(), $"All files under Solution Parsers folders are supposed to have .yaml extension");
+            Assert.True(!allNonYamlMdFiles.Any(), $"All files under Parsers folders are supposed to have .yaml or .md extension");
         }
+
 
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
