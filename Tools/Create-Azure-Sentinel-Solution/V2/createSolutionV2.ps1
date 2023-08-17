@@ -1311,7 +1311,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             {
                                                 $parameterCount = $instructionItem.parameters.Count -gt 0
                                                 $parameterInstructionStepsCount = $instructionItem.parameters.instructionSteps.Count -gt 0
-                                                #$parameterInstructionStepsCount = ($instructionItem.parameters.Count -gt 0 && $instructionItem.parameters.instructionSteps.Count -gt 0)
 
                                                 if ($parameterCount -and $parameterInstructionStepsCount)
                                                 {
@@ -1328,17 +1327,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         }
                                     }
                                 }
-                                # foreach($item in $instructionArray)
-                                # {
-                                #     if ($item.description)
-                                #     {
-                                #         $deployToAzureIndex = $item.description.IndexOf('[Deploy To Azure]')
-                                #         if ($deployToAzureIndex -gt 0)
-                                #         {
-                                #             $existingFunctionApp = $true;
-                                #         }
-                                #     }
-                                # }
+                                
                                 if($existingFunctionApp)
                                 {
                                     $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"

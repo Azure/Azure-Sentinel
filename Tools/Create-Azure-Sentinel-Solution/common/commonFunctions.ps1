@@ -1649,6 +1649,35 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $existingFunctionApp = $false;
                             $instructionArray = $templateSpecConnectorData.instructionSteps
                             ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
+
+                            if ($existingFunctionApp -eq $false)
+                            {
+                                # check if only instructions object is present without any description
+                                foreach ($item in $instructionArray) 
+                                {
+                                    if ($null -eq $item.description -and $item.instructions.Count -gt 0)
+                                    {
+                                        foreach ($instructionItem in $item.instructions)
+                                        {
+                                            $parameterCount = $instructionItem.parameters.Count -gt 0
+                                            $parameterInstructionStepsCount = $instructionItem.parameters.instructionSteps.Count -gt 0
+
+                                            if ($parameterCount -and $parameterInstructionStepsCount)
+                                            {
+                                                foreach ($desc in $instructionItem.parameters.instructionSteps)
+                                                {
+                                                    if ($desc.description && $desc.descriptionIndexOf('Deploy To Azure') -gt 0)
+                                                    {
+                                                        $existingFunctionApp = $true
+                                                        break
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             if($existingFunctionApp)
                             {
                                 $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
