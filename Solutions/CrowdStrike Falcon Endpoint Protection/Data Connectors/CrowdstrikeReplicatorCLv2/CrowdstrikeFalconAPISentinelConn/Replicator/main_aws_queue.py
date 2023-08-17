@@ -100,7 +100,7 @@ async def main(mytimer: func.TimerRequest):
                             break
                         logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}. Timestamp: {}.".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"], body_obj["timestamp"]))
                         
-                        diffFromNow = int(time.time()) - parser.parse(body_obj["timestamp"]).timestamp()
+                        diffFromNow = int(time.time()*1000) - int(body_obj["timestamp"])
                         if diffFromNow >= 3600:
                             logging.warn("More than 1 hour old records are getting processed now. This indicates requirement for additional function app.")
                         

@@ -218,6 +218,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--http-proxy)
 		HTTPPROXY="$2"
+		shift 2
 		;;
 	--confirm-all-prompts)
 		CONFIRMALL=1
@@ -750,17 +751,18 @@ while [ -z "$SDKFILELOC" ] || [ ! -f "$SDKFILELOC" ]; do
 	SDKFILELOC="${SDKFILELOC/#\~/$HOME}"
 done
 
-#Verifying SDK version
-
-unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
-SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
-sdkok=$?
-rm -rf /tmp/nwrfcsdk
-if [ ! $sdkok -eq 0 ]; then
-	echo "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
-	echo $SDKLOADRESULT
-	echo "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
-	exit 1
+#Verifying SDK version only in case of non-fedora OS
+if [ "$os" != "fedora" ]; then
+	unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
+	SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
+	sdkok=$?
+	rm -rf /tmp/nwrfcsdk
+	if [ ! $sdkok -eq 0 ]; then
+		echo "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
+		echo $SDKLOADRESULT
+		echo "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
+		exit 1
+	fi
 fi
 
 #Building the container
