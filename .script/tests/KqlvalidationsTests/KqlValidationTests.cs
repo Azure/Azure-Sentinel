@@ -273,6 +273,21 @@ namespace Kqlvalidations.Tests
             ValidateKql(parserName, queryStr, false);
         }
 
+        [Fact]
+        public void Validate_AllSolutionParsersAreYamls()
+        {
+            var basePath = Utils.GetTestDirectory(6);
+            var solutionDirectories = Path.Combine(basePath, "Solutions");
+            var parserFolders = Directory.GetDirectories(solutionDirectories, "Parsers", SearchOption.AllDirectories);
+
+            var allNonYamlFiles = parserFolders
+                .SelectMany(parserFolder => Directory.GetFiles(parserFolder, "*", SearchOption.AllDirectories))
+                .Where(file => !file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            Assert.True(!allNonYamlFiles.Any(), $"All files under Solution Parsers folders are supposed to have .yaml extension");
+        }
+
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(CommonFunctionsYamlFilesTestData))]
