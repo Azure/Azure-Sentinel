@@ -23,8 +23,8 @@ ALERT_LOG_TYPE = 'PaloAltoPrismaCloudAlert'
 AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
 LOGTYPE = os.environ.get('LogType',"alert, audit")
 
-# if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
-MAX_PERIOD_MINUTES = 60 * 6
+# if ts of last event is not available -> script will get events from now - MAX_PERIOD_MINUTES
+MAX_PERIOD_MINUTES = 60 * 1
 FIELD_SIZE_LIMIT_BYTES = 1000 * 32
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
@@ -77,9 +77,9 @@ class PrismaCloudConnector:
     async def process_alerts(self):
         last_alert_ts_ms = await self.alerts_state_manager.get()
         max_period = (int(time.time()) - MAX_PERIOD_MINUTES * 60) * 1000
-        if not last_alert_ts_ms or int(last_alert_ts_ms) < max_period:
+        if not last_alert_ts_ms:
             alert_start_ts_ms = max_period
-            logging.info('Last alert was too long ago or there is no info about last alert timestamp.')
+            logging.info('There is no info about last alert timestamp.')
         else:
             alert_start_ts_ms = int(last_alert_ts_ms) + 1
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
@@ -165,6 +165,9 @@ class PrismaCloudConnector:
         }
 
         unix_ts_now = (int(time.time()) - 10) * 1000
+        diff = unix_ts_now - start_time
+        if diff > MAX_PERIOD_MINUTES * 60 * 1000:
+            unix_ts_now = (int(start_time) + MAX_PERIOD_MINUTES * 60 * 1000) 
         data = {
             "timeRange": {
                 "type": "absolute",
