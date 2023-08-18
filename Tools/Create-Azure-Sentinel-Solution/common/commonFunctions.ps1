@@ -1666,7 +1666,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                             {
                                                 foreach ($desc in $instructionItem.parameters.instructionSteps)
                                                 {
-                                                    if ($desc.description && $desc.descriptionIndexOf('Deploy To Azure') -gt 0)
+                                                    if ($desc.description && $desc.description.IndexOf('Deploy To Azure') -gt 0)
                                                     {
                                                         $existingFunctionApp = $true
                                                         break
