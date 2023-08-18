@@ -33,7 +33,11 @@ This exercise guides you through the Content Hub catalog.
 
 5. Feel free to navigate to other solutions. In the next exercise, we will install one of them.
 
-### Exercise 2: Deploy standalone content items
+### Exercise 2: Deploy content from Content Hub Catalog.
+
+This exercice guides you through installing Standalone content and Solutions from the Content Hub catalog.
+
+#### Task 1: Deploy standalone content items
 
 We're going to look at a few items available standalone in the Content hub.
 
@@ -54,33 +58,35 @@ You can optionally search for, explore and Save these workbooks:
 
 
 
-### Exercise 2: Deploy a new solution
+#### Task 2: Deploy a new Solution
 
 This exercise explains how to install a new solution into your Microsoft Sentinel workspace.
 
 1. From the Microsoft Sentinel portal, navigate to **Content hub** under **Content Management**
 
-2. In the search bar, type **Dynamics**. Select on the **Continuous Threat Monitoring for Dynamics 365** solution and click **Install**
+2. In the search bar, type **dynamics 365 CE**. Select the **Dynamics 365 CE Apps** solution and click **Install**
 
-    ![azsolutions](../Images/azsolutions4.png)
+    ![azsolutions](../Images/azsolutions12.png)
 
-3. Notice the content being added by this solution (Data Connector, Analytics Rules, Workbook and Hunting Queries). Also notice the disclaimer, saying that the Data Connector is already in the data connectors gallery, so the solution won't deploy this data connector. Click on **Create**.
+3. Click on **View Details**. Notice the content being added by this solution (Data Connector, Analytics Rules, Workbook and Hunting Queries). Click on **Create**.
 
     ![azsolutions](../Images/azsolutions5.png)
 
-4. Select your subscription, resource group and Microsoft Sentinel workspace. Click on **Next: Workbook**.
+4. Select your subscription, resource group and Microsoft Sentinel workspace. Click on **Next:**.
 
     ![azsolutions](../Images/azsolutions6.png)
 
-5. In the Workbooks tab, type the name for your Workbook. Click on **Next: Analytics**.
+5. In the Workbooks tab, type the name for your Workbook. Click on **Next:**.
 
     ![azsolutions](../Images/azsolutions7.png)
 
-6. Notice the different Analytics Rules that will be added to your workspace. Click **Next: Hunting Queries**.
+6. Notice the different Analytics Rules that will be added to your workspace. Click **Next:**.
 
-7. Notice the Hunting Queries included in the solution. Click **Next: Review + create**.
+7. Notice the Hunting Queries included in the solution. Click **Next:**.
 
-8. A final validation will run. If everything is ok, click on **Create** button. The deployment will kick off and finish in a few seconds.
+8. Notice the Watchlists included in the solution. Click **Next:**.
+
+9. A final validation will run. If everything is ok, click on **Create** button. The deployment will kick off and finish in a few seconds.
 
     ![azsolutions](../Images/azsolutions8.png)
 
