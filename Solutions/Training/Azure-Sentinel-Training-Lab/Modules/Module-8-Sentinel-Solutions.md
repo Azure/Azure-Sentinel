@@ -68,23 +68,23 @@ This exercise explains how to install a new solution into your Microsoft Sentine
 
     ![azsolutions](../Images/azsolutions12.png)
 
-3. Click on **View Details**. Notice the content being added by this solution (Data Connector, Analytics Rules, Workbook and Hunting Queries). Click on **Create**.
+3. Click on **View Details**. Notice the content being added by this solution (Data Connector, Analytics Rules, Workbook, Hunting Queries and Watchlists). Click on **Create**.
 
     ![azsolutions](../Images/azsolutions5.png)
 
-4. Select your subscription, resource group and Microsoft Sentinel workspace. Click on **Next:**.
+4. Select your subscription, resource group and Microsoft Sentinel workspace. Click on **Next**
 
     ![azsolutions](../Images/azsolutions6.png)
 
-5. In the Workbooks tab, type the name for your Workbook. Click on **Next:**.
+5. In the Workbooks tab, type the name for your Workbook. Click on **Next**
 
     ![azsolutions](../Images/azsolutions7.png)
 
-6. Notice the different Analytics Rules that will be added to your workspace. Click **Next:**.
+6. Notice the different Analytics Rules that will be added to your workspace. Click **Next**
 
-7. Notice the Hunting Queries included in the solution. Click **Next:**.
+7. Notice the Hunting Queries included in the solution. Click **Next**
 
-8. Notice the Watchlists included in the solution. Click **Next:**.
+8. Notice the Watchlists included in the solution. Click **Next**
 
 9. A final validation will run. If everything is ok, click on **Create** button. The deployment will kick off and finish in a few seconds.
 
@@ -93,23 +93,26 @@ This exercise explains how to install a new solution into your Microsoft Sentine
 
 ### Exercise 3: Review and enable deployed artifacts
 
-1. Return to Microsoft Sentinel home page and navigate to **Analytics Rules**.
+1. Return to Microsoft Sentinel home page and navigate to **Analytics**, and go the **Rule Templates** tab.
 
-2. Type **Dynamics** in the search box. You should see 6 different analytics rules that look at Dynamics 365 data.
+2. Type **Dynamics** in the search box. You should see 16 different analytics rules that look at Dynamics 365 data.
 
 ![azsolutions](../Images/azsolutions9.png)
 
-3. Notice that these rules are created in **Disabled** state. In a real-world environment, you would need to enable them.
+3. Notice that these rules are available as **templates**. In a real-world environment, you would need to create them in order to use them.
 
-4. Navigate to **Workbooks** under Threat Management. Switch to **My Workbooks** tab and search for Dynamics. You can see the newly deployed workbook. This should be empty unless you have enabled the Dynamics 365 connector.
+4. Navigate to **Workbooks** under Threat Management. Search for Dynamics. Like the analytics rules the workbook exists as a template,. This should be empty unless you have enabled the Dynamics 365 connector.
 
 ![azsolutions](../Images/azsolutions10.png)
 
-5. Navigate to **Hunting** and search for dynamics. You should see 2 new queries that use data coming from Dynamics 365.
+5. Navigate to **Hunting**,  go to **Queries** tab and search for **dynamics 365**. You should see 2 new queries that use data coming from Dynamics 365.
 
 ![azsolutions](../Images/azsolutions11.png)
 
+6. Navigate to **Watchlist** under Configuration. Search for **d365**. Notice you have two new watchlists.
 
+![azsolutions](../Images/azsolutions13.png)
+   
 ## Summary
 
 In this module your learned how to use the Microsoft Sentinel content hub to bring new content into your workspace.
