@@ -20,6 +20,7 @@ WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
 FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 LOG_TYPE = 'CiscoDuo'
+MAX_SYNC_WINDOW_PER_RUN_MINUTES = os.getenv('MAX_SYNC_WINDOW_PER_RUN_MINUTES', "60")
 
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
@@ -94,8 +95,10 @@ def process_trust_monitor_events(admin_api: duo_client.Admin, state_manager: Sta
 
     maxtime = int(time.time() - 120) * 1000
     diff = maxtime - mintime
-    if(diff > 3600000):
-        maxtime = (int(mintime/1000) + 3600) * 1000
+    maxwindow = int(MAX_SYNC_WINDOW_PER_RUN_MINUTES) * 60000
+    if(diff > maxwindow):
+        maxtime = mintime + maxwindow
+        logging.warn('Ingestion is lagging for trust_monitor logs, limiting synchronization window to {}'.format(maxwindow))
 
     logging.info('Making trust_monitor logs request: mintime={}, maxtime={}'.format(mintime, maxtime))
     for event in admin_api.get_trust_monitor_events_iterator(mintime=mintime, maxtime=maxtime):
@@ -120,8 +123,10 @@ def process_auth_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
 
     maxtime = int(time.time() - 120) * 1000
     diff = maxtime - mintime
-    if(diff > 3600000):
-        maxtime = (int(mintime/1000) + 3600) * 1000
+    maxwindow = int(MAX_SYNC_WINDOW_PER_RUN_MINUTES) * 60000
+    if(diff > maxwindow):
+        maxtime = mintime + maxwindow
+        logging.warn('Ingestion is lagging for authentication logs, limiting synchronization window to {}'.format(maxwindow))
 
     for event in get_auth_logs(admin_api, mintime, maxtime):
         sentinel.send(event)
