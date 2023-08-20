@@ -4,22 +4,14 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Make-GitHub-Repository-Private%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Make-GitHub-Repository-Private%2Fmain%2Fazuredeploy.json)       
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fportal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Make-GitHub-Repository-Private%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fportal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Make-GitHub-Repository-Private%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel Incident. It will look up the GitHub repositories associated with the Incident Account Entities and make them private. A comment noting the affected GitHub repositories will be added to the Incident.
 
 ![MakeGitHubRepoPrivate_Demo_1](Images/MakeGitHubRepoPrivate_Demo_1.png)
 
 ![MakeGitHubRepoPrivate_Demo_2](Images/MakeGitHubRepoPrivate_Demo_2.png)
-
-![MakeGitHubRepoPrivate_Demo_3](Images/MakeGitHubRepoPrivate_Demo_3.png)
-
-![MakeGitHubRepoPrivate_Demo_4](Images/MakeGitHubRepoPrivate_Demo_4.png)
-
-
-> **Note**
-> This playbook is predicated on the use of GitHub Audit Logs in Microsoft Sentinel. The Audit Log API is currently only available for the [GitHub Enterprise tier subscription](https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/using-the-audit-log-api-for-your-enterprise).
 
 > **Note**
 > Because there is currently no way to query GitHub repositories by name, this playbook loops through all GitHub repositories looking for a match. GitHub API responses are limited to a maximum of 100 items, so if your GitHub Organization has more than 100 repositories, you will need to add additional logic to this playbook to handle pagination.
@@ -29,12 +21,12 @@ This playbook is intended to be run from a Microsoft Sentinel Incident. It will 
                                                                                                                             
 The following items are required under the template settings during deployment: 
 
-* A [GitHub App](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#install-the-github-app) with permissions to read and write on Administration for repositories in your GitHub Organization
-* The [GitHub App Installation ID](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#install-the-github-app)
-* An [Encoded Private Key](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#encode-the-private-key-for-storage-compatibility-in-azure-key-vault) for the GitHub App
-* An [Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#create-an-azure-key-vault-secret) containing your encoded private key
-* Install [Visual Studio Code](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#configure-visual-studio-code) and configure it to deploy an Azure Function to your Azure tenant
-* An [Azure Function App](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#deploy-the-azure-function-app) that supports Node.js to deploy an Azure function to
+* A [GitHub App](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#install-the-github-app) with permissions to read and write on Administration for repositories in your GitHub Organization
+* The [GitHub App Installation ID](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#install-the-github-app)
+* An [Encoded Private Key](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#encode-the-private-key-for-storage-compatibility-in-azure-key-vault) for the GitHub App
+* An [Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#create-an-azure-key-vault-secret) containing your encoded private key
+* Install [Visual Studio Code](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#configure-visual-studio-code) and configure it to deploy an Azure Function to your Azure tenant
+* An [Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#deploy-the-azure-function-app) that supports Node.js to deploy an Azure function to
 
 
 # 
@@ -86,18 +78,18 @@ Navigate to an existing Key Vault or create a new one. From the Key Vault overvi
 
 ![MakeGitHubRepoPrivate_Key_Vault_Create_Secret_1](Images/MakeGitHubRepoPrivate_Key_Vault_Create_Secret_1.png)
 
-Choose a name for the secret, such as "**GitHub-App-Private-Key--Update-Repository**", and enter the encoded GitHub private key value copied from the [previous step](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#encode-the-private-key-for-storage-compatibility-in-azure-key-vault) in the "**Value**" field. All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**GitHub-App-Private-Key--Update-Repository**", and enter the encoded GitHub private key value copied from the [previous step](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#encode-the-private-key-for-storage-compatibility-in-azure-key-vault) in the "**Value**" field. All other settings can be left as is. Click "**Create**". 
 
 ![MakeGitHubRepoPrivate_Key_Vault_Create_Secret_2](Images/MakeGitHubRepoPrivate_Key_Vault_Create_Secret_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#granting-access-to-azure-key-vault).
 
 ![MakeGitHubRepoPrivate_Key_Vault_Create_Secret_3](Images/MakeGitHubRepoPrivate_Key_Vault_Create_Secret_3.png)
 
 
 #### Configure Visual Studio Code:
 
-This playbook utilizes an Azure Function to create a JSON Web Token (JWT), which is a required step in authenticating to GitHub as an application. This function can be reused for all API calls from Microsoft to GitHub, so if this step has already been completed during the deployment of another one of Accelerynt's GitHub playbooks, it can be skipped along with the [Deploy the Azure Function App](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#deploy-the-azure-function-app) step. Otherwise, the Azure Function included in this repository will need to be deployed to your Azure tenant before it can be used. This Azure Function relies on the Node.js libraries "**jsonwebtoken**" and "**date-fns**". These libraries are not included in Node.js by default, which is why they must be installed in an IDE housing the CreateJWT project and then deployed to Azure.
+This playbook utilizes an Azure Function to create a JSON Web Token (JWT), which is a required step in authenticating to GitHub as an application. This function can be reused for all API calls from Microsoft to GitHub, so if this step has already been completed during the deployment of another one of Accelerynt's GitHub playbooks, it can be skipped along with the [Deploy the Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#deploy-the-azure-function-app) step. Otherwise, the Azure Function included in this repository will need to be deployed to your Azure tenant before it can be used. This Azure Function relies on the Node.js libraries "**jsonwebtoken**" and "**date-fns**". These libraries are not included in Node.js by default, which is why they must be installed in an IDE housing the CreateJWT project and then deployed to Azure.
 
 > **Note**
 > Simply recreating the file structure from this repository in Azure will not actually install the libraries required for the Azure Function; the function must be deployed from an IDE, so that the dependent library packages are recreated and properly installed. Any IDE can be used for this, but this documentation will outline the process using Visual Studio Code (VS Code).
@@ -196,8 +188,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Make-GitHub-Repository-Private%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Make-GitHub-Repository-Private%2Fmain%2Fazuredeploy.json)                                             
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fportal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Make-GitHub-Repository-Private%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fportal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Make-GitHub-Repository-Private%2Fazuredeploy.json)                                             
 
 Click the "**Deploy to Azure**" button at the bottom and it will bring you to the custom deployment template.
 
@@ -211,15 +203,15 @@ In the **Instance Details** section:
 
 * **GitHub Organization Name**: Enter the name of your GitHub Organization
 
-* **GitHub App ID**: Enter the name of your GitHub App ID noted in [Install the GitHub App](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#install-the-github-app)
+* **GitHub App ID**: Enter the name of your GitHub App ID noted in [Install the GitHub App](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#install-the-github-app)
 
-* **GitHub App Installation ID**: Enter the name of your GitHub App Installation ID noted in [Install the GitHub App](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#install-the-github-app)
+* **GitHub App Installation ID**: Enter the name of your GitHub App Installation ID noted in [Install the GitHub App](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#install-the-github-app)
 
-* **Function App Name**: Enter the name of your Azure Function App noted in [Deploy the Azure Function App](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#deploy-the-azure-function-app)
+* **Function App Name**: Enter the name of your Azure Function App noted in [Deploy the Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#deploy-the-azure-function-app)
 
-* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#create-an-azure-key-vault-secret).
 
-* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Make-GitHub-Repository-Private#create-an-azure-key-vault-secret).
+* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Make-GitHub-Repository-Private#create-an-azure-key-vault-secret).
 
 Towards the bottom, click on "**Review + create**". 
 
