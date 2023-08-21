@@ -10,7 +10,6 @@ This Sentinel integration enables Commvault users to ingest alerts and other dat
 - Administrative access to your Azure Resource Group and Subscription.
 - An Azure Sentinel instance in the aforementioned Azure Resource Group.
 - An Azure Log Analytic Workspace in the aformentioned Azure Resource Group.
-- A properly setup Syslog Forwarder VM injesting Commvault/Metallic alerts: [Azure Documentation](https://learn.microsoft.com/en-us/azure/sentinel/connect-syslog)
 
 ## Inventory of Required Assets
 The following Azure assets need to all be created in order for this integration to function properly. In addition to these assets, proper permissions need to be granted. When following the installation instructions, please use the same asset names to ensure compatibility.
@@ -23,7 +22,7 @@ All runbooks are stored in the Automation Account *Commvault-Automation-Account*
 - **Commvault_Disable_IDP:** Used in the *Commvault-Logic-App* Logic App to execute the API calls that disable the IDP in your environment.
 - **Commvault_Disable_User:** Used in the *Commvault-Logic-App* Logic App to execute the API calls that disable a specific user given their email address.
 ### Logic Apps
-- **Commvault-Logic-App:** This Logic App (also referred to as a *Playbook*) executes when called upon by an Automation Rule. Accessing the KeyVault to retrieve various credentials, it executes a specific runbook depending on the use case. 
+- **Commvault-Logic-App:** This Logic App (also referred to as a *Playbook*) executes when called upon by an Automation Rule. Accessing the KeyVault to retrieve various credentials, it executes a specific runbook depending on the use case.
 - **CommvaultTokenCycle:** This Logic App (also referred to as a *Playbook*) executes periodically to generate a new Commvault/Metallic access token and securely overwrites the old access token in your KeyVault.
 ### KeyVaults
 - **Commvault-Integration-KV:** This KeyVault stores all required credentials as *secrets*.
@@ -44,14 +43,7 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
 - **User Compromised:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a compromised Commvault/Metallic user. 
 - **Data Aging:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a request to disable data aging on a specific Commvault/Metallic client. 
 
-Note:- The Commvault-Logic-App mentioned below in the documentation can either be created manually by following the steps mentioned or it can be imported from the file **Playbooks/Commvault-Logic-App-ARM-Template.json**.
-To import the logic app from the azure portal go to "Custom Deployment" -> "Build your own template in the editor" -> "Load File" -> Use the json present under **Playbooks/Commvault-Logic-App-ARM-Template.json**.
-Please have the keyvault and the automation account ready prior to deploying the logic app and also give the neccessary permissions as mentioned in the documentation post the deployment of the logic app.
-
-
 ## Installation
-### Syslog Data Connector
-In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog" Data Connector. 
 ### Create the Runbooks
 * Go to Automation Accounts -> Create 
   * Basics:
@@ -94,54 +86,14 @@ In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog
     * Use the content in this file: **Runbooks/Commvault_Disable_Data_Aging.ps1**
     * Click "Publish"
   * Click "Save"
-### Initialize the Logic App (*Playbook*):
-* Go to "All Resources" -> Create -> Integration -> Logic App -> Add
-  * Basics:
-    * Select the correct subscription and resource group
-    * Logic App Name:
-      * Commvault-Logic-App
-    * Plan Type:
-      * Consumption
-  * Click "Review + Create"
-  * Click "Create"
-* Go to "Commvault-Logic-App":
-  * Under "Settings", click "Identity"
-  * In the "System assigned" tab, turns the "Status" to "On" then click "Save"
-    * If prompted for confirmation, click "Yes"
-* Go to "Logic App Designer" (under "Development Tools")
-  * Under "Templates", click "Blank Logic App"
-  * In the search bar, search for "Sentinel Incident"
-  * Under "Triggers", select the "Microsoft Sentinel Incident (Preview)" search result
-  * Select "Connect With Managed Identity"
-    * Connection Name:
-      * Commvault-Managed-Identity-Connection
-    * Managed Identity:
-      * Use the default option of "System-assigned managed identity"
-    * Click "Create"
-  * Click "Save" (Done with this for now. We will come back later)
+    
 ### Create The KeyVault:
 * Go to KeyVault -> Create
   * Basics:
     * Select the correct subscription and resource group
     * KeyVault name = 
       * Commvault-Integration-KV
-  * Access Configuration:
-    * Permission Model = 
-      * Vault Access Policy
-    * Go to "Access Policies" -> "Create"
-      * Under "Permissions" -> "Secret Permissions"
-        * Select "Get", "List", and "Set"
-        * Click "Next"
-      * Under "Principal"
-        * Search for "Commvault-Logic-App"
-          * Select "Commvault-Logic-App from the search results
-        * Click "Next"
-      * Under "Application (Optional)"
-        * Do nothing here except click "Next"
-      * Under "Review + Create"
-        * Click "Create"
-  * Click "Review + Create"
-  * Click "Create"
+  
 ### Create the KeyVault Secrets:
 * Go to KeyVault -> "Commvault-Integration-KV" -> Secrets (Under "Objects") -> "Generate/Import"
   * Upload Options:
@@ -163,6 +115,31 @@ In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog
   * Enabled:
     * Yes
   * Click "Create"
+  
+### Initialize the Logic App (*Playbook*):
+* Go to "Custom Deployment" -> "Build your own template in the editor" -> "Load File" -> Use the json present under **Playbooks/CommvaultLogicApp/azuredeploy.json**.
+	* Save 
+	* Enter the resource group, subscription, automation account and keyvault name
+	* In the playbook name field use "Commvault-Logic-App"
+* Go to KeyVault -> Commvault-Integration-KV
+* Access Configuration:
+    * Permission Model = 
+      * Vault Access Policy
+    * Go to "Access Policies" -> "Create"
+      * Under "Permissions" -> "Secret Permissions"
+        * Select "Get", "List", and "Set"
+        * Click "Next"
+      * Under "Principal"
+        * Search for "Commvault-Logic-App"
+          * Select "Commvault-Logic-App from the search results
+        * Click "Next"
+      * Under "Application (Optional)"
+        * Do nothing here except click "Next"
+      * Under "Review + Create"
+        * Click "Create"
+  * Click "Review + Create"
+  * Click "Create"
+
 ### Setup the Managed Identity
 * Go to Automation Accounts -> "Commvault-Sandbox-Automation-Account" -> "Access Control (IAM)" -> "Add" -> "Add Role Assignment
   * In "Job function roles" under "role":
@@ -201,151 +178,7 @@ In your Sentinel instance, navigate to "Data Connectors" and install the "Syslog
     * Role:
       * KeyVault Secrets Officer
     * Click the blue "Save" button
-### Complete the Logic App
-* Go to "Logic Apps" -> "Commvault-Logic-App" -> "Logic App Designer" (under "Development Tools")
-  * Click "+ New Step"
-    * Search "Get Secret"
-    * From the results in the "Actions" tab, click "Get Secret Azure Key Vault"
-      * Connection Name: 
-        * Commvault-KeyVault-Connection
-      * Authentication Type:
-        * Managed Identity
-      * Vault Name: 
-        * Commvault-Integration-KV
-      * Click "Create"
-      * Name of Secret:
-        * access-token
-    * In this Action Box, click the three dots in the top right corner
-      * Rename:
-        * Access Token
-  * Click "+ New Step"
-    * Search "Get Secret"
-    * From the results in the "Actions" tab, click "Get Secret Azure Key Vault"
-      * Name of Secret:
-        * environment-endpoint-url
-    * In this Action Box, click the three dots in the top right corner
-      * Rename:
-        * Environment Endpoint URL
-  * Click "+ New Step"
-    * Switch to the "Built-in" tab (located under the search bar)
-    * Under "Actions", click "Condition Control"
-    * Rename this grey Action Box (currently named "Condition") to "Disable Data Aging" by clicking the three dots (located in the top right corner of the Action Box) and then clicking "Rename"
-    * In the grey "Disable Data Aging" Action Box, click in the box where it says "Chose a value". A search window will appear
-      * Search for "Incident Description" and select "Incident Description" from the search results
-    * Click on where it says "is equal to" and select "starts with"
-    * Click where it says "Chose a value" and type "Data"
-  * In the green "True" Action Box, click "Add an action"
-    * In the search box, type "Create Job"
-      * In the "Actions" tab, select "Create job"
-    * Select the correct subscription and resource group
-    * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
-    * Under "Wait for job", select "Yes"
-    * Click where it says "Add new parameter"
-      * Select "Runbook name"
-      * Click in the whitespace under the "Create Job" Action Box to confirm the selection
-    * Click "Add new parameter"
-      * Select "Runbook Parameter apiAccessToken"
-      * Click in the whitespace outside of the Action Box to confirm the selection
-    * In the "Runbook Parameter apiAccessToken" box, select "value" under "AccessToken"
-    * Click in the whitespace outside of the Action Box to confirm the selection
-    * Click "Add new parameter"
-      * Select "Runbook Parameter EnvironmentEndpointURL"
-    * In the "Runbook Parameter EnvironmentEndpointURL" box, select "value" under "Environment Endpoint URL"
-    * Click in the whitespace outside of the Action Box to confirm the selection
-    * For "Runbook Name", select "Commvault_Disable_Data_Aging" from the dropdown menu
-    * Click the "Change Connection" blue text
-      * Switch the "Authentication Type" to "Logic Apps Managed Identity"
-      * Name the connection "Commvault-Automation-Connection"
-      * Click "Create"
-    * In this Action Box (currently named "Create Job"), rename it to "Disable Data Aging Job" by click in the three dots in the top right corner of this Action Box, then clicking "Rename"
-  * Still in the green "True" Action Box, click "Add an Action"
-    * In the search bar, type "Job Output"
-      * In the "Actions" tab, select "Get Job Output" search result
-    * Select the correct subscription and resource group
-    * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
-    * For the Job ID, click in the box that says "GUID for the ID of the run"
-      * In the pop-up window, under "Disable Data Aging Job", click "Job ID"
-      * Click in the whitespace under the "Get Job Output" Action Box to confirm the selection
-    * Click the "Change Connection blue text
-      * Select "Commvault-Automation-Connection"
-    * In this Action Box (currently named "Get job output"), rename it to be "Disable Data Aging Job Output" by clicking the three dots in the top right corner of this Action Box, then clicking "Rename"
-  * Collapse the grey "Disable Data Aging" Action Box by clicking the name of the box ("Disable Data Aging")
-  * Hover your mouse cursor on the downwards arrow between "Environment Endpoint URL" and "Disable Data Aging"
-    * Click on the blue plus sign that appears
-    * Click on "add parallel branch"
-      * A new grey Action Box appears
-  * In the new grey box
-    * Switch to the "Built-in" tab (located under the search bar)
-    * Under "Actions", click "Condition Control"
-    * Rename this grey Action Box (currently named "Condition") to "Disable IDP" by clicking on the three dots (located in the top right corner of the action box) and then clicking "Rename"
-    * In the grey "Disable IDP" Action Box, click in the box where it says "Choose a value". A search window will appear
-      * Search for "Incident Description" and select "Incident Description" from the search results
-      * Click in the whitespace outside of the Action Box to confirm the selection
-    * Click on where it says "is equal to" and select "starts with"
-    * Click where it says "Choose a value" and type "IDP"
-  * In the green "True" Action Box, click "Add an Action"
-    * In the search box, type "Create Job"
-      * In the "Actions" tab, select "Create job"
-    * Select the correct subscription and resource group
-    * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
-    * Under "Wait for Job", select "Yes"
-    * Click where it says "Add new parameter"
-      * Select "Runbook Name"
-      * Click in the whitespace outside of the Action Box to confirm the selection
-    * For "Runbook Name", select "Commvault_Disable_IDP" from the dropdown menu
-    * Click the "Change Connection" blue text
-      * Select "Commvault-Automation-Connection"
-    * In this Action Box (currently named "Create Job"), rename it to "Disable IDP Job" by clicking the three dots in the top right corner of this Action Box, then clicking "Rename"
-  * Still in the green "True" Action Box, click "Add an Action"
-    * In the search bar, type "Job Output"
-      * In the "Actions" tab, select "Get Job Output" search result
-    * Search the correct subscription and resource group
-    * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
-    * For Job ID, click in the box that says "GUID for the ID of the run"
-      * In the pop-up window, under "Disable IDP Job, click "Job ID"
-        * Click in the whitespace under "Get Job Output" Action Box to confirm the selection
-      * Click the "Change Connection" blue text
-        * Select "Commvault-Automation-Connection"
-      * In this Action Box (currently named "Get Job Output"), rename it to be "Disable IDP Job Output" by clicking the three dots in the top right corner of this Action Box, then clicking "Rename"
-    * Collapse the grey "Disable IDP" Action Box by clicking the name of the box ("Disable IDP")
-    * Hover your mouse cursor on the downwards arrow below "Environment Endpoint URL"
-      * Click on the blue plus sign that appears
-      * Click on "add parallel branch"
-        * A new grey Action Box appears
-    * In the new grey Action Box
-      * Switch to the "Built-In" tab (located under the search bar)
-      * Under "Actions", click "Condition Control"
-      * Rename this grey Action Box (currently named "Condition") to "Disable User" by clicking on the three dots (located in the top right corner of the Action Box) and then clicking "Rename"
-      * In the grey "Disable User" action box, click in the box where it says "Choose a value". A search window will appear
-        * Search for "Incident Description" and select "Incident Description" from the search results
-        * Click in the whitespace outside of the Action Box to confirm the selection
-	  * Click on where it says "is equal to" and select "starts with"
-      * Click where it says "Choose a value" and type "User"
-    * In the green "True" Action Box, click "Add an action"
-      * In the search box, type "Create Job"
-        * In the "Actions" tab, select "Create job"
-      * Select the correct subscription and resource group
-      * Under "Automation Account", select "Commvault-Automation-Account" from the dropdown menu
-      * Under "Wait for Job", select "Yes"
-      * Click where it says "Add new parameter"
-        * Select "Runbook Name"
-        * Click in the whitespace outside of the Action Box to confirm the selection
-      * For "Runbook Name", select "Commvault_Disable_User" from the dropdown menu
-      * Click the "Change Connection" blue text
-        * Select "Commvault-Automation-Connection"
-      * In this Action Box (currently named “Create Job”), rename it to “Disable User Job” by clicking the three dots in the top right corner of this Action Box, then clicking “Rename” 
-    * Still in the green “True” Action Box, click “Add an Action” 
-      * In the search bar, type “Job Output” 
-        * In the “Actions” tab, select “Get Job Output” search result 
-      * Select the correct subscription and resource group 
-      * Under “Automation Account”, select “Commvault-Automation-Account" from the dropdown menu
-      * For Job ID, click in the box that says “GUID for the ID of the run” 
-        * In the pop-up window, under “Disable IDP Job”, click “Job ID” 
-        * Click in the whitespace under the “Get Job Output” Action Box to confirm the selection 
-      * Click the “Change Connection” blue text 
-        * Select “Commvault-Automation-Connection" 
-      * In this Action Box (currently named “Get job output”), rename it to “Disable User Job Output” by clicking the three dots in the top right corner of this Action Box, then clicking “Rename” 
-    * Click “Save” 
+
 ### Create the Analytic Rules:
 * Go to Sentinel -> (The name of your Sentinel instance) -> Analytics (located under “Configuration”) -> Create -> Scheduled Query Rule 
   * General: 
