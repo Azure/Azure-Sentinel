@@ -53,13 +53,13 @@ async def main(mytimer: func.TimerRequest):
             mainQueueHelper = AzureStorageQueueHelper(connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items")
             backlogQueueHelper = AzureStorageQueueHelper(connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items-backlog")    
 
-            logging.info("Check if main queue is already full.")
+            logging.info("Check if we already have enough backlog to process")
             mainQueueCount = mainQueueHelper.get_queue_current_count()
             logging.info("Main queue size is {}".format(mainQueueCount))
-            while mainQueueCount >= MAX_QUEUE_MESSAGES_MAIN_QUEUE:
+            while (mainQueueCount ) >= MAX_QUEUE_MESSAGES_MAIN_QUEUE:
                 time.sleep(15)
                 if check_if_script_runs_too_long(0.7, script_start_time):
-                    logging.warn("Main queue already have enough messages to process. Not clearing any backlog or reading a new SQS message in this iteration.")
+                    logging.warn("We already have queue already have enough messages to process. Not clearing any backlog or reading a new SQS message in this iteration.")
                     return
                 mainQueueCount = mainQueueHelper.get_queue_current_count()
 
@@ -126,7 +126,7 @@ async def main(mytimer: func.TimerRequest):
 async def download_message_files_queue(mainQueueHelper, backlogQueueHelper, messageId, msg):
     for s3_file in msg['files']:
         link = s3_file['path']
-        if not(REQUIRE_SECONDARY) and link.startswith("fdrv2"):
+        if not(REQUIRE_SECONDARY) and "fdrv2/" in link:
             logging.info('Skip processing a secondary data bucket {}.'.format(link))
             continue
                         
