@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 from botocore.config import Config as BotoCoreConfig
 from aiobotocore.session import get_session
@@ -9,6 +10,8 @@ import aiohttp
 import logging
 import azure.functions as func
 import requests
+import time
+from datetime import datetime
 
 AWS_KEY = os.environ['AWS_KEY']
 AWS_SECRET = os.environ['AWS_SECRET']
@@ -171,11 +174,16 @@ async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSche
                                                                     )
 
         try:
+            logging.info("Making request to AWS for downloading file started time: {}  ".format(datetime.now()))
             response = await client.get_object(Bucket=bucket, Key=s3_path)
+            response_body_size = sys.getsizeof(response["Body"])
+            logging.info("downloaded S3 file: {} of size: {} from AWS S3 successfully time: {}  ".format(s3_path, response_body_size,datetime.now()))
             s = ''
             async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
+                #logging.info("Inside AsyncGZIPDecompressedStream time: {}  ".format(datetime.now()))
                 s += decompressed_chunk.decode(errors='ignore')
                 lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                #logging.info("Inside AsyncGZIPDecompressedStream File: {} downloaded and length: {}  ".format(s3_path,len(lines)))
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
