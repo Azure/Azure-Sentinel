@@ -220,6 +220,10 @@ while [[ $# -gt 0 ]]; do
 		HTTPPROXY="$2"
 		shift 2
 		;;
+	--local-img)
+		LOCALIMG="$2"
+		shift 2
+		;;
 	--confirm-all-prompts)
 		CONFIRMALL=1
 		shift 1
@@ -516,6 +520,9 @@ if [ $DEVMODE ]; then
 	acr=$(echo "$DEVURL" | awk -F/ '{print $1}')
 	sudo docker login "$acr" -u "$DEVACRLOGIN" -p "$DEVACRPWD"
 	tagver=$(echo "$DEVURL" | awk -F: '{print ":"$2}')
+elif [ -n $LOCALIMG ]; then
+	dockerimage="$LOCALIMG"
+	tagver=''
 else
 	dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
 	if [ $CLOUD == 'public' ]; then
@@ -567,13 +574,15 @@ fi
 echo 'Deploying Azure Sentinel SAP data connector.'
 
 echo 'Starting Docker image pull'
-
-sudo docker pull $dockerimage$tagver
-if [ $? -eq 1 ]; then
-	echo 'Error downloading the Azure Sentinel SAP data connector.'
-	exit 1
+# pull only if LOCALIMG is not set
+if [ -z $LOCALIMG ]; then
+	sudo docker pull $dockerimage$tagver
+	if [ $? -eq 1 ]; then
+		echo 'Error downloading the Azure Sentinel SAP data connector.'
+		exit 1
+	fi
+	echo 'Latest Azure Sentinel data connector downloaded successfully.'
 fi
-echo 'Latest Azure Sentinel data connector downloaded successfully.'
 
 if [ "$CONNECTIONMODE" == 'abap' ]; then
 	read_value ABAPSERVER 'ABAP Server Hostname'
