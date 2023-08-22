@@ -28,6 +28,7 @@ pickle_str = os.environ['GooglePickleString']
 pickle_string = base64.b64decode(pickle_str)
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
+MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
 activities = [
             "access_transparency", 
@@ -142,25 +143,43 @@ def GetDates(logType):
     return json.loads(activity_list) if (isBlank(logType)) else (json.loads(activity_list)[logType],end_time)
 
 def get_result(activity,start_time, end_time):
-    result_activities = []
-    service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False)
-    results = service.activities().list(userKey='all', applicationName=activity,
-                                              maxResults=1000, startTime=start_time, endTime=end_time).execute()
-    next_page_token = results.get('nextPageToken', None)
-    result = results.get('items', [])
-    result_activities.extend(result)
-    while next_page_token is not None:
+    try:
+        result_activities = []
+        service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False)
         results = service.activities().list(userKey='all', applicationName=activity,
-                                            maxResults=1000, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
+                                                maxResults=1000, startTime=start_time, endTime=end_time).execute()
         next_page_token = results.get('nextPageToken', None)
         result = results.get('items', [])
         result_activities.extend(result)
-    if result_activities == None or len(result_activities) == 0:
-        logging.info("Logs not founded for {} activity".format(activity))
-        logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
-    else:
-        logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
-        return result_activities
+        logging.info("Name of Activity: {}, Number of events: {})".format(activity, len(result_activities)))
+        if result_activities == None or len(result_activities) == 0:
+            logging.info("Logs not founded for {} activity".format(activity))
+            logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
+        else:
+            logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
+            return result_activities, next_page_token
+    except Exception as err:
+        logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
+    
+def get_nextpage_results(activity,start_time, end_time, next_page_token):
+    try:
+        result_activities = []
+        service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False)
+        results = service.activities().list(userKey='all', applicationName=activity,
+                                                maxResults=1000, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
+        next_page_token = results.get('nextPageToken', None)
+        result = results.get('items', [])
+        result_activities.extend(result)
+        logging.info("Number of events {}".format(len(result_activities)))
+        if result_activities == None or len(result_activities) == 0:
+            logging.info("Logs not founded for {} activity".format(activity))
+            logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
+        else:
+            logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
+            return result_activities, next_page_token
+    except Exception as err:
+        logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
+    
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
     x_headers = 'x-ms-date:' + date
@@ -249,11 +268,53 @@ def gen_chunks_with_latesttime(data,log_type):
             logging.error("Something wrong. Exception error text: {}".format(err))
     return latest_timestamp
 
+def process_result(result_obj, start_time, postactivity_list, line, script_start_time):
+    if result_obj is not None:
+        result_obj = expand_data(result_obj)
+        sorted_data = sorted(result_obj, key=lambda x: x["id"]["time"],reverse=False)
+        json_string = json.dumps(result_obj)
+        byte_ = json_string.encode("utf-8")
+        byteLength = len(byte_)
+        mbLength = byteLength/1024/1024
+        if(len(result_obj)) > 0 and int(mbLength) < 25 :
+            # Sort the json based on the "timestamp" key
+            body = json.dumps(result_obj)
+            statuscode = post_data(customer_id, shared_key,body,"GWorkspace_ReportsAPI_"+line, len(result_obj))
+            if (statuscode >= 200 and statuscode <= 299):
+                latest_timestamp = sorted_data[-1]["id"]["time"]
+                dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
+                dt += timedelta(milliseconds=1)
+                latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
+                latest_timestamp = latest_timestamp[:-3] + 'Z'
+            else:
+                logging.warn("There is an issue with Posting data to LA - Response code: {}".format(statuscode))
+                latest_timestamp = start_time
+        else:
+            latest_timestamp = gen_chunks_with_latesttime(sorted_data, "GWorkspace_ReportsAPI_"+line)
+            if(isBlank(latest_timestamp)):
+                latest_timestamp = start_time
+                logging.info("The latest timestamp is same as the original start time {} - {}".format(line,latest_timestamp))
+                # Fetch the latest timestamp
+                logging.info("The latest timestamp got from api activity is {} - {}".format(line,latest_timestamp))
+        postactivity_list[line] = latest_timestamp
+        state = StateManager(connection_string)
+        state.post(str(json.dumps(postactivity_list)))
+        if check_if_script_runs_too_long(script_start_time):
+            logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+            return
+        return latest_timestamp 
+
+def check_if_script_runs_too_long(script_start_time):
+    now = int(time.time())
+    duration = now - script_start_time
+    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.8)
+    return duration > max_duration            
 
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.info('The timer is past due!')
     logging.info('Starting program')
+    script_start_time = int(time.time())
     global creds
     creds = get_credentials()
     latest_timestamp = ""
@@ -265,39 +326,13 @@ def main(mytimer: func.TimerRequest) -> None:
             logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
             latest_timestamp = start_time
             logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
-            result_obj = get_result(line,latest_timestamp,end_time)
-            if result_obj is not None:
-                result_obj = expand_data(result_obj)
-                sorted_data = sorted(result_obj, key=lambda x: x["id"]["time"],reverse=False)
-                json_string = json.dumps(result_obj)
-                byte_ = json_string.encode("utf-8")
-                byteLength = len(byte_)
-                mbLength = byteLength/1024/1024
-                if(len(result_obj)) > 0 and int(mbLength) < 25 :
-                # Sort the json based on the "timestamp" key
-                    body = json.dumps(result_obj)
-                    statuscode = post_data(customer_id, shared_key,body,"GWorkspace_ReportsAPI_"+line, len(result_obj))
-                    if (statuscode >= 200 and statuscode <= 299):
-                        latest_timestamp = sorted_data[-1]["id"]["time"]
-                        dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
-                        dt += timedelta(milliseconds=1)
-                        latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
-                        latest_timestamp = latest_timestamp[:-3] + 'Z'
-                    else:
-                        logging.warn("There is an issue with Posting data to LA - Response code: {}".format(statuscode))
-                        latest_timestamp = start_time
-                else:
-                    latest_timestamp = gen_chunks_with_latesttime(sorted_data, "GWorkspace_ReportsAPI_"+line)
-                    if(isBlank(latest_timestamp)):
-                        latest_timestamp = start_time
-                        logging.info("The latest timestamp is same as the original start time {} - {}".format(line,latest_timestamp))
-                    # Fetch the latest timestamp
-                    logging.info("The latest timestamp got from api activity is {} - {}".format(line,latest_timestamp))
-            postactivity_list[line] = latest_timestamp
+            result_obj, next_page_token = get_result(line,latest_timestamp,end_time)
+            latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
+            while next_page_token is not None:
+                result_obj, next_page_token  = get_nextpage_results(line,latest_timestamp,end_time,next_page_token)
+                latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
       except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
         logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
         raise
-    logging.info("No exceptions hence posting the data to fileshare")
-    state = StateManager(connection_string)
-    state.post(str(json.dumps(postactivity_list)))
+    logging.info(f'Finish script.')
