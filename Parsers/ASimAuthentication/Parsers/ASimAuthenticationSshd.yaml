@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for OpenSSH sshd
-  Version: '0.2.0'
-  LastUpdated: January 29, 2023
+  Version: '0.2.1'
+  LastUpdated: 21 Jul 2023
 Product:
   Name: OpenSSH
 Normalization:
@@ -19,6 +19,7 @@ Notes: |
   - Certain preauth events log unsuccessful authentication negotiation, which have security importance but are not authentication events per se, and therefore are not used by this parser.
   - The parser may support other sshd servers, but this has not been tested. 
 ParserName: ASimAuthenticationSshd
+EquivalentBuiltInParser: _ASim_Authentication_Sshd
 ParserParams:
   - Name: disabled
     Type: bool
@@ -30,172 +31,180 @@ ParserQuery: |
     // -- Successful login
     let SSHDAccepted=(disabled:bool=false) { 
         // -- Parse events with the format "Accepted password for <User> from <IP address> port <port> ssh2"
-        SyslogProjects | where not(disabled)
-            | where ProcessName == "sshd" and SyslogMessage startswith 'Accepted'
-            | parse SyslogMessage with "Accepted password for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
-            | extend
-                EventResult     = 'Success'
-                , EventSeverity = 'Informational'
-                , EventType     = 'Logon'
-                , EventCount    = int(1)
-            | project-away SyslogMessage, ProcessName
+        SyslogProjects 
+        | where not(disabled)
+        | where ProcessName == "sshd" and SyslogMessage startswith 'Accepted'
+        | parse SyslogMessage with "Accepted password for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
+        | extend
+            EventCount    = int(1),
+            EventResult   = 'Success',
+            EventSeverity = 'Informational',
+            EventType     = 'Logon'
+        | project-away SyslogMessage, ProcessName
     };
     //
     // -- Failed login - incorrect password
     let SSHDFailed=(disabled:bool=false) {
         // -- Parse events with the format "Failed (password|none|publickey) for <User> from <IP address> port <port> ssh2[: RSA <cipher>:<key>]"
         // -- Or a number of such events message repeated <n> times: [ <message> ]
-        SyslogProjects | where not(disabled)
-            | where ProcessName == "sshd" and (
-                SyslogMessage startswith 'Failed' 
-                or (SyslogMessage startswith 'message repeated' and SyslogMessage has 'Failed')
-            )
-            | parse SyslogMessage with * "Failed " * " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
-            | parse SyslogMessage with "message repeated" EventCount:int " times:" * 
-            | extend
-            EventResult          = 'Failure'
-            , EventSeverity      = 'Low' 
-            , EventType          = 'Logon'
-            , LogonMethod        = iff (SyslogMessage has 'publickey', 'PKI', 'Username & password')
-            , EventResultDetails = iff (SyslogMessage has 'publickey', 'Incorrect key', 'Incorrect password')
-            , EventCount         = toint(coalesce(EventCount,1))
-            | project-away SyslogMessage, ProcessName
+        SyslogProjects 
+        | where not(disabled)
+        | where ProcessName == "sshd" and (
+            SyslogMessage startswith 'Failed' 
+            or (SyslogMessage startswith 'message repeated' and SyslogMessage has 'Failed')
+        )
+        | parse SyslogMessage with * "Failed " * " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
+        | parse SyslogMessage with "message repeated" EventCount:int " times:" * 
+        | extend
+            EventCount         = toint(coalesce(EventCount,1)),
+            EventResult        = 'Failure',
+            EventResultDetails = iff (SyslogMessage has 'publickey', 'Incorrect key', 'Incorrect password'),
+            EventSeverity      = 'Low' ,
+            EventType          = 'Logon',
+            LogonMethod        = iff (SyslogMessage has 'publickey', 'PKI', 'Username & password')
+        | project-away SyslogMessage, ProcessName
     };
     //
     // -- Logoff - Timeout
     let SSHDTimeout=(disabled:bool=false) {
         // -- Parse events with the format "Timeout, client not responding from user yanivsh 131.107.174.198 port 7623"
-        SyslogProjects | where not(disabled)
-            | where ProcessName == "sshd" and SyslogMessage startswith 'Timeout'
-            | parse-where SyslogMessage with * "user " TargetUsername:string " " SrcIpAddr:string " port " SrcPortNumber:int
-            | extend
-            EventSeverity    = 'Informational'
-            , EventType      = 'Logoff'
-            , EventResult    = 'Success'
-            , EventCount     = int(1)
-            | project-away SyslogMessage, ProcessName
+        SyslogProjects 
+        | where not(disabled)
+        | where ProcessName == "sshd" and SyslogMessage startswith 'Timeout'
+        | parse-where SyslogMessage with * "user " TargetUsername:string " " SrcIpAddr:string " port " SrcPortNumber:int
+        | extend
+            EventCount     = int(1),
+            EventResult    = 'Success',
+            EventSeverity  = 'Informational',
+            EventType      = 'Logoff'
+        | project-away SyslogMessage, ProcessName
     };
     //
     // -- Failed login - invalid user
     let SSHDInvalidUser=(disabled:bool=false) {
         // -- Parse events with the format "Invalid user [<User>] from <IP address> port <port>"
-        SyslogProjects | where not(disabled)
-            | where ProcessName == "sshd" and SyslogMessage startswith 'Invalid user'
-            | parse SyslogMessage with "Invalid user " TargetUsername:string " from " SrcIpAddr:string " port " SrcPortNumber:int
-            | parse SyslogMessage with "Invalid user  from " SrcIpAddrNoUser:string " port " SrcPortNumberNoUser:int
-            | extend
-            EventResult             = 'Failure'
-            , EventSeverity         = 'Low'
-            , EventType             = 'Logon'
-            , EventResultDetails    = 'No such user'
-            , EventCount            = int(1)
-            , SrcIpAddr             = coalesce(SrcIpAddr, SrcIpAddrNoUser)
-            , SrcPortNumber         = coalesce(SrcPortNumber, SrcPortNumberNoUser)
-            | project-away SyslogMessage, ProcessName, SrcIpAddrNoUser, SrcPortNumberNoUser
+        SyslogProjects 
+        | where not(disabled)
+        | where ProcessName == "sshd" and SyslogMessage startswith 'Invalid user'
+        | parse SyslogMessage with "Invalid user " TargetUsername:string " from " SrcIpAddr:string " port " SrcPortNumber:int
+        | parse SyslogMessage with "Invalid user  from " SrcIpAddrNoUser:string " port " SrcPortNumberNoUser:int
+        | extend
+            EventCount            = int(1),
+            EventResult           = 'Failure',
+            EventResultDetails    = 'No such user',
+            EventSeverity         = 'Low',
+            EventType             = 'Logon',
+            SrcIpAddr             = coalesce(SrcIpAddr, SrcIpAddrNoUser),
+            SrcPortNumber         = coalesce(SrcPortNumber, SrcPortNumberNoUser)
+        | project-away SyslogMessage, ProcessName, SrcIpAddrNoUser, SrcPortNumberNoUser
     };
     //
     // -- Blocked intrusion attempts
     let SSHDABreakInAttemptMappingFailed=(disabled:bool=false) {
         // -- Parse events with the format "reverse mapping checking getaddrinfo for <host> [<Ip address>] failed - POSSIBLE BREAK-IN ATTEMPT!"
-    SyslogProjects | where not(disabled)
-            | where ProcessName == "sshd" and SyslogMessage startswith "reverse mapping checking getaddrinfo for"
-            | parse SyslogMessage with * " for " Src " [" SrcIpAddr "]" *
-            | invoke _ASIM_ResolveSrcFQDN ('Src')
-            | extend
-                EventResult             = 'Failure'
-                , EventType             = 'Logon'
-                , DvcAction             = 'Block'
-                , TargetUsername        = ''
-                , EventSeverity         = 'Medium'
-                , EventCount            = int(1)
-                , EventResultDetails    = 'Logon violates policy'
-                , RuleName              = "Reverse mapping failed"
-            | extend
-                Rule = RuleName
-            | project-away SyslogMessage, ProcessName, Src
+    SyslogProjects 
+        | where not(disabled)
+        | where ProcessName == "sshd" and SyslogMessage startswith "reverse mapping checking getaddrinfo for"
+        | parse SyslogMessage with * " for " Src " [" SrcIpAddr "]" *
+        | invoke _ASIM_ResolveSrcFQDN ('Src')
+        | extend
+            DvcAction             = 'Block',
+            EventCount            = int(1),
+            EventResult           = 'Failure',
+            EventResultDetails    = 'Logon violates policy',
+            EventSeverity         = 'Medium',
+            EventType             = 'Logon',
+            RuleName              = "Reverse mapping failed",    
+            TargetUsername        = ''
+        | extend
+            Rule = RuleName
+        | project-away SyslogMessage, ProcessName, Src
     };
     let SSHDABreakInAttemptMappingMismatch=(disabled:bool=false) {
         // -- Parse events with the format "Address 61.70.128.48 maps to host-61-70-128-48.static.kbtelecom.net, but this does not map back to the address - POSSIBLE BREAK-IN ATTEMPT!"
-    SyslogProjects | where not(disabled)
-            | where ProcessName == "sshd" and SyslogMessage has "but this does not map back to the address"
-            | parse SyslogMessage with "Address " SrcIpAddr:string " maps to " Src:string ", but this" *
-            | invoke _ASIM_ResolveSrcFQDN ('Src')
-            | extend
-                EventResult          = 'Failure'
-                , EventType          = 'Logon'
-                , DvcAction          = 'Block'
-                , TargetUsername     = ''
-                , EventSeverity      = 'Medium'
-                , EventCount         = int(1)
-                , EventResultDetails = 'Logon violates policy'
-                , RuleName = "Address to host to address mapping does not map back to address"
-            | extend
-                Rule = RuleName
-            | project-away SyslogMessage, ProcessName, Src
+    SyslogProjects 
+        | where not(disabled)
+        | where ProcessName == "sshd" and SyslogMessage has "but this does not map back to the address"
+        | parse SyslogMessage with "Address " SrcIpAddr:string " maps to " Src:string ", but this" *
+        | invoke _ASIM_ResolveSrcFQDN ('Src')
+        | extend
+            DvcAction          = 'Block',
+            EventCount         = int(1),
+            EventResult        = 'Failure',
+            EventResultDetails = 'Logon violates policy',
+            EventSeverity      = 'Medium',
+            EventType          = 'Logon',
+            RuleName           = "Address to host to address mapping does not map back to address",
+            TargetUsername     = ''
+        | extend
+            Rule = RuleName
+        | project-away SyslogMessage, ProcessName, Src
     };
     let SSHDABreakInAttemptNastyPtr=(disabled:bool=false) {
         // -- Parse events with the format "Nasty PTR record "<RR>" is set up for <IP Address>, ignoring"
     SyslogProjects | where not(disabled)
-            | where ProcessName == "sshd" and SyslogMessage startswith "Nasty PTR record"
-            | parse SyslogMessage with * "set up for " SrcIpAddr:string ", ignoring"
-            | extend
-                EventResult          = 'Failure'
-                , EventType          = 'Logon'
-                , DvcAction          = 'Block'
-                , TargetUsername     = ''
-                , EventSeverity      = 'Medium'
-                , EventCount         = int(1)
-                , EventResultDetails = 'Logon violates policy'
-                , RuleName = "Nasty PTR record set for IP Address"
-            | extend
-                Rule = RuleName
-            | project-away SyslogMessage, ProcessName
+        | where ProcessName == "sshd" and SyslogMessage startswith "Nasty PTR record"
+        | parse SyslogMessage with * "set up for " SrcIpAddr:string ", ignoring"
+        | extend
+            DvcAction          = 'Block',
+            EventCount         = int(1),
+            EventResult        = 'Failure',
+            EventResultDetails = 'Logon violates policy',
+            EventSeverity      = 'Medium',
+            EventType          = 'Logon',
+            RuleName           = "Nasty PTR record set for IP Address",
+            TargetUsername     = ''
+        | extend
+            Rule = RuleName
+        | project-away SyslogMessage, ProcessName
     };
     union isfuzzy=false 
-        SSHDAccepted (disabled=disabled)
-        , SSHDFailed (disabled=disabled)
-        , SSHDInvalidUser (disabled=disabled)
-        , SSHDTimeout (disabled=disabled)
-        , SSHDABreakInAttemptMappingFailed (disabled=disabled)
-        , SSHDABreakInAttemptMappingMismatch (disabled=disabled)
-        , SSHDABreakInAttemptNastyPtr (disabled=disabled)
+        SSHDAccepted (disabled=disabled),
+        SSHDFailed (disabled=disabled),
+        SSHDInvalidUser (disabled=disabled),
+        SSHDTimeout (disabled=disabled),
+        SSHDABreakInAttemptMappingFailed (disabled=disabled),
+        SSHDABreakInAttemptMappingMismatch (disabled=disabled),
+        SSHDABreakInAttemptNastyPtr (disabled=disabled)
     | invoke _ASIM_ResolveDvcFQDN ('Computer')
     | extend 
-        EventVendor             = 'OpenBSD'
-        , EventProduct          = 'OpenSSH'
-        , DvcOs                 = 'Linux'
-        , TargetDvcOs           = 'Linux'
-        , LogonProtocol         = 'ssh'
-        , TargetAppName         = 'sshd'
-        , TargetAppType         = 'Service'
-        , EventSubType          = 'Remote'
-        , EventSchema           = 'Authentication'
-        , EventSchemaVersion    = '0.1.2'
-        , EventStartTime        = TimeGenerated
-        , EventEndTime          = TimeGenerated
-        , TargetUsernameType    = 'Simple'
-        , DvcIdType             = iff (isnotempty(_ResourceId), "AzureResourceId", "")
-        , TargetAppId           = tostring(ProcessID)
+        DvcIdType             = iff (isnotempty(_ResourceId), "AzureResourceId", ""),
+        DvcOs                 = 'Linux',
+        EventEndTime          = TimeGenerated,
+        EventProduct          = 'OpenSSH',
+        EventSchema           = 'Authentication',
+        EventSchemaVersion    = '0.1.2',
+        EventStartTime        = TimeGenerated,
+        EventSubType          = 'Remote',
+        EventVendor           = 'OpenBSD',
+        LogonProtocol         = 'ssh',
+        TargetAppId           = tostring(ProcessID),
+        TargetAppName         = 'sshd',
+        TargetAppType         = 'Service',
+        TargetDvcOs           = 'Linux',
+        TargetUsernameType    = 'Simple'
     | project-away Computer, ProcessID
     | project-rename 
-        EventUid                = _ItemId
-        , DvcScopeId            = _SubscriptionId
-        , DvcId                 = _ResourceId
-        , DvcIpAddr             = HostIP
+        DvcId                 = _ResourceId,
+        DvcIpAddr             = HostIP,
+        DvcScopeId            = _SubscriptionId,
+        EventUid              = _ItemId
     //
     // -- Aliases
     | extend
-        User                    = TargetUsername
-        , Dvc                   = DvcHostname
-        , Dst                   = coalesce (DvcFQDN, DvcHostname, DvcIpAddr)
-        , TargetDomain          = DvcDomain
-        , TargetFQDN            = DvcFQDN
-        , TargetDomainType      = DvcDomainType
-        , TargetHostname        = DvcHostname
-        , TargetDvcId           = DvcId
-        , TargetDvcScopeId      = DvcScopeId
-        , TargetDvcIdType       = DvcDomainType
-        , IpAddr                = DvcIpAddr
-        , TargetIpAddr          = DvcIpAddr
+        Dst                   = coalesce (DvcFQDN, DvcHostname, DvcIpAddr),
+        Dvc                   = DvcHostname,
+        IpAddr                = DvcIpAddr,
+        TargetDomain          = DvcDomain,
+        TargetDomainType      = DvcDomainType,
+        TargetDvcId           = DvcId,
+        TargetDvcIdType       = DvcDomainType,
+        TargetDvcScopeId      = DvcScopeId,
+        TargetFQDN            = DvcFQDN,
+        TargetHostname        = DvcHostname,
+        TargetIpAddr          = DvcIpAddr,
+        User                  = TargetUsername
     };
-    parser (disabled=disabled)
+    parser (
+        disabled=disabled
+    )
