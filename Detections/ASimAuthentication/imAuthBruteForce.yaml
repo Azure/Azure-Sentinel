@@ -1,0 +1,63 @@
+id: a6c435a2-b1a0-466d-b730-9f8af69262e8
+name: Brute force attack against user credentials (Uses Authentication Normalization)
+description: |
+  'Identifies evidence of brute force activity against a user based on multiple authentication failures 
+  and at least one successful authentication within a given time window. Note that the query does not enforce any sequence,
+  and does not require the successful authentication to occur last.
+  The default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.
+  To use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/ASimAuthentication)'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 20m
+queryPeriod: 20m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+tags:
+  - Id: 28b42356-45af-40a6-a0b4-a554cdfd5d8a
+    version: 1.0.0
+  - Schema: ASIMAuthentication
+    SchemaVersion: 0.1.0
+query: |
+  let failureCountThreshold = 10;
+  let successCountThreshold = 1;
+  // let authenticationWindow = 20m; // Implicit in the analytic rule query period 
+  imAuthentication
+  | where TargetUserType != "NonInteractive"
+  | summarize 
+        StartTime = min(TimeGenerated), 
+        EndTime = max(TimeGenerated), 
+        IpAddresses = make_set (SrcDvcIpAddr, 100),
+        ReportedBy = make_set (strcat (EventVendor, "/", EventProduct), 100),
+        FailureCount = countif(EventResult=='Failure'),
+        SuccessCount = countif(EventResult=='Success')
+    by 
+        TargetUserId, TargetUsername, TargetUserType 
+  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold
+  | extend
+        IpAddresses = strcat_array(IpAddresses, ", "), 
+        ReportedBy = strcat_array(ReportedBy, ", ")
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUsername
+
+customDetails:
+  IpAddresses: IpAddresses
+  ReportedBy: ReportedBy
+version: 1.2.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ofer Shezaf
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]
