@@ -329,7 +329,7 @@ def main(mytimer: func.TimerRequest) -> None:
             result_obj, next_page_token = get_result(line,latest_timestamp,end_time)
             latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
             while next_page_token is not None:
-                result_obj, next_page_token  = get_nextpage_results(line,latest_timestamp,end_time,next_page_token)
+                result_obj, next_page_token  = get_nextpage_results(line,start_time,end_time,next_page_token)
                 latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
       except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
