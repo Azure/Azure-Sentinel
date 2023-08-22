@@ -9,6 +9,7 @@ using Microsoft.Azure.Sentinel.KustoServices.Implementation;
 using Kqlvalidations.Tests.FunctionSchemasLoaders;
 using System;
 using Newtonsoft.Json;
+using Octokit;
 
 namespace Kqlvalidations.Tests
 {
@@ -274,20 +275,59 @@ namespace Kqlvalidations.Tests
             ValidateKql(id.ToString(), queryStr, false);
         }
 
+        //Will enable this test case once all txt files removed from the parsers folders
+        //[Fact]
+        //public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
+        //{
+        //    var basePath = Utils.GetTestDirectory(TestFolderDepthForSolutionParsers);
+        //    var solutionDirectories = Path.Combine(basePath, "Solutions");
+        //    var parserFolders = Directory.GetDirectories(solutionDirectories, "Parsers", SearchOption.AllDirectories);
+
+        //    var allNonYamlMdFiles = parserFolders
+        //        .SelectMany(parserFolder => Directory.GetFiles(parserFolder, "*", SearchOption.AllDirectories))
+        //        .Where(file => !file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+        //        .ToList();
+
+        //    Assert.True(!allNonYamlMdFiles.Any(), $"All files under Parsers folders are supposed to have .yaml or .md extension");
+        //}
+
         [Fact]
         public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
         {
-            var basePath = Utils.GetTestDirectory(TestFolderDepthForSolutionParsers);
-            var solutionDirectories = Path.Combine(basePath, "Solutions");
-            var parserFolders = Directory.GetDirectories(solutionDirectories, "Parsers", SearchOption.AllDirectories);
+            try
+            {
+                var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
+                var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", 8706).Result;
 
-            var allNonYamlMdFiles = parserFolders
-                .SelectMany(parserFolder => Directory.GetFiles(parserFolder, "*", SearchOption.AllDirectories))
-                .Where(file => !file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
-                .ToList();
+                var basePath = Utils.GetTestDirectory(TestFolderDepth);
+                var solutionDirectories = Path.Combine(basePath, "Solutions");
+                var parserPaths = Directory.GetDirectories(solutionDirectories, "Parsers", SearchOption.AllDirectories).ToList();
 
-            Assert.True(!allNonYamlMdFiles.Any(), $"All files under Parsers folders are supposed to have .yaml or .md extension");
+                var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".yaml", ".md" };
+
+                var filteredFiles = prFiles
+                    .Where(file =>
+                        parserPaths.Any(parserPath => Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar)).Contains(parserPath)) && // Check if the file is under the Parsers path
+                        file.Status != "removed") // Filter by status
+                    .ToList();
+
+                // Check for non-YAML and non-MD files
+                var nonYamlMdFiles = filteredFiles
+                    .Where(file =>
+                        !allowedExtensions.Contains(Path.GetExtension(file.FileName)))
+                    .ToList();
+
+                // Assert that there are no non-YAML and non-MD files
+                Assert.False(nonYamlMdFiles.Any(), $"Files with disallowed extensions found: {string.Join(", ", nonYamlMdFiles.Select(file => file.FileName))}");
+            }
+            catch (Exception ex)
+            {
+                // Fail the test with the exception message and stack trace
+                Assert.True(false, $"Error occurred while getting the files from PR. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
+            }
         }
+
+
 
 
         // We pass File name to test because in the result file we want to show an informative name for the test
