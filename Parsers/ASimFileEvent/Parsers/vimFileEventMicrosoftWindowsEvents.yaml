@@ -12,6 +12,10 @@ References:
   Link: https://aka.ms/ASimFileEventDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
+- Title: EventID 5140
+  Link: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-5140
+- Tile: EventID 4670
+  Link: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4670
 Description: |
   This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663, 5140, 4670
 ParserName: vimFileEventMicrosoftWindowsEvents
@@ -41,18 +45,18 @@ ParserQuery: |
       "%%4416", "Preview"
       , "%%4417", "Checkin"
       , "%%4418", "Extended"
-      , "%%4419", "N/A"
-      , "%%4420", "N/A"
-      , "%%4421", "N/A"
-      , "%%4422", "N/A"
-      , "%%4423", "N/A"
-      , "%%4424", "N/A"
-      , "%%1537", "N/A"
-      , "%%1538", "N/A"
-      , "%%1539", "N/A"
-      , "%%1540", "N/A"
-      , "%%1541", "N/A"
-      , "%%1542", "N/A"
+      , "%%4419", "Other"
+      , "%%4420", "Other"
+      , "%%4421", "Other"
+      , "%%4422", "Other"
+      , "%%4423", "Other"
+      , "%%4424", "Other"
+      , "%%1537", "Other"
+      , "%%1538", "Other"
+      , "%%1539", "Other"
+      , "%%1540", "Other"
+      , "%%1541", "Other"
+      , "%%1542", "Other"
   ];
   let EventType4663Lookup = datatable (AccessMask:string,EventType:string)
   [
@@ -100,6 +104,7 @@ ParserQuery: |
             , SubjectAccount = tostring(EventData.SubjectAccount)
             , SubjectLogonId = tostring(EventData.SubjectLogonId)
             , HandleId = tostring(EventData.HandleId)
+            , Type
     )
   , ( 
     SecurityEvent
@@ -119,6 +124,7 @@ ParserQuery: |
             , SubjectAccount
             , SubjectLogonId
             , HandleId
+            , Type
     )
         | lookup EventType4663Lookup on AccessMask
         | extend ActingProcessName = ProcessName
@@ -144,6 +150,7 @@ ParserQuery: |
             , SubjectLogonId = tostring(EventData.SubjectLogonId)
             , SubjectDomainName = tostring(EventData.SubjectDomainName)
             , ShareName = tostring(EventData.ShareName)
+            , Type
         | extend SubjectAccount = strcat(SubjectDomainName,"\\",SubjectUserName)
         | extend AccountType = "Unknown"
         | project-away SubjectDomainName
@@ -163,6 +170,7 @@ ParserQuery: |
                 , SubjectAccount
                 , SubjectLogonId
                 , ShareName
+                , Type
     )
         | lookup EventType5140Lookup on AccessMask
         | extend AccessListTrimmed = trim(@"\s+",AccessList)
@@ -189,6 +197,7 @@ ParserQuery: |
             , ProcessName = tostring(EventData.ProcessName)
             , ProcessId = tostring(EventData.ProcessId)
             , HandleId = tostring(EventData.HandleId)
+            , Type
         | extend SubjectAccount = strcat(SubjectDomainName,"\\",SubjectUserName)
         | extend AccountType = "Unknown"
         | project-away SubjectDomainName
@@ -209,6 +218,7 @@ ParserQuery: |
                 , ProcessId
                 , ProcessName
                 , HandleId
+                , Type
     )
         | extend ActingProcessName = ProcessName
             , ActingProcessId = tostring(toint(ProcessId))
@@ -228,9 +238,9 @@ ParserQuery: |
             , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
             , EventStartTime = TimeGenerated
             , EventEndTime = TimeGenerated
-            , TargetFilePathFormat = "Windows Local"
+            , TargetFilePathType = iff( TargetFilePath startswith "\\", "Windows Share", "Windows Local")
             , EventOriginalType = tostring(EventID)
-        | project-away EventID, AccountType, type, username
+        | project-away EventID, AccountType, type, username, AccessList, AccessMask, SubjectAccount, SubjectUserName
         | project-rename ActorUserId = SubjectUserSid
             , DvcHostname = Computer
             , ActorSessionId = SubjectLogonId
@@ -241,8 +251,9 @@ ParserQuery: |
             , EventVendor = 'Microsoft'
             , EventProduct = 'Security Events'
             , Dvc = DvcHostname
-            , ActorWindowsUsername = ActorUsername
             , User = ActorUsername
             , ActorUserSid = ActorUserId
+            , ActorUserIdType = "SID"
+            , EventUid = _ItemId
   };
   Parser
