@@ -72,5 +72,5 @@ python ASimFilteringTest.py C:\parsers\vimDnsMicrosoftOMSfict.yaml 123-456 99
 
 
 
-- In order to carry out the tests, data within the workspace is necessary. Some error messages indicate about lack of data in the workspace rather than a problem with the parser:
+- In order to carry out the tests, data within the workspace is necessary. Some error messages indicate a lack of data in the workspace rather than a problem with the parser:
 ![enter image description here](https://github.com/Azure/Azure-Sentinel/assets/126081432/4707b8db-743e-4c13-9db2-bd0d91b1abc7)

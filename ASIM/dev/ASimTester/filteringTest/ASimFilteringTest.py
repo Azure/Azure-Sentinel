@@ -197,12 +197,10 @@ def get_splitted_parts_of_string(values_list):
         output = ("44-", "55.5.1293")
     '''
     for value in values_list:
-        for i in range(len(value)):
+        for i, char in enumerate(value):
             # Splitting the value if the i-th character is non-word and return the substrings
-            if not value[i].isalnum():
-                first_part = value[:i+1]
-                second_part = value[i+1:]
-                return (first_part, second_part)
+            if not char.isalnum():
+                return (value[:i+1], value[i+1:])
     return (None, None)
 
 
@@ -520,7 +518,7 @@ class FilteringTest(unittest.TestCase):
 
         # Performing filtering with two values if possible
         first_part_of_a_value , second_part_of_a_value = get_splitted_parts_of_string(values_list)
-        if first_part_of_a_value == None:
+        if first_part_of_a_value is None:
             self.fail(f"Parameter: {parameter_name} - has_all tests performed for only one filtering value")
         splitted_parts_list = [first_part_of_a_value , second_part_of_a_value]
         filtering_response, values_string = self.get_response_for_query_with_parameters(parameter_name, query_definition, column_name_in_table, splitted_parts_list)
