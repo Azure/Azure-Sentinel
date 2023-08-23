@@ -320,13 +320,9 @@ namespace Kqlvalidations.Tests
         [Fact]
         public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
         {
-            int prNumber = 0;
-            int.TryParse(Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
+            var gitHubApiClient = GitHubApiClient.Instance;
 
-            // For debugging purposes, you can manually assign a PR number here:
-            // prNumber = 8855;
-
-            IReadOnlyList<PullRequestFile> prFiles = FetchPullRequestFiles(prNumber);
+            IReadOnlyList<PullRequestFile> prFiles = gitHubApiClient.GetPullRequestFiles();
 
             if (prFiles.Count == 0)
             {
@@ -335,38 +331,29 @@ namespace Kqlvalidations.Tests
                 return;
             }
 
+            // Define constants for readability
+            const string parsersFolder = "Parsers";
+            const string parserFolder = "Parser";
+            const string removedStatus = "removed";
+
             var basePath = Utils.GetTestDirectory(TestFolderDepthForSolutionParsers);
             var solutionDirectories = Path.Combine(basePath, "Solutions");
-            var parserPaths = Directory.GetDirectories(solutionDirectories, "Parsers", SearchOption.AllDirectories).ToList();
-            parserPaths.AddRange(Directory.GetDirectories(solutionDirectories, "Parser", SearchOption.AllDirectories).ToList());
+            var parserPaths = Directory.GetDirectories(solutionDirectories, parsersFolder, SearchOption.AllDirectories).ToList();
+            parserPaths.AddRange(Directory.GetDirectories(solutionDirectories, parserFolder, SearchOption.AllDirectories).ToList());
 
             var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".yaml", ".md" };
 
             var filteredFiles = prFiles
                 .Where(file =>
-                    parserPaths.Any(parserPath => Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar)).StartsWith(parserPath, StringComparison.OrdinalIgnoreCase)) && // Check if the file is under the Parsers path
-                    file.Status != "removed" && // Filter by status
-                    !allowedExtensions.Contains(Path.GetExtension(file.FileName))) // Check if the extension is disallowed
+                    parserPaths.Any(parserPath => Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar)).StartsWith(parserPath, StringComparison.OrdinalIgnoreCase)) &&
+                    file.Status != removedStatus &&
+                    !allowedExtensions.Contains(Path.GetExtension(file.FileName)))
                 .ToList();
 
             // Assert that there are no disallowed extensions
-            Assert.False(filteredFiles.Any(), $"Files with disallowed extensions found: {string.Join(", ", filteredFiles.Select(file => file.FileName))}, Only {string.Join(", ", allowedExtensions)} extensions are allowed under Solution/Parsers.");
+            Assert.False(filteredFiles.Any(), $"Files with disallowed extensions found: {string.Join(", ", filteredFiles.Select(file => file.FileName))}, Only {string.Join(", ", allowedExtensions)} extensions are allowed under Solution/Parsers folder.");
         }
 
-        private IReadOnlyList<PullRequestFile> FetchPullRequestFiles(int prNumber)
-        {
-            try
-            {
-                var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
-                return client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
-            }
-            catch (Exception ex)
-            {
-                // Fail the test with the exception message and stack trace
-                Assert.True(false, $"Error occurred while getting the files from PR. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
-                return new List<PullRequestFile>(); // Return an empty list in case of an exception
-            }
-        }
 
         /// <summary>
         /// Validates the KQL query for the latest Threat Intelligence data.
