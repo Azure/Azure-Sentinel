@@ -1,6 +1,6 @@
 Parser:
   Title: Registry Event ASIM Parser for SentinelOne
-  Version: '0.1'
+  Version: '0.1.0'
   LastUpdated: Jul 25, 2023
 Product:
   Name: SentinelOne
@@ -51,9 +51,10 @@ ParserQuery: |
       "MULTI_SZ", "Reg_Multi_Sz",
       "DWORD_BIG_ENDIAN", "Reg_DWord"
   ];
-  let parser = () { 
+  let parser = (disabled: bool=false) { 
       SentinelOne_CL
-      | where event_name_s == "Alerts."
+      | where not(disabled)
+          and event_name_s == "Alerts."
           and alertInfo_eventType_s in ("REGVALUEMODIFIED", "REGVALUECREATE", "REGKEYCREATE", "REGKEYDELETE", "REGVALUEDELETE", "REGKEYRENAME")
       | lookup EventTypeLookup on alertInfo_eventType_s
       | lookup RegistryPreviousValueTypeLookup on alertInfo_registryOldValueType_s
@@ -74,7 +75,8 @@ ParserQuery: |
           ActingProcessId = sourceProcessInfo_pid_s,
           ActorUsername = sourceProcessInfo_user_s,
           EventStartTime= sourceProcessInfo_pidStarttime_t,
-          EventUid = _ResourceId,
+          EventOriginalSeverity = ruleInfo_severity_s,
+          EventUid = _ItemId,
           ParentProcessId = sourceParentProcessInfo_pid_s,
           ActingProcessName = sourceProcessInfo_name_s,
           DvcId = agentDetectionInfo_uuid_g,
@@ -87,24 +89,31 @@ ParserQuery: |
       | extend
           EventCount = int(1),
           EventProduct = "SentinelOne",
+          EventVendor = "SentinelOne",
           EventResult = "Success",
+          DvcAction = "Allowed",
+          EventSchema = "RegistryEvent",
           EventSchemaVersion = "0.1.2"
       | extend
-          Dvc = DvcHostname, 
+          Dvc = coalesce(DvcHostname, EventProduct), 
           EventEndTime = EventStartTime,
+          EventSeverity = iff(EventOriginalSeverity == "Critical", "High", EventOriginalSeverity),
           RegistryPreviousKey = RegistryKey,
           RegistryPreviousValueData = coalesce(alertInfo_registryOldValue_s, RegistryValueData),
           RegistryPreviousValueType = coalesce(RegistryPreviousValueType_lookup, RegistryValueType),
           RegistryPreviousValue = RegistryValue,
           Process = ActingProcessName,
           User = ActorUsername,
-          ActorUsernameType =  _ASIM_GetUsernameType(ActorUsername)
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          ActorUsernameType =  _ASIM_GetUsernameType(ActorUsername),
+          ActorUserType = _ASIM_GetUserType(ActorUsername, "")
       | project-away 
           *_d,
           *_s,
           *_g,
           *_t,
           *_b,
+          _ResourceId,
           Computer,
           MG,
           ManagementGroupName,
@@ -115,4 +124,4 @@ ParserQuery: |
           RegistryKeyNormalizedPrefix,
           RegistryPreviousValueType_lookup
   };
-  parser()
+  parser(disabled = disabled)
