@@ -155,6 +155,7 @@ def get_result(activity,start_time, end_time):
         if result_activities == None or len(result_activities) == 0:
             logging.info("Logs not founded for {} activity".format(activity))
             logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
+            return result_activities, next_page_token
         else:
             logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
             return result_activities, next_page_token
@@ -327,10 +328,12 @@ def main(mytimer: func.TimerRequest) -> None:
             latest_timestamp = start_time
             logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
             result_obj, next_page_token = get_result(line,latest_timestamp,end_time)
-            latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
-            while next_page_token is not None:
-                result_obj, next_page_token  = get_nextpage_results(line,start_time,end_time,next_page_token)
+            if result_obj is not None:
                 latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
+                while next_page_token is not None:
+                    result_obj, next_page_token  = get_nextpage_results(line,start_time,end_time,next_page_token)
+                    latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
+            postactivity_list[line] = latest_timestamp
       except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
         logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
