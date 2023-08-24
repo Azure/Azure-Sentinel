@@ -7,7 +7,7 @@ This guide provides instructions on how to install, upgrade and configure Record
 
 Recorded Future is the world's largest provider of intelligence for enterprise security. By seamlessly combining automated data collection, pervasive analytics, and expert human analysis, Recorded Future delivers timely, accurate, and actionable intelligence.
 
-**Benefits ofRecorded Future integrations** 
+**Benefits of Recorded Future integrations** 
 - Detect indicators of compromise (IOCs) in your environment.
 - Triage alerts faster with elite, real-time intelligence.
 - Respond quickly with transparency and context around internal telemetry data.
@@ -35,6 +35,10 @@ Automation rules triggers on each incident and enriches incidents with Recorded 
 
 Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The sandbox provides safe and immediate behavioral analysis, helping contextualize key artifacts in an investigation, leading to faster triage.
 ![](Images/2023-06-26-10-04-42.png)
+
+## **Import Alerts** (SOC Efficiency)
+
+To increase the visibility and availability of Recorded Future Alerts. Import Recorded Future Alerts and Playbook Alerts from Recorded Future Portal into Sentinel. 
 
 ## Risk lists
 Risk lists are curated lists that contain Indicators of Compromise (IOCs), such as IP addresses, domains, file hashes, or URLs associated with malicious activity. These lists are generated based on a wide array of Recorded Future intelligence sources, including open web, dark web, and other technical sources.
