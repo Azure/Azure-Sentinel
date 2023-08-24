@@ -2682,7 +2682,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                 Write-Output "Missing arm-ttk validations. Downloading module..."
                 Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
             }
-            Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"
+            Invoke-Expression "& '$armTtkFolder/run-arm-ttk-in-automation.ps1' '$solutionName'"
         }
     }
 
