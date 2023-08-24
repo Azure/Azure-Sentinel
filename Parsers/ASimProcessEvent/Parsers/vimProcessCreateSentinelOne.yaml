@@ -1,6 +1,6 @@
 Parser:
   Title: Process Create ASIM parser for SentinelOne
-  Version: '0.1.1'
+  Version: '0.1.0'
   LastUpdated: Jul 24, 2023
 Product:
   Name: SentinelOne
@@ -100,9 +100,8 @@ ParserQuery: |
           TargetProcessCommandLine = targetProcessInfo_tgtProcCmdLine_s,
           TargetProcessId = targetProcessInfo_tgtProcPid_s,
           TargetProcessName = targetProcessInfo_tgtProcName_s,
-          EventUid = _ResourceId,
+          EventUid = _ItemId,
           TargetProcessCreationTime = targetProcessInfo_tgtProcessStartTime_t,
-          DvcHostname = agentDetectionInfo_name_s,
           ActingProcessName = sourceProcessInfo_name_s,
           ParentProcessName = sourceParentProcessInfo_name_s,
           ActingProcessCommandLine = sourceProcessInfo_commandline_s,
@@ -112,25 +111,28 @@ ParserQuery: |
           ActingProcessSHA256 = sourceProcessInfo_fileHashSha256_s,
           ParentProcessSHA256 = sourceParentProcessInfo_fileHashSha256_s,
           DvcOs = agentDetectionInfo_osName_s,
-          DvcOsVersion = agentDetectionInfo_version_s,
+          DvcOsVersion = agentDetectionInfo_osRevision_s,
           TargetProcessIntegrityLevel = targetProcessInfo_tgtProcIntegrityLevel_s,
           EventOriginalType = alertInfo_eventType_s,
+          EventOriginalSeverity = ruleInfo_severity_s,
           EventOriginalUid = alertInfo_dvEventId_s
+      | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
       | extend
           ActingProcessId = sourceProcessInfo_pid_s,
-          ActorUsername = coalesce(sourceProcessInfo_user_s, 'N/A'),
-          TargetUsername = coalesce(sourceProcessInfo_user_s, 'N/A'),
+          ActorUsername = sourceProcessInfo_user_s,
+          TargetUsername = sourceProcessInfo_user_s,
           Hash = coalesce(targetProcessInfo_tgtFileHashSha256_s, targetProcessInfo_tgtFileHashSha1_s),
           ParentProcessId = sourceProcessInfo_pid_s,
           TargetProcessSHA1 = targetProcessInfo_tgtFileHashSha1_s,
           TargetProcessSHA256 = targetProcessInfo_tgtFileHashSha256_s,
           ParentProcessMD5 = replace_string(sourceParentProcessInfo_fileHashMd5_g, "-", ""),
           ActingProcessMD5 = replace_string(sourceProcessInfo_fileHashMd5_g, "-", ""),
-          EventSeverity = iff(ruleInfo_severity_s == "Critical", "High", ruleInfo_severity_s)
+          EventSeverity = iff(EventOriginalSeverity  == "Critical", "High", EventOriginalSeverity)
       | extend
           EventCount = int(1),
           EventProduct = "SentinelOne",
           EventResult = "Success",
+          DvcAction = "Allowed",
           EventSchemaVersion = "0.1.4",
           EventType = "ProcessCreated",
           EventVendor = "SentinelOne",
@@ -145,20 +147,23 @@ ParserQuery: |
       | extend 
           HashType = case(
                 isnotempty(Hash) and isnotempty(TargetProcessSHA256),
-                "SHA256",
+                "TargetProcessSHA256",
                 isnotempty(Hash) and isnotempty(TargetProcessSHA1),
-                "SHA1",
+                "TargetProcessSHA1",
                 ""
             ),
           TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
-          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+          ActorUserType = _ASIM_GetUserType(ActorUsername, "")
       | project-away
           *_d,
           *_s,
           *_g,
           *_t,
           *_b,
+          _ResourceId,
           TenantId,
           RawData,
           Computer,
