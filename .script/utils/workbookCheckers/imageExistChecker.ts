@@ -6,7 +6,7 @@ const logoImagesFolderPath: string = "Workbooks/Images/Logos";
 const previewImagesFolderPath: string = "Workbooks/Images/Preview";
 
 // Load the skip list from the JSON file
-const skipListFile = "WorkbookPreviewImageValidationSkipList.json";
+const skipListFile = "./.script/utils/workbookCheckers/WorkbookPreviewImageValidationSkipList.json";
 const WorkbookPreviewImageValidationSkipList = fs.existsSync(skipListFile) ? JSON.parse(fs.readFileSync(skipListFile, "utf8")).skipList : [];
 
 
