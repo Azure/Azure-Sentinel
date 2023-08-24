@@ -1,6 +1,6 @@
 Parser:
   Title: DNS activity ASIM parser for SentinelOne
-  Version: '0.1.1'
+  Version: '0.1.0'
   LastUpdated: Jun 28 2023
 Product:
   Name: SentinelOne
@@ -17,7 +17,7 @@ References:
 Description: |
   This ASIM parser supports normalizing SentinelOne logs to the ASIM DNS normalized schema. SentinelOne events are captured through SentinelOne data connector which ingests SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API.
 ParserName: vimDnsSentinelOne
-EquivalentBuiltInParser: _Im_DNS_SentinelOne
+EquivalentBuiltInParser: _Im_Dns_SentinelOne
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -46,7 +46,6 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-
 ParserQuery: |
   let parser = (
       starttime: datetime=datetime(null),
@@ -70,7 +69,7 @@ ParserQuery: |
           and (array_length(domain_has_any) == 0 or alertInfo_dnsRequest_s has_any (domain_has_any))
           and (response_has_ipv4 == '*' or has_ipv4(alertInfo_dnsResponse_s, response_has_ipv4))
           and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(alertInfo_dnsResponse_s, response_has_any_prefix))
-      | parse alertInfo_dnsResponse_s with * "type: " DnsQueryType: int " " RestMessage_s
+      | parse alertInfo_dnsResponse_s with * "type: " DnsQueryType: int " " RestMessage
       | extend 
           DnsResponseCode = case(
                         alertInfo_dnsResponse_s has "NoError" or alertInfo_dnsResponse_s has "No Error",
@@ -134,22 +133,25 @@ ParserQuery: |
       | project-rename
           EventStartTime = sourceProcessInfo_pidStarttime_t,
           DnsQuery = alertInfo_dnsRequest_s,
-          EventUid = _ResourceId,
-          DvcHostname = agentDetectionInfo_name_s,
+          EventUid = _ItemId,
           DnsResponseName = alertInfo_dnsResponse_s,
           DvcId = agentDetectionInfo_uuid_g,
           DvcOs = agentDetectionInfo_osName_s,
-          DvcOsVersion = agentDetectionInfo_version_s,
+          DvcOsVersion = agentDetectionInfo_osRevision_s,
+          EventOriginalType = alertInfo_eventType_s,
           EventOriginalSeverity = ruleInfo_severity_s,
           EventOriginalUid = alertInfo_dvEventId_s,
           RuleName = ruleInfo_name_s,
           SrcProcessId = sourceProcessInfo_pid_s,
           SrcProcessName = sourceProcessInfo_name_s,
           SrcUsername = sourceProcessInfo_user_s
+      | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
       | extend
           Dvc = DvcId,
           EventEndTime = EventStartTime,
           EventResult = iff(DnsResponseCode == 0, "Success", "Failure"),
+          EventSubType = iff(isnotempty(DnsResponseName), "Response", "Request"),
+          EventOriginalResultDetails = DnsResponseCode,
           DnsQueryTypeName = _ASIM_LookupDnsQueryType(DnsQueryType),
           Rule = RuleName,
           SrcDvcId = DvcId,
@@ -158,7 +160,8 @@ ParserQuery: |
           Domain = DnsQuery,
           Process = SrcProcessName,
           User = SrcUsername,
-          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          SrcUserType = _ASIM_GetUserType(SrcUsername, "")
       | extend 
           Src = SrcHostname,
           Hostname = SrcHostname,
@@ -180,6 +183,8 @@ ParserQuery: |
           *_g,
           *_t,
           *_b,
+          RestMessage,
+          _ResourceId,
           TenantId,
           RawData,
           Computer,
