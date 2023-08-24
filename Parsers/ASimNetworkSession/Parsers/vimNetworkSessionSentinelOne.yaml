@@ -1,6 +1,6 @@
 Parser:
   Title: Network Session ASIM filtering parser for SentinelOne
-  Version: '0.1.1'
+  Version: '0.1.0'
   LastUpdated: Jul 27 2023
 Product:
   Name: SentinelOne
@@ -57,6 +57,14 @@ ParserQuery: |
       "OUTGOING", "Outbound",
       "INCOMING", "Inbound",
   ];
+  let DeviceTypeLookup = datatable (agentDetectionInfo_machineType_s: string, SrcDeviceType: string)
+  [
+      "desktop", "Computer",
+      "server", "Computer",
+      "laptop", "Computer",
+      "kubernetes node", "Other",
+      "unknown", "Other"
+  ];
   let parser=(
       disabled: bool=false, 
       starttime: datetime=datetime(null), 
@@ -80,7 +88,7 @@ ParserQuery: |
           and (eventresult == "*" or eventresult == "Success")
           and (isnull(dstportnumber) or toint(alertInfo_dstPort_s) == dstportnumber)
           and (array_length(hostname_has_any) == 0 or agentDetectionInfo_name_s has_any (hostname_has_any))
-          and array_length(dvcaction) == 0
+          and (array_length(dvcaction) == 0 or dvcaction has_any ("Allow"))
       | extend
           temp_SrcMatch = has_any_ipv4_prefix(alertInfo_srcIp_s, src_or_any),
           temp_DstMatch = has_any_ipv4_prefix(alertInfo_dstIp_s, dst_or_any)
@@ -99,24 +107,19 @@ ParserQuery: |
           ASimMatchingHostname = "SrcHostname"
       | where ASimMatchingIpAddr != "No match"
       | lookup NetworkDirectionLookup on alertInfo_netEventDirection_s
+      | lookup DeviceTypeLookup on agentDetectionInfo_machineType_s
+      | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
       | extend 
           DstPortNumber = toint(alertInfo_dstPort_s),
-          SrcPortNumber = toint(alertInfo_srcPort_s),
-          AdditionalFields = bag_pack(
-                        "MachineType",
-                        agentDetectionInfo_machineType_s,
-                        "OsRevision",
-                        agentDetectionInfo_osRevision_s
-                    )
+          SrcPortNumber = toint(alertInfo_srcPort_s)
       | project-rename
           EventStartTime = sourceProcessInfo_pidStarttime_t,
           DstIpAddr = alertInfo_dstIp_s,
-          DvcHostname = agentDetectionInfo_name_s,
-          EventUid = _ResourceId,
+          EventUid = _ItemId,
           SrcIpAddr = alertInfo_srcIp_s,
           DvcId = agentDetectionInfo_uuid_g,
           DvcOs = agentDetectionInfo_osName_s,
-          DvcOsVersion = agentDetectionInfo_version_s,
+          DvcOsVersion = agentDetectionInfo_osRevision_s,
           EventOriginalSeverity = ruleInfo_severity_s,
           EventOriginalUid = alertInfo_dvEventId_s,
           SrcProcessName = sourceProcessInfo_name_s,
@@ -135,14 +138,16 @@ ParserQuery: |
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
       | extend
-          Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr)
+          Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr),
+          Hostname = SrcHostname
       | extend
           EventCount = int(1),
           EventProduct = "SentinelOne",
           EventResult = "Success",
+          DvcAction = "Allow",
           EventSchema = "NetworkSession",
           EventSchemaVersion = "0.2.6",
-          EventResultDetails = "Unknown",
+          EventResultDetails = "NA",
           EventType = "EndpointNetworkSession",
           EventVendor = "SentinelOne",
           NetworkProtocol = "TCP",
@@ -153,6 +158,7 @@ ParserQuery: |
           *_g,
           *_t,
           *_b,
+          _ResourceId,
           temp*,
           TenantId,
           RawData,
