@@ -125,9 +125,17 @@ function ConvertSentinelRuleFrom-Yaml {
             $($template.resources).name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/" + $convert.id + "')]"
             $($template.resources).properties = ($convert | Select-Object * -ExcludeProperty id)
 
-            $($template.resources).properties.queryFrequency = ConvertTo-ISO8601 -value $($template.resources).properties.queryFrequency
-            $($template.resources).properties.queryPeriod = ConvertTo-ISO8601 -value $($template.resources).properties.queryPeriod
-            $($template.resources).properties.triggerOperator = Convert-TriggerOperator -value $($template.resources).properties.triggerOperator
+            if ($template.resources.properties.queryFrequency) {
+                $($template.resources).properties.queryFrequency = ConvertTo-ISO8601 -value $($template.resources).properties.queryFrequency
+            }
+
+            if ($template.resources.properties.queryPeriod) {
+                $($template.resources).properties.queryPeriod = ConvertTo-ISO8601 -value $($template.resources).properties.queryPeriod
+            }
+
+            if ($template.resources.properties.triggerOperator) {
+                $($template.resources).properties.triggerOperator = Convert-TriggerOperator -value $($template.resources).properties.triggerOperator
+            }
 
             #Based of output path variable export files to the right folder
             if ($null -ne $expPath) {
