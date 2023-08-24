@@ -89,7 +89,7 @@ function ConvertSentinelRuleFrom-Yaml {
     }
 
     <#
-        If any YAML file found starte lopp to process all the files
+        If any YAML file found start loop to process all files
     #>
     if ($content) {
         Write-Verbose "'$($content.count)' templates found to convert"
