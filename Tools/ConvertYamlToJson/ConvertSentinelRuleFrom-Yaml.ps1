@@ -137,6 +137,10 @@ function ConvertSentinelRuleFrom-Yaml {
                 $($template.resources).properties.triggerOperator = Convert-TriggerOperator -value $($template.resources).properties.triggerOperator
             }
 
+            if ($template.resources.properties.incidentConfiguration.groupingConfiguration.lookbackDuration) {
+                $($template.resources).properties.incidentConfiguration.groupingConfiguration.lookbackDuration = ConvertTo-ISO8601 $($template.resources).properties.incidentConfiguration.groupingConfiguration.lookbackDuration
+            }
+
             #Based of output path variable export files to the right folder
             if ($null -ne $expPath) {
                 $outputFile = $expPath + "/" + $($_.BaseName) + ".json"
