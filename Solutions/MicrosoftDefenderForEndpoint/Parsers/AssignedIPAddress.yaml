@@ -1,0 +1,23 @@
+id: a06da838-8c56-4eed-ac1a-097bdfab5e9b
+Function:
+  Title: Parser for AssignedIPAddress
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: AssignedIPAddress
+FunctionAlias: AssignedIPAddress
+FunctionQuery: |
+    let AssignedIPAddresses = (Device:string, Timestamp:datetime = datetime(null))
+    {
+    let t = coalesce(Timestamp, now());
+    let adapters = materialize(
+        DeviceNetworkInfo 
+        | where Timestamp between(max_of(t - 1d, ago(30d)) .. t)
+        | where DeviceId == Device or DeviceName == Device
+        | top 500 by Timestamp);
+    let lastReportId = tolong(toscalar(adapters | summarize arg_max(Timestamp, ReportId) | project ReportId));
+    adapters | where ReportId == lastReportId
+    | project Timestamp, NetworkAdapterType, IpAddresses = todynamic(tostring(IPAddresses)), ConnectedNetworks
+    | mv-expand IpAddresses
+    | project Timestamp, IPAddress = tostring(IpAddresses.IPAddress), IPType = tostring(IpAddresses.AddressType), NetworkAdapterType, ConnectedNetworks
+    };

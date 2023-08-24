@@ -23,67 +23,60 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-  let dt_lookBack = 1h;
-  let ioc_lookBack = 14d;
-  let IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True);
-  //Create a list of TLDs in our threat feed for later validation of extracted domains
-  let list_tlds = ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  | where isnotempty(DomainName)
-  | extend DomainName = tolower(DomainName)
-  | extend parts = split(DomainName, '.')
-  | extend tld = parts[(array_length(parts)-1)]
-  | summarize count() by tostring(tld)
-  | summarize make_list(tld);
-  let Domain_Indicators = (union isfuzzy=true
-  (ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  // Picking up only IOC's that contain the entities we want
-  | where isnotempty(DomainName)
-  | extend TI_DomainEntity = DomainName
-  ),
-  (IoCList
-  | where IoC_Type =~ 'domainname'
-  | where ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC
-  | where Active =~ 'True'
-  | extend TI_DomainEntity = IoC
-  | project-away  IoC_Type
-  )
-  );
+  let dt_lookBack = 1h;  // Duration to look back for recent logs (1 hour)
+  let ioc_lookBack = 14d;  // Duration to look back for recent threat intelligence indicators (14 days)
+  // Create a list of top-level domains (TLDs) in our threat feed for later validation of extracted domains
+  let list_tlds = 
+      ThreatIntelligenceIndicator
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true and ExpirationDateTime > now()
+      | where isnotempty(DomainName)
+      | extend DomainName = tolower(DomainName)
+      | extend parts = split(DomainName, '.')
+      | extend tld = parts[(array_length(parts)-1)]
+      | summarize count() by tostring(tld)
+      | summarize make_list(tld);
+  let Domain_Indicators = 
+      ThreatIntelligenceIndicator
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true and ExpirationDateTime > now()
+      // Filter to pick up only IOC's that contain the entities we want (in this case, DomainName)
+      | where isnotempty(DomainName)
+      | extend TI_DomainEntity = DomainName;
   Domain_Indicators
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-  CommonSecurityLog
-  | extend IngestionTime = ingestion_time()
-  | where IngestionTime > ago(dt_lookBack)
-  | where DeviceVendor =~ 'Palo Alto Networks'
-  | where DeviceEventClassID =~ 'url'
-  //Uncomment the line below to only alert on allowed connections
-  //| where DeviceAction !~ "block-url"
-  //Extract domain from RequestURL, if not present extarct it from AdditionalExtentions
-  | extend PA_Url = column_ifexists("RequestURL", "None")
-  | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith "PanOS", extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
-  | extend PA_Url = iif(PA_Url !startswith "http://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), iif(PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url))
-  | extend Domain = trim(@"""",tostring(parse_url(PA_Url).Host))
-  | where isnotempty(Domain)
-  | extend Domain = tolower(Domain)
-  | extend parts = split(Domain, '.')
-  //Split out the TLD for the purpose of checking if we have any TI indicators with this TLD to match on
-  | extend tld = parts[(array_length(parts)-1)]
-  //Validate parsed domain by checking TLD against TLDs from threat feed and drop domains where there is no chance of a match
-  | where tld in~ (list_tlds)
-  | extend CommonSecurityLog_TimeGenerated = TimeGenerated
-  ) on $left.TI_DomainEntity==$right.Domain
-  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
-  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Domain, IoC
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
-    DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, IoC, TI_DomainEntity
-  | extend timestamp = CommonSecurityLog_TimeGenerated
+      // Join with CommonSecurityLog to find potential malicious activity
+      | join kind=innerunique (
+          CommonSecurityLog
+          | extend IngestionTime = ingestion_time()
+          | where IngestionTime > ago(dt_lookBack)
+          | where DeviceVendor =~ 'Palo Alto Networks'
+          | where DeviceEventClassID =~ 'url'
+          // Uncomment the line below to only alert on allowed connections
+          // | where DeviceAction !~ "block-url"
+          // Extract domain from RequestURL, if not present, extract it from AdditionalExtensions
+          | extend PA_Url = coalesce(RequestURL, "None")
+          | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith "PanOS", extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
+          | extend PA_Url = iif(PA_Url !in~ ('None', 'http://None', 'https://None') and PA_Url !startswith "http://" and PA_Url !startswith "https://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), PA_Url)
+          | extend PA_Url = iif(PA_Url !in~ ('None', 'http://None', 'https://None') and PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url)
+          | extend Domain = trim(@"""", tostring(parse_url(PA_Url).Host))
+          | where isnotempty(Domain)
+          | extend Domain = tolower(Domain)
+          | extend parts = split(Domain, '.')
+          // Split out the top-level domain (TLD) for the purpose of checking if we have any TI indicators with this TLD to match on
+          | extend tld = parts[(array_length(parts)-1)]
+          // Validate parsed domain by checking TLD against TLDs from the threat feed and drop domains where there is no chance of a match
+          | where tld in~ (list_tlds)
+          | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+      ) on $left.TI_DomainEntity == $right.Domain
+      | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+      // Group the results by IndicatorId and Domain and keep only the latest CommonSecurityLog_TimeGenerated
+      | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Domain
+      // Select the desired fields for the final result set
+      | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
+      // Add a new field 'timestamp' for convenience, using the CommonSecurityLog_TimeGenerated as its value
+      | extend timestamp = CommonSecurityLog_TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -97,5 +90,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: PA_Url
-version: 1.3.3
+version: 1.4.0
 kind: Scheduled
