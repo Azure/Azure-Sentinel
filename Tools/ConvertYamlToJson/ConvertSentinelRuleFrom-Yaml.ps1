@@ -45,9 +45,8 @@ function ConvertSentinelRuleFrom-Yaml {
         }
     }
 
-    <#
-        If OutPut folder defined then test if exists otherwise create folder
-    #>
+    # If OutPut folder defined then test if exists otherwise create folder
+
     if ($OutputFolder) {
         if (Test-Path $OutputFolder) {
             $expPath = (Get-Item $OutputFolder).FullName
@@ -63,9 +62,8 @@ function ConvertSentinelRuleFrom-Yaml {
         }
     }
 
-    <#
-        Test if path exists and extract the data from folder or file
-    #>
+    # Test if path exists and extract the data from folder or file
+
     if ($Path.Extension -in '.yaml', '.yml') {
         Write-Verbose "Singel YAML file selected"
         try {
@@ -88,9 +86,8 @@ function ConvertSentinelRuleFrom-Yaml {
         Write-Error 'Wrong Path please see example'
     }
 
-    <#
-        If any YAML file found start loop to process all files
-    #>
+    # If any YAML file found start loop to process all files
+
     if ($content) {
         Write-Verbose "'$($content.count)' templates found to convert"
 
