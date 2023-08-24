@@ -1,0 +1,351 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "defaultValue": "Cofense",
+            "minLength": 1,
+            "maxLength": 11,
+            "type": "string"
+        },
+        "WorkspaceID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Workspace ID of Log Analytics workspace"
+            }
+        },
+        "WorkspaceKey": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Workspace Key of Log Analytics workspace"
+            }
+        },
+        "BaseURL": {
+            "defaultValue": "https://www.threathq.com/apiv1",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Base URL of Cofense Intelligence API (e.g. https://www.threathq.com/apiv1)"
+            }
+        },
+        "Cofense_Username": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Cofense Intelligence User Token for authentication"
+            }
+        },
+        "Cofense_Password": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Cofense Intelligence Password for authentication"
+            }
+        },
+        "Azure_Client_Id": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client Id that you have created during app registration"
+            }
+        },
+        "Azure_Client_Secret": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client Secret that you have created during creating the client secret"
+            }
+        },
+        "Azure_Tenant_Id": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Tenant Id of your Azure Active Directory"
+            }
+        },
+        "Azure_Resource_Group_Name": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Resource Group Name in which you want deploy the data connector"
+            }
+        },
+        "Azure_Workspace_Name": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Microsoft Sentinel Workspace Name of Log Analytics workspace"
+            }
+        },
+        "Azure_Subscription_Id": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Subscription Id which is present in the subscription tab in Microsoft Sentinel"
+            }
+        },
+        "RequireProxy": {
+            "type": "string",
+            "metadata": {
+                "description": "Select Yes, if you want to use Proxy to send Cofense indicators into Threat Intelligence. Default No is selected"
+            },
+            "allowedValues": [
+                "Yes",
+                "No"
+            ],
+            "defaultValue": "No"
+        },
+        "Proxy_Username": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "This is an optional parameter if required enter the proxy username"
+            }
+        },
+        "Proxy_Password": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "This is an optional parameter if required enter the proxy password"
+            }
+        },
+        "Proxy_URL": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "This is an optional parameter if required enter the proxy url"
+            }
+        },
+        "Proxy_Port": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "This is an optional parameter if required enter the proxy port"
+            }
+        },
+        "SendCofenseIndicatorToDefender": {
+            "type": "string",
+            "metadata": {
+                "description": "Select Yes, if you want to send Cofense Indicators to Defender"
+            },
+            "allowedValues": [
+                "Yes",
+                "No"
+            ],
+            "defaultValue": "No"
+        },
+        "LogLevel": {
+            "type": "string",
+            "metadata": {
+                "description": "Please add log level or log severity value. By default it is set to INFO"
+            },
+            "allowedValues": [
+                "Debug",
+                "Info",
+                "Error",
+                "Warning"
+            ],
+            "defaultValue": "Info"
+        },
+        "Malware_Data_Table_name": {
+            "type": "string",
+            "defaultValue": "Malware_Data"
+        },
+        "Schedule": {
+            "type": "string",
+            "minLength": 11,
+            "metadata": {
+                "description": "Please enter a valid Quartz cron-expression. (Example: 0 0 0 * * *)"
+            }
+        }
+    },
+    "variables": {
+        "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2015-05-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[tolower(variables('FunctionName'))]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.8"
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
+                        "Function_App_Name": "[variables('FunctionName')]",
+                        "WorkspaceID": "[parameters('WorkspaceID')]",
+                        "WorkspaceKey": "[parameters('WorkspaceKey')]",
+                        "BaseURL": "[parameters('BaseURL')]",
+                        "Cofense_Username": "[parameters('Cofense_Username')]",
+                        "Cofense_Password": "[parameters('Cofense_Password')]",
+                        "Azure_Client_Id": "[parameters('Azure_Client_Id')]",
+                        "Azure_Client_Secret": "[parameters('Azure_Client_Secret')]",
+                        "Azure_Tenant_Id": "[parameters('Azure_Tenant_Id')]",
+                        "Azure_Resource_Group_Name": "[parameters('Azure_Resource_Group_Name')]",
+                        "Azure_Workspace_Name": "[parameters('Azure_Workspace_Name')]",
+                        "Azure_Subscription_Id": "[parameters('Azure_Subscription_Id')]",
+                        "RequireProxy": "[parameters('RequireProxy')]",
+                        "Proxy_Username": "[parameters('Proxy_Username')]",
+                        "Proxy_Password": "[parameters('Proxy_Password')]",
+                        "Proxy_URL": "[parameters('Proxy_URL')]",
+                        "Proxy_Port": "[parameters('Proxy_Port')]",
+                        "SendCofenseIndicatorToDefender": "[parameters('SendCofenseIndicatorToDefender')]",
+                        "Malware_Data_Table_name": "[parameters('Malware_Data_Table_name')]",
+                        "Schedule": "[parameters('Schedule')]",
+                        "LogLevel": "[parameters('LogLevel')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-CofenseIntelligence-functionapp"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionName'), '/default/', tolower(variables('FunctionName')))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            }
+        }
+    ]
+}
