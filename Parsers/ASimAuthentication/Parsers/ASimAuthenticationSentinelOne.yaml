@@ -1,6 +1,6 @@
 Parser:
   Title: ASIM Authentication parser for SentinelOne
-  Version: '0.1'
+  Version: '0.1.0'
   LastUpdated: Jul 24 2023
 Product:
   Name: SentinelOne
@@ -35,7 +35,7 @@ ParserQuery: |
       activityType_d: real,
       EventType: string,
       EventResult: string,
-      EventOriginalType: string
+      EventOriginalResultDetails: string
   )
   [
       27, "Logon", "Success", "User Logged In",
@@ -65,7 +65,7 @@ ParserQuery: |
       "SYSTEM", "System",
       "UNLOCK", "System"
   ];
-  let DeviceTypeLookup = datatable (agentDetectionInfo_machineType_s: string, TargetDeviceType: string)
+  let DeviceTypeLookup = datatable (agentDetectionInfo_machineType_s: string, SrcDeviceType: string)
   [
       "desktop", "Computer",
       "server", "Computer",
@@ -73,6 +73,7 @@ ParserQuery: |
       "kubernetes node", "Other",
       "unknown", "Other"
   ];
+  let TargetUserTypesList = dynamic(["Regular", "Machine", "Admin", "System", "Application", "Service Principal", "Service", "Anonymous"]);
   let parser = (disabled: bool=false) {
       let alldata = SentinelOne_CL
           | where not(disabled);
@@ -83,23 +84,28 @@ ParserQuery: |
           | lookup EventFieldsLookup on activityType_d
           | lookup EventResultDetailsLookup on comments_s
           | extend 
-              DvcIpAddr = iff(ipAddress == "null", "", ipAddress),
+              SrcIpAddr = iff(ipAddress == "null", "", ipAddress),
+              EventOriginalType = tostring(toint(activityType_d)),
               TargetUsername = username,
               TargetUserScope = userScope,
               AdditionalFields = bag_pack(
                       "accountName", accountName,
                       "fullScopeDetails", fullScopeDetails,
                       "fullScopeDetailsPath", fullScopeDetailsPath,
-                      "role", role,
                       "scopeLevel", scopeLevel,
                       "source", source,
                       "sourceType", sourceType
-                  )
+                  ),
+              TargetOriginalUserType = role,
+              TargetUserType = case(
+                                role in (TargetUserTypesList), role,
+                                role == "null", "",
+                                "Other"
+                            )
           | project-rename
               EventStartTime = createdAt_t,
               TargetUserId = userId_s,
               EventOriginalUid = activityUuid_g,
-              EventOriginalResultDetails = comments_s,
               EventMessage = primaryDescription_s;
       let alertdata = alldata
           | where event_name_s == "Alerts."
@@ -108,26 +114,28 @@ ParserQuery: |
           | lookup EventSubTypeLookup on alertInfo_loginType_s
           | lookup DeviceTypeLookup on agentDetectionInfo_machineType_s
           | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
-          | invoke _ASIM_ResolveDstFQDN('alertInfo_loginAccountDomain_s')
+          | invoke _ASIM_ResolveSrcFQDN('alertInfo_loginAccountDomain_s')
           | extend
               EventResult = iff(alertInfo_loginIsSuccessful_s == "true", "Success", "Failure"),
               EventSeverity = iff(ruleInfo_severity_s == "Critical", "High", ruleInfo_severity_s)
           | project-rename
               EventStartTime = alertInfo_createdAt_t,
-              DvcIpAddr = alertInfo_srcMachineIp_s,
+              SrcIpAddr = alertInfo_srcMachineIp_s,
               ActingAppName = sourceProcessInfo_name_s,
               DvcId = agentDetectionInfo_uuid_g,
               DvcOs = agentDetectionInfo_osName_s,
-              DvcOsVersion = agentDetectionInfo_version_s,
+              DvcOsVersion = agentDetectionInfo_osRevision_s,
               EventOriginalSeverity = ruleInfo_severity_s,
               EventOriginalType = alertInfo_eventType_s,
+              EventOriginalSubType = alertInfo_loginType_s,
               RuleName = ruleInfo_name_s,
               TargetUserId = alertInfo_loginAccountSid_s,
               TargetUsername = alertInfo_loginsUserName_s
           | extend
               Rule = RuleName,
               ActingAppType = iff(isnotempty(ActingAppName), "Process", ""),
-              DvcIdType = iff(isnotempty(DvcId), "Other", "");
+              DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+              TargetUserType = _ASIM_GetUserType(TargetUsername, TargetUserId);
       union activitydata, alertdata
       | extend
           EventCount = int(1),
@@ -136,21 +144,19 @@ ParserQuery: |
           EventVendor = "SentinelOne",
           EventSchema = "Authentication"
       | extend
-          Dvc = coalesce(DvcHostname, DvcIpAddr, EventProduct),
-          SrcIpAddr = DvcIpAddr,
+          Dvc = coalesce(DvcHostname, EventProduct),
           EventEndTime = EventStartTime,
-          EventUid = _ResourceId,
+          EventUid = _ItemId,
           User = TargetUsername,
-          TargetHostname = DstHostname,
-          TargetDomain = DstDomain,
-          TargetDomainType = DstDomainType,
-          TargetFQDN = DstFQDN,
+          TargetHostname = SrcHostname,
+          TargetDomain = SrcDomain,
+          TargetDomainType = SrcDomainType,
+          TargetFQDN = SrcFQDN,
           TargetUserIdType = iff(isnotempty(TargetUserId), "Other", ""),
           TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
       | extend
           IpAddr = SrcIpAddr,
-          Src = SrcIpAddr,
-          Dst = TargetHostname
+          Src = SrcIpAddr
       | project-away
           *_b,
           *_d,
@@ -167,16 +173,13 @@ ParserQuery: |
           source,
           sourceType,
           userScope,
-          DstHostname,
-          DstDomain,
-          DstDomainType,
-          DstFQDN,
           Computer,
           MG,
           ManagementGroupName,
           RawData,
           SourceSystem,
           TenantId,
+          _ItemId,
           _ResourceId
   };
-  parser(disabled=disabled);
+  parser(disabled=disabled)
