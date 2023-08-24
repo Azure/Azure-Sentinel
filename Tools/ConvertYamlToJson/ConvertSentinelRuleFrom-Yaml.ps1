@@ -125,6 +125,10 @@ function ConvertSentinelRuleFrom-Yaml {
             $($template.resources).name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/" + $convert.id + "')]"
             $($template.resources).properties = ($convert | Select-Object * -ExcludeProperty id)
 
+            $($template.resources).properties.queryFrequency = ConvertTo-ISO8601 -value $($template.resources).properties.queryFrequency
+            $($template.resources).properties.queryPeriod = ConvertTo-ISO8601 -value $($template.resources).properties.queryPeriod
+            $($template.resources).properties.triggerOperator = Convert-TriggerOperator -value $($template.resources).properties.triggerOperator
+
             #Based of output path variable export files to the right folder
             if ($null -ne $expPath) {
                 $outputFile = $expPath + "/" + $($_.BaseName) + ".json"
@@ -146,5 +150,40 @@ function ConvertSentinelRuleFrom-Yaml {
     else {
         Write-Error "No YAML templates found"
         break
+    }
+}
+
+function Convert-TriggerOperator {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$value
+    )
+
+    switch ($value) {
+        "gt" { $value = "GreaterThan" }
+        "lt" { $value = "LessThan" }
+        "eq" { $value = "Equal" }
+        "ne" { $value = "NotEqual" }
+        default { $value }
+    }
+    return $value
+}
+
+function ConvertTo-ISO8601 {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$value
+    )
+
+    switch -regEx ($value.ToUpper()) {
+        '[hmHM]$' {
+            return ('PT{0}' -f $value).ToUpper()
+        }
+        '[dD]$' {
+            return ('P{0}' -f $value).ToUpper()
+        }
+        default {
+            return $value.ToUpper()
+        }
     }
 }
