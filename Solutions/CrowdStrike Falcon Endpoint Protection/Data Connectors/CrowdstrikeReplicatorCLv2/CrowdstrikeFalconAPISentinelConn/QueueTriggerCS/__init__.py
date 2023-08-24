@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 from botocore.config import Config as BotoCoreConfig
 from aiobotocore.session import get_session
@@ -9,6 +10,8 @@ import aiohttp
 import logging
 import azure.functions as func
 import requests
+import time
+from datetime import datetime
 
 AWS_KEY = os.environ['AWS_KEY']
 AWS_SECRET = os.environ['AWS_SECRET']
@@ -82,7 +85,7 @@ async def main(msg: func.QueueMessage) -> None:
             if link:
                 logging.info("Processing file {}".format(link))
                 try:
-                    if link.startswith("fdrv2"):
+                    if "fdrv2/" in link:
                         logging.info('Processing a secondary data bucket.')
                         await process_file_secondary_CLv2(bucket, link, client, session)
                     else:
@@ -129,6 +132,13 @@ def customize_event(line, eventsSchemaMappingDict, requiredFieldsMappingDict, re
             else:
                 normalized_additional_fields[key] = element[key]
 
+            # As below tables are getting transformed and loosing original info. Adding workaround to carry original timestamp and contextTimeStamp fields as it is    
+            if key == "timestamp" and schema_fields_status[key] == "Required":
+                normalized_additional_fields[key] = element[key]
+
+            if key == "ContextTimeStamp" and schema_fields_status[key] == "Required":
+                normalized_additional_fields[key] = element[key]
+
         # If field is new and never seen before
         # If Raw data is required, add this field to raw data specific to raw data
         # Otherwise only add to additional fields specific to normalized data
@@ -171,11 +181,16 @@ async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSche
                                                                     )
 
         try:
+            logging.info("Making request to AWS for downloading file started time: {}  ".format(datetime.now()))
             response = await client.get_object(Bucket=bucket, Key=s3_path)
+            response_body_size = sys.getsizeof(response["Body"])
+            logging.info("downloaded S3 file: {} of size: {} from AWS S3 successfully time: {}  ".format(s3_path, response_body_size,datetime.now()))
             s = ''
             async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
+                #logging.info("Inside AsyncGZIPDecompressedStream time: {}  ".format(datetime.now()))
                 s += decompressed_chunk.decode(errors='ignore')
                 lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                #logging.info("Inside AsyncGZIPDecompressedStream File: {} downloaded and length: {}  ".format(s3_path,len(lines)))
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
@@ -229,7 +244,7 @@ async def process_file_secondary_CLv2(bucket, s3_path, client, session):
         AzureSentinelConnector = AzureSentinelConnectorCLv2Async(session, NORMALIZED_DCE_ENDPOINT, NORMALIZED_DCR_ID, SECONDARY_DATA_SCHEMA,
                                                          AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
 
-        folderName = s3_path.split('/')[-2]
+        folderName = (s3_path.split("fdrv2/")[1]).split('/')[0]
 
         try:
             response = await client.get_object(Bucket=bucket, Key=s3_path)
