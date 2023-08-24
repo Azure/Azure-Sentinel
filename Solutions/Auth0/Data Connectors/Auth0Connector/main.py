@@ -109,7 +109,7 @@ class Auth0Connector:
             next_link = resp.headers['Link']
             next_uri = next_link[next_link.index('<') + 1:next_link.index('>')]
             page_num = 1
-            while resp.json():
+            while resp.json() and len(events)!=0:
                 resp = requests.get(next_uri, headers=self.header)
                 #logging.info(f'\t Response message {resp.headers}')
                 try:
@@ -120,24 +120,26 @@ class Auth0Connector:
                     page_num += 1
                     if page_num % 9 == 0:
                         time.sleep(1)
-                    events.sort(key=lambda item: item['date'], reverse=True)
-                    last_log_id = events[0]['log_id']
-                    config['last_log_id'] = last_log_id
-                    try:
-                        config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
-                    except IndexError:
-                        pass
-                    logging.info("new config" + str(config))
-                    self.state_manager.post(json.dumps(config))
-                    for el in events:
-                        self.sentinel.send(el)
-                    self.sentinel.flush()
+                    if len(events)!=0:
+                        events.sort(key=lambda item: item['date'], reverse=True)
+                        last_log_id = events[0]['log_id']
+                        config['last_log_id'] = last_log_id
+                        try:
+                            config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
+                        except IndexError:
+                            pass
+                        logging.info("new config" + str(config))
+                        self.state_manager.post(json.dumps(config))
+                        for el in events:
+                            self.sentinel.send(el)
+                        self.sentinel.flush()
                     if self.check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         return
-                except:
-                    logging.info(f'Next link is not available, exiting')
-                    break            
+                except Exception as err:
+                    logging.error("Something wrong. Exception error text: {}".format(err))
+                    break
+            return last_log_id, events           
         logging.info(f'\t New last log id: {last_log_id}\n at date {events[0]["date"]}. Events extracted.')
         return last_log_id, events
 
@@ -173,7 +175,7 @@ class Auth0Connector:
     def _get_header(self):
         return {'Authorization': 'Bearer ' + self.token}
     
-    def check_if_script_runs_too_long(script_start_time: int) -> bool:
+    def check_if_script_runs_too_long(self, script_start_time: int) -> bool:
         now = int(time.time())
         duration = now - script_start_time
         max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
