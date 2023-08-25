@@ -53,7 +53,11 @@ async def main(mytimer: func.TimerRequest):
             mainQueueHelper = AzureStorageQueueHelper(connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items")
             backlogQueueHelper = AzureStorageQueueHelper(connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items-backlog")    
 
+<<<<<<< HEAD
             logging.info("Check if we already have enough backlog to process in main queue. Maxmum set is MAX_QUEUE_MESSAGES_MAIN_QUEUE: {} ".format(MAX_QUEUE_MESSAGES_MAIN_QUEUE))
+=======
+            logging.info("Check if we already have enough backlog to process")
+>>>>>>> master
             mainQueueCount = mainQueueHelper.get_queue_current_count()
             logging.info("Main queue size is {}".format(mainQueueCount))
             while (mainQueueCount ) >= MAX_QUEUE_MESSAGES_MAIN_QUEUE:
