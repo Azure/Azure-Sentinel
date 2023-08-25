@@ -300,9 +300,6 @@ def process_result(result_obj, start_time, postactivity_list, line, script_start
         postactivity_list[line] = latest_timestamp
         state = StateManager(connection_string)
         state.post(str(json.dumps(postactivity_list)))
-        if check_if_script_runs_too_long(script_start_time):
-            logging.info(f'Script is running too long. Stop processing new events. Finish script.')
-            return
         return latest_timestamp 
 
 def check_if_script_runs_too_long(script_start_time):
@@ -333,6 +330,9 @@ def main(mytimer: func.TimerRequest) -> None:
                 while next_page_token is not None:
                     result_obj, next_page_token  = get_nextpage_results(line,start_time,end_time,next_page_token)
                     latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        return
             postactivity_list[line] = latest_timestamp
       except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
