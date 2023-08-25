@@ -1,5 +1,7 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Schema;
+using Octokit;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,31 +28,39 @@ namespace Kqlvalidations.Tests
             try
             {
                 var directoryPaths = GetDirectoryPaths();
-                var gitHubApiClient = GitHubApiClient.Instance;
-
-                // Fetch the PR number using the singleton instance
-                int prNumber = gitHubApiClient.GetPullRequestNumber();
-
+                int prNumber = 0;
+                int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
+                //assign pr number to debug with a pr
+                //prNumber=8414;
                 var basePath = Utils.GetTestDirectory(TestFolderDepth);
                 var prFilesListModified = new List<string>();
 
                 if (prNumber != 0)
                 {
-                    // Fetch pull request files using the singleton instance
-                    var prFiles = gitHubApiClient.GetPullRequestFiles();
-
-                    foreach (var file in prFiles)
+                    try
                     {
-                        var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
-                        prFilesListModified.Add(modifiedFile);
+                        var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
+                        var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
+
+                        foreach (var file in prFiles)
+                        {
+                            var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
+                            prFilesListModified.Add(modifiedFile);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Exception occurred during PR file retrieval, set prFilesListModified to null
+                        Console.WriteLine("Error occured while getting the files from PR. Error message: " + ex.Message + " Stack trace: " + ex.StackTrace);
+                        prFilesListModified = null;
                     }
                 }
 
-                foreach (var directoryPath in directoryPaths)
+                directoryPaths.ForEach(directoryPath =>
                 {
                     var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories);
 
-                    if (prNumber != 0 && prFilesListModified != null && prFilesListModified.Count != 0)
+                    if (prNumber != 0 && prFilesListModified != null)
                     {
                         files = files.Where(file => prFilesListModified.Contains(file)).ToArray();
                     }
@@ -73,14 +83,18 @@ namespace Kqlvalidations.Tests
                                 throw new Exception("Invalid JSON schema for file: " + filePath);
                             }
                         }
+                        catch (JsonReaderException ex)
+                        {
+                            Console.WriteLine("Invalid JSON file: " + filePath);
+                            Console.WriteLine("Error message: " + ex.Message);
+                        }
                         catch (Exception ex)
                         {
-                            // Log the error and continue processing other files
                             Console.WriteLine("An error occurred while processing file: " + filePath);
                             Console.WriteLine("Error message: " + ex.Message);
                         }
                     }
-                }
+                });
 
                 if (validFiles.Count == 0)
                 {
@@ -91,7 +105,6 @@ namespace Kqlvalidations.Tests
             }
             catch (Exception ex)
             {
-                // Log the error
                 Console.WriteLine("An error occurred while retrieving directory paths.");
                 Console.WriteLine("Error message: " + ex.Message);
             }

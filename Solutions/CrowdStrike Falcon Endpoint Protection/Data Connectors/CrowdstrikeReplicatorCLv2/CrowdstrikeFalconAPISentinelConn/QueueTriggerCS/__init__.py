@@ -86,11 +86,7 @@ async def main(msg: func.QueueMessage) -> None:
             if link:
                 try:
                     if "fdrv2/" in link:
-<<<<<<< HEAD
                         logging.info("Started processing a secondary data fdrv2 bucket. S3file: {} S3Bucket: {} SQSMessageId: {}".format(link,bucket,messageId))
-=======
-                        logging.info('Processing a secondary data bucket.')
->>>>>>> master
                         await process_file_secondary_CLv2(bucket, link, client, session)
                         logging.info("Finished processing a secondary data fdrv2 bucket. S3file: {} S3Bucket: {} SQSMessageId: {}".format(link,bucket,messageId))
                         
