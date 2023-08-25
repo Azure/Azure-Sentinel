@@ -9,7 +9,7 @@ from ..Helpers.azure_monitor_collector import AzureMonitorCollector
 from ..Models.Error.errors import MimecastRequestError, AzureMonitorCollectorRequestError
 from ..Models.Request.get_siem_logs import GetSIEMLogsRequest
 from ..Models.Enum.mimecast_endpoints import MimecastEndpoints
-from ..Parser.siem_parser import SiemParser
+from ..TransformData.siem_parser import SiemParser
 
 
 def main(mytimer: func.TimerRequest, checkpoint: str) -> str:
