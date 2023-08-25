@@ -11,7 +11,7 @@ from ..Helpers.azure_monitor_collector import AzureMonitorCollector
 from ..Models.Error.errors import MimecastRequestError, AzureMonitorCollectorRequestError
 from ..Models.Request.get_data_leak_protection_logs import GetDataLeakProtectionLogsRequest
 from ..Models.Enum.mimecast_endpoints import MimecastEndpoints
-from ..Parsers.dlp_parser import DLPParser
+from ..Parser.dlp_parser import DLPParser
 
 
 def main(mytimer: func.TimerRequest, checkpoint: str) -> str:
