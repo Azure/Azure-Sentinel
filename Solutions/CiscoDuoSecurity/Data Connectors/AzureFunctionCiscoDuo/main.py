@@ -166,7 +166,7 @@ def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> It
             
             try:
                 response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
-                logging.info('Response recieved {}'.format(response))
+                #logging.info('Response recieved {}'.format(response))
             except Exception as ex:
                 logging.info('Error in while loop while getting authentication logs- {}'.format(ex))
                 if ex.status == 429:
