@@ -101,7 +101,7 @@ try {
                 Write-Debug "Processing $($item)"
 
                 # Creating parameters from the parameters in the yaml file
-                $yamlObject.ParserParams | ForEach-Object {
+                $null = $yamlObject.ParserParams | ForEach-Object {
                     ($stringParams = "$($stringParams), $($_.Name):$($_.Type)=$($_.Default)")
                 }
 
