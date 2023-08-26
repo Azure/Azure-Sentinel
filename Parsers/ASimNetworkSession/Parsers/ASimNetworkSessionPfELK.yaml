@@ -1,0 +1,136 @@
+Parser:
+  Title: Network Session ASIM parser for PfELK
+  Version: '0.1'
+  LastUpdated: Aug 26th, 2023
+Product:
+  Name: PfELK
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing PfELK's logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionPfELK
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DvcActionLookup = datatable(tempPfResult:string, DvcAction:string) [
+    "block", "Drop",
+    "pass", "Allow",
+    "reject", "Deny"
+  ];
+  let EventResultLookup = datatable(tempPfResult:string, EventResult:string) [
+    "block", "Failure",
+    "pass", "Success",
+    "reject", "Failure"
+  ];
+  let NetworkProtocolVersionLookup = datatable(tempNetworkProtocolVersion:int, NetworkProtocolVersion:string) [
+    4, "IPv4",
+    6, "IPv6"
+  ];
+  let EventCountOne = toint(1);
+  let parser = (
+    disabled:bool=false
+  )
+  {
+    PfELK_CL
+    // Filters (most of)
+    | where not(disabled)
+    | where data_stream.namespace == "firewall"
+    | extend
+        RawData = pack_all()
+    | extend tempPfResult = tostring(event.action)
+    | lookup EventResultLookup on tempPfResult
+    | lookup DvcActionLookup on tempPfResult
+    | extend 
+        EventCount = EventCountOne,
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventType = 'NetworkSession',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion = '0.2.6',
+        EventProduct = 'PfElk',
+        EventVendor = 'PfElk'
+    | extend
+        EventSeverity = case(EventResult in ("Drop", "Deny"), "Low", "Informational"),
+        DvcIpAddr = tostring(source.ip),
+        NetworkProtocol = toupper(network.transport),
+        tempNetworkProtocolVersion = toint(network.type)
+    | lookup NetworkProtocolVersionLookup on tempNetworkProtocolVersion
+    | extend
+        DstIpAddr = tostring(destination.ip),
+        DstPortNumber = toint(destination.port),
+        SrcIpAddr = tostring(source.ip),
+        SrcPortNumber = toint(source.port),
+        NetworkRuleName = tostring(rule.alias),
+        NetworkRuleNumber = toint(rule.ruleset),
+        DvcInboundInterface = tostring(interface.name)
+    // Add aliases
+    | extend
+        DvcInterface = DvcInboundInterface,
+        Src = SrcIpAddr,
+        Dst = DstIpAddr,
+        Dvc = SrcIpAddr,
+        IpAddr = SrcIpAddr
+    // Finalize
+    | project-away temp*
+    // Use RawData to access the original fields
+    | project-away
+        data_stream,
+        destination,
+        ecs,
+        event,
+        host,
+        interface,
+        log,
+        logstash_type,
+        ls_timestamp,
+        ls_version,
+        network,
+        pf,
+        process,
+        rule,
+        service,
+        source,
+        tags
+    | project-reorder
+        // ASIM Common (mandatory) fields
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventResult,
+        EventSeverity,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventSchemaVersion,
+        // ASIM Device fields
+        Dvc,
+        DvcIpAddr,
+        DvcAction,
+        // Network session fields
+        NetworkProtocol,
+        NetworkProtocolVersion,
+        IpAddr,
+        // Destination system fields
+        Dst,
+        DstIpAddr,
+        DstPortNumber,
+        // Source system fields
+        SrcIpAddr,
+        Src,
+        SrcPortNumber,
+        // Intermediary device and Network Address Translation (NAT) fields
+        DvcInboundInterface,
+        // Inspection fields
+        NetworkRuleName,
+        NetworkRuleNumber
+  };
+  parser (disabled=disabled)
