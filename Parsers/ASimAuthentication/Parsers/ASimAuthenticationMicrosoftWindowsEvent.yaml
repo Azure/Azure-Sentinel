@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for Windows Security Events
-  Version: '0.2'
-  LastUpdated: Feb 23, 2023
+  Version: '0.2.1'
+  LastUpdated: 21 Jul 2023
 Product:
   Name: Windows Security Events
 Normalization:
@@ -15,6 +15,7 @@ References:
 Description: |
   This ASIM parser supports normalizing Windows Authentication events (4624, 4625, 4634, and 4647), collected either by the Log Analytics Agent or the Azure Monitor Agent, into either the WindowsEvent (WEF) or SecurityEvent tables, to the ASIM Authentication schema.
 ParserName: ASimAuthenticationMicrosoftWindowsEvent
+EquivalentBuiltInParser: _ASim_Authentication_WindowsEvent
 ParserParams:
   - Name: disabled
     Type: bool
@@ -76,105 +77,116 @@ ParserQuery: |
       '0xc0000224', 'STATUS_PASSWORD_MUST_CHANGE','Other',
       '0xc0000234', 'STATUS_ACCOUNT_LOCKED_OUT','User locked',
       '0xc00002ee', 'STATUS_UNFINISHED_CONTEXT_DELETED','Other'];
-      let WinLogon=(disabled:bool=false){ 
-          WindowsEvent | where not(disabled)
-          | where Provider == 'Microsoft-Windows-Security-Auditing'
-          | where     EventID in (LogonEvents) or EventID in (LogoffEvents)
-          | extend    LogonProtocol = tostring(EventData.AuthenticationPackageName),
-                      SrcDvcIpAddr = tostring(EventData.IpAddress),
-                      TargetPortNumber = toint(EventData.IpPort),
-                      LogonGuid = tostring(EventData.LogonGuid),
-                      LogonType = toint(EventData.LogonType),
-                      ActingProcessCreationTime = EventData.ProcessCreationTime,
-                      ActingProcessId = tostring(toint(EventData.ProcessId)),
-                      ActingProcessName = tostring(EventData.ProcessName),
-                      Status = tostring(EventData.Status),
-                      ActorSessionId = tostring(EventData.SubjectLogonId),
-                      ActorUsername = tostring(iff (EventData.SubjectDomainName in ('-',''), EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
-                      ActorUserId = tostring(EventData.SubjectUserSid),
-                      SubStatus = tostring(EventData.SubStatus),
-                      TargetDomainName = tostring(EventData.TargetDomainName),
-                      TargetSessionId = tostring(EventData.TargetLogonId),
-                      TargetUserId = tostring(EventData.TargetUserSid),
-                      TargetUsername = tostring(iff (EventData.TargetDomainName in ('-',''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName))),
-                      SrcDvcHostname = tostring(EventData.WorkstationName),
-                      EventProduct = "Security Events"
-          | extend EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
-          // -- creating EventMessage matching EventMessage in SecurityEvent table
-          | extend EventMessage = case(EventID == 4634, "4634 - An account was logged off.", 
-                                      EventID == 4625, "4625 - An account failed to log on.",
-                                      EventID == 4624 ,"4624 - An account was successfully logged on.",
-                                      "4647 - User initiated logoff."),
-                  EventResult = iff(EventID == 4625, 'Failure', 'Success')
-          | project-rename 
-              TargetDvcHostname = Computer
-              , EventOriginalUid=EventOriginId          
-              , EventOriginalType=EventID
-          | extend  EventCount=int(1)
-                  , EventSchemaVersion='0.1.0'
-                  , ActorUserIdType='SID'
-                  , TargetUserIdType='SID'
-                  , EventVendor='Microsoft'  
-                  , EventStartTime =TimeGenerated
-                  , EventEndTime=TimeGenerated
-                  , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')                  
-                  , ActorUsernameType= iff(EventData.SubjectDomainName in ('-',''),'Simple', 'Windows' )                  
-                  , TargetUsernameType=iff(TargetDomainName in ('-',''), 'Simple', 'Windows')
-                  , SrcDvcOs = 'Windows'
-                  , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
-          | extend
-                  ActorUserType = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
-                  , TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
-          | lookup LogonStatus on EventStatus
-          | lookup LogonTypes on LogonType
-              /// ** Aliases 
-              | extend
-                  User=TargetUsername
-                  , LogonTarget=TargetDvcHostname
-                  , Dvc=SrcDvcHostname
+  let WinLogon=(disabled:bool=false){ 
+      WindowsEvent 
+      | where not(disabled)
+      | where Provider == 'Microsoft-Windows-Security-Auditing'
+      | where EventID in (LogonEvents) or EventID in (LogoffEvents)
+      | extend    
+          ActingProcessCreationTime = EventData.ProcessCreationTime,
+          ActingProcessId           = tostring(toint(EventData.ProcessId)),
+          ActingProcessName         = tostring(EventData.ProcessName),
+          ActorSessionId            = tostring(EventData.SubjectLogonId),
+          ActorUserId               = tostring(EventData.SubjectUserSid),
+          ActorUsername             = tostring(iff (EventData.SubjectDomainName in ('-',''), EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
+          EventProduct              = "Security Events",
+          LogonGuid                 = tostring(EventData.LogonGuid),
+          LogonProtocol             = tostring(EventData.AuthenticationPackageName),
+          LogonType                 = toint(EventData.LogonType),
+          SrcDvcHostname            = tostring(EventData.WorkstationName),
+          SrcDvcIpAddr              = tostring(EventData.IpAddress),
+          Status                    = tostring(EventData.Status),
+          SubStatus                 = tostring(EventData.SubStatus),
+          TargetDomainName          = tostring(EventData.TargetDomainName),
+          TargetPortNumber          = toint(EventData.IpPort),
+          TargetSessionId           = tostring(EventData.TargetLogonId),
+          TargetUserId              = tostring(EventData.TargetUserSid),
+          TargetUsername            = tostring(iff (EventData.TargetDomainName in ('-',''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName)))
+      | extend 
+          EventStatus = iff(SubStatus=='0x0',Status,SubStatus)
+      // -- creating EventMessage matching EventMessage in SecurityEvent table
+      | extend 
+          EventMessage = case(
+                              EventID == 4624 ,"4624 - An account was successfully logged on.",
+                              EventID == 4625, "4625 - An account failed to log on.",
+                              EventID == 4634, "4634 - An account was logged off.", 
+                              "4647 - User initiated logoff."),
+          EventResult = iff(EventID == 4625, 'Failure', 'Success')
+      | project-rename 
+          EventOriginalType = EventID,
+          EventOriginalUid  = EventOriginId,   
+          EventUid          = _ItemId,       
+          TargetDvcHostname = Computer
+      | extend 
+          ActorUserIdType    = 'SID',
+          ActorUsernameType  = iff(EventData.SubjectDomainName in ('-',''),'Simple', 'Windows' ),
+          EventCount         = int(1),
+          EventEndTime       = TimeGenerated,
+          EventSchemaVersion = '0.1.0',
+          EventStartTime     = TimeGenerated,
+          EventStatus        = iff(SubStatus=='0x0',Status,SubStatus),
+          EventType          = iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon'),
+          EventVendor        = 'Microsoft',
+          SrcDvcOs           = 'Windows',
+          TargetUserIdType   = 'SID',
+          TargetUsernameType = iff(TargetDomainName in ('-',''), 'Simple', 'Windows')
+      | extend
+          ActorUserType  = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId),
+          TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
+      | lookup LogonStatus on EventStatus
+      | lookup LogonTypes on LogonType
+      /// ** Aliases 
+      | extend
+          Dvc         = SrcDvcHostname,
+          LogonTarget = TargetDvcHostname,
+          User        = TargetUsername
   };
   let SecEventLogon=(disabled:bool=false){
-    SecurityEvent | where not(disabled)
+    SecurityEvent 
+    | where not(disabled)
     | where EventID in (LogonEvents) or 
             EventID in (LogoffEvents)
     | project-rename 
-         EventMessage = Activity
-       , ActorSessionId=SubjectLogonId
-       , TargetSessionId=TargetLogonId
-       , ActorUserId=SubjectUserSid
-       , TargetUserId =TargetUserSid
-       , SrcDvcHostname = WorkstationName
-       , TargetDvcHostname = Computer
-       , EventOriginalUid = EventOriginId
-       , LogonProtocol=AuthenticationPackageName
-       , SrcDvcIpAddr=IpAddress
-       , EventOriginalType=EventID
-    | extend EventResult = iff(EventOriginalType == 4625, 'Failure', 'Success')
-      , EventCount=int(1)
-      , EventSchemaVersion='0.1.0'
-      , EventProduct = "Security Events"
-      , ActorUserIdType='SID'
-      , TargetUserIdType='SID'
-      , EventVendor='Microsoft' 
-      , EventStartTime =TimeGenerated
-      , EventEndTime=TimeGenerated
-      , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')
-      , ActorUsername = iff (SubjectDomainName in ('-',''), SubjectUserName, SubjectAccount)
-      , ActorUsernameType= iff(SubjectDomainName in ('-',''), 'Simple', 'Windows' )
-      , TargetUsername = iff (TargetDomainName in ('-',''), trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
-      , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
-      , SrcDvcOs = 'Windows'
-      , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
+        ActorSessionId    = SubjectLogonId,
+        ActorUserId       = SubjectUserSid,
+        EventMessage      = Activity,
+        EventOriginalType = EventID,
+        EventOriginalUid  = EventOriginId,
+        LogonProtocol     = AuthenticationPackageName,
+        SrcDvcHostname    = WorkstationName,
+        SrcDvcIpAddr      = IpAddress,
+        TargetDvcHostname = Computer,
+        TargetSessionId   = TargetLogonId,
+        TargetUserId      = TargetUserSid
+    | extend 
+        ActorUserIdType    = 'SID',
+        ActorUsername      = iff (SubjectDomainName in ('-',''), SubjectUserName, SubjectAccount),
+        ActorUsernameType  = iff(SubjectDomainName in ('-',''), 'Simple', 'Windows' ),
+        EventCount         = int(1),
+        EventEndTime       = TimeGenerated,
+        EventProduct       = "Security Events",
+        EventResult        = iff(EventOriginalType == 4625, 'Failure', 'Success'),
+        EventSchemaVersion = '0.1.0',
+        EventStartTime     = TimeGenerated,
+        EventStatus        = iff(SubStatus=='0x0',Status,SubStatus),
+        EventType          = iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon'),
+        EventVendor        = 'Microsoft',
+        SrcDvcOs           = 'Windows',
+        TargetUserIdType   = 'SID',
+        TargetUsername     = iff (TargetDomainName in ('-',''), trim(@'\\',TargetUserName), trim(@'\\',TargetAccount)),
+        TargetUsernameType = iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
     | project-away TargetUserName, AccountType
     | extend
-        ActorUserType = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
-      , TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
+        ActorUserType      = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId),
+        TargetUserType     = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
     | lookup LogonStatus on EventStatus
     | lookup LogonTypes  on LogonType
     /// ** Aliases 
     | extend
-         User=TargetUsername
-        , LogonTarget=TargetDvcHostname
-        , Dvc=SrcDvcHostname
+        Dvc         = SrcDvcHostname,
+        LogonTarget = TargetDvcHostname,
+        User        = TargetUsername
     };
-  union isfuzzy=true SecEventLogon(disabled), WinLogon(disabled)
+  union isfuzzy=true 
+    SecEventLogon(disabled=disabled), 
+    WinLogon(disabled=disabled)

@@ -1,0 +1,435 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Infoblox Incident Enrichment Domains",
+        "description":  "Leverages the Infoblox TIDE API to enrich Sentinel incidents with detailed TIDE data. This playbook can be configured to run automatically when an incident occurs (recommended) or run on demand.",
+        "prerequisites":  [
+            "Infoblox TIDE API key."
+        ],        
+        "postDeployment":  [
+            "1. Grant playbook's Managed Identity **Microsoft Sentinel Responder** or greater to Resource Group.",
+            "2. Authorize connections."
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "2023-08-07T00:00:00.000Z",
+        "entities":  [ "DnsResolution"
+        ],
+        "tags":  [ "Enrichment"
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Infoblox"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Infoblox-Incident-Enrichment-Domains",
+            "type":  "string"
+        },
+        "TIDE API Key":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for TIDE API Key"
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "TIDE API Key":  {
+                            "defaultValue":  "[parameters('TIDE API Key')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Entities_-_Get_DNS":  {
+                            "runAfter":  {
+                                "Initialize_HTML":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/entities/dnsresolution"
+                            }
+                        },
+                        "For_each_DNS_Domain_Entity":  {
+                            "foreach":  "@body('Entities_-_Get_DNS')?['Dnsresolutions']",
+                            "actions":  {
+                                "For_each_Threat_IoC":  {
+                                    "foreach":  "@body('Parse_JSON')?['threat']",
+                                    "actions":  {
+                                        "Enrich_Incident_with_TIDE_Data_if_it_exists":  {
+                                            "actions":  {
+                                            },
+                                            "runAfter":  {
+                                            },
+                                            "else":  {
+                                                "actions":  {
+                                                    "Add_comment_to_incident":  {
+                                                        "runAfter":  {
+                                                            "Set_HTML_Table_with_TIDE_Data":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "ApiConnection",
+                                                        "inputs":  {
+                                                            "body":  {
+                                                                "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                                "message":  "\u003cp\u003eIoC - @{items('For_each_DNS_Domain_Entity')?['DomainName']} - @{items('For_each_Threat_IoC')?['type']} - @{items('For_each_Threat_IoC')?['class']}\u003cbr\u003e\n@{variables('html')}\u003c/p\u003e"
+                                                            },
+                                                            "host":  {
+                                                                "connection":  {
+                                                                    "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method":  "post",
+                                                            "path":  "/Incidents/Comment"
+                                                        }
+                                                    },
+                                                    "Set_HTML_Table_with_TIDE_Data":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "SetVariable",
+                                                        "inputs":  {
+                                                            "name":  "html",
+                                                            "value":  "\u003cp style=\"height:0px\"\u003e\u003ctable\u003e\u003ctbody\u003e \n\u003ctr\u003e\u003ctd\u003eID\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['id']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eType\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['type']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eHost\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['host']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eDomain\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['domain']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eURL\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['url']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eIP\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['ip']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctd\u003eEmail\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['email']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eHash\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['hash']}       @{items('For_each_Threat_IoC')?['hash_type']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eProfile\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['profile']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eProperty\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['property']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eThreat Level\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['threat_level']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eConfidence\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['confidence']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eDetected\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['detected']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eReceived\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['received']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eImported\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['imported']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd\u003eExpiration\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['expiration']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd \u003eDescription\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003e@{items('For_each_Threat_IoC')?['extended']?['notes']}\u003c/td\u003e\u003c/tr\u003e\n\u003ctr\u003e\u003ctd \u003eOpen in CSP\u003c/td\u003e\u003ctd style=\"text-align:left\"\u003ehttps://csp.infoblox.com/#/security_research/search/auto/@{items('For_each_Threat_IoC')?['host']}/summary\u003c/td\u003e\u003c/tr\u003e\n\u003c/tbody\u003e\u003c/table\u003e\u003c/p\u003e"
+                                                        }
+                                                    },
+                                                    "Update_incident_Tags":  {
+                                                        "runAfter":  {
+                                                            "Add_comment_to_incident":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "ApiConnection",
+                                                        "inputs":  {
+                                                            "body":  {
+                                                                "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                                "tagsToAdd":  {
+                                                                    "TagsToAdd":  [
+                                                                        {
+                                                                            "Tag":  "@items('For_each_Threat_IoC')?['type']"
+                                                                        },
+                                                                        {
+                                                                            "Tag":  "Imported: @{items('For_each_Threat_IoC')?['imported']}"
+                                                                        },
+                                                                        {
+                                                                            "Tag":  "Profile: @{items('For_each_Threat_IoC')?['profile']}"
+                                                                        },
+                                                                        {
+                                                                            "Tag":  "Property: @{items('For_each_Threat_IoC')?['property']}"
+                                                                        },
+                                                                        {
+                                                                            "Tag":  "Threat Level: @{items('For_each_Threat_IoC')?['threat_level']}"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            },
+                                                            "host":  {
+                                                                "connection":  {
+                                                                    "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method":  "put",
+                                                            "path":  "/Incidents"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression":  {
+                                                "and":  [
+                                                    {
+                                                        "equals":  [
+                                                            "@body('Parse_JSON')?['record_count']",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type":  "If"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Parse_JSON":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "HTTP_-_Get_TIDE_Data_(Hosts)":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Http",
+                                    "inputs":  {
+                                        "headers":  {
+                                            "Authorization":  "Token @{parameters('TIDE API Key')}"
+                                        },
+                                        "method":  "GET",
+                                        "queries":  {
+                                            "host":  "@items('For_each_DNS_Domain_Entity')?['DomainName']",
+                                            "rlimit":  "1"
+                                        },
+                                        "uri":  "https://csp.infoblox.com/tide/api/data/threats"
+                                    }
+                                },
+                                "Parse_JSON":  {
+                                    "runAfter":  {
+                                        "HTTP_-_Get_TIDE_Data_(Hosts)":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@body('HTTP_-_Get_TIDE_Data_(Hosts)')",
+                                        "schema":  {
+                                            "properties":  {
+                                                "record_count":  {
+                                                    "type":  "integer"
+                                                },
+                                                "threat":  {
+                                                    "items":  {
+                                                        "properties":  {
+                                                            "batch_id":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "class":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "confidence":  {
+                                                                "type":  "integer"
+                                                            },
+                                                            "confidence_score":  {
+                                                                "type":  "number"
+                                                            },
+                                                            "confidence_score_rating":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "confidence_score_vector":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "detected":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "dga":  {
+                                                            },
+                                                            "domain":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "email":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "expiration":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "extended":  {
+                                                                "properties":  {
+                                                                    "ais_consent":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "cyberint_guid":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "no_whitelist":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "notes":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "protocol":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "url_hash":  {
+                                                                        "type":  "string"
+                                                                    }
+                                                                },
+                                                                "type":  "object"
+                                                            },
+                                                            "hash":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "hash_type":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "host":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "id":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "imported":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "ip":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "profile":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "property":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "received":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "risk_score":  {
+                                                                "type":  "number"
+                                                            },
+                                                            "risk_score_rating":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "risk_score_vector":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "threat_level":  {
+                                                                "type":  "integer"
+                                                            },
+                                                            "threat_score":  {
+                                                                "type":  "number"
+                                                            },
+                                                            "threat_score_rating":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "threat_score_vector":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "tld":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "type":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "up":  {
+                                                            },
+                                                            "url":  {
+                                                                "type":  "string"
+                                                            }
+                                                        },
+                                                        "required":  [
+                                                            "id"
+                                                        ],
+                                                        "type":  "object"
+                                                    },
+                                                    "type":  "array"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Entities_-_Get_DNS":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Initialize_HTML":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "html",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Infoblox-Incident-Enrichment-Domains",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}
