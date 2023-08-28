@@ -1,0 +1,67 @@
+id: 16f093d4-c9a8-4426-89ab-855c3e3be243
+Function:
+  Title: Parser for Infoblox_dnsclient
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: Infoblox_dnsclient
+FunctionAlias: Infoblox_dnsclient
+FunctionQuery: |
+    let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
+    // Parse Response Logs
+    let response =
+        Syslog
+        | where Computer in (datasource)
+        | where SyslogMessage has_all ("client", "query:", "response:")
+        | parse SyslogMessage with *
+            "client " SrcIpAddr: string
+            "#" SrcPortNumber: string
+            " " NetworkProtocol: string
+            ": query: " DnsQuery: string
+            " " DnsQueryClassName: string
+            " " DnsQueryType: string
+            " response: " DnsResponseCode: string
+            " " DnsFlags: string
+        | extend DnsResponseNameIndex= indexof(DnsFlags, " ")
+        | extend EventMessage =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
+        | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
+        | extend SrcPortNumber = iif(SrcPortNumber has ':',replace_string(SrcPortNumber,':',''),SrcPortNumber)
+        | extend SrcPortNumber = toint(SrcPortNumber)
+        | extend EventSubType = "response"
+        | project-away DnsResponseNameIndex,SyslogMessage;
+    //
+    // Parse Request Logs
+    //
+    let request =
+        Syslog
+        | where Computer in (datasource)
+        | where SyslogMessage has_all ("client", "query:")
+            and SyslogMessage !has "response:"
+        | extend SyslogMessage = (split(SyslogMessage,"client "))[1]
+        | extend SyslogMessage = iif(SyslogMessage startswith "@", (substring(SyslogMessage, indexof(SyslogMessage, " ")+1)), SyslogMessage)
+        | extend SyslogMessage = replace_string(SyslogMessage,"\\ ","@@@")
+        | parse SyslogMessage with 
+            SrcIpAddr: string
+            "#" SrcPortNumber: int *
+            "query: " DnsQuery: string
+            " " DnsQueryClassName: string
+            " " DnsQueryType: string
+            " " DnsFlags: string
+        | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
+        | extend DnsFlags= tostring((split(DnsFlags," "))[0])
+        | extend EventSubType = "request",DnsResponseCode = "NA"
+        | project-away SyslogMessage
+        ;
+    //
+    // Union Request and Response Logs
+    //
+    let Infoblox_NIOS_ParsedData =
+        union response, request
+        | extend
+            EventProduct="NIOS",
+            EventVendor="Infoblox",
+            EventType="Query",
+            EventResult=iff(EventSubType=="request" or DnsResponseCode=="NOERROR","Success","Failure"),
+            Log_Type="client",
+            responseTime=EventTime;
+    Infoblox_NIOS_ParsedData

@@ -1,0 +1,51 @@
+id: d68167dc-3161-487f-bccc-981fe71907e1
+Function:
+  Title: Parser for CiscoSyslogUTD
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: CiscoSyslogUTD
+FunctionAlias: CiscoSyslogUTD
+FunctionQuery: |
+    let CiscoSyslogUTD_view = view() {
+        Syslog
+        | where SyslogMessage matches regex @"\[\*\*\].*\[\*\*\].*\[\*\*\][^-]*.*->"
+        | extend FieldList = extract_all(@"]\s(?P<action>[^\s[]*)\s\[\S*\s[^{]*{(?P<protocol>[^\s}]*)}\s(?P<src_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<src_port>\d{1,5})\s->\s(?P<dest_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<dest_port>\d{1,5})", dynamic(['action', 'protocol', 'src_ip', 'src_port', 'dest_ip', 'dest_port']), SyslogMessage)
+        | extend
+            Action = tostring(FieldList[0][0]),
+            Protocol = tostring(FieldList[0][1]),
+            SourceIP = tostring(FieldList[0][2]),
+            SourcePort = tostring(FieldList[0][3]),
+            DestinationIP = tostring(FieldList[0][4]),
+            DestinationPort = tostring(FieldList[0][5])
+        | extend UTDWebfilter = extract(@"\sUTD\sWebFilter\s(?P<utd_webfilter>[^\s]*)", 1, SyslogMessage)
+        | extend SignatureId = replace_string(extract(@"\[(?P<raw_signature_id>\d+\:\d+)\:\d+\]",1,SyslogMessage),':','-')
+        | extend FileInspectionLogs = extract(@"UTD\sAMP\sDISPOSITION\s(?P<utd_amp_disposition>[^\s]*)\s", 1, SyslogMessage)
+        | extend BracketData = SyslogMessage 
+        | extend NonBracketData = SyslogMessage
+        | extend 
+            EventVendor="CiscoSD-WAN",
+            EventProduct="Syslog_UTD"
+        | project
+            EventVendor,
+            EventProduct,
+            Host = HostName,
+            TimeGenerated = EventTime,
+            Action,
+            Protocol,
+            SourceIP,
+            SourcePort,
+            DestinationIP,
+            DestinationPort,
+            UTDWebfilter,
+            FileInspectionLogs,
+            BracketData,
+            NonBracketData,
+            SignatureId,
+            SyslogMessage
+        | parse-kv BracketData as (['Hostname'] : string, ['System_IP']: string, ['Instance_ID']: string, ['Classification']: string, ['Priority']: string, ['POLICY']: string, ['URL']: string, ['Category']: string, ['Reputation']: string) with (regex=@"\s\[([^\[\]:]*):\s([^\]]*)\]")
+        | project-away BracketData
+        | parse-kv NonBracketData as (['SHA']: string, ['Malware']: string, ['Filename']: string, ['Filetype']: string) with (regex=@"[\s|\{]([\w.:\/]+):\s([\w.]*)")
+        | project-away NonBracketData
+    };
+    CiscoSyslogUTD_view
