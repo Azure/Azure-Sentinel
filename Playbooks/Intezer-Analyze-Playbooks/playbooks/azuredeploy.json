@@ -1,0 +1,1633 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "resourceTags": {
+            "type": "object",
+            "defaultValue": {
+                "LogicAppsCategory": "security"
+            }
+        },
+        "logicAppWorkspace": {
+            "type": "string",
+            "metadata": {
+              "description": "Name of the existing Log Analytics workspace that the Logic App should connect to. Note that the Logic App connects to a single workspace, but can query data across multiple workspaces. Use the 'Workspaces To Query' parameter to specify the list of workspaces that the Logic App should query data from."
+            }
+        },
+        "logicAppWorkspaceId": {
+            "type": "string",
+            "metadata": {
+              "description": "Id of the existing Log Analytics workspace that the Logic App should connect to."
+            }
+        },
+        "SubmitAlertTriggeredByIncidentCreatedPlaybookName": {
+            "defaultValue": "Submit-IntezerAlert-IncidentTriggered",
+            "type": "string"
+        },
+        "UpdateIncidentTriggeredByIncidentCreatedPlaybookName": {
+            "defaultValue": "UpdateIncident-IntezerAlert-Webhook",
+            "type": "string"
+        },
+        "SubmitIntezerScanFileHashPlaybookName": {
+            "defaultValue": "Submit-IntezerScanFileHash-IncidentTriggered",
+            "type": "string"
+        },
+        "SubmitIntezerScanURLPlaybookName": {
+            "defaultValue": "Submit-IntezerScanURL-IncidentTriggered",
+            "type": "string"
+        },
+        "KeyvaultName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Vault containing intezer API key as secret intezer-sentinel-api-key"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        }
+    },
+    "variables": {
+        "AlertAzureSentinelConnectionName": "azuresentinel-intezer-connection",
+        "AlertKeyvaultConnectionName": "keyvault-intezer-connection",
+        "LogsMonitorConnectionName": "monitorlogs-intezer-connection"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AlertAzureSentinelConnectionName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "properties": {
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AlertKeyvaultConnectionName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "properties": {
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyvaultName')]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('LogsMonitorConnectionName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "properties": {
+              "api": {
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuremonitorlogs')]"
+              },
+              "displayName": "azuremonitorlogs"
+            }
+          },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('SubmitAlertTriggeredByIncidentCreatedPlaybookName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AlertAzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_FileHashes": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/filehash"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "For_each_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {
+                                "Initialize_variable_-_evidences_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {
+                                        "Parse_JSON_-_extract_IP_address": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "evidences",
+                                        "value": {
+                                            "type": "ip",
+                                            "value": "@body('Parse_JSON_-_extract_IP_address')?['address']"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_-_extract_IP_address": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each')",
+                                        "schema": {
+                                            "properties": {
+                                                "address": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_2": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "Append_to_array_variable_2": {
+                                    "runAfter": {
+                                        "Parse_JSON_2-_extract_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "evidences",
+                                        "value": {
+                                            "type": "url",
+                                            "value": "@body('Parse_JSON_2-_extract_URL')?['url']"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_2-_extract_URL": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each_2')",
+                                        "schema": {
+                                            "properties": {
+                                                "url": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_3": {
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "actions": {
+                                "Append_to_array_variable_3": {
+                                    "runAfter": {
+                                        "Parse_JSON_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "evidences",
+                                        "value": {
+                                            "type": "file_hash",
+                                            "value": "@body('Parse_JSON_2')?['Value']"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_2": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each_3')",
+                                        "schema": {
+                                            "properties": {
+                                                "Value": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_FileHashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('intezer-sentinel-api-key')}/value"
+                            }
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "api_key": "@body('Get_secret')?['value']"
+                                },
+                                "method": "POST",
+                                "uri": "https://analyze.intezer.com/api/v2-0/get-access-token"
+                            }
+                        },
+                        "HTTP_2": {
+                            "runAfter": {
+                                "For_each_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "alert": {
+                                        "alert_id": "@triggerBody()?['object']?['name']",
+                                        "alert_title": "@triggerBody()?['object']?['properties']?['title']",
+                                        "alert_url": "@triggerBody()?['object']?['properties']?['incidentUrl']",
+                                        "creation_time": "@triggerBody()?['object']?['properties']?['createdTimeUtc']",
+                                        "evidences": "@variables('evidences')",
+                                        "severity": "@triggerBody()?['object']?['properties']?['severity']"
+                                    },
+                                    "alert_source": "microsoft_sentinel",
+                                    "definition_mapping": {
+                                        "alert_id": {
+                                            "from_path": "$.alert_id"
+                                        },
+                                        "alert_title": {
+                                            "from_path": "$.alert_title"
+                                        },
+                                        "alert_type": {
+                                            "value": "endpoint"
+                                        },
+                                        "creation_time": {
+                                            "from_path": "$.creation_time"
+                                        },
+                                        "evidences": [
+                                            {
+                                                "evidence_type": {
+                                                    "from_path": "$.type"
+                                                },
+                                                "evidence_value": {
+                                                    "from_path": "$.value"
+                                                },
+                                                "list_path": "$.evidences"
+                                            }
+                                        ],
+                                        "severity": {
+                                            "from_path": "$.severity",
+                                            "value_map": {
+                                                "High": "high",
+                                                "Informational": "low",
+                                                "Low": "low",
+                                                "Medium": "medium"
+                                            }
+                                        }
+                                    },
+                                    "display_fields": [
+                                        "creation_time",
+                                        "alert_url"
+                                    ]
+                                },
+                                "headers": {
+                                    "Authorization": "Bearer @{body('Parse_JSON')?['result']}"
+                                },
+                                "method": "POST",
+                                "uri": "https://analyze.intezer.com/api/v2-0/alerts/ingest"
+                            }
+                        },
+                        "Initialize_variable_-_evidences_array": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "evidences",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "result": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AlertAzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AlertAzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AlertKeyvaultConnectionName'))]",
+                                "connectionName": "[variables('AlertKeyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('UpdateIncidentTriggeredByIncidentCreatedPlaybookName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AlertAzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('LogsMonitorConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                    "message": "<p>@{body('Parse_JSON')?['note']}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Alert_-_Get_incident": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(parameters('$workspaceSubscriptionId')['workspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(parameters('$resourceGroupName')['resourceGroupName'])}/workspaces/@{encodeURIComponent(parameters('$resourceWorkspaceId')['resourceWorkspaceId'])}/alerts/@{encodeURIComponent(body('Parse_JSON_2')?['SystemAlertId'])}"
+
+                            },
+                            "runAfter": {
+                                "Parse_JSON_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Compose_-_remove_\"da\"_from_alert_id_to_make_if_sentinel_alert_id": {
+                            "inputs": "@substring(variables('edr_alert_id'),2,sub(length(variables('edr_alert_id')),2))",
+                            "runAfter": {
+                                "Initialize_edr_alert_id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose"
+                        },
+                        "Condition": {
+                            "actions": {
+                                "Terminate": {
+                                    "inputs": {
+                                        "runStatus": "Cancelled"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Terminate"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@body('Parse_JSON')?['source']",
+                                                "msd"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_2": {
+                            "actions": {
+                                "Terminate_2": {
+                                    "inputs": {
+                                        "runStatus": "Cancelled"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Terminate"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@length(body('Run_query_and_list_results')?['value'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Delay": {
+                            "inputs": {
+                                "interval": {
+                                    "count": 15,
+                                    "unit": "Minute"
+                                }
+                            },
+                            "runAfter": {
+                                "Compose_-_remove_\"da\"_from_alert_id_to_make_if_sentinel_alert_id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Wait"
+                        },
+                        "Initialize_edr_alert_id": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "edr_alert_id",
+                                        "type": "string",
+                                        "value": "@body('Parse_JSON')?['alert']?['alert_id']"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "alert_to_check",
+                                        "type": "object",
+                                        "value": "@first(body('Run_query_and_list_results')?['value'])"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Condition_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Parse_JSON": {
+                            "inputs": {
+                                "content": "@triggerBody()",
+                                "schema": {
+                                    "properties": {
+                                        "alert": {
+                                            "properties": {
+                                                "alert_id": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "intezer_alert_url": {
+                                            "type": "string"
+                                        },
+                                        "note": {
+                                            "type": "string"
+                                        },
+                                        "source": {
+                                            "type": "string"
+                                        },
+                                        "triage_result": {
+                                            "properties": {
+                                                "alert_verdict_display": {
+                                                    "type": "string"
+                                                },
+                                                "risk_category_display": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {},
+                            "type": "ParseJson"
+                        },
+                        "Parse_JSON_2": {
+                            "inputs": {
+                                "content": "@variables('alert_to_check')",
+                                "schema": {
+                                    "properties": {
+                                        "SystemAlertId": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "Run_query_and_list_results": {
+                            "inputs": {
+                                "body": "SecurityAlert\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\n| where VendorOriginalId in(\"@{outputs('Compose_-_remove_\"da\"_from_alert_id_to_make_if_sentinel_alert_id')}\")",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@{parameters('$resourceGroupName')['resourceGroupName']}",
+                                    "resourcename": "@{parameters('$resourceWorkspaceName')['resourceWorkspaceName']}",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@{parameters('$workspaceSubscriptionId')['workspaceSubscriptionId']}",
+                                    "timerange": "Last 7 days"
+                                }
+                            },
+                            "runAfter": {
+                                "Delay": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "$workspaceSubscriptionId": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "$resourceGroupName": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "$resourceWorkspaceId": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "$resourceWorkspaceName": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "inputs": {
+                                "schema": {}
+                            },
+                            "kind": "Http",
+                            "type": "Request"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$workspaceSubscriptionId": {
+                        "value": {
+                            "workspaceSubscriptionId": "[subscription().subscriptionId]"
+                        }
+                    },
+                    "$resourceGroupName": {
+                        "value": {
+                            "resourceGroupName": "[resourceGroup().name]"
+                        }
+                    },
+                    "$resourceWorkspaceId": {
+                        "value": {
+                            "resourceWorkspaceId": "[parameters('logicAppWorkspaceId')]"
+                        }
+                    },
+                    "$resourceWorkspaceName": {
+                        "value": {
+                            "resourceWorkspaceName": "[parameters('logicAppWorkspace')]"
+                        }
+                    },
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AlertAzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AlertAzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AlertKeyvaultConnectionName'))]",
+                                "connectionName": "[variables('AlertKeyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('LogsMonitorConnectionName'))]",
+                                "connectionName": "[variables('LogsMonitorConnectionName')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuremonitorlogs')]"
+                              }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('SubmitIntezerScanFileHashPlaybookName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AlertAzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Condition_-_if_no_FileHashes_entities": {
+                            "actions": {
+                                "Terminate": {
+                                    "inputs": {
+                                        "runStatus": "Cancelled"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Terminate"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@length(body('Entities_-_Get_FileHashes')?['Filehashes'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_FileHashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Delay": {
+                            "inputs": {
+                                "interval": {
+                                    "count": 10,
+                                    "unit": "Minute"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_Filehashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Wait"
+                        },
+                        "Entities_-_Get_FileHashes": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/filehash"
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "For_each_Filehashes": {
+                            "actions": {
+                                "Condition": {
+                                    "actions": {},
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_array_variable": {
+                                                "inputs": {
+                                                    "name": "analyses_result_urls",
+                                                    "value": "@body('Parse_JSON_2')?['result_url']"
+                                                },
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greaterOrEquals": [
+                                                    "@outputs('HTTP_-_Analysis_by_hash')['statusCode']",
+                                                    400
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP_-_Analysis_by_hash": {
+                                    "inputs": {
+                                        "body": {
+                                            "hash": "@body('Parse_JSON_FileHash')?['hashValue']",
+                                            "requester": "microsoft_sentinel"
+                                        },
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Parse_JSON')?['result']}"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://analyze.intezer.com/api/v2-0/analyze-by-hash"
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_FileHash": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http"
+                                },
+                                "Parse_JSON_2": {
+                                    "inputs": {
+                                        "content": "@body('HTTP_-_Analysis_by_hash')",
+                                        "schema": {
+                                            "properties": {
+                                                "result_url": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_-_Analysis_by_hash": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                },
+                                "Parse_JSON_FileHash": {
+                                    "inputs": {
+                                        "content": "@items('For_each_Filehashes')",
+                                        "schema": {
+                                            "properties": {
+                                                "Type": {
+                                                    "type": "string"
+                                                },
+                                                "Value": {
+                                                    "type": "string"
+                                                },
+                                                "algorithm": {
+                                                    "type": "string"
+                                                },
+                                                "friendlyName": {
+                                                    "type": "string"
+                                                },
+                                                "hashValue": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_analysis": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>Got @{body('Parse_JSON_-_analysis_result')?['result']?['verdict']} verdict from Intezer.<br>\n@{body('Parse_JSON_-_analysis_result')?['result']?['analysis_url']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_-_analysis_result": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "HTTP_-_Get_analysis_result": {
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Parse_JSON')?['result']}"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://analyze.intezer.com/api/v2-0@{items('For_each_analysis')}"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                },
+                                "Parse_JSON_-_analysis_result": {
+                                    "inputs": {
+                                        "content": "@body('HTTP_-_Get_analysis_result')",
+                                        "schema": {
+                                            "properties": {
+                                                "result": {
+                                                    "properties": {
+                                                        "analysis_url": {
+                                                            "type": "string"
+                                                        },
+                                                        "family_name": {
+                                                            "type": "string"
+                                                        },
+                                                        "verdict": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "status": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_-_Get_analysis_result": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@variables('analyses_result_urls')",
+                            "runAfter": {
+                                "Delay": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('intezer-sentinel-api-key')}/value"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_hash_match": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "HTTP": {
+                            "inputs": {
+                                "body": {
+                                    "api_key": "@body('Get_secret')?['value']"
+                                },
+                                "method": "POST",
+                                "uri": "https://analyze.intezer.com/api/v2-0/get-access-token"
+                            },
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "analyses_result_urls",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Condition_-_if_no_FileHashes_entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_comment": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "comment",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_hash_match": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "hash_match",
+                                        "type": "boolean",
+                                        "value": "@bool(false)"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Parse_JSON": {
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "result": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            },
+                            "type": "ParseJson"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AlertAzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AlertAzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AlertKeyvaultConnectionName'))]",
+                                "connectionName": "[variables('AlertKeyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('LogsMonitorConnectionName'))]",
+                                "connectionName": "[variables('LogsMonitorConnectionName')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuremonitorlogs')]"
+                              }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('SubmitIntezerScanURLPlaybookName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AlertAzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Condition_-_if_no_URLs_entities": {
+                            "actions": {
+                                "Terminate": {
+                                    "inputs": {
+                                        "runStatus": "Cancelled"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Terminate"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(body('Entities_-_Get_URLs')?['URLs'])",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Delay": {
+                            "inputs": {
+                                "interval": {
+                                    "count": 10,
+                                    "unit": "Minute"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Wait"
+                        },
+                        "Entities_-_Get_URLs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "For_each_URL": {
+                            "actions": {
+                                "Condition": {
+                                    "actions": {},
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_array_variable": {
+                                                "inputs": {
+                                                    "name": "analyses_result_urls",
+                                                    "value": "@body('Parse_JSON_3')?['result_url']"
+                                                },
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greaterOrEquals": [
+                                                    "@outputs('HTTP_2')['statusCode']",
+                                                    400
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP_2": {
+                                    "inputs": {
+                                        "body": {
+                                            "source": "microsoft_sentinel",
+                                            "url": "@body('Parse_JSON_2')?['url']"
+                                        },
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Parse_JSON')?['result']}"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://analyze.intezer.com/api/v2-0/url"
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http"
+                                },
+                                "Parse_JSON_2": {
+                                    "inputs": {
+                                        "content": "@items('For_each_URL')",
+                                        "schema": {
+                                            "properties": {
+                                                "url": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ParseJson"
+                                },
+                                "Parse_JSON_3": {
+                                    "inputs": {
+                                        "content": "@body('HTTP_2')",
+                                        "schema": {
+                                            "properties": {
+                                                "result_url": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_analysis_result": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>Got @{body('Parse_JSON_4')?['result']?['summary']?['title']} verdict from Intezer.<br>\n@{body('Parse_JSON_4')?['result']?['analysis_url']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_4": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "HTTP_3": {
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Parse_JSON')?['result']}"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://analyze.intezer.com/api/v2-0@{items('For_each_analysis_result')}"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                },
+                                "Parse_JSON_4": {
+                                    "inputs": {
+                                        "content": "@body('HTTP_3')",
+                                        "schema": {
+                                            "properties": {
+                                                "analysis_url": {
+                                                    "type": "string"
+                                                },
+                                                "result": {
+                                                    "properties": {
+                                                        "summary": {
+                                                            "properties": {
+                                                                "title": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "status": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@variables('analyses_result_urls')",
+                            "runAfter": {
+                                "Delay": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('intezer-sentinel-api-key')}/value"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "HTTP": {
+                            "inputs": {
+                                "body": {
+                                    "api_key": "@body('Get_secret')?['value']"
+                                },
+                                "method": "POST",
+                                "uri": "https://analyze.intezer.com/api/v2-0/get-access-token"
+                            },
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "analyses_result_urls",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Condition_-_if_no_URLs_entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Parse_JSON": {
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "result": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            },
+                            "type": "ParseJson"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AlertAzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AlertAzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AlertKeyvaultConnectionName'))]",
+                                "connectionName": "[variables('AlertKeyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('LogsMonitorConnectionName'))]",
+                                "connectionName": "[variables('LogsMonitorConnectionName')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuremonitorlogs')]"
+                              }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
