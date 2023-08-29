@@ -1,7 +1,7 @@
 Parser:
   Title: User Management ASIM parser for SentinelOne
   Version: '0.1.0'
-  LastUpdated: Jul 25, 2023
+  LastUpdated: Aug 24, 2023
 Product:
   Name: SentinelOne
 Normalization:
@@ -16,9 +16,27 @@ References:
 - Link: https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview
 Description: |
   This ASIM parser supports normalizing SentinelOne logs to the ASIM User Management normalized schema. SentinelOne events are captured through SentinelOne data connector which ingests SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API.
-ParserName: ASimUserManagementSentinelOne
-EquivalentBuiltInParser: _ASim_UserManagement_SentinelOne
+ParserName: vimUserManagementSentinelOne
+EquivalentBuiltInParser: _Im_UserManagement_SentinelOne
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: actorusername_has
+    Type: string
+    Default: '*'
+  - Name: targetdomain_has
+    Type: string
+    Default: '*'
+  - Name: anydomain_has
+    Type: string    
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
@@ -49,11 +67,24 @@ ParserQuery: |
       5008, "GroupCreated", "User created a Manual or Pinned Group", "",
       5011, "GroupModified", "Group Policy Reverted", "Newpolicy",
   ];
-  let parser = (disabled: bool=false) {
+  let parser = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    targetusername_has:string="*", 
+    actorusername_has:string="",
+    targetdomain_has:string="*",
+    anydomain_has:string="*",
+    disabled:bool=false
+    ) {
       SentinelOne_CL
       | where not(disabled)
           and event_name_s == "Activities."
+          and (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
           and activityType_d in (23, 24, 25, 37, 102, 110, 111, 140, 141, 142, 3522, 3523, 3524, 3710, 3711, 3715, 5006, 5008, 5011)
+          and (targetusername_has == "*" or DataFields_s has targetusername_has)
+          and (actorusername_has == "*" or DataFields_s has actorusername_has)
+          and targetdomain_has == "*"
+          and anydomain_has == "*"
       | parse-kv DataFields_s as (byUser: string, username: string, email: string, ipAddress: string, group: string, groupName: string, name: string, oldDescription: string, oldRole: string, description: string, role: string, userScope: string, scopeLevelName: string, scopeName: string, roleName: string, modifiedFields: string, deactivationPeriodInDays: string, descriptionChanged: string, groupType: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
       | parse modifiedFields with 'Modified fields: ' ModifiedFields:string
       | parse description_s with * "with id=" id: string "," restOfMessage
@@ -64,6 +95,8 @@ ParserQuery: |
           TargetUsername = iff(isnotempty(byUser), username, ""),
           PreviousPropertyValue = coalesce(oldDescription, oldRole),
           NewPropertyValue = coalesce(description, role)
+      | where (targetusername_has == "*" or TargetUsername has targetusername_has)
+          and (actorusername_has == "*" or ActorUsername has actorusername_has)
       | extend GroupName = iff(GroupName == "null", "", GroupName)
       | project-rename
           EventStartTime = createdAt_t,
@@ -141,4 +174,12 @@ ParserQuery: |
           ManagementGroupName,
           SourceSystem
   };
-  parser(disabled=disabled)
+  parser(
+    starttime = starttime,
+    endtime = endtime,
+    targetusername_has = targetusername_has,
+    actorusername_has = actorusername_has,
+    targetdomain_has = targetdomain_has,
+    anydomain_has = anydomain_has,
+    disabled=disabled
+  )
