@@ -1,6 +1,6 @@
 Parser:
   Title: Process Create ASIM parser
-  Version: '0.1.1'
+  Version: '0.1.0'
   LastUpdated: Jul 17, 2023
 Product:
   Name: Trend Micro Vision One
@@ -27,12 +27,12 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let ASIM_GetFilenamePart = (path: string) { tostring(split(path, @'\')[-1]) };
+  let GetFilenamePart = (path: string) { tostring(split(path, @'\')[-1]) };
   let EventSeverityLookup = datatable(detail_filterRiskLevel_s: string, EventSeverity: string)[
       "low", "Low",
       "medium", "Medium",
       "high", "High",
-      "info", "Infomrational",
+      "info", "Informational",
       "critical", "High"
   ];
   let IntegrityLevelLookup = datatable(IntegrityLevel: real, IntegrityType: string)
@@ -56,10 +56,10 @@ ParserQuery: |
           ParentProcessId = tostring(toint(detail_parentPid_d)),
           TargetProcessCreationTime = unixtime_milliseconds_todatetime(detail_objectLaunchTime_d),
           ActingProcessCreationTime = unixtime_milliseconds_todatetime(detail_processLaunchTime_d),
-          ActingProcessFilename = ASIM_GetFilenamePart(detail_processFilePath_s),
+          ActingProcessFilename = GetFilenamePart(detail_processFilePath_s),
           ParentProcessCreationTime = unixtime_milliseconds_todatetime(detail_parentLaunchTime_d),
           ParentProcessName = detail_parentName_s,
-          TargetProcessFilename = ASIM_GetFilenamePart(detail_objectFilePath_s),
+          TargetProcessFilename = GetFilenamePart(detail_objectFilePath_s),
           ActingProcessFileSize = tolong(detail_processFileSize_d),
           TargetUserSessionId = tostring(toint(detail_objectAuthId_d)),
           ActorSessionId = tostring(toint(detail_authId_d)),
@@ -89,7 +89,8 @@ ParserQuery: |
           EventSchemaVersion = "0.1.4",
           EventType = "ProcessCreated",
           EventVendor = "Trend Micro",
-          EventSchema = "ProcessEvent"
+          EventSchema = "ProcessEvent",
+          DvcAction = "Allowed"
       | project-rename
           ActorUsername = detail_processUser_s,
           EventStartTime = detail_eventTimeDT_t,
@@ -106,12 +107,13 @@ ParserQuery: |
           EventOriginalSubType = detail_eventSubId_s,
           EventOriginalType = detail_eventId_s,
           EventOriginalUid = detail_uuid_g,
+          EventOriginalSeverity = detail_filterRiskLevel_s,
           EventProductVersion = detail_pver_s,
           ParentProcessSHA1 = detail_parentFileHashSha1_s,
           ParentProcessSHA256 = detail_parentFileHashSha256_s,
           TargetProcessSHA1 = detail_objectFileHashSha1_s,
           TargetProcessSHA256 = detail_objectFileHashSha256_s,
-          EventUid = _ResourceId
+          EventUid = _ItemId
       | extend 
           Dvc = DvcHostname,
           EventEndTime = EventStartTime,
@@ -122,14 +124,16 @@ ParserQuery: |
       | extend
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+          ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
           TargetUsernameType = iff(isnotempty(TargetUsername), "Simple", ""),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
           HashType = case(
                 isnotempty(Hash) and isnotempty(TargetProcessSHA256),
-                "SHA256",
+                "TargetProcessSHA256",
                 isnotempty(Hash) and isnotempty(TargetProcessSHA1),
-                "SHA1",
+                "TargetProcessSHA1",
                 isnotempty(Hash) and isnotempty(TargetProcessMD5),
-                "MD5",
+                "TargetProcessMD5",
                 ""
             )
       | project-away
@@ -138,15 +142,13 @@ ParserQuery: |
           *_g,
           *_t,
           *_b,
+          _ResourceId,
           Computer,
           MG,
           ManagementGroupName,
           RawData,
           SourceSystem,
           TenantId,
-          DvcDomain,
-          DvcDomainType,
-          DvcFQDN,
           filters,
           description,
           name
