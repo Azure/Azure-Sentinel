@@ -1,6 +1,6 @@
 Parser:
   Title: Audit Event ASIM parser for SentinelOne
-  Version: '0.1'
+  Version: '0.1.0'
   LastUpdated: Jul 31 2023
 Product:
   Name: SentinelOne
@@ -32,7 +32,7 @@ ParserQuery: |
         Object: string,
         ObjectType: string
     )
-    [
+        [
         39, "Research Settings Modified", "", "", "Success", "Research Settings", "Policy Rule",
         41, "Learning Mode Settings Modified", "Set", "", "Success", "Mitigation policy", "Policy Rule",
         44, "Auto decommission On", "Enable", "", "Success", "Auto decommission", "Service",
@@ -154,7 +154,7 @@ ParserQuery: |
         40, "Cloud Intelligence Settings Modified", "", "", "Success", "Cloud Intelligence Settings", "Policy Rule",
         42, "Global 2FA modified", "", "", "Success", "Global Two Factor Authentication", "Service",
         58, "Notification Option Level Modified", "Set", "", "Success", "Notification Level", "Service",
-        59, "Event Severity Level Modified", "Set", "", "Success", "", "Policy Rule",
+        59, "Event Severity Level Modified", "Set", "", "Success", "EventSeverity Level", "Other",
         60, "Notification - Recipients Configuration Modified", "Set", "", "Success", "Recipients configuration", "Policy Rule",
         101, "User Changed Agent's Customer Identifier", "Set", "", "Success", "Customer Identifier string", "Configuration Atom",
         106, "User Commanded Agents To Move To Another Console", "Execute", "", "Failure", "Agents", "Service",
@@ -389,7 +389,7 @@ ParserQuery: |
                 NewValue = NewValue_fieldenableddisabled;
         let rawotheractivitydata = activitydata
             | where activityType_d in (2, 40, 42, 58, 59, 60, 101, 106, 107, 108, 109, 112, 113, 129, 147, 1501, 1502, 1503, 1504, 2011, 2012, 2013, 2014, 2015, 2016, 2028, 2029, 2030, 2036, 2037, 3001, 3002, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3021, 3100, 3101, 3102, 3103, 3500, 3501, 3502, 3506, 3507, 3521, 3525, 3526, 3527, 3530, 3531, 3600, 3601, 3602, 3603, 3604, 3626, 3628, 3641, 3650, 3651, 3652, 3653, 3654, 3750, 3751, 3752, 3753, 3754, 3755, 3756, 3767, 3768, 3769, 3770, 3771, 3772, 3773, 3774, 4001, 4002, 4006, 4007, 4008, 4009, 4011, 4012, 5242, 5243, 5244, 5250, 5251, 5252, 5253, 5254, 5255, 5256, 5257, 5258, 5259, 7500, 7501, 7602, 7603, 7604, 5120, 5121, 5122, 5123, 5124, 5129, 5220, 5221, 5222, 5225, 5226, 5231, 5234, 5235, 5236, 5237, 5238, 5241, 6030, 6053, 6054, 6055)
-            | parse-kv DataFields_s as (username: string, userName: string, email: string, globalTwoFaEnabled: string, cloudIntelligenceOn: string, fileDisplayName: string, roleName: string, oldIncidentStatusTitle: string, oldTicketId: string, oldAnalystVerdictTitle: string, oldConfidenceLevel: string, previous: string, oldStatus: string, oldTagName: string, oldTagDescription: string, newIncidentStatusTitle: string, newTicketId: string, newAnalystVerdictTitle: string, newConfidenceLevel: string, newStatus: string, current: string, Status: string, newTagName: string, newTagDescription: string, value: string, rulesAdded: string, rulesRemoved: string, tagsAdded: string, tagsRemoved: string, incidentName: string, ruleName: string, deviceId: string, ip: string, externalIp: string, affectedDevices: string, featureValue: string, featureName: string, recoveryEmail: string, policyName: string, tagName: string, gatewayExternalIp: string, gatewayMac: string, threatClassification: string, ipAddress: string, applicationPath: string, externalId: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
+            | parse-kv DataFields_s as (username: string, userName: string, email: string, globalTwoFaEnabled: string, cloudIntelligenceOn: string, fileDisplayName: string, roleName: string, oldIncidentStatusTitle: string, oldTicketId: string, oldAnalystVerdictTitle: string, oldConfidenceLevel: string, previous: string, oldStatus: string, oldTagName: string, oldTagDescription: string, newIncidentStatusTitle: string, newTicketId: string, newAnalystVerdictTitle: string, newConfidenceLevel: string, newStatus: string, current: string, Status: string, newTagName: string, newTagDescription: string, value: string, rulesAdded: string, rulesRemoved: string, tagsAdded: string, tagsRemoved: string, incidentName: string, ruleName: string, deviceId: string, ip: string, externalIp: string, affectedDevices: string, featureValue: string, featureName: string, recoveryEmail: string, policyName: string, tagName: string, gatewayExternalIp: string, gatewayMac: string, threatClassification: string, ipAddress: string, applicationPath: string, externalId: string, consoleUrl: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
             | lookup EventFieldsLookup_otheractivity on activityType_d
             | lookup EventTypeLookup_onoff on $left.cloudIntelligenceOn == $right.field
             | lookup EventTypeLookup_onoff on $left.globalTwoFaEnabled == $right.field
@@ -409,7 +409,8 @@ ParserQuery: |
                 TargetHostname = DstHostname,
                 TargetDomain = DstDomain,
                 TargetDomainType = DstDomainType,
-                TargetFQDN = DstFQDN;
+                TargetFQDN = DstFQDN,
+                TargetUrl = consoleUrl;
         let parsedotheractivitydata_52565258 = rawotheractivitydata
             | where activityType_d in (5256, 5258)
             | extend EventType = case(
@@ -440,23 +441,29 @@ ParserQuery: |
             EventSchemaVersion = "0.1",
             AdditionalFields = todynamic(DataFields_s),
             EventOriginalType = tostring(toint(activityType_d)),
-            DvcIpAddr = iff(ipAddress != "null", ipAddress, "")
+            SrcIpAddr = iff(ipAddress != "null", ipAddress, ""),
+            DvcAction = iff(EventResult == "Success", "Allow", "Deny")
         | project-rename
             EventStartTime = createdAt_t,
-            EventUid = _ResourceId,
+            EventUid = _ItemId,
             EventMessage = primaryDescription_s,
             ActorUserId = userId_s,
             DvcId = agentId_s,
             EventOriginalUid = activityUuid_g
-        | extend ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)
+        | extend
+            ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+            ActorUserType = _ASIM_GetUserType(ActorUsername, ActorUserId),
+            ActorUserIdType = iff(isnotempty(ActorUserId), "Other", ""),
+            DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+            TargetDvcIdType = iff(isnotempty(TargetDvcId), "Other", ""),
+            ValueType = iff(isnotempty(NewValue), "Other", "")
         | extend
             EventEndTime = EventStartTime,
             User = ActorUsername,
-            ActorUserIdType = iff(isnotempty(ActorUserId), "UID", ""),
-            DvcIdType = iff(isnotempty(DvcId), "Other", ""),
-            TargetDvcIdType = iff(isnotempty(TargetDvcId), "Other", ""),
-            Dvc = coalesce(DvcHostname, DvcId, DvcIpAddr, EventProduct),
+            IpAddr = SrcIpAddr,
+            Dvc = coalesce(DvcHostname, DvcId, EventProduct),
             Dst = coalesce(TargetHostname, TargetIpAddr),
+            Src = SrcIpAddr,
             Rule = RuleName,
             Value = NewValue
         | project-away
@@ -533,6 +540,7 @@ ParserQuery: |
             EventType_*,
             EventSubType_*,
             EventSeverity_*,
-            NewValue_*
+            NewValue_*,
+            _ResourceId
     };
     parser(disabled=disabled)
