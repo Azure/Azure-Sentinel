@@ -45,9 +45,8 @@ function ConvertSentinelRuleFrom-Yaml {
         }
     }
 
-    <#
-        If OutPut folder defined then test if exists otherwise create folder
-    #>
+    # If OutPut folder defined then test if exists otherwise create folder
+
     if ($OutputFolder) {
         if (Test-Path $OutputFolder) {
             $expPath = (Get-Item $OutputFolder).FullName
@@ -63,9 +62,8 @@ function ConvertSentinelRuleFrom-Yaml {
         }
     }
 
-    <#
-        Test if path exists and extract the data from folder or file
-    #>
+    # Test if path exists and extract the data from folder or file
+
     if ($Path.Extension -in '.yaml', '.yml') {
         Write-Verbose "Singel YAML file selected"
         try {
@@ -88,9 +86,8 @@ function ConvertSentinelRuleFrom-Yaml {
         Write-Error 'Wrong Path please see example'
     }
 
-    <#
-        If any YAML file found starte lopp to process all the files
-    #>
+    # If any YAML file found start loop to process all files
+
     if ($content) {
         Write-Verbose "'$($content.count)' templates found to convert"
 
@@ -125,6 +122,22 @@ function ConvertSentinelRuleFrom-Yaml {
             $($template.resources).name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/" + $convert.id + "')]"
             $($template.resources).properties = ($convert | Select-Object * -ExcludeProperty id)
 
+            if ($template.resources.properties.queryFrequency) {
+                $($template.resources).properties.queryFrequency = ConvertTo-ISO8601 -value $($template.resources).properties.queryFrequency
+            }
+
+            if ($template.resources.properties.queryPeriod) {
+                $($template.resources).properties.queryPeriod = ConvertTo-ISO8601 -value $($template.resources).properties.queryPeriod
+            }
+
+            if ($template.resources.properties.triggerOperator) {
+                $($template.resources).properties.triggerOperator = Convert-TriggerOperator -value $($template.resources).properties.triggerOperator
+            }
+
+            if ($template.resources.properties.incidentConfiguration.groupingConfiguration.lookbackDuration) {
+                $($template.resources).properties.incidentConfiguration.groupingConfiguration.lookbackDuration = ConvertTo-ISO8601 $($template.resources).properties.incidentConfiguration.groupingConfiguration.lookbackDuration
+            }
+
             #Based of output path variable export files to the right folder
             if ($null -ne $expPath) {
                 $outputFile = $expPath + "/" + $($_.BaseName) + ".json"
@@ -146,5 +159,40 @@ function ConvertSentinelRuleFrom-Yaml {
     else {
         Write-Error "No YAML templates found"
         break
+    }
+}
+
+function Convert-TriggerOperator {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$value
+    )
+
+    switch ($value) {
+        "gt" { $value = "GreaterThan" }
+        "lt" { $value = "LessThan" }
+        "eq" { $value = "Equal" }
+        "ne" { $value = "NotEqual" }
+        default { $value }
+    }
+    return $value
+}
+
+function ConvertTo-ISO8601 {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$value
+    )
+
+    switch -regEx ($value.ToUpper()) {
+        '[hmHM]$' {
+            return ('PT{0}' -f $value).ToUpper()
+        }
+        '[dD]$' {
+            return ('P{0}' -f $value).ToUpper()
+        }
+        default {
+            return $value.ToUpper()
+        }
     }
 }
