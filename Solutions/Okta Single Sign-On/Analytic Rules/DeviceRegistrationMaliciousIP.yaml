@@ -1,0 +1,47 @@
+id: e36c6bd6-f86a-4282-93a5-b4a1b48dd849
+name: Device Registration from Malicious IP
+description: |
+  'This query identifies Device Registration from IP addresses identified as malicious by Okta ThreatInsight'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let Events = dynamic(["device.enrollment.create"]);
+  let ThreatInsightOperations = dynamic(["security.threat.detected", "security.attack.start", "security.attack.end" ]);
+  let DeviceRegistrations =  Okta_CL
+  | where eventType_s in (Events)
+  | where outcome_result_s == "SUCCESS"
+  | extend oktaDeviceId_ = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).oktaDeviceId), NewDevice_osPlatform = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osPlatform),  NewDevice_osVersion = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osVersion), displayName_ = tostring(parse_json(target_s)[0].displayName)
+  | extend Location = strcat(client_geographicalContext_city_s,  " | ", client_geographicalContext_state_s," | ", client_geographicalContext_country_s)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, displayMessage_s, outcome_result_s,
+  outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s',""), client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location ;
+  let ThreatInsightEvents = Okta_CL
+  | where eventType_s in (ThreatInsightOperations)
+  | extend SuspiciousIP = actor_displayName_s
+  | project TimeGenerated, debugContext_debugData_threatDetections_s, client_userAgent_rawUserAgent_s, severity_s, outcome_result_s, eventType_s, displayMessage_s, SuspiciousIP, transaction_id_s;
+  DeviceRegistrations 
+  | join kind=inner (ThreatInsightEvents) on $left.client_ipAddress_s == $right.SuspiciousIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: client_ipAddress_s
+version: 1.0.0
+kind: Scheduled

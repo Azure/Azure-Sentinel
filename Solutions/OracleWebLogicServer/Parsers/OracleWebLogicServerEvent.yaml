@@ -1,0 +1,79 @@
+id: 3ff1473b-60af-4392-afbf-c0f9d25481c4
+Function:
+  Title: Parser for OracleWebLogicServerEvent
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: OracleWebLogicServerEvent
+FunctionAlias: OracleWebLogicServerEvent
+FunctionQuery: |
+    let owl_serverlog =() {
+    OracleWebLogicServer_CL
+    | where RawData startswith "####"
+    | extend EventVendor = "Oracle"
+    | extend EventProduct = 'Oracle WebLogic Server'
+    | extend EventType = 'ServerLog'
+    | extend EventData = extract_all(@"<(.*?)>", RawData)
+    | extend EventStartTime = todatetime(replace(@',\d+', @'', replace(@'(\s\d{1,2}),', @'\1', extract(@'\A(.*(PM|AM))', 1, tostring(EventData[0])))))
+    | extend DvcTimeZone = extract(@'\A.*(PM|AM)(.*)', 2, tostring(EventData[0]))
+    | extend EventSeverity = tostring(EventData[1])
+    | extend Subsystem = tostring(EventData[2])
+    | extend DvcHostname = tostring(EventData[3])
+    | extend SrcDvcHostname = tostring(EventData[4])
+    | extend TreadId = tostring(EventData[5])
+    | extend SrcUserName = replace(@'<', '', tostring(EventData[6]))
+    | extend TransactionId = tostring(EventData[7])
+    | extend DiagnosticContextId = tostring(EventData[8])
+    | extend RawTimeValue = tostring(EventData[9])
+    | extend EventOriginalUid = tostring(EventData[10])
+    | extend EventMessage = tostring(EventData[11])
+    };
+    let owl_accesslog=() {
+    OracleWebLogicServer_CL
+    | where RawData matches regex @'\A\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.*\[.*\]\s\"(GET|POST)'
+    | extend EventVendor = "Oracle"
+    | extend EventProduct = 'Oracle WebLogic Server'
+    | extend EventType = 'AccessLog'
+    | extend EventData = split(RawData, '"')
+    | extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')
+    | extend SubEventData1 = split(EventData[1], ' ')
+    | extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')
+    | extend SrcIpAddr = tostring(SubEventData0[0])
+    | extend ClientIdentity = tostring(SubEventData0[1])
+    | extend SrcUserName = tostring(SubEventData0[2])
+    | extend EventStartTime = todatetime(replace(@'\/', @'-', replace(@'(\d{2}\/\w{3}\/\d{4}):(\d{2}\:\d{2}\:\d{2})', @'\1 \2', extract(@'\[(.*?)(\-|\+)\d+\]', 1, RawData))))
+    | extend HttpRequestMethod = tostring(SubEventData1[0])
+    | extend UrlOriginal = tostring(SubEventData1[1])
+    | extend HttpVersion = tostring(SubEventData1[2])
+    | extend HttpStatusCode = toint(SubEventData2[0])
+    | extend HttpResponseBodyBytes = toint(SubEventData2[1])
+    | extend HttpReferrerOriginal = tostring(EventData[3])
+    | extend HttpUserAgentOriginal = tostring(EventData[5])
+    };
+    union isfuzzy=true owl_serverlog, owl_accesslog
+    | project TimeGenerated
+            , EventVendor
+            , EventProduct
+            , EventType
+            , EventStartTime
+            , DvcTimeZone
+            , EventSeverity
+            , Subsystem
+            , DvcHostname
+            , SrcDvcHostname
+            , TreadId
+            , SrcUserName
+            , TransactionId
+            , DiagnosticContextId
+            , RawTimeValue
+            , EventOriginalUid
+            , EventMessage
+            , SrcIpAddr
+            , ClientIdentity
+            , HttpRequestMethod
+            , UrlOriginal
+            , HttpVersion
+            , HttpStatusCode
+            , HttpResponseBodyBytes
+            , HttpReferrerOriginal
+            , HttpUserAgentOriginal

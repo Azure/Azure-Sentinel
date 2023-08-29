@@ -1,0 +1,303 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"metadata": {
+		"title": "Jamf Protect - Set Alert to Resolved",
+		"description": "This Jamf Protect Playbook can be used manually or in a Automation Rule to change the state of the Alert in Jamf Protect itself, in an automated way you can mirror the state from a Microsoft Sentinel incident back to Jamf Protect.",
+		"mainSteps": [
+			"1. Fetches the AlertUDID from the Alert of Jamf Protect",
+			"2. Generates a Access Token to authenticate against the Jamf Protect GraphQL API",
+			"3. Changes the Alert status in Jamf Protect to Resolved"
+		],
+		"prerequisites": [
+			"1. Generate API Client in Jamf Protect and take note of the CLientID and Password. [learn how](https://learn.jamf.com/bundle/jamf-protect-documentation/page/Jamf_Protect_API.html#ariaid-title3)",
+			"2. Use the ClientID and Password during the deployment of this Playbook"
+		],
+		"lastUpdateTime": "2023-07-20T00:00:00.000Z",
+		"entities": [],
+		"tags": ["Utilities"],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "Thijs Xhaflaire"
+		},
+		"source": {
+			"type": "solution",
+			"name": "Jamf Protect"
+		},
+		"postDeployment": [
+			"** b. Configurations in Sentinel **",
+			"1. In Microsoft Sentinel Analytic Rules for Jamf Protect - Alerts should be configured to create an incident",
+			"2. Configure the Automation Rules to trigger this playbook once a incident is status is changed to Active"
+		],
+		"releaseNotes": [{
+			"version": "1.0.0",
+			"title": "Jamf Protect - Set Alert to Resolved",
+			"notes": [
+				"Initial version"
+			]
+		}]
+	},
+	"parameters": {
+		"clientIdentifier": {
+			"type": "String",
+			"metadata": {
+				"description": "The Client ID for the Jamf Protect API Key"
+			}
+		},
+		"clientSecret": {
+			"type": "SecureString",
+			"metadata": {
+				"description": "The Client Secret for the Jamf Protect API Key"
+			}
+		},
+		"jamfProtect_URL": {
+			"defaultValue": "https://*.protect.jamfcloud.com",
+			"type": "String",
+			"metadata": {
+				"description": "Enter the Jamf Protect instance URL ex: {https://fakevalue.protect.jamfcloud.com}"
+			}
+		},
+		"PlaybookName": {
+			"type": "String",
+			"minLength": 1,
+			"defaultValue": "JamfProtect_Alert_Status_Resolved",
+			"metadata": {
+				"description": "Name of the Logic App/Playbook"
+			}
+		}
+	},
+	"variables": {
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+	"resources": [{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2017-07-01",
+			"name": "[parameters('playbookName')]",
+			"location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"properties": {
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						},
+						"client_ID": {
+							"defaultValue": "[parameters('clientIdentifier')]",
+							"type": "String"
+						},
+						"jamfProtectURL": {
+							"defaultValue": "[parameters('jamfProtect_URL')]",
+							"type": "String"
+						},
+						"password": {
+							"defaultValue": "[parameters('clientSecret')]",
+							"type": "SecureString"
+						}
+					},
+					"triggers": {
+						"Microsoft_Sentinel_incident": {
+							"type": "ApiConnectionWebhook",
+							"inputs": {
+								"body": {
+									"callback_url": "@{listCallbackUrl()}"
+								},
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+									}
+								},
+								"path": "/incident-creation"
+							}
+						}
+					},
+					"actions": {
+						"For_each": {
+							"foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+							"actions": {
+								"Add_comment_to_incident_(V3)": {
+									"runAfter": {
+										"HTTP_POST_-_Change_Alert_Status_using_Jamf_Protect's_GraphQL_API_Endpoint": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"body": {
+											"incidentArmId": "@triggerBody()?['object']?['id']",
+											"message": "<p>Jamf Protect Alert with URL @{outputs('Composing_Jamf_Protect_Alert_URL')} has been set to status <strong>Resolved</strong></p>"
+										},
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+											}
+										},
+										"method": "post",
+										"path": "/Incidents/Comment"
+									}
+								},
+								"Composing_Jamf_Protect_Alert_URL": {
+									"runAfter": {},
+									"type": "Compose",
+									"inputs": "@items('For_each')?['properties']?['alertLink']"
+								},
+								"HTTP_POST_-_Change_Alert_Status_using_Jamf_Protect's_GraphQL_API_Endpoint": {
+									"runAfter": {
+										"Removing_pre-fix_of_URL_and_keeping_Alert_UDID": [
+											"Succeeded"
+										]
+									},
+									"type": "Http",
+									"inputs": {
+										"authentication": {
+											"type": "Raw",
+											"value": "@variables('accessToken')"
+										},
+										"body": {
+											"operationName": "updateAlert",
+											"query": "mutation updateAlert {\n  updateAlerts(input: { uuids: [\"@{outputs('Removing_pre-fix_of_URL_and_keeping_Alert_UDID')}\"], status: Resolved })\n   {\n    items {\n      uuid\n      status\n    }\n  }\n}\n",
+											"variables": {}
+										},
+										"method": "POST",
+										"uri": "@{parameters('jamfProtectURL')}/graphql"
+									}
+								},
+								"Removing_pre-fix_of_URL_and_keeping_Alert_UDID": {
+									"runAfter": {
+										"Composing_Jamf_Protect_Alert_URL": [
+											"Succeeded"
+										]
+									},
+									"type": "Compose",
+									"inputs": "@replace(outputs('Composing_Jamf_Protect_Alert_URL'), variables('jamfProtectAlertURL'), '')"
+								}
+							},
+							"runAfter": {
+								"Set_accessToken_as_variable": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach"
+						},
+						"Generate_Access_Token": {
+							"runAfter": {
+								"set_jamfProtectAlertURL_as_variable": [
+									"Succeeded"
+								]
+							},
+							"type": "Http",
+							"inputs": {
+								"body": {
+									"client_id": "@{parameters('client_ID')}",
+									"password": "@{parameters('password')}"
+								},
+								"headers": {
+									"Content-Type": "application/json"
+								},
+								"method": "POST",
+								"uri": "@{parameters('jamfProtectURL')}/token"
+							},
+							"runtimeConfiguration": {
+								"secureData": {
+									"properties": [
+										"inputs"
+									]
+								}
+							}
+						},
+						"Parse_JSON_Response_from_Access_Token": {
+							"runAfter": {
+								"Generate_Access_Token": [
+									"Succeeded"
+								]
+							},
+							"type": "ParseJson",
+							"inputs": {
+								"content": "@body('Generate_Access_Token')",
+								"schema": {
+									"properties": {
+										"access_token": {
+											"type": "string"
+										},
+										"expires_in": {
+											"type": "integer"
+										},
+										"token_type": {
+											"type": "string"
+										}
+									},
+									"type": "object"
+								}
+							}
+						},
+						"Set_accessToken_as_variable": {
+							"runAfter": {
+								"Parse_JSON_Response_from_Access_Token": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "accessToken",
+									"type": "string",
+									"value": "@body('Parse_JSON_Response_from_Access_Token')?['access_token']"
+								}]
+							}
+						},
+						"set_jamfProtectAlertURL_as_variable": {
+							"runAfter": {},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "jamfProtectAlertURL",
+									"type": "string",
+									"value": "@{parameters('jamfProtectURL')}/Alerts/"
+								}]
+							}
+						}
+					},
+					"outputs": {}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuresentinel": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+								"connectionName": "[variables('AzureSentinelConnectionName')]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	]
+}
