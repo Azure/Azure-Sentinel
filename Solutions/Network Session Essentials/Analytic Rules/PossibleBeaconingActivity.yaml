@@ -1,7 +1,7 @@
 id: fcb9d75c-c3c1-4910-8697-f136bfef2363
 name: Potential beaconing activity (ASIM Network Session schema)
 description: |
-  This rule identifies beaconing patterns from Network traffic logs based on recurrent frequency patterns. Such potential outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts as discussed in this [Blog](http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/).\<br><br>
+  This rule identifies beaconing patterns from Network traffic logs based on recurrent frequency patterns. Such potential outbound beaconing patterns to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts as discussed in this [Blog](http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/).\<br><br>
   This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'
 severity: Low
 status: Available
@@ -77,21 +77,60 @@ query: |
   let TimeDeltaThreshold = 10;
   let TotalEventsThreshold = 15;
   let PercentBeaconThreshold = 80;
+  let LocalNetworks=dynamic(["169.254.0.0/16","127.0.0.0/8"]);
   _Im_NetworkSession(starttime=ago(querystarttime), endtime=ago(queryendtime))
   | where not(ipv4_is_private(DstIpAddr))
-  | project TimeGenerated,   SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes
-  | sort by SrcIpAddr asc,TimeGenerated asc, DstIpAddr asc, DstPortNumber asc
+  | where not (ipv4_is_in_any_range(DstIpAddr, LocalNetworks))
+  | project 
+      TimeGenerated
+      , SrcIpAddr
+      , SrcPortNumber
+      , DstIpAddr
+      , DstPortNumber
+      , DstBytes
+      , SrcBytes
+  | sort by 
+      SrcIpAddr asc
+      , TimeGenerated asc
+      , DstIpAddr asc
+      , DstPortNumber asc
   | serialize
-  | extend nextTimeGenerated = next(TimeGenerated, 1), nextSrcIpAddr = next(SrcIpAddr, 1)
-  | extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated)
+  | extend 
+      nextTimeGenerated = next(TimeGenerated, 1)
+      , nextSrcIpAddr = next(SrcIpAddr, 1)
+  | extend 
+      TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)
   | where SrcIpAddr == nextSrcIpAddr
   //Whitelisting criteria/ threshold criteria
   | where TimeDeltainSeconds > TimeDeltaThreshold 
-  | project TimeGenerated, TimeDeltainSeconds,   SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes
-  | summarize count(), sum(DstBytes), sum(SrcBytes), make_list(TimeDeltainSeconds) 
-  by TimeDeltainSeconds, bin(TimeGenerated, 1h),   SrcIpAddr, DstIpAddr, DstPortNumber
-  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSrcBytes = sum(sum_SrcBytes), TotalDstBytes = sum(sum_DstBytes) 
-  by bin(TimeGenerated, 1h),   SrcIpAddr, DstIpAddr, DstPortNumber
+  | project
+      TimeGenerated
+      , TimeDeltainSeconds
+      , SrcIpAddr
+      , SrcPortNumber
+      , DstIpAddr
+      , DstPortNumber
+      , DstBytes
+      , SrcBytes
+  | summarize
+      count()
+      , sum(DstBytes)
+      , sum(SrcBytes)
+      , make_list(TimeDeltainSeconds) 
+      by TimeDeltainSeconds
+          , bin(TimeGenerated, 1h)
+          , SrcIpAddr
+          , DstIpAddr
+          , DstPortNumber
+  | summarize
+      (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds)
+      , TotalEvents=sum(count_)
+      , TotalSrcBytes = sum(sum_SrcBytes)
+      , TotalDstBytes = sum(sum_DstBytes)
+      by bin(TimeGenerated, 1h)
+          , SrcIpAddr
+          , DstIpAddr
+          , DstPortNumber
   | where TotalEvents > TotalEventsThreshold 
   | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
   | where BeaconPercent > PercentBeaconThreshold
@@ -115,5 +154,5 @@ customDetails:
   FrequencyTime: MostFrequentTimeDeltaCount
   TotalDstBytes: TotalDstBytes
 
-version: 1.1.2
+version: 1.1.3
 kind: Scheduled
