@@ -324,6 +324,7 @@ def main(mytimer: func.TimerRequest) -> None:
             logging.info("There is no last time point, trying to get events for last one day.")
             end_time = datetime.strptime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")
             start_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            end_time = end_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         if not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
             logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
             latest_timestamp = start_time
