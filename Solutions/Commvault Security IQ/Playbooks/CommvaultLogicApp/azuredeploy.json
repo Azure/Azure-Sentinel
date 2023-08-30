@@ -1,0 +1,428 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Commvault Logic App Playbook",
+        "description":  "This Logic App executes when called upon by an Automation Rule. Accessing the KeyVault to retrieve various credentials, it executes a specific runbook depending on the use case.",
+        "prerequisites":  ["1. Administrative access to your Commvault/Metallic environment.",
+        "2. Administrative access to your Azure Resource Group and Subscription.",
+        "3. An Azure Sentinel instance in the aforementioned Azure Resource Group.",
+        "4. A Keyvault and an Automation Account configured as mentioned in the documentation here :- (https://github.com/Cv-securityIQ/Azure-Integration/blob/Commvault/Solutions/Commvault%20Security%20IQ/README.md)"],
+        "postDeployment":  ["1. Steps to follow the instructions are mentioned here :- (https://github.com/Cv-securityIQ/Azure-Integration/blob/Commvault/Solutions/Commvault%20Security%20IQ/README.md)",
+        "2. Give the required permissions to the logic app to get the secrets from the keyvault.",
+        "3. Setup the Managed Identity"        
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "2023-08-24T00:00:00.000Z",
+        "entities":  [],
+        "tags":  [ "Commvault", "Metallic", "Threat Intelligence", "Ransomware", "Security - Automation (SOAR)"
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "microsoft"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Commvault-Logic-App10",
+            "type":  "string"
+        },
+        "Automation-Account": {
+			"defaultValue": "Commvault-Automation-Account",
+			"type": "string"
+		},
+        "keyvaultName": {
+            "type": "string"
+        }
+    },
+    "variables":  {
+        "location": "[resourceGroup().location]",
+        "subscriptionId": "[subscription().subscriptionId]",
+        "tenantId": "[subscription().tenantId]",
+        "keyvaultApiId": "[concat('/subscriptions/', variables('subscriptionId'), '/providers/Microsoft.Web/locations/', variables('location'),'/managedApis/keyvault')]",
+        "AzureautomationConnectionName":  "[concat('Azureautomation-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName":  "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Access_Token":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/secrets/@{encodeURIComponent('access-token')}/value"
+                            }
+                        },
+                        "Disable_Data_Aging":  {
+                            "actions":  {
+                                "Disable_Data_Aging_Job":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "body":  {
+                                            "properties":  {
+                                                "parameters":  {
+                                                    "ClientName":  "@triggerBody()?['object']?['properties']?['description']",
+                                                    "EnvironmentEndpointURL":  "@body('Environment_Endpoint_URL')?['value']",
+                                                    "apiAccessToken":  "@body('Access_Token')?['value']"
+                                                }
+                                            }
+                                        },
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "put",
+                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
+                                        "queries":  {
+                                            "runbookName":  "Commvault_Disable_Data_Aging",
+                                            "wait":  true,
+                                            "x-ms-api-version":  "2015-10-31"
+                                        }
+                                    }
+                                },
+                                "Disable_Data_Aging_Job_Output":  {
+                                    "runAfter":  {
+                                        "Disable_Data_Aging_Job":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "get",
+                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_Data_Aging_Job')?['properties']?['jobId'])}/output",
+                                        "queries":  {
+                                            "x-ms-api-version":  "2015-10-31"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Environment_Endpoint_URL":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "startsWith":  [
+                                            "@triggerBody()?['object']?['properties']?['description']",
+                                            "Data"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Disable_IDP":  {
+                            "actions":  {
+                                "Disable_IDP_Job":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "body":  {
+                                            "properties":  {
+                                                "parameters":  {
+                                                    "EnvironmentEndpointURL":  "@body('Environment_Endpoint_URL')?['value']",
+                                                    "apiAccessToken":  "@body('Access_Token')?['value']"
+                                                }
+                                            }
+                                        },
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "put",
+                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
+                                        "queries":  {
+                                            "runbookName":  "Commvault_Disable_IDP",
+                                            "wait":  true,
+                                            "x-ms-api-version":  "2015-10-31"
+                                        }
+                                    }
+                                },
+                                "Disable_IDP_Job_Output":  {
+                                    "runAfter":  {
+                                        "Disable_IDP_Job":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "get",
+                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_IDP_Job')?['properties']?['jobId'])}/output",
+                                        "queries":  {
+                                            "x-ms-api-version":  "2015-10-31"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Environment_Endpoint_URL":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "startsWith":  [
+                                            "@triggerBody()?['object']?['properties']?['description']",
+                                            "IDP"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Disable_User":  {
+                            "actions":  {
+                                "Disable_User_Job":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "body":  {
+                                            "properties":  {
+                                                "parameters":  {
+                                                    "EnvironmentEndpointURL":  "@body('Environment_Endpoint_URL')?['value']",
+                                                    "UserIdentity":  "@triggerBody()?['object']?['properties']?['description']",
+                                                    "apiAccessToken":  "@body('Access_Token')?['value']"
+                                                }
+                                            }
+                                        },
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "put",
+                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
+                                        "queries":  {
+                                            "runbookName":  "Commvault_Disable_User",
+                                            "wait":  true,
+                                            "x-ms-api-version":  "2015-10-31"
+                                        }
+                                    }
+                                },
+                                "Disable_User_Job_Output":  {
+                                    "runAfter":  {
+                                        "Disable_User_Job":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "get",
+                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_User_Job')?['properties']?['jobId'])}/output",
+                                        "queries":  {
+                                            "x-ms-api-version":  "2015-10-31"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Environment_Endpoint_URL":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "startsWith":  [
+                                            "@triggerBody()?['object']?['properties']?['description']",
+                                            "User"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Environment_Endpoint_URL":  {
+                            "runAfter":  {
+                                "Access_Token":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/secrets/@{encodeURIComponent('environment-endpoint-url')}/value"
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azureautomation":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzureautomationConnectionName'))]",
+                                "connectionName":  "[variables('AzureautomationConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureautomation')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName":  "[variables('KeyvaultConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Commvault-Logic-App1",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzureautomationConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzureautomationConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzureautomationConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureautomation')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('KeyvaultConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('KeyvaultConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "alternativeParameterValues": {
+                    "token:TenantId": "[variables('tenantId')]",
+                    "token:grantType": "code",
+                    "vaultName": "[parameters('keyvaultName')]"
+            },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                }
+            }
+        }
+    ]
+}
