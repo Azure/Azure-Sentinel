@@ -34,16 +34,20 @@ query: |
   let logonDiff = 10m; let aadFunc = (tableName:string){ table(tableName)
   | where ResultType == "0"
   | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online") // To remove false-positives, add more Apps to this array
-  | project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, AppDisplayName, SuccessIPBlock = iff(IPAddress contains ":", strcat(split(IPAddress, ":")[0], ":", split(IPAddress, ":")[1]), strcat(split(IPAddress, ".")[0], ".", split(IPAddress, ".")[1])), Type
+  // ---------- Fix for SuccessBlock to also consider IPv6
+  | extend SuccessIPv6Block = strcat(split(IPAddress, ":")[0], ":", split(IPAddress, ":")[1], ":", split(IPAddress, ":")[2], ":", split(IPAddress, ":")[3])
+  | extend SuccessIPv4Block = strcat(split(IPAddress, ".")[0], ".", split(IPAddress, ".")[1])
+  // ------------------
+  | project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, SuccessLocation = Location, AppDisplayName, SuccessIPBlock = iff(IPAddress contains ":", strcat(split(IPAddress, ":")[0], ":", split(IPAddress, ":")[1]), strcat(split(IPAddress, ".")[0], ".", split(IPAddress, ".")[1])), Type
   | join kind= inner (
       table(tableName)
       | where ResultType !in ("0", "50140")
       | where ResultDescription !~ "Other"
       | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
-      | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription, Type 
+      | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, FailedLocation = Location, AppDisplayName, ResultType, ResultDescription, Type 
   ) on UserPrincipalName, AppDisplayName
   | where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock
-  | summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription, Type
+  | summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, SuccessLocation, AppDisplayName, FailedIPAddress, FailedLocation, ResultType, ResultDescription, Type
   | extend timestamp = SuccessLogonTime
   | extend UserPrincipalName = tolower(UserPrincipalName)};
   let aadSignin = aadFunc("SigninLogs");
@@ -94,5 +98,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: FailedIPAddress
-version: 2.1.3
+version: 2.1.4
 kind: Scheduled
