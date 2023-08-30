@@ -6,7 +6,7 @@ from collections import deque
 import zlib
 
 class AzureSentinelConnectorCLv2Async:
-    def __init__(self, session: aiohttp.ClientSession, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=3000, queue_size_bytes=5 * (2**20)):
+    def __init__(self, session: aiohttp.ClientSession, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=1200, queue_size_bytes=2 * (2**20)):
         self.dce_endpoint = dce_endpoint
         self.dcr_id = dcr_id
         self.stream_name = stream_name
@@ -102,7 +102,7 @@ class AzureSentinelConnectorCLv2Async:
             await response.text()
             if not (200 <= response.status <= 299):
                 self.failed_sent_events_number += dataLength
-                raise Exception("Error during sending events to Azure Sentinel. Response code: {}".format(response.status))
+                raise Exception("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status))
             else:
                 self.successful_sent_events_number += dataLength
 

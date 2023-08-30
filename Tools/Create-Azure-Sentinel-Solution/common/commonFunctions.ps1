@@ -2788,7 +2788,12 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         else {
             $zipPackageName = "$calculatedBuildPipelinePackageVersion" + ".zip"
         }
-        Compress-Archive -Path "$solutionFolder/*" -DestinationPath "$solutionFolder/$zipPackageName" -Force
+
+        $compress = @{
+            Path = "$solutionFolder/createUiDefinition.json", "$solutionFolder/mainTemplate.json"
+            DestinationPath = "$solutionFolder/$zipPackageName"
+        }
+        Compress-Archive @compress -Force
     }
 
     function global:GetContentTemplateDefaultValues()

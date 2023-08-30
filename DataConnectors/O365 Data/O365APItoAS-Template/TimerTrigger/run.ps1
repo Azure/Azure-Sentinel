@@ -14,7 +14,7 @@ function Write-OMSLogfile {
     Given a  value pair hash table, this function will write the data to an OMS Log Analytics workspace.
     Certain variables, such as Customer ID and Shared Key are specific to the OMS workspace data is being written to.
     This function will not write to multiple OMS workspaces.  Build-signature and post-analytics function from Microsoft documentation
-    at https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-data-collector-api
+    at https://docs.microsoft.com/azure/log-analytics/log-analytics-data-collector-api
     .PARAMETER DateTime
     date and time for the log.  DateTime value
     .PARAMETER Type
@@ -104,14 +104,23 @@ function Write-OMSLogfile {
                 -method $method `
                 -contentType $ContentType `
                 -resource $resource
-            $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+
+		    # Compatible with previous version
+		    if ([string]::IsNullOrEmpty($LAURI)){
+		    	$LAURI = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+		    }
+		    else
+		    {
+		    	$LAURI = $LAURI + $resource + "?api-version=2016-04-01"
+		    }
+		
             $headers = @{
                 "Authorization" = $signature;
                 "Log-Type" = $type;
                 "x-ms-date" = $rfc1123date
                 "time-generated-field" = $dateTime
             }
-            $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $ContentType -Headers $headers -Body $body -UseBasicParsing
+            $response = Invoke-WebRequest -Uri $LAURI -Method $method -ContentType $ContentType -Headers $headers -Body $body -UseBasicParsing
             Write-Verbose -message ('Post Function Return Code ' + $response.statuscode)
             return $response.statuscode
         }
@@ -150,9 +159,9 @@ function Get-AuthToken{
             [string]$TenantGUID
         )
     # Create app of type Web app / API in Azure AD, generate a Client Secret, and update the client id and client secret here
-    $loginURL = "https://login.microsoftonline.com/"
+    $loginURL = "$env:loginEndpoint"
     # Get the tenant GUID from Properties | Directory ID under the Azure Active Directory section
-    $resource = "https://manage.office.com"
+    $resource = "https://$env:managementApi"
     # auth
     $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID;client_secret=$ClientSecret}
     $oauth = Invoke-RestMethod -Method Post -Uri $loginURL/$tenantdomain/oauth2/token?api-version=1.0 -Body $body
@@ -176,7 +185,7 @@ function Get-O365Data{
     $contentTypes = $env:contentTypes.split(",")
     #Loop for each content Type like Audit.General
     foreach($contentType in $contentTypes){
-        $listAvailableContentUri = "https://manage.office.com/api/v1.0/$tenantGUID/activity/feed/subscriptions/content?contentType=$contentType&PublisherIdentifier=$env:publisher&startTime=$startTime&endTime=$endTime"
+        $listAvailableContentUri = "https://$env:managementApi/api/v1.0/$tenantGUID/activity/feed/subscriptions/content?contentType=$contentType&PublisherIdentifier=$env:publisher&startTime=$startTime&endTime=$endTime"
         do {
             #List Available Content
             $contentResult = Invoke-RestMethod -Method GET -Headers $headerParams -Uri $listAvailableContentUri
@@ -231,6 +240,16 @@ $currentUTCtime = (Get-Date).ToUniversalTime()
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
+
+$LAURI = $env:LAURI
+if (-Not [string]::IsNullOrEmpty($LAURI)){
+	if($LAURI.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+	{
+		Write-Error -Message "MCASActivity-SecurityEvents: Invalid Log Analytics Uri." -ErrorAction Stop
+		Exit
+	}
+}
+
 
 #add last run time to blob file to ensure no missed packages
 $endTime = $currentUTCtime | Get-Date -Format yyyy-MM-ddTHH:mm:ss
