@@ -1,0 +1,85 @@
+id: 85aca4d1-5d15-4001-abd9-acb86ca1786a
+name: TI map Domain entity to DnsEvents
+description: |
+  Identifies a match in DnsEvents from any Domain IOC from TI
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  // Define the lookback periods for time-based filters
+  let dt_lookBack = 1h; // Look back 1 hour for DNS events
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  // Fetch threat intelligence indicators related to domains
+  let Domain_Indicators = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    // Filter out indicators without domain names
+    | where isnotempty(DomainName)
+    | extend TI_DomainEntity = DomainName;
+  // Create a list of TLDs in our threat feed for later validation
+  let maxListSize = 100000; // Define the maximum allowed size for each list
+  let list_tlds = Domain_Indicators
+    | extend parts = split(DomainName, '.')
+    | extend tld = parts[(array_length(parts)-1)]
+    | summarize count() by tostring(tld)
+    | project tld
+    | summarize make_list(tld, maxListSize);
+  // Perform a join between domain indicators and DNS events to identify potential malicious activity
+  Domain_Indicators
+    // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
+    | join kind=innerunique (
+      DnsEvents
+      | where TimeGenerated > ago(dt_lookBack)
+      // Extract domain patterns from syslog message
+      | where isnotempty(Name)
+      | extend parts = split(Name, '.')
+      | extend tld = parts[(array_length(parts)-1)]
+      // Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
+      | where tld in~ (list_tlds)
+      | extend DNS_TimeGenerated = TimeGenerated
+    ) on $left.TI_DomainEntity==$right.Name
+    // Filter out DNS events that occurred after the expiration of the corresponding indicator
+    | where DNS_TimeGenerated < ExpirationDateTime
+    // Group the results by IndicatorId and Name, and keep the DNS event with the latest timestamp
+    | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by IndicatorId, Name
+    // Select the desired output fields
+    | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, Computer, ClientIP, Name, QueryType, Type, TI_DomainEntity
+    // Extract hostname and DNS domain from the Computer field
+    | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+    // Rename the timestamp field
+    | extend timestamp = DNS_TimeGenerated
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain 
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.4.0
+kind: Scheduled

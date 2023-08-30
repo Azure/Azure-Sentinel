@@ -1,0 +1,45 @@
+id: 15049017-527f-4d3b-b011-b0e99e68ef45
+name: Windows Binaries Executed from Non-Default Directory
+description: |
+   'The query detects Windows binaries, that can be executed from a non-default directory (e.g. C:\Windows\, C:\Windows\System32 etc.). 
+   Ref: https://lolbas-project.github.io/'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059
+query: |
+   let procList = externaldata(Process:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Microsoft_Lolbas_Execution_Binaries.csv"] with (format="csv", ignoreFirstRecord=True);
+   SecurityEvent
+   | where EventID == 4688 and Process has_any (procList) and not (NewProcessName has ("C:\\Windows\\"))
+   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, NewProcessName, Process, CommandLine
+   | extend Name=tostring(split(SubjectUserName, "@")[0]), UPNSuffix=tostring(split(SubjectUserName, "@")[1])
+   | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: CommandLine
+version: 1.0.2
+kind: Scheduled

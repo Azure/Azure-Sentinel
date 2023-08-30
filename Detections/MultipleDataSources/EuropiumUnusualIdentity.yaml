@@ -1,0 +1,55 @@
+id: 0a3f4f4f-46ad-4562-acd6-f17730a5aef4
+name: Unusual identity creation using exchange powershell
+description: | 
+  ' The query below identifies creation of unusual identity by the Europium actor to mimic Microsoft Exchange Health Manager Service account using Exchange PowerShell commands
+    Reference: https://www.microsoft.com/security/blog/2022/09/08/microsoft-investigates-iranian-attacks-against-the-albanian-government/'
+severity: High 
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 12h 
+queryPeriod: 12h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - Persistence
+relevantTechniques:
+  - T1136
+tags:
+  - Europium
+query: |
+  (union isfuzzy=true
+  (SecurityEvent
+  | where EventID==4688
+  | where CommandLine has_any ("New-Mailbox","Update-RoleGroupMember") and CommandLine has "HealthMailbox55x2yq"
+  | project TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  ),
+  (DeviceProcessEvents
+  | where ProcessCommandLine has_any ("New-Mailbox","Update-RoleGroupMember") and ProcessCommandLine has "HealthMailbox55x2yq"
+  | extend timestamp = TimeGenerated, AccountCustomEntity =  InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ajeet Prakash
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

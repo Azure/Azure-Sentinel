@@ -1,0 +1,75 @@
+id: d36bb1e3-5abc-4037-ad9a-24ba3469819e
+name: Abnormal Deny Rate for Source IP
+description: |
+  'Identifies abnormal deny rate for specific source IP to destination IP based on the normal average and standard deviation learned during a configured period. This can indicate potential exfiltration, initial access or C2, where attacker tries to exploit the same vulnerability on machines in the organization, but is being blocked by firewall rules.
+  
+  Configurable Parameters:
+  
+  - Minimum of stds threshold - the number of stds to use in the threshold calculation. Default is set to 3.
+  - Learning period time - learning period for threshold calculation in days. Default is set to 5.
+  - Bin time - learning buckets time in hours. Default is set to 1 hour.
+  - Minimum threshold - minimum threshold for alert. Default is set to 5.
+  - Minimum bucket threshold - minimum learning buckets threshold for alert. Default is set to 5.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
+queryFrequency: 1h
+queryPeriod: 25h
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - InitialAccess
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  let LearningPeriod = 1d;
+  let RunTime = 1h;
+  let StartLearningPeriod = LearningPeriod + RunTime;
+  let EndRunTime = RunTime - 1h;
+  let BinTime = 1h;
+  let NumOfStdsThreshold = 3;
+  let MinThreshold = 5.0;
+  let MinLearningBuckets = 5;
+  let TrafficLogs = (union isfuzzy=true
+  (AzureDiagnostics
+  | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog" 
+  | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
+  | where Action == "Deny"
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)),
+  (AZFWNetworkRule
+  | extend Fqdn = DestinationIp
+  | where Action == "Deny"
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)),
+  (AZFWApplicationRule
+  | where Action == "Deny"
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)));
+  let LearningSrcIpDenyRate = (TrafficLogs
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | summarize count() by SourceIp, bin(TimeGenerated, BinTime), Fqdn
+  | summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by SourceIp, Fqdn
+  | where LearningTimeBuckets > MinLearningBuckets);
+  let AlertTimeSrcIpDenyRate = (TrafficLogs
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp);
+  AlertTimeSrcIpDenyRate
+  | join kind=leftouter (LearningSrcIpDenyRate) on SourceIp
+  | extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
+  | where AlertTimeSrcIpDenyRateCount > LearningThreshold
+  | project-away SourceIp1, LearningTimeSrcIpDenyRateAvg, LearningTimeSrcIpDenyRateStd
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Fqdn
+version: 1.1.0
+kind: Scheduled

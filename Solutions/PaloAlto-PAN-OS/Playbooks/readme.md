@@ -18,7 +18,7 @@
 
 # Overview
 
-PAN‑OS is the software that runs all Palo Alto Networks next-generation firewalls. This integration will allow your SOC to leverage automation to block traffic to/from specific IP or URL as a response to Azure Sentinel incidents.
+PAN‑OS is the software that runs all Palo Alto Networks next-generation firewalls. This integration will allow your SOC to leverage automation to block traffic to/from specific IP or URL as a response to Microsoft Sentinel incidents.
 
 **PAN-OS custom connector** includes [various actions](./PaloAltoCustomConnector#actions-supported-by-palo-alto-custom-connector) which allow you to create your own playbooks from scratch. In addition to the connector, there are 3 OOTB **playbooks templates** which leverage it so you can start automating Blocking of IPs an URLs with minimum configurations and effort. The OOTB scenarios are leveraging **address objects groups**, which are pre-configured to be refferenced to Security Policy rules. The playbooks will add IPs and URLs as address objects to these groups, so the policies will apply on them.
 
@@ -73,14 +73,14 @@ This connector supports [API Key authentication](https://paloaltolactest.traffic
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for other connections such as Teams connection and PAN-OS API  Connection (For authorizing the PAN-OS API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
 
 

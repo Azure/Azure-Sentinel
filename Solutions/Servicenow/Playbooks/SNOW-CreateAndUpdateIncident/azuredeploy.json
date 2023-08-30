@@ -1,0 +1,773 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Create And Update ServiceNow Record",
+        "description": "This playbook will create or update incident in SNOW. When incident is created, playbook will run and create incident in SNOW. When incident is updated, playbook will run and add update to comment section. When incident is closed, playbook will run and close incident in SNOW.",
+        "postDeployment": [ "1. Add Microsoft Sentinel Responder role to the playbook's managed identity.", "2. Authorize ServiceNow connection", "3. Create an automation rules for when incident is created or updated and add this playbook as an action." ],
+        "prerequisites": "We will need following data to make Jira connector:\n\n1. SNOW instance (ex. xyz.service-now.com)\n\n2. Username\n\n3. Password",
+        "lastUpdateTime": "2022-07-13T00:00:00.000Z",
+        "entities": [
+        ],
+        "tags": [
+            "Sync",
+            "Incident Update"
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Benjamin Kovacevic"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.1.0",
+                "title": "Create And Update ServiceNow Record",
+                "notes": [ "Initial version", "Bugfix to handle html tags in comment" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SNOW-CreateAndUpdateIncident",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "Service-NowConnectionName": "[concat('Service-Now-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_create_or_update_incident": {
+                            "actions": {
+                                "Create_Record": {
+                                    "runAfter": {
+                                        "Switch": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "comments": "@triggerBody()?['object']?['properties']?['incidentUrl']",
+                                            "description": "Incident description: @{triggerBody()?['object']?['properties']?['description']};\nSeverity: @{triggerBody()?['object']?['properties']?['severity']};\nTactics:@{if(not(equals(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], null)), join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '; '), '')};\nAlerts:@{if(not(equals(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], null)), join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], '; '), '')}",
+                                            "impact": "@variables('Creation severity')",
+                                            "number": "@triggerBody()?['object']?['name']",
+                                            "short_description": "@triggerBody()?['object']?['properties']?['title']",
+                                            "urgency": "@variables('Creation severity')"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['service-now']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/now/v2/table/@{encodeURIComponent('incident')}",
+                                        "queries": {
+                                            "sysparm_display_value": false,
+                                            "sysparm_exclude_reference_link": true
+                                        }
+                                    }
+                                },
+                                "Switch": {
+                                    "runAfter": {
+                                    },
+                                    "cases": {
+                                        "Case_Severity_High": {
+                                            "case": "High",
+                                            "actions": {
+                                                "Set_Severity_variable_to_High": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Creation severity",
+                                                        "value": "1"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_Severity_Medium": {
+                                            "case": "Medium",
+                                            "actions": {
+                                                "Set_Severity_variable_to_Medium": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Creation severity",
+                                                        "value": "2"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {
+                                        }
+                                    },
+                                    "expression": "@triggerBody()?['object']?['properties']?['severity']",
+                                    "type": "Switch"
+                                },
+                                "Update_incident": {
+                                    "runAfter": {
+                                        "Create_Record": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                    {
+                                                        "Tag": "SNOW System ID: @{body('Create_Record')?['result']?['sys_id']}"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_creation_severity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "For_each": {
+                                        "foreach": "@triggerBody()?['object']?['properties']?['labels']",
+                                        "actions": {
+                                            "Condition": {
+                                                "actions": {
+                                                    "Condition_-_is_incident_closed": {
+                                                        "actions": {
+                                                            "Update_Record_-_Incident_closed": {
+                                                                "runAfter": {
+                                                                },
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "body": {
+                                                                        "caller_id": "@triggerBody()?['incidentUpdates']?['updatedBy']?['name']",
+                                                                        "close_code": "Closed/Resolved by Caller",
+                                                                        "close_notes": "Classification: @{triggerBody()?['object']?['properties']?['classification']}\nClassification reason: @{triggerBody()?['object']?['properties']?['classificationReason']}\nClassification comment: @{triggerBody()?['object']?['properties']?['classificationComment']}",
+                                                                        "state": "7"
+                                                                    },
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['service-now']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "put",
+                                                                    "path": "/api/now/v2/table/@{encodeURIComponent('incident')}/@{encodeURIComponent(variables('SNOW System ID'))}",
+                                                                    "queries": {
+                                                                        "sysparm_display_value": false,
+                                                                        "sysparm_exclude_reference_link": true
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "Set_variable_-_SNOW_System_ID": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Condition_-_alert_updated": {
+                                                                    "actions": {
+                                                                        "Compose_alert": {
+                                                                            "runAfter": {
+                                                                                "For_each_-_new_alert": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Compose",
+                                                                            "inputs": "Alerts: @{variables('New alert')}"
+                                                                        },
+                                                                        "For_each_-_new_alert": {
+                                                                            "foreach": "@triggerBody()?['incidentUpdates']?['alerts']",
+                                                                            "actions": {
+                                                                                "Append_to_string_variable_-_alert": {
+                                                                                    "runAfter": {
+                                                                                    },
+                                                                                    "type": "AppendToStringVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "New alert",
+                                                                                        "value": "@concat(items('For_each_-_new_alert')?['properties']?['alertDisplayName'], '; ')"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                            },
+                                                                            "type": "Foreach"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Condition_-_comment_updated": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "contains": [
+                                                                                    "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                                                    "Alerts"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Condition_-_comment_updated": {
+                                                                    "actions": {
+                                                                        "Compose_comment": {
+                                                                            "runAfter": {
+                                                                                "For_each_-_new_comment": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Compose",
+                                                                            "inputs": "Comment: @{variables('New comments')}"
+                                                                        },
+                                                                        "For_each_-_new_comment": {
+                                                                            "foreach": "@triggerBody()?['incidentUpdates']?['comments']",
+                                                                            "actions": {
+                                                                                "Append_to_string_variable_-_comment": {
+                                                                                    "runAfter": {
+                                                                                    },
+                                                                                    "type": "AppendToStringVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "New comments",
+                                                                                        "value": "@concat(slice(items('For_each_-_new_comment')?['properties']?['message'], add(indexOf(items('For_each_-_new_comment')?['properties']?['message'], '>'), 1), sub(lastIndexOf(items('For_each_-_new_comment')?['properties']?['message'], '</'), 1)), '; ')"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                            },
+                                                                            "type": "Foreach"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "contains": [
+                                                                                    "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                                                    "Comments"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Condition_-_owner_update": {
+                                                                    "actions": {
+                                                                        "Append_to_string_variable_-_owner": {
+                                                                            "runAfter": {
+                                                                            },
+                                                                            "type": "AppendToStringVariable",
+                                                                            "inputs": {
+                                                                                "name": "New owner",
+                                                                                "value": "@triggerBody()?['object']?['properties']?['owner']?['assignedTo']"
+                                                                            }
+                                                                        },
+                                                                        "Compose_owner": {
+                                                                            "runAfter": {
+                                                                                "Append_to_string_variable_-_owner": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Compose",
+                                                                            "inputs": "Owner: @{variables('New owner')}"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Condition_-_tag_updated": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "contains": [
+                                                                                    "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                                                    "Owner"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Condition_-_severity_update": {
+                                                                    "actions": {
+                                                                        "Append_to_string_variable_-_severity": {
+                                                                            "runAfter": {
+                                                                            },
+                                                                            "type": "AppendToStringVariable",
+                                                                            "inputs": {
+                                                                                "name": "New severity",
+                                                                                "value": "@triggerBody()?['object']?['properties']?['severity']"
+                                                                            }
+                                                                        },
+                                                                        "Compose_severity": {
+                                                                            "runAfter": {
+                                                                                "Append_to_string_variable_-_severity": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Compose",
+                                                                            "inputs": "Severity: @{variables('New severity')}"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Condition_-_owner_update": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "contains": [
+                                                                                    "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                                                    "Severity"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Condition_-_status_update": {
+                                                                    "actions": {
+                                                                        "Append_to_string_variable_-_status": {
+                                                                            "runAfter": {
+                                                                            },
+                                                                            "type": "AppendToStringVariable",
+                                                                            "inputs": {
+                                                                                "name": "New status",
+                                                                                "value": "@triggerBody()?['object']?['properties']?['status']"
+                                                                            }
+                                                                        },
+                                                                        "Compose_status": {
+                                                                            "runAfter": {
+                                                                                "Append_to_string_variable_-_status": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Compose",
+                                                                            "inputs": "Status: @{variables('New status')}"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Condition_-_tactics_update": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "contains": [
+                                                                                    "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                                                    "Status"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Condition_-_tactics_update": {
+                                                                    "actions": {
+                                                                        "Compose_tactics": {
+                                                                            "runAfter": {
+                                                                            },
+                                                                            "type": "Compose",
+                                                                            "inputs": "Tactics: @{join(triggerBody()?['incidentUpdates']?['tactics'], '; ')}"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Condition_-_severity_update": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "contains": [
+                                                                                    "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                                                    "Tactics"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Condition_-_tag_updated": {
+                                                                    "actions": {
+                                                                        "Compose_tag": {
+                                                                            "runAfter": {
+                                                                                "For_each_-_new_tag": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Compose",
+                                                                            "inputs": "Tags: @{variables('New tag')}"
+                                                                        },
+                                                                        "For_each_-_new_tag": {
+                                                                            "foreach": "@triggerBody()?['incidentUpdates']?['labels']",
+                                                                            "actions": {
+                                                                                "Append_to_string_variable_-_tag": {
+                                                                                    "runAfter": {
+                                                                                    },
+                                                                                    "type": "AppendToStringVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "New tag",
+                                                                                        "value": "@concat(items('For_each_-_new_tag')?['labelName'], '; ')"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                            },
+                                                                            "type": "Foreach"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Condition_-_alert_updated": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "contains": [
+                                                                                    "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                                                    "Labels"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Update_Record_-_incident_not_closed": {
+                                                                    "runAfter": {
+                                                                        "Condition_-_status_update": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "comments": "Microsoft Sentinel incident is updated:\n\nUpdate fields: @{join(triggerBody()?['incidentUpdates']?['updatedFields'], '; ')}\nUpdate by: @{triggerBody()?['incidentUpdates']?['updatedBy']?['name']}\n\nNew values:\n@{outputs('Compose_alert')}\n@{outputs('Compose_severity')}\n@{outputs('Compose_owner')}\n@{outputs('Compose_status')}\n@{outputs('Compose_tag')}\n@{outputs('Compose_comment')}\n@{outputs('Compose_tactics')}"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['service-now']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "put",
+                                                                        "path": "/api/now/v2/table/@{encodeURIComponent('incident')}/@{encodeURIComponent(variables('SNOW System ID'))}",
+                                                                        "queries": {
+                                                                            "sysparm_display_value": false,
+                                                                            "sysparm_exclude_reference_link": true
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@triggerBody()?['object']?['properties']?['status']",
+                                                                        "Closed"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "Set_variable_-_SNOW_System_ID": {
+                                                        "runAfter": {
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "SNOW System ID",
+                                                            "value": "@{split(items('For_each')?['labelName'],': ')[1]}"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "contains": [
+                                                                "@items('For_each')?['labelName']",
+                                                                "SNOW"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            }
+                                        },
+                                        "runAfter": {
+                                        },
+                                        "type": "Foreach"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_variable_-_SNOW_System_ID": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SNOW System ID",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_alert": {
+                            "runAfter": {
+                                "Initialize_variable_-_comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "New alert",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_comment": {
+                            "runAfter": {
+                                "Initialize_variable_-_SNOW_System_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "New comments",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_creation_severity": {
+                            "runAfter": {
+                                "Initialize_variable_-_status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Creation severity",
+                                        "type": "string",
+                                        "value": "3"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_owner": {
+                            "runAfter": {
+                                "Initialize_variable_-_tag": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "New owner",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_severity": {
+                            "runAfter": {
+                                "Initialize_variable_-_owner": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "New severity",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_status": {
+                            "runAfter": {
+                                "Initialize_variable_-_severity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "New status",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_tag": {
+                            "runAfter": {
+                                "Initialize_variable_-_alert": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "New tag",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftsentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "service-now": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Service-NowConnectionName'))]",
+                                "connectionName": "[variables('Service-NowConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Service-Now')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "CreateAndUpdateSNOWRecord",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Service-NowConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Service-NowConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Service-NowConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Service-Now')]"
+                }
+            }
+        }
+    ]
+}

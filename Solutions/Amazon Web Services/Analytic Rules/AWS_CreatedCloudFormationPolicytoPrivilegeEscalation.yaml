@@ -1,0 +1,69 @@
+id: efdc3cff-f006-426f-97fd-4657862f7b9a
+name: CloudFormation policy created then used for privilege escalation
+description: |
+  'Detected creation of new Cloudformation policy and usage of one of the attach policy events (AttachUserPolicy/AttachRolePolicy/AttachGroupPolicy). This might indicate a privilege escalation technique that attackers could use.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1484
+query: |
+  let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
+  let createPolicy =  dynamic(["CreatePolicy", "CreatePolicyVersion"]);
+  let timeframe = 1d;
+  let lookback = 14d;
+  // Creating Master table with all the events to use with materialize for better performance
+  let EventInfo = AWSCloudTrail
+  | where TimeGenerated >= ago(lookback)
+  | where EventName in (EventNameList) or EventName in (createPolicy);
+  //Checking for Policy creation event with Full Admin Privileges since lookback period.
+  let FullAdminPolicyEvents =  materialize(  EventInfo
+  | where TimeGenerated >= ago(lookback)
+  | where EventName in (createPolicy)
+  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)
+  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement
+  | mvexpand Statement
+  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)
+  | extend Action = tostring(Action)
+  | where Effect =~ "Allow" and (((Action has "iam:*" or Action has "iam:PassRole") and Action has "cloudformation:*") or ((Action has "iam:*" or Action has "iam:PassRole") and Action contains "cloudformation:DescribeStacks" and Action contains "cloudformation:CreateStack") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "cloudformation:Describe*" and Action contains "cloudformation:Create*")) and Resource == "*" and Condition == ""
+  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | project-rename StartTime = TimeGenerated  );
+  let PolicyAttach = materialize(  EventInfo
+  | where TimeGenerated >= ago(timeframe)
+  | where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)
+  | extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),"/")[1])
+  | summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, UserIdentityUserName = iff(isnotempty(UserIdentityUserName),   UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1])), PolicyName
+  | extend AttachEvent = pack("StartTime", StartTime, "EndTime", EndTime, "EventName", EventName, "UserIdentityType",   UserIdentityType, "UserIdentityArn", UserIdentityArn, "SourceIpAddress", SourceIpAddress, "UserIdentityUserName", UserIdentityUserName)
+  | project EventSource, PolicyName, AttachEvent, AttachEventCount
+  );
+  // Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.
+  // These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.
+  FullAdminPolicyEvents
+  | join kind=leftouter
+  (
+      PolicyAttach
+  )
+  on PolicyName
+  | project-away PolicyName1
+  | extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled

@@ -1,0 +1,54 @@
+id: 2843e796-3d6c-4a78-a815-1db783b346a3
+name: High count download from a SAP Privileged account
+description: |
+  'This query detects high counts of download from a sensitive SAP Privileged account. A pre-built watchlist is leveraged to identify the privileged users that are under extra restrictions.
+  Reference: 
+    https://learn.microsoft.com/en-us/azure/sentinel/sap/sap-solution-security-content#available-watchlists
+    https://techcommunity.microsoft.com/t5/azure-sentinel/what-s-new-watchlists-templates-are-now-in-public-preview/ba-p/2614340'
+requiredDataConnectors:
+  - connectorId: SAP
+    dataTypes:
+      - SAPAuditLog
+tactics:
+  - InitialAccess
+  - Exfiltration
+relevantTechniques:
+  - T1078
+  - T1030
+query: |
+    let priv_users = ('_GetWatchlist("VIPUsers") | distinct ["User Principal Name"]');
+    SAPAuditLog 
+    | where User in (priv_users)
+    | where (MessageID in ('AU1') and Variable1 in ('A','H')) //AU1 = Logon Successful
+    | where MessageText has "Logon successful"
+    | project MessageID, LogonTypes=Variable1, ClientID, Email, User
+    | join kind=inner 
+    (
+    SAPAuditLog 
+    | where MessageID == "AUY" //AUY= Download bytes
+    | extend ByteCount= toint(replace_string(replace_string(Variable1, ".",""), ",","")), Code=Variable2, Path= Variable3
+    | summarize DownloadsByUser = count(), Paths= make_set(Variable3, 10), ByteCount=sum(ByteCount) by SystemID, ClientID, User, TerminalIPv6, Email, Host, TransactionCode, Instance
+    | where ByteCount > 5000
+    ) on Email, User
+    | project  User, Computer = Host, ClientID, Email, MessageID, LogonTypes, SystemID, ByteCount, DownloadsByUser, TerminalIPv6, TransactionCode
+    | extend UserName = tostring(split(User, '@', 0)[0]), UPNSuffix = tostring(split(User, '@', 1)[0])
+    | extend Account_0_Name = UserName
+    | extend Account_0_UPNSuffix = UPNSuffix
+    | extend IP_0_Address = TerminalIPv6
+    | extend Host_0_HostName = Computer
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+version: 1.0.0

@@ -1,0 +1,40 @@
+id: f041e01d-840d-43da-95c8-4188f6cef546
+name: GitHub Activites from a New Country
+description: |
+  'Detect activities from a location that was not recently or was never visited by the user or by any user in your organization.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let LearningPeriod = 7d;
+  let RunTime = 1h;
+  let StartTime = 1h;
+  let EndRunTime = StartTime - RunTime;
+  let EndLearningTime = StartTime + LearningPeriod;
+  let GitHubCountryCodeLogs = (GitHubAuditData
+  | where Country != "");
+    GitHubCountryCodeLogs
+  | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
+  | summarize makeset(Country) by Actor
+  | join kind=innerunique (
+    GitHubCountryCodeLogs
+    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+    | distinct Country, Actor, TimeGenerated
+  ) on Actor 
+  | where set_Country !contains Country
+  | extend AccountCustomEntity = Actor , timestamp = TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

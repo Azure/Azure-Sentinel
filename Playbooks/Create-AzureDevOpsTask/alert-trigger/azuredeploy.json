@@ -1,0 +1,187 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Create-AzureDevOpsTask-alert-trigger",
+    "version": "1.0.0",
+    "description": "This playbook will create the Azure DevOps task filled with the Microsoft Sentinel incident details.  ",
+    "prerequisites": [ "None" ],
+    "lastUpdateTime": "2022-07-25T00:00:00.000Z",
+    "entities": [],
+    "tags": [],
+    "support": {
+      "tier": "Community"
+    },
+    "categories": {
+      "domains": [ "Security - Automation (SOAR)" ]
+    },
+    "author": {
+      "name": "Nicholas DiCola"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Create AzureDevOpsTask Alert Trigger",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ],
+    "source": {
+      "kind": "Community"
+    }
+  },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Create-AzureDevOpsTask-alert-trigger",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureDevOpsConnectionName": "[concat('azuredevops-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureDevOpsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureDevOpsConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/visualstudioteamservices')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureDevOpsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V2)": {
+                            "runAfter": {
+                                "Create_a_work_item": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Value": "Azure DevOps Task created: @{body('Create_a_work_item')?['url']}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent(triggerBody()?['AlertType'])}/@{encodeURIComponent(triggerBody()?['ProviderAlertId'])}"
+                            }
+                        },
+                        "Create_a_work_item": {
+                            "runAfter": {
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "description": "Description: @{triggerBody()?['Description']}\nSeverity: @{triggerBody()?['Severity']}\nWorkspace ID: @{triggerBody()?['WorkspaceId']}\n",
+                                    "dynamicFields": {
+                                        "System.Tags": "Sentinel"
+                                    },
+                                    "title": "New Microsoft Sentinel Incident: @{triggerBody()?['AlertDisplayName']}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['visualstudioteamservices']['connectionId']"
+                                    }
+                                },
+                                "method": "patch",
+                                "path": "/@{encodeURIComponent('DevOpsProject123')}/_apis/wit/workitems/$@{encodeURIComponent('Task')}",
+                                "queries": {
+                                    "account": "DevOpsOrg123"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "visualstudioteamservices": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureDevOpsConnectionName'))]",
+                                "connectionName": "[variables('AzureDevOpsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/visualstudioteamservices')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

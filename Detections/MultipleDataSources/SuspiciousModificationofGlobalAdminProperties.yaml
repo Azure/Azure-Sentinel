@@ -1,0 +1,84 @@
+id: 48602a24-67cf-4362-b258-3f4249e55def
+name: Suspicious modification of Global Administrator user properties
+description: |
+  ' This query will detect if user properties of Global Administrator are updated by an existing user. Usually only user administrator or other global administrator can update such properties.
+  Investigate if such user change is an attempt to elevate an existing low privileged identity or rogue administrator activity'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+query: |
+  let query_frequency = 1h;
+  let query_period = 14d;
+  IdentityInfo
+  | where TimeGenerated > ago(query_period)
+  | where set_has_element(AssignedRoles, "Global Administrator")
+  | distinct AccountUPN, AccountObjectId
+  | join kind=inner (
+      AuditLogs
+      | where TimeGenerated > ago(query_frequency)
+      | where OperationName=~ "Update user" and Result =~ "success"
+      // | where isnotempty(InitiatedBy["user"])
+      | mv-expand TargetResource = TargetResources
+      | where TargetResource["type"] == "User"
+      | extend AccountObjectId = tostring(TargetResource["id"])
+      | where tostring(TargetResource["modifiedProperties"]) != "[]"
+      | mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
+          summarize modifiedProperties = make_bag(
+              bag_pack(tostring(modifiedProperty["displayName"]),
+                  bag_pack("oldValue", trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
+                      "newValue", trim(@'[\"\s]+', tostring(modifiedProperty["newValue"])))))
+      )
+      | where not(tostring(modifiedProperties["Included Updated Properties"]["newValue"]) in ("LastDirSyncTime", ""))
+      | where not(tostring(modifiedProperties["Included Updated Properties"]["newValue"]) == "StrongAuthenticationPhoneAppDetail" and isnotempty(modifiedProperties["StrongAuthenticationPhoneAppDetail"]) and tostring(array_sort_asc(extract_all(@'\"Id\"\:\"([^\"]+)\"', tostring(modifiedProperties["StrongAuthenticationPhoneAppDetail"]["newValue"])))) == tostring(array_sort_asc(extract_all(@'\"Id\"\:\"([^\"]+)\"', tostring(modifiedProperties["StrongAuthenticationPhoneAppDetail"]["oldValue"])))))
+      | extend
+          Initiator = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["displayName"]), tostring(InitiatedBy["user"]["userPrincipalName"])),
+          InitiatorId = iif(isnotempty(InitiatedBy["app"]), tostring(InitiatedBy["app"]["servicePrincipalId"]), tostring(InitiatedBy["user"]["id"])),
+          IPAddress = tostring(InitiatedBy[tostring(bag_keys(InitiatedBy)[0])]["ipAddress"])
+  ) on AccountObjectId
+  | project TimeGenerated, Category, Identity, Initiator, IPAddress, OperationName, Result, AccountUPN, InitiatedBy, AdditionalDetails, TargetResources, AccountObjectId, InitiatorId, CorrelationId
+  | extend
+      InitiatorName = tostring(split(Initiator, "@")[0]),
+      InitiatorUPNSuffix = tostring(split(Initiator, "@")[1]),
+      AccountName = tostring(split(AccountUPN, "@")[0]),
+      AccountUPNSuffix = tostring(split(AccountUPN, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatorName
+      - identifier: UPNSuffix
+        columnName: InitiatorUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ashwin Patil
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

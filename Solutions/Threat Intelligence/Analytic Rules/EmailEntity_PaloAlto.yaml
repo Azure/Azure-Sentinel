@@ -1,0 +1,65 @@
+id: ffcd575b-3d54-482a-a6d8-d0de13b6ac63
+name: TI map Email entity to PaloAlto CommonSecurityLog
+description: |
+  'Identifies a match in CommonSecurityLog table from any Email IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  //Filtering the table for Email related IOCs
+  | where isnotempty(EmailSenderAddress)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+      CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserID)
+      // Filtering PAN Logs for specific event type to match relevant email entities
+      | where DeviceVendor == "Palo Alto Networks" and  DeviceEventClassID == "wildfire" and ApplicationProtocol in ("smtp","pop3")
+      | extend DestinationUserID = tolower(DestinationUserID)
+      | where DestinationUserID matches regex emailregex
+      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  )
+  on $left.EmailSenderAddress == $right.DestinationUserID
+  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, DestinationUserID
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient,
+  EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction, SourceIP, SourcePort,
+  DestinationIP, DestinationPort, Protocol, ApplicationProtocol
+  | extend timestamp = CommonSecurityLog_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: DestinationUserID
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.2.4
+kind: Scheduled

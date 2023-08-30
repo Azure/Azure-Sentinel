@@ -1,0 +1,68 @@
+id: 106813db-679e-4382-a51b-1bfc463befc3
+name: TI Map URL Entity to PaloAlto Data
+description: |
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in PaloAlto Data.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(Url)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+    CommonSecurityLog
+    | extend IngestionTime = ingestion_time()
+    | where IngestionTime > ago(dt_lookBack)
+    // Select on Palo Alto logs
+    | where DeviceVendor =~ "Palo Alto Networks"
+    | where DeviceEventClassID =~ 'url'
+    //Uncomment the line below to only alert on allowed connections
+    //| where DeviceAction !~ "block-url"
+    //Select logs where URL data is populated
+    | extend PA_Url = column_ifexists("RequestURL", "None")
+    | extend PA_Url = iif(isempty(PA_Url), extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
+    | extend PA_Url = iif(PA_Url !startswith "http://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), iif(PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url))
+    | where isnotempty(PA_Url)
+    | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  ) on $left.Url == $right.PA_Url
+  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, PA_Url
+  | project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, PA_Url, DeviceName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: PA_Url
+version: 1.2.3
+kind: Scheduled

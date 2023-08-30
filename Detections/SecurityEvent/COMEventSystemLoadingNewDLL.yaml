@@ -1,0 +1,106 @@
+id: 02f6c2e5-219d-4426-a0bf-ad67abc63d53
+name: COM Event System Loading New DLL
+description: |
+  'This query uses Sysmon Image Load (Event ID 7) and Process Create (Event ID 1) data to look for COM Event System being used to load a newly seen DLL.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1543
+query: |
+  let lookback_start = 7d;
+  let lookback_end = 1d;
+  let timedelta = 5s;
+  // Get a list of previously seen DLLs being loaded
+  let known_dlls = (Event
+  | where TimeGenerated between(ago(lookback_start)..ago(lookback_end))
+  | where EventID == 7
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).["Data"]
+  | mv-expand LoadedItems
+  | where tostring(LoadedItems.["@Name"]) =~ "ImageLoaded"
+  | extend DLL = tostring(LoadedItems.["#text"])
+  | summarize by DLL);
+  // Get Image Load events related to svchost.exe
+  Event
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  // Image Load Event in Sysmon
+  | where EventID == 7
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend Images = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).["Data"]
+  | mv-expand Images
+  // Parse out executing process
+  | where tostring(Images.["@Name"]) =~ "Image"
+  | extend Image = tostring(Images.["#text"])
+  | where Image endswith "\\svchost.exe"
+  // Parse out loaded DLLs
+  | extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).["Data"]
+  | mv-expand LoadedItems
+  | where tostring(LoadedItems.["@Name"]) =~ "ImageLoaded"
+  | extend DLL = tostring(LoadedItems.["#text"])
+  | extend Image = tostring(Image)
+  | extend ImageLoadTime = TimeGenerated
+  // Join with processes with a command line related to COM Event System
+  | join kind = inner(Event
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  // Sysmon process execution events
+  | where EventID == 1
+  | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | extend ParentImage = tostring(column_ifexists("ParentImage", "NotAvailable"))
+  // Command line related to COM Event System
+  | where ParentImage endswith "\\svchost.exe"
+  //| where ParentCommandLine has_all (" -k LocalService"," -p"," -s EventSystem")
+  | extend ProcessExecutionTime = TimeGenerated) on $left.Image == $right.ParentImage
+  // Check timespan between DLL load and process creation
+  | extend delta =  ProcessExecutionTime - ImageLoadTime
+  | where ImageLoadTime <= ProcessExecutionTime and delta <= timedelta
+  // Filter to only newly seen DLLs
+  | where DLL !in (known_dlls)
+  | extend ParentCommandLine = tostring(column_ifexists("ParentCommandLine", "NotAvailable"))
+  | project-reorder ImageLoadTime, ProcessExecutionTime , Image, ParentCommandLine, DLL
+  | extend Hashes = tostring(column_ifexists("Hashes", "NotAvailable, NotAvailable"))
+  | extend Hashes = split(Hashes, ",")
+  | mv-apply Hashes on (summarize FileHashes = make_bag(pack(tostring(split(Hashes, "=")[0]), tostring(split(Hashes, "=")[1]))))
+  | extend SHA1 = tostring(FileHashes.SHA1)
+  | extend HashAlgo = "SHA1"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: SHA1
+      - identifier: Algorithm
+        columnName: HashAlgo
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

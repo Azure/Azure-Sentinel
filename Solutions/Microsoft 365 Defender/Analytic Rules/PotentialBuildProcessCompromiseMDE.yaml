@@ -1,0 +1,61 @@
+id: 1bf6e165-5e32-420e-ab4f-0da8558a8be2
+name: Potential Build Process Compromise - MDE
+description: |
+  'The query looks for source code files being modified immediately after a build process is started. The purpose of this is to look for malicious code injection during the build process. This query uses Microsoft Defender for Endpoint telemetry.
+  More details: https://techcommunity.microsoft.com/t5/azure-sentinel/monitoring-the-software-supply-chain-with-azure-sentinel/ba-p/2176463'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceFileEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1554
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  // How far back to look for events from
+  let timeframe = 1d;
+  // How close together build events and file modifications should occur to alert (make this smaller to reduce FPs)
+  let time_window = 5m;
+  // Edit this to include build processes used
+  let build_processes = dynamic(["MSBuild.exe", "dotnet.exe", "VBCSCompiler.exe"]);
+  // Include any processes that you want to allow to edit files during/around the build process
+  let allow_list = dynamic([]);
+  DeviceProcessEvents
+  | where TimeGenerated > ago(timeframe)
+  // Look for build process starts
+  | where FileName has_any (build_processes)
+  | summarize by BuildParentProcess=InitiatingProcessFileName, BuildProcess=FileName, BuildAccount = AccountName, DeviceName, BuildCommand=ProcessCommandLine, timekey= bin(TimeGenerated, time_window), BuildProcessTime=TimeGenerated
+  | join kind=inner(
+  DeviceFileEvents
+  | where TimeGenerated > ago(timeframe)
+  | where InitiatingProcessFileName !in (allow_list)
+  | where ActionType == "FileCreated"  or ActionType == "FileModified"
+  // Look for code files, edit this to include file extensions used in build.
+  | where FileName endswith ".cs" or FileName endswith ".cpp"
+  | summarize by FileEditParentProcess=InitiatingProcessParentFileName, FileEditAccount = InitiatingProcessAccountName, DeviceName, FileEdited=FileName, FileEditProcess=InitiatingProcessFileName, timekey= bin(TimeGenerated, time_window), FileEditTime=TimeGenerated)
+  // join where build processes and file modifications seen at same time on same host
+  on timekey, DeviceName
+  // Limit to only where the file edit happens after the build process starts
+  | where BuildProcessTime <= FileEditTime
+  | summarize make_set(FileEdited), make_set(FileEditProcess), make_set(FileEditAccount) by timekey, DeviceName, BuildParentProcess, BuildProcess
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName,0,indexof(DeviceName,'.')),DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName,indexof(DeviceName,'.')+1),"")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1
+kind: Scheduled

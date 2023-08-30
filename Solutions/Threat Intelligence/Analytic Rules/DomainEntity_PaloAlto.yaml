@@ -1,0 +1,94 @@
+id: ec21493c-2684-4acd-9bc2-696dbad72426
+name: TI map Domain entity to PaloAlto
+description: |
+  'Identifies a match in Palo Alto data in CommonSecurityLog table from any Domain IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;  // Duration to look back for recent logs (1 hour)
+  let ioc_lookBack = 14d;  // Duration to look back for recent threat intelligence indicators (14 days)
+  // Create a list of top-level domains (TLDs) in our threat feed for later validation of extracted domains
+  let list_tlds = 
+      ThreatIntelligenceIndicator
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true and ExpirationDateTime > now()
+      | where isnotempty(DomainName)
+      | extend DomainName = tolower(DomainName)
+      | extend parts = split(DomainName, '.')
+      | extend tld = parts[(array_length(parts)-1)]
+      | summarize count() by tostring(tld)
+      | summarize make_list(tld);
+  let Domain_Indicators = 
+      ThreatIntelligenceIndicator
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true and ExpirationDateTime > now()
+      // Filter to pick up only IOC's that contain the entities we want (in this case, DomainName)
+      | where isnotempty(DomainName)
+      | extend TI_DomainEntity = DomainName;
+  Domain_Indicators
+      // Join with CommonSecurityLog to find potential malicious activity
+      | join kind=innerunique (
+          CommonSecurityLog
+          | extend IngestionTime = ingestion_time()
+          | where IngestionTime > ago(dt_lookBack)
+          | where DeviceVendor =~ 'Palo Alto Networks'
+          | where DeviceEventClassID =~ 'url'
+          // Uncomment the line below to only alert on allowed connections
+          // | where DeviceAction !~ "block-url"
+          // Extract domain from RequestURL, if not present, extract it from AdditionalExtensions
+          | extend PA_Url = coalesce(RequestURL, "None")
+          | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith "PanOS", extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
+          | extend PA_Url = iif(PA_Url !in~ ('None', 'http://None', 'https://None') and PA_Url !startswith "http://" and PA_Url !startswith "https://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), PA_Url)
+          | extend PA_Url = iif(PA_Url !in~ ('None', 'http://None', 'https://None') and PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url)
+          | extend Domain = trim(@"""", tostring(parse_url(PA_Url).Host))
+          | where isnotempty(Domain)
+          | extend Domain = tolower(Domain)
+          | extend parts = split(Domain, '.')
+          // Split out the top-level domain (TLD) for the purpose of checking if we have any TI indicators with this TLD to match on
+          | extend tld = parts[(array_length(parts)-1)]
+          // Validate parsed domain by checking TLD against TLDs from the threat feed and drop domains where there is no chance of a match
+          | where tld in~ (list_tlds)
+          | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+      ) on $left.TI_DomainEntity == $right.Domain
+      | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+      // Group the results by IndicatorId and Domain and keep only the latest CommonSecurityLog_TimeGenerated
+      | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Domain
+      // Select the desired fields for the final result set
+      | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
+      // Add a new field 'timestamp' for convenience, using the CommonSecurityLog_TimeGenerated as its value
+      | extend timestamp = CommonSecurityLog_TimeGenerated
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: PA_Url
+version: 1.4.0
+kind: Scheduled

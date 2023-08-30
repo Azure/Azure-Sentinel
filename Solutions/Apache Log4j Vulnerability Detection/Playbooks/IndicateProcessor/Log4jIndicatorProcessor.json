@@ -1,0 +1,240 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Log4jIndicatorProcessor", 
+        "description": "These playbooks automate the ingest of threat indicators into the ThreatIntelligenceIndicator table of an Microsoft Sentinel workspace. Sample data for Log4j IOC can be found at https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Log4j_IOC_List.csv.",
+        "prerequisites": ["None"],
+        "lastUpdateTime": "2022-08-03T00:00:00.000Z", 
+        "mainSteps": ["1. You must deploy the BatchImportToSentinel playbook before deploying the Log4jIndicatorProcessor playbook.", 
+            "2. During the deployment of Log4jIndicatorProcessor playbook, Playbook2 parameter name should be that of BatchImportToSentinel(default)."
+        ],
+        "entities": [], 
+        "tags": [], 
+        "postDeployment": ["Deploying these playbooks requires the following steps:", 
+            "1. BatchImportToSentinel is deployed first, you need to provide following parameters", 
+            "![image](https://user-images.githubusercontent.com/95622706/151350644-bc46c35d-5e60-412a-a638-48aca963b69f.png)",
+            "2. BatchImportToSentinel will need connection for the Submit multiple tiIndicators action as shown below -", 
+            "![image](https://user-images.githubusercontent.com/95622706/151345549-ff19fd73-7589-4dd4-afb9-00ee8dbea723.png)", 
+            "Configuring this connection, you will be asked to login to Azure Active Directory and consent for the permissions needed for the Playbook to submit threat indicators to the Graph Security API. You need to authenticate with as a user with an Azure Active Directory Limited Administrator Role of Global Administrator.", 
+            "3. Log4jIndicatorProcessor is deployed after BatchImportToSentinel. You need to provide following parameters –", 
+            "![image](https://user-images.githubusercontent.com/95622706/151345675-bca4f7f3-5c79-4a3f-ab55-5c635c51e16a.png) ", 
+            "4. Log4jIndicatorProcessor Playbook performs the following steps: ",
+            "• Triggered on a defined schedule", 
+            "• Reads the indicators from GitHub", 
+            "• Transforms the indicators from the text-based source to the appropriate tiIndicator JSON format", 
+            "• Uses the Batch action to send the indicators to the second Playbook (BatchImportToSentinel)", 
+            "5. Following configuration is needed in Log4jIndicatorProcessor Playbook after deployment", 
+            "Query – This KQL query will get the external data from https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Log4j_IOC_List.csv. This can be configured to any other data source.", 
+            "Connection - Configuring this connection, you will be asked to login to Azure Active Directory and consent for the permissions needed for the Playbook to submit threat indicators to the Graph Security API. You need to authenticate with as a user with an Azure Active Directory Limited Administrator Role of Global Administrator.", 
+            "6. Managed Identity – If you want to use managed identity to configure logic apps, Create managed identity from connections tab, use following powershell commands to provide required permissions for managed identity on Microsoft graph API – Connect-AzureAD -TenantId <tenantid>", 
+            "$graph = Get-AzureADServicePrincipal -Filter ''AppId eq '00000003-0000-0000-c000-000000000000''' ", 
+            "$permissionlist = @('Group.Read.All','SecurityActions.Read.All','SecurityActions.ReadWrite.All','SecurityEvents.Read.All','SecurityEvents.ReadWrite.All','ThreatIndicators.ReadWrite.OwnedBy' ) foreach( $permission in $permissionlist) { $groupReadPermission = $graph.AppRoles ` | where Value -Like ($permission) ` | Select-Object $msi = Get-AzureADServicePrincipal -ObjectId <objid of managed identity> New-AzureADServiceAppRoleAssignment ` -Id $groupReadPermission.Id ` -ObjectId $msi.ObjectId ` -PrincipalId $msi.ObjectId ` -ResourceId $graph.ObjectId }"
+        ],
+        "support": {
+            "tier": "Microsoft" 
+        },
+        "author": {
+            "name": "Ruchir Shrivastava"
+        },
+        "releaseNotes": [
+        {
+          "version": "1.0.0",
+          "title": "Log4jIndicatorProcessor",
+          "notes": [
+            "Initial version"
+          ]
+        }
+        ]
+    },
+    "parameters": {
+     "MicrosoftSentinelLogAnalyticsWorkspaceName": {
+            "defaultValue": "Microsoft Sentinel Workspace Name",
+            "type": "string"
+          },
+     "PlaybookName": {
+      "defaultValue": "Log4jIndicatorProcessor",
+      "type": "string"
+    },
+    "Playbook2Name": {
+      "defaultValue": "BatchImportToSentinel",
+      "type": "string"
+    },
+    "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+          }        
+    },
+    "variables": {"AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"},
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+              "displayName": "[parameters('UserName')]",
+              "customParameterValues": {},
+              "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+            }
+          },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+             "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                         "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                    }
+                                           
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Select_Log4j_indicators_and_transform_to_tiIndicators')",
+                            "actions": {
+                                "BatchImportToSentinel": {
+                                    "runAfter": {},
+                                    "type": "SendToBatch",
+                                    "inputs": {
+                                        "batchName": "tiIndicators",
+                                        "content": "@items('For_each')",
+                                        "host": {
+                                            "triggerName": "Batch_messages",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Playbook2Name'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Select_Log4j_indicators_and_transform_to_tiIndicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Run_query_and_list_results_V2_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Run_query_and_list_results_V2_2')",
+                                "schema": {
+                                    "properties": {
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "IPAddress": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "IPAddress"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_V2_2": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "query": "externaldata(IPAddress: string)[h@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Log4j_IOC_List.csv\"]\nwith (ignoreFirstRecord = true)",
+                                    "timerange": {
+                                        "relativeTimeRange": "Last 24 hours"
+                                    },
+                                    "timerangetype": "2"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryDataV2",
+                                "queries": {
+                                    "resourcegroups": "[resourceGroup().name]",
+                                    "resourcename": "[parameters('MicrosoftSentinelLogAnalyticsWorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[subscription().subscriptionId]"
+                        
+                                }
+                            }
+                        },
+                        "Select_Log4j_indicators_and_transform_to_tiIndicators": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@body('Parse_JSON')?['value']",
+                                "select": {
+                                    "action": "alert",
+                                    "confidence": "100",
+                                    "description": "Microsoft Log4j threat indicator",
+                                    "expirationDateTime": "2030-05-01T00:00:00.0000000Z",
+                                    "networkIPv4": "@item()?['IPAddress']",
+                                    "targetProduct": "Azure Sentinel",
+                                    "threatType": "WatchList",
+                                    "tlpLevel": "white"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                              }
+                        }
+                    }
+                   
+                }
+            }
+
+        }            
+        
+    ]
+}

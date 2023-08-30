@@ -1,0 +1,781 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "BlockIP-Azure Firewall New Rule",
+    "description": "This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Microsoft Sentinel Incident",
+    "mainSteps:": [
+      "When a new Sentinel incident is created:",
+      "1. An adaptive card is sent to the SOC channel, providing IP address, Virus Total report , showing list of existing firewalls in the Resource group and providing an option to block IP Address to Deny network rules collection or Ignore.",
+      "2. If SOC user confirms yes, the IP Address gets added to deny network rules collection and incident will get updates with endpoint information, summary of the action taken and virus total scan report.",
+      "3. Else, incident will get updates with endpoint information and summary of the action taken."
+    ],
+    "prerequisites": [
+      "**This playbook template is based on Microsoft Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.",
+      "1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.",
+      "2. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. Relevant instructions can be found in the connector doc page.",
+      "3. This playbook will add new rules to existing Network Collections in Azure Firewalls in your subscription. Make sure you have such prior to running the playbook.",
+      "4.To use VirusTotal connector, get your Virus Totan API key. [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)"
+    ],
+    "lastUpdateTime": "2022-05-24T00:00:00.000Z",
+    "entities": [
+      "Ip"
+    ],
+    "tags": [],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Dharma Reddy, Azure Firewall"
+    },
+    "postDeployment": [
+      "**a. Authorize connections**",
+      "Once deployment is complete, you will need to authorize each connection.",
+      "1. Click the Microsoft Sentinel connection resource",
+      "2. Click edit API connection",
+      "3. Click Authorize",
+      "4. Sign in",
+      "5. Click Save",
+      "6. Repeat steps for other connection such as Teams connection and Virus Total (For authorizing the Virus Total API connection, the API Key needs to be provided)",
+      "7. Authorize the Azure Firewall custom connector by following the below mentioned steps.",
+      "a. Navigate to playbook",
+      "b. Click Edit",
+      "c. Find the action with the name 'Lists all Azure Firewalls in a resource group', 'Gets the specified Azure Firewall', 'Creates or updates the specified Azure Firewall', 'Updates tags for Azure Firewall resource' in the workflow.",
+      "d. Click Change connection [ Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. ]",
+      "**b. Configurations in Sentinel**",
+      "1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.",
+      "2. Configure the automation rules to trigger this playbook"
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "BlockIP-Azure Firewall New Rule",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "AzureFirewall-BlockIP-addNewRule",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Logic App or Playbook"
+      }
+    },
+    "CustomConnectorName": {
+      "defaultValue": "AzureFirewallConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the custom connector which interacts with Azure Firewall. Cannot contain spaces."
+      }
+    },
+    "Teams GroupId": {
+      "defaultValue": "TeamgroupId",
+      "type": "String",
+      "metadata": {
+        "description": "GroupId of the Team channel"
+      }
+    },
+    "Teams ChannelId": {
+      "defaultValue": "TeamChannelId",
+      "type": "String",
+      "metadata": {
+        "description": "Team ChannelId"
+      }
+    },
+    "clientId": {
+      "defaultValue": "<enter the ClientId of the application>",
+      "type": "string"
+    },
+    "clientSecret": {
+      "defaultValue": "<enter the Client secret of the application>",
+      "type": "securestring"
+    }
+  },
+  "variables": {
+    "OAuthConnection": "[concat('OAuthConnection-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]",
+    "VirusTotalConnectionName": "[concat('VirusTotal-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('OAuthConnection')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "OAuthConnection",
+        "parameterValues": {
+          "token:clientId": "[parameters('clientId')]",
+          "token:clientSecret": "[parameters('clientSecret')]",
+          "token:TenantId": "[subscription().tenantId]",
+          "token:grantType": "client_credentials"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]"
+      ],
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('TeamsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]"
+      ],
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('VirusTotalConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]"
+      ],
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_IPs": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/ip"
+              }
+            },
+            "FinalRuleCollectionList": {
+              "runAfter": {
+                "RulecollectionFilteredArray": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "FinalRuleCollectionList",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "Variable to store the entire Network Rules collection"
+            },
+            "For_each_Firewall": {
+              "foreach": "@body('Gets_all_the_Azure_Firewalls_in_a_subscription')?['value']",
+              "actions": {
+                "Choice_list_-_Firewall_and_Rule_collection": {
+                  "foreach": "@body('Select_Firewall_and_Rules_collection_name')",
+                  "actions": {
+                    "Condition": {
+                      "actions": {
+                        "Append_to_choice_list": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "FirewallsList",
+                            "value": "@item()"
+                          },
+                          "description": "Append prepared Firewall and Rules collection list"
+                        }
+                      },
+                      "runAfter": {},
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@item()?['action']",
+                              "Deny"
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    }
+                  },
+                  "runAfter": {
+                    "Select_Firewall_and_Rules_collection_name": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach",
+                  "description": "Prepare a choice list using the above formatted Output."
+                },
+                "Select_Firewall_and_Rules_collection_name": {
+                  "runAfter": {},
+                  "type": "Select",
+                  "inputs": {
+                    "from": "@items('For_each_Firewall')?['properties']?['networkRuleCollections']",
+                    "select": {
+                      "action": "@item()?['properties']?['action']?['type']",
+                      "title": "@{split(items('For_each_firewall')?['id'],'/')?[4]}  @{items('For_each_Firewall')?['name']}  @{item()?['name']}",
+                      "value": "@{split(items('For_each_firewall')?['id'],'/')?[4]}::@{items('For_each_Firewall')?['name']}::@{item()?['name']}"
+                    }
+                  },
+                  "description": "Select Firewall name and Rule collection name from the Azure Firewall response"
+                }
+              },
+              "runAfter": {
+                "Gets_all_the_Azure_Firewalls_in_a_subscription": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach",
+              "description": "Iterate over each Firewall present from the Resource Group and Prepare a Firewall - Rules collection choice list to show in the Adaptive Card"
+            },
+            "For_each_IP_Address_Entity_from_Incident": {
+              "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+              "actions": {
+                "Add_IP_address_to_the_firewall_network_rules_list_based_on_SOC_choice": {
+                  "actions": {
+                    "Compose": {
+                      "runAfter": {},
+                      "type": "Compose",
+                      "inputs": "@split(body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['FirewallRulesSelectedVal'],',')",
+                      "description": "Preparing an Array with SOC selected Firewall Options"
+                    },
+                    "For_each_rules_collection_selected_from_Adaptive_Card": {
+                      "foreach": "@outputs('Compose')",
+                      "actions": {
+                        "Add_comment_to_incident_with_the_endpoint_info_and_action_taken": {
+                          "runAfter": {
+                            "Creates_or_updates_the_specified_Azure_Firewall": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<p><strong>Azure Firewall Playbook performed the following action :-<br>\n<br>\nIP Address : &nbsp;</strong><strong>@{items('For_each_IP_Address_Entity_from_Incident')?['Address']}</strong><strong><br>\n<br>\nVirus Total Report &nbsp;:<br>\n<br>\nCountry &nbsp;: &nbsp;</strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['country']}</strong><strong><br>\nContinent : </strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['continent']}</strong><strong><br>\nASN : </strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['asn']}</strong><strong><br>\nAS_Owner : </strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['as_owner']}</strong><strong><br>\n<br>\nTotal Votes :-<br>\n&nbsp;<br>\n&nbsp;Malicious : </strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['total_votes']?['malicious']}</strong><strong><br>\n&nbsp;Positives Votes : </strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['total_votes']?['harmless']}</strong><strong><br>\n&nbsp;Negative Votes : &nbsp;</strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['total_votes']?['malicious']}</strong><strong><br>\n&nbsp;Suspicious Votes: </strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['last_analysis_stats']?['suspicious']}</strong><strong><br>\n&nbsp;Number of reports saying that is Undetected : </strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['last_analysis_stats']?['undetected']}</strong><strong><br>\nNetwork : </strong><strong>@{body('Ip_scan_report_V3')?['data']?['attributes']?['network']}</strong><strong><br>\n<br>\nAction Taken In Azure Firewall :-<br>\n<br>\nAdded IP Address </strong><strong>@{items('For_each_IP_Address_Entity_from_Incident')?['Address']}</strong><strong> to the below Azure Firewall Configuration :-<br>\n<br>\nFirewall name : </strong><strong></strong><strong><br>\nRule Collection name : </strong><strong></strong><strong><br>\nRule name : </strong><strong></strong><strong><br>\n<br>\n</strong></p>"
+                            },
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment"
+                          }
+                        },
+                        "Assign_Rule": {
+                          "runAfter": {
+                            "Assign_selected_Rules_present_from_Network_rules_collection": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "Rule",
+                            "value": [
+                              {
+                                "description": "Block traffic based on source IPs and ports",
+                                "destinationAddresses": [
+                                  "*"
+                                ],
+                                "destinationPorts": [
+                                  "*"
+                                ],
+                                "name": "@concat('Rule',utcNow('yyyy-MM-ddTHH:mm:ssZ'))",
+                                "protocols": [
+                                  "Any"
+                                ],
+                                "sourceAddresses": [
+                                  "@items('For_each_IP_Address_Entity_from_Incident')?['Address']"
+                                ]
+                              }
+                            ]
+                          },
+                          "description": "Variable to store the new rule with malicious IP Address reported"
+                        },
+                        "Assign_selected_Rules_present_from_Network_rules_collection": {
+                          "runAfter": {
+                            "Excluded_selected_rules_collection_list_from_Adaptive_Card": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "RulecollectionFilteredArray",
+                            "value": "@body('Filter_Network_rule_collection')[0]?['properties']?['rules']"
+                          },
+                          "description": "Variable to store the rules present in the selected network rules collection"
+                        },
+                        "Creates_or_updates_the_specified_Azure_Firewall": {
+                          "runAfter": {
+                            "Final_Network_rules_collection_list": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "location": "@body('Gets_the_specified_Azure_Firewall')?['location']",
+                              "properties": {
+                                "networkRuleCollections": "@variables('FinalRuleCollectionList')"
+                              }
+                            },
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['AzureFirewallConnector']['connectionId']"
+                              }
+                            },
+                            "method": "put",
+                            "path": "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(outputs('Resource_Group_name'))}/providers/Microsoft.Network/azureFirewalls/@{encodeURIComponent(outputs('Firewall_name'))}",
+                            "queries": {
+                              "api-version": "2020-07-01"
+                            }
+                          },
+                          "description": "Create a rule with in the specified Azure firewall"
+                        },
+                        "Excluded_selected_rules_collection_list_from_Adaptive_Card": {
+                          "runAfter": {
+                            "Filter_network_collections_list_excluding_selected_rules_collection": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "FinalRuleCollectionList",
+                            "value": "@body('Filter_network_collections_list_excluding_selected_rules_collection')"
+                          },
+                          "description": "Variable to store the above filtered collection"
+                        },
+                        "Filter_Network_rule_collection": {
+                          "runAfter": {
+                            "Store_Existing_Rule_collection_information": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Query",
+                          "inputs": {
+                            "from": "@variables('RulecollectionArray')",
+                            "where": "@equals(item()?['name'], trim(split(items('For_each_rules_collection_selected_from_Adaptive_Card'), '::')?[2]))"
+                          },
+                          "description": "Filter the network rule collection information based on the network rule collection selected in the Adaptive Card"
+                        },
+                        "Filter_network_collections_list_excluding_selected_rules_collection": {
+                          "runAfter": {
+                            "Filter_Network_rule_collection": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Query",
+                          "inputs": {
+                            "from": "@variables('RulecollectionArray')",
+                            "where": "@not(equals(item()?['name'], trim(split(items('For_each_rules_collection_selected_from_Adaptive_Card'), '::')?[2])))"
+                          },
+                          "description": "Filter the network collection list by excluding the selected rules collection"
+                        },
+                        "Final_Network_rules_collection_list": {
+                          "runAfter": {
+                            "Set_property_to_update_the_properties_with_in_the_selected_rules_collection_list": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "FinalRuleCollectionList",
+                            "value": "@outputs('Set_property_to_update_the_properties_with_in_the_selected_rules_collection_list')"
+                          },
+                          "description": "Append the selected rules collection list "
+                        },
+                        "Firewall_name": {
+                          "runAfter": {},
+                          "type": "Compose",
+                          "inputs": "@trim(split(items('For_each_rules_collection_selected_from_Adaptive_Card'),'::')?[1])",
+                          "description": "Reading the firewall name from the SOC selected Firewall Rule collection"
+                        },
+                        "Gets_the_specified_Azure_Firewall": {
+                          "runAfter": {
+                            "Resource_Group_name": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['AzureFirewallConnector']['connectionId']"
+                              }
+                            },
+                            "method": "get",
+                            "path": "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(outputs('Resource_Group_name'))}/providers/Microsoft.Network/azureFirewalls/@{encodeURIComponent(outputs('Firewall_name'))}",
+                            "queries": {
+                              "api-version": "2020-07-01"
+                            }
+                          },
+                          "description": "Gets the specified Azure Firewall information from the Azure Firewall Connector"
+                        },
+                        "Join_the_New_Rule_to_the_selected_Rules_collection": {
+                          "runAfter": {
+                            "Assign_Rule": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Compose",
+                          "inputs": "@union(variables('RuleCollectionFilteredArray'),variables('Rule'))",
+                          "description": "Append the new rule to the filtered rule collection list which is selected in the Adaptive Card"
+                        },
+                        "Resource_Group_name": {
+                          "runAfter": {
+                            "Firewall_name": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Compose",
+                          "inputs": "@trim(split(items('For_each_rules_collection_selected_from_Adaptive_Card'),'::')?[0])",
+                          "description": "Reading the resource group name from the SOC selected Firewall Rule collection"
+                        },
+                        "Set_property_to_update_the_properties_with_in_the_selected_rules_collection_list": {
+                          "runAfter": {
+                            "Set_property_to_update_the_rules_list_with_in_the_selected_rules_collection_list": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Compose",
+                          "inputs": "@setProperty(body('Filter_Network_rule_collection')?[0],'properties',outputs('Set_property_to_update_the_rules_list_with_in_the_selected_rules_collection_list'))",
+                          "description": "Update the existing  network rules collection with the composed new rule collection list"
+                        },
+                        "Set_property_to_update_the_rules_list_with_in_the_selected_rules_collection_list": {
+                          "runAfter": {
+                            "Join_the_New_Rule_to_the_selected_Rules_collection": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Compose",
+                          "inputs": "@setProperty(body('Filter_Network_rule_collection')?[0]?['properties'],'rules',outputs('Join_the_New_Rule_to_the_selected_Rules_collection'))",
+                          "description": "Update the existing rules list with the composed new rules list"
+                        },
+                        "Store_Existing_Rule_collection_information": {
+                          "runAfter": {
+                            "Gets_the_specified_Azure_Firewall": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "RulecollectionArray",
+                            "value": "@body('Gets_the_specified_Azure_Firewall')?['properties']?['networkRuleCollections']"
+                          },
+                          "description": "Array to Store the existing rule collection information for the selected firewall"
+                        },
+                        "Update_incident": {
+                          "runAfter": {
+                            "Add_comment_to_incident_with_the_endpoint_info_and_action_taken": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "classification": {
+                                "ClassificationAndReason": "@{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['incidentStatus']}"
+                              },
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "severity": "@{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['incidentSeverity']}",
+                              "status": "Closed"
+                            },
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "put",
+                            "path": "/Incidents"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Compose": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Foreach",
+                      "description": "Add a new rule to the each Rules collection selected from Adaptive Card"
+                    }
+                  },
+                  "runAfter": {
+                    "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "Add_comment_to_incident_(V3)": {
+                        "runAfter": {},
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                            "message": "<p><strong>Azure Firewall Playbook performed the following action :-</strong><br>\n<br>\n<strong>IP Address :</strong> &nbsp;@{items('For_each_IP_Address_Entity_from_Incident')?['Address']}<br>\n<br>\n<strong>Virus Total Report &nbsp;:</strong><br>\n<br>\n<strong>Country &nbsp;: </strong>&nbsp;@{body('Ip_scan_report_V3')?['data']?['attributes']?['country']}<br>\n<strong>Continent :</strong> @{body('Ip_scan_report_V3')?['data']?['attributes']?['continent']}<br>\n<strong>ASN :</strong> @{body('Ip_scan_report_V3')?['data']?['attributes']?['asn']}<br>\n<strong>AS_Owner :</strong> @{body('Ip_scan_report_V3')?['data']?['attributes']?['as_owner']}<br>\n<br>\n<strong>Total Votes :-</strong><br>\n&nbsp;<br>\n<strong>&nbsp;Malicious :</strong> @{body('Ip_scan_report_V3')?['data']?['attributes']?['total_votes']?['malicious']}<br>\n<strong>&nbsp;Positives Votes :</strong> @{body('Ip_scan_report_V3')?['data']?['attributes']?['total_votes']?['harmless']}<br>\n<strong>&nbsp;Negative Votes :</strong> &nbsp;@{body('Ip_scan_report_V3')?['data']?['attributes']?['total_votes']?['malicious']}<br>\n<strong>&nbsp;Suspicious Votes :</strong> @{body('Ip_scan_report_V3')?['data']?['attributes']?['last_analysis_stats']?['suspicious']}<br>\n<strong>&nbsp;Number of reports saying that is Undetected :</strong> @{body('Ip_scan_report_V3')?['data']?['attributes']?['last_analysis_stats']?['undetected']}<br>\n<strong>Network :</strong> @{body('Ip_scan_report_V3')?['data']?['attributes']?['network']}<br>\n<br>\n<strong>Action Taken In Azure Firewall :-<br>\n<br>\nIgnored to Add IP Address : </strong><strong>@{items('For_each_IP_Address_Entity_from_Incident')?['Address']}</strong><strong> to the Network Rules collection.</strong></p>"
+                          },
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment"
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['submitActionId']",
+                          "OK"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If",
+                  "description": "Condition - Add the IP address to the  Firewall rule collection list or Ignore"
+                },
+                "Ip_scan_report_V3": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['virustotal']['connectionId']"
+                      }
+                    },
+                    "method": "get",
+                    "path": "/api/v3/ip_addresses/@{encodeURIComponent(items('For_each_IP_Address_Entity_from_Incident')?['Address'])}"
+                  }
+                },
+                "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response": {
+                  "runAfter": {
+                    "Ip_scan_report_V3": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnectionWebhook",
+                  "inputs": {
+                    "body": {
+                      "body": {
+                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"large\",\n            \"weight\": \"bolder\",\n            \"text\": \"Suspicious IP - Microsoft Sentinel\",\n            \"wrap\": true\n        },\n        \n   {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']} incident @{triggerBody()?['object']?['properties']?['title']} \",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Incident description\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \" @{triggerBody()?['object']?['properties']?['description']}\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"IP Address : @{items('For_each_IP_Address_Entity_from_Incident')?['Address']}\",\n                \"wrap\": true,\n            \"weight\": \"Bolder\"\n\n        },\n{\n            \"type\": \"TextBlock\",\n            \n            \"weight\": \"bolder\",\n            \"text\": \"Virus Total Report\",\n            \"wrap\": true\n        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Country :  @{body('Ip_scan_report_V3')?['data']?['attributes']?['country']}\",\n                            \"wrap\": true\n                        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Continent :  @{body('Ip_scan_report_V3')?['data']?['attributes']?['continent']}\",\n                            \"wrap\": true\n                        },\n                       {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"ASN :  @{body('Ip_scan_report_V3')?['data']?['attributes']?['asn']}\",\n                            \"wrap\": true\n                        },\n                     {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"As_Owner : @{body('Ip_scan_report_V3')?['data']?['attributes']?['as_owner']}\",\n                            \"wrap\": true\n                        },\n {\n            \"type\": \"TextBlock\",\n            \n            \"weight\": \"bolder\",\n            \"text\": \"Total Votes :  \",\n            \"wrap\": true\n        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Malicious : @{body('Ip_scan_report_V3')?['data']?['attributes']?['last_analysis_stats']?['malicious']}\",\n                            \"wrap\": true\n                        },\n                       {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Positive Votes : @{body('Ip_scan_report_V3')?['data']?['attributes']?['total_votes']?['harmless']} \",\n                            \"wrap\": true\n                        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Suspicious : @{body('Ip_scan_report_V3')?['data']?['attributes']?['last_analysis_stats']?['suspicious']}\",\n                            \"wrap\": true\n                        },\n                         {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Number of reports saying that is Undetected : @{body('Ip_scan_report_V3')?['data']?['attributes']?['last_analysis_stats']?['undetected']}\",\n                            \"wrap\": true\n                        },\n    {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Network :  @{body('Ip_scan_report_V3')?['data']?['attributes']?['network']}\",\n                            \"wrap\": true\n                        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration :\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Microsoft Sentinel incident?\"\n        },\n        {\n            \"choices\": [\n  {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Microsoft Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Azure Firewall Actions\",\n            \"size\": \"Medium\",\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"Image\",\n            \"style\": \"Person\",\n            \"url\": \"data:image/png;base64,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\",\n            \"size\": \"Small\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Add IP address to Network Rules Collection\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"TextBlock\",\n                        \"text\": \"Select a Firewall and Rule collection: \n \n(Resource group - Firewall name - Collection name) \"\n                    },\n                  \n                    {     \n      \"type\": \"Input.ChoiceSet\",\n      \"id\": \"FirewallRulesSelectedVal\",\n      \"label\": \"Please select Firewall and netRules name\",\n      \"style\": \"compact\",\n      \"isRequired\": true,\n      \"errorMessage\": \"This is a required input\",\n      \"placeholder\": \"Please select an Firewall - Network Rules List\",\n      \"isMultiSelect\": true,\n      \"choices\":  @{variables('FirewallsList')}\n    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"OK\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.2\"\n            }\n        },\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Ignore\"\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                        "recipient": {
+                          "channelId": "[parameters('Teams ChannelId')]"
+                        },
+                        "shouldUpdateCard": true
+                      },
+                      "notificationUrl": "@{listCallbackUrl()}"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['teams']['connectionId']"
+                      }
+                    },
+                    "path": "/flowbot/actions/flowcontinuation/recipienttypes/channel/$subscriptions",
+                    "queries": {
+                      "groupId": "[parameters('Teams GroupId')]"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "For_each_Firewall": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach",
+              "description": "For each IP Address from Entity"
+            },
+            "Gets_all_the_Azure_Firewalls_in_a_subscription": {
+              "runAfter": {
+                "List_-_existing_firewalls_with_in_the_Resource_Group": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['AzureFirewallConnector']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/providers/Microsoft.Network/azureFirewalls",
+                "queries": {
+                  "api-version": "2020-07-01"
+                }
+              }
+            },
+            "Initialize_Rule": {
+              "runAfter": {
+                "Entities_-_Get_IPs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Rule",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "Variable to store the Rule information"
+            },
+            "List_-_existing_firewalls_with_in_the_Resource_Group": {
+              "runAfter": {
+                "FinalRuleCollectionList": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "FirewallsList",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "Variable to store the Firewall - Rule collection choice list to show in the Adaptive Card"
+            },
+            "RulecollectionArray": {
+              "runAfter": {
+                "Initialize_Rule": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "RulecollectionArray",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "Variable to store the Rules collection array"
+            },
+            "RulecollectionFilteredArray": {
+              "runAfter": {
+                "RulecollectionArray": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "RulecollectionFilteredArray",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "Variable to store the Rules collection array which is selected by SOC"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "AzureFirewallConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]",
+                "connectionName": "[variables('OAuthConnection')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "connectionName": "[variables('TeamsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+              },
+              "virustotal": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
+                "connectionName": "[variables('VirusTotalConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

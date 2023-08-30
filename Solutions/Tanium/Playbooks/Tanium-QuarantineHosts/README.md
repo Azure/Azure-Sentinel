@@ -1,18 +1,40 @@
 # Tanium-QuarantineHosts
 
 ## Overview
-This playbook will tell Tanium to quarantine the machine(s) in question for any incidents in Microsoft Sentinel. It will add the status of the quarantine as a comment inside the incident. This is intended to run against any incident in Microsoft Sentinel that was generated from the "Tanium Threat Response Alerts" analytic rule.
+
+This playbook will use Tanium to quarantine any hosts associated with a Microsoft Sentinel incident.
+
+The results of the playbook will be added as comments to the incident: targeting results, action deployment status, and finally action results. The action results comment will wait for the action to expire and then check its results. By default the quarantine actions expire after thirty minutes.
+
+![Tanium-QuarantineHosts screenshot](images/Tanium-QuarantineHosts.png)
 
 ## Prerequisites
-Alerts from Tanium Threat Response will not trigger an incident in Microsoft Sentinel without "Tanium Threat Response Alerts" analytic rule. Without this rule, this playbook will not have the desired effect.
+
+Your Tanium Server will need the "IR Quarantine" content installed.
+
+Sentinel incidents with associated hosts.
+
+The "Tanium Threat Response Alerts" analytic rule will generate incidents from Tanium Threat Response Alerts with associated hosts from Tanium Threat Response alerts.
 
 ## Post-Deployment Instructions
-After deploying the playbook, you must authorize the connections leveraged.
+
+You must authorize the API Connections used by this playbook after deployment.
 
 1. Visit the playbook resource.
-2. Under "Development Tools" (located on the left), click "API Connections".
+2. Under "Development Tools" (located on the sidebar), click "API Connections".
 3. Ensure each connection has been authorized.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-QuarantineHosts%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-QuarantineHosts%2Fazuredeploy.json)
+
 ## Note
-With the default deployment and configuration settings of the playbooks, your API-Key is exposed in plain text. All the users who have read access to the playbooks (logic apps) can view your API-Key.
-If you do not want to expose the API-Key in plain text, then it is advised to store API-Key with the azure key-vault and playbook integration. Please refer following links for more details [Secure access and data - Azure Logic Apps | Microsoft Docs](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app?tabs=azure-portal#secure-inputs-and-outputs-in-the-designer).
+
+With the default deployment and configuration settings of the playbooks, your Tanium API Key is stored in a secure string workflow parameter. To update your Tanium API Key you must redeploy this playbook.
+
+To allow Tanium API Key updates it is advised to use Azure Key Vault to securely store the Tanium API Key and update this playbook to use the Tanium API Key from the Key Vault instead of the secure string parameter.
+
+Key Vault references
+
+* [Key Vault | Microsoft Azure](https://azure.microsoft.com/services/key-vault/)
+* [Azure Key Vault Connector reference | Microsoft Docs](https://docs.microsoft.com/connectors/keyvault/)
+* [Secure access and data - Azure Logic Apps | Microsoft Docs](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app?tabs=azure-portal#secure-inputs-and-outputs-in-the-designer).
+

@@ -1,0 +1,149 @@
+id: 05208917-82de-46f7-a190-a65739a690f4
+name: Entropy for Processes for a given Host
+description: |
+  'Entropy calculation used to help identify Hosts where they have a high variety of processes (a high entropy process list on a given Host over time).
+  This helps us identify rare processes on a given Host. Rare here means a process shows up on the Host relatively few times in the last 7days.
+  The Weight is calculated based on the Entropy, Process Count and Distinct Hosts with that Process. The lower the Weight/ProcessEntropy, the more interesting.
+  The Weight calculation increases the Weight if the process executes more than once on the Host or has executed on more than 1 Hosts.
+  In general, this should identify processes on a Host that are rare for the environment.
+  References: https://medium.com/udacity/shannon-entropy-information-gain-and-picking-balls-from-buckets-5810d35d54b4
+  https://en.wiktionary.org/wiki/Shannon_entropy'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+  // exclude when over # of machines have the process
+  let excludeThreshold = 10;
+  // exclude when more than percent (default 10%)
+  let ratioHighCount = 0.1;
+  // exclude when less than percent (default 3%)
+  let ratioMidCount = 0.03;
+  // Process count limit in one day per machine, perf improvement (default every 20 minutes for 24 hours - 3*24 = 72)
+  let procLimit = 3*24;
+  // Decrease possibility of hitting memory limit by removing high process count items across all machines (default every 10 minutes for 24 hours - 6*24 = 144)
+  let maxLimit = 6*24;
+  let removeHigh = SecurityEvent 
+  | where TimeGenerated >= ago(1d)
+  | where EventID == 4688 | summarize count() by NewProcessName = tolower(NewProcessName) | where count_ > maxLimit
+  | summarize make_set(NewProcessName, 1000);
+  let SecEvents = SecurityEvent
+  | where TimeGenerated >= ago(1d)
+  | where EventID == 4688 | where tolower(NewProcessName) !in~ (removeHigh)
+  // removing common items that may still show up in small environments, add here if you have additional exclusions 
+  | where NewProcessName !has ':\\Windows\\System32\\conhost.exe' and ParentProcessName !has ':\\Windows\\System32\\conhost.exe' 
+  | where ParentProcessName !has ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !has':\\Windows\\System32\\wuauclt.exe' and NewProcessName !startswith 'C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_' 
+  | where ParentProcessName !has ':\\WindowsAzure\\GuestAgent_' and NewProcessName !has ':\\WindowsAzure\\GuestAgent_' 
+  | where ParentProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_' and NewProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_' 
+  | where ParentProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\' and NewProcessName !has "\\Windows Defender Advanced Threat Protection\\SenseCncProxy.exe" and NewProcessName !has "\\Windows Defender Advanced Threat Protection\\SenseIR.exe.exe" 
+  | where NewProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\' 
+  | where NewProcessName !has ':\\Windows\\Microsoft.NET\\Framework' and not(NewProcessName endswith '\\ngentask.exe' or NewProcessName endswith '\\ngen.exe') 
+  | where ParentProcessName !has ':\\Windows\\Microsoft.NET\\Framework' and not(ParentProcessName endswith '\\ngentask.exe' or ParentProcessName endswith '\\ngen.exe') 
+  | where NewProcessName !has ':\\Windows\\System32\\taskhostw.exe' and ParentProcessName !has ':\\Windows\\System32\\taskhostw.exe' 
+  | where ParentProcessName !has ':\\Windows\\SoftwareDistribution\\Download\\Install\\' and not(NewProcessName endswith '\\MpSigStub.exe') 
+  | where NewProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\Health Service State\\' and ParentProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe' 
+  | where NewProcessName !has ':\\Windows\\servicing\\trustedinstaller.exe' 
+  | where ParentProcessName !has ':\\Program Files\\Microsoft Dependency Agent\\bin\\MicrosoftDependencyAgent.exe' 
+  | where ParentProcessName !has ':\\Program Files (x86)\\Microsoft\\EdgeUpdate\\MicrosoftEdgeUpdate.exe'
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId, SourceComputerId;
+  let Exclude = SecEvents 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ExcludeCompCount = dcount(Computer), ExcludeProcCount = count() by Process 
+  // Removing general limit for noise in one day 
+  | extend timediff = iff(datetime_diff('day', EndTime, StartTime) > 0, datetime_diff('day', EndTime, StartTime), 1) 
+  // Default exclude of 48 (2 per hour) or more executions in 24 hours on a given machine 
+  | where ExcludeProcCount > procLimit*timediff 
+  // Removing noisy processes for an environment, adjust as needed 
+  | extend compRatio = ExcludeCompCount/toreal(ExcludeProcCount) 
+  | where compRatio == 0 or (ExcludeCompCount > excludeThreshold and compRatio < ratioHighCount) or (ExcludeCompCount between (2 .. excludeThreshold) and compRatio < ratioMidCount);
+  let AllSecEvents =  
+  SecEvents | project Computer, Process 
+  | join kind= leftanti (  
+  SecEvents 
+  // Removing general limit for noise in one day 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), procCount = count() by Computer, Process 
+  | extend timediff = iff(datetime_diff('day', EndTime, StartTime) > 0, datetime_diff('day', EndTime, StartTime), 1) 
+  // Default exclude 48 (2 per hour) or more executions in 24 hours on a given machine to remove them from overall comparison list 
+  | where procCount > procLimit*timediff 
+  ) on Computer, Process 
+  | project Computer, Process;
+  // Removing noisy process from full list 
+  let Include = materialize(AllSecEvents 
+  | join kind= leftanti ( 
+  Exclude 
+  ) on Process);
+  // Identifying prevalence for a given process in the environment 
+  let DCwPC = materialize(Include 
+  | summarize DistinctHostsProcessCount = dcount(Computer) by Process 
+  | join kind=inner ( 
+  Include 
+  ) on Process 
+  | distinct Computer, Process, DistinctHostsProcessCount);
+  // Getting the Total process count on each host to use as the denominator in the entropy calc 
+  let AHPC = materialize(Include 
+  | summarize AllHostsProcessCount = count() by Computer 
+  | join kind=inner ( 
+  Include 
+  ) on Computer 
+  | distinct Computer, Process, AllHostsProcessCount 
+  //Getting a decimal value for later computation 
+  | extend AHPCValue = todecimal(AllHostsProcessCount));
+  // Need the count of each class in my bucket or also said as count of ProcName(Class) per Host(Bucket) for use in the entropy calc 
+  let PCoH = Include 
+  | summarize ProcessCountOnHost = count() by Computer, Process 
+  | join kind=inner ( 
+  Include 
+  ) on Computer,Process 
+  | distinct Computer, Process, ProcessCountOnHost 
+  //Getting a decimal value for later computation 
+  | extend PCoHValue = todecimal(ProcessCountOnHost); 
+  let Combined = DCwPC 
+  | join ( 
+  AHPC 
+  ) on Computer, Process 
+  | join ( 
+  PCoH 
+  ) on Computer, Process;
+  let Results = Combined 
+  // Entropy calculation 
+  | extend ProcessEntropy = -log2(PCoHValue/AHPCValue)*(PCoHValue/AHPCValue) 
+  // Calculating Weight, see details in description 
+  | extend Weight = toreal(ProcessEntropy*ProcessCountOnHost*DistinctHostsProcessCount) 
+  // Remove or increase value to see processes with low entropy, meaning more common. 
+  | where Weight <= 100
+  | project Computer, Process, Weight , ProcessEntropy, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount; 
+  // Join back full entry 
+  Results 
+  | join kind= inner ( 
+  SecEvents
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId, SourceComputerId 
+  ) on Computer, Process 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResultCount = count() by EventID, Computer, SubjectUserSid, Account, AccountType, Weight, ProcessEntropy,  
+  Process, NewProcessName, CommandLine, ParentProcessName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, SourceComputerId
+  | project-reorder StartTime, EndTime, ResultCount, EventID, Computer, SubjectUserSid, Account, AccountType, Weight, ProcessEntropy,  
+  Process, NewProcessName, CommandLine, ParentProcessName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, SourceComputerId
+  | sort by Weight asc, ProcessEntropy asc, NewProcessName asc 
+  | extend timestamp = StartTime, NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = split(Computer, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain 
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1
+

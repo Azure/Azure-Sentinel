@@ -1,0 +1,89 @@
+id: 6098daa0-f05e-44d5-b5a0-913e63ba3179
+name: Jamf Protect - Alerts 
+description: |
+  'Creates an incident based on Jamf Protect Alert data in Microsoft Sentinel'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: JamfProtect
+    dataTypes: 
+      - jamfprotect_CL
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+relevantTechniques:
+query: |
+  JamfProtect
+  | where EventProduct == "Jamf Protect - Alerts"
+      and isnotempty(EventSeverity)
+  | extend
+      algorithm = "SHA256",
+      Host_IPs = tostring(parse_json(DvcIpAddr)[0]),
+      Tags = tostring(Match_facts[0].tags),
+      Tactics = case(Match_tags has "Execution", "Execution", Match_tags has "Visibility", "Visibility", Match_tags has "Persistence", "Persistence", Match_tags has "LateralMovement", "LateralMovement", Match_tags has "CredentialAccess", "CredentialAcccess", Match_tags has "DefenseEvasion", "DefenseEvasion", Match_tags has "PrivilegeEscalation", "PrivilegeEscalation", Match_tags has "Impact", "Impact", Match_tags has "CommandAndControl", "CommandandControl", Match_tags has "Discovery", "Discovery", Match_tags has "InitialAccess", "InitialAccess", ""),
+      Techniques = pack_array(extract(@"[A-Za-z]\d{4}", 0, tostring(Match_tags))),
+      JamfPro = case(Match_actions has "SmartGroup", "Workflow with Jamf Pro", Match_actions has "Prevented", "No workflow, Prevented by Protect", "No workflow")
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{EventMessage}} detected on {{DvcHostname}}"
+  alertDescriptionFormat: "{{EventDescription}} - Please investigate"
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: EventSeverity
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: EventReportUrl
+    - alertProperty: ProviderName
+      value: EventVendor
+    - alertProperty: ProductName
+      value: EventProduct
+    - alertProperty: Techniques
+      value: Techniques
+customDetails:
+  Protect_Event_Type: EventType
+  Protect_Analytic: EventMessage
+  Related_File_hash: TargetBinarySHA256
+  Related_Binaries: TargetBinaryFilePath
+  TargetBinarySignMsg: TargetBinarySigningInfoMessage
+  TargetbinarySign: TargetbinarySignerType
+  TargetBinarySigner: TargetBinarySigningTeamID
+  JamfPro_Status: JamfPro
+  Protect_Tags: Tags
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DvcHostname
+      - identifier: OSFamily
+        columnName: DvcOs
+      - identifier: OSVersion
+        columnName: DvcOsVersion
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Host_IPs
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetUsername
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: TargetProcessCurrentDirectory
+      - identifier: ProcessId
+        columnName: TargetProcessId
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: algorithm
+      - identifier: Value
+        columnName: TargetBinarySHA256
+version: 1.0.5
+kind: NRT

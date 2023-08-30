@@ -1,0 +1,75 @@
+id: a4025a76-6490-4e6b-bb69-d02be4b03f07
+name: TI map IP entity to AzureNetworkAnalytics_CL (NSG Flow Logs)
+description: |
+  Identifies a match in AzureNetworkAnalytics_CL (NSG Flow Logs) from any IP IOC from TI that was Allowed
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h; // Look back 1 hour for AzureNetworkAnalytics_CL logs
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  // Fetch threat intelligence indicators related to IP addresses
+  let IP_Indicators = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+    | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+  // Perform a join between IP indicators and AzureNetworkAnalytics_CL logs for NSG Flow information
+  IP_Indicators
+    // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
+    | join kind=innerunique (
+        AzureNetworkAnalytics_CL
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend AzureNetworkAnalytics_CL_TimeGenerated = TimeGenerated
+        | extend PIPs = split(PublicIPs_s, '|', 0)
+        | extend PIP = tostring(PIPs[0])
+    )
+    on $left.TI_ipEntity == $right.PIP
+    // Filter out logs that occurred after the expiration of the corresponding indicator
+    | where AzureNetworkAnalytics_CL_TimeGenerated < ExpirationDateTime
+    // Filter out NSG Flow logs that are not allowed (FlowStatus_s == "A")
+    | where FlowStatus_s == "A"
+    // Group the results by IndicatorId and PIP (Public IP), and keep the log entry with the latest timestamp
+    | summarize AzureNetworkAnalytics_CL_TimeGenerated = arg_max(AzureNetworkAnalytics_CL_TimeGenerated, *) by IndicatorId, PIP
+    // Select the desired output fields
+    | project AzureNetworkAnalytics_CL_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+      TI_ipEntity, Computer, FlowDirection_s, FlowStatus_s, FlowType_s, SrcPublicIPs_s, DestPublicIPs_s, PublicIPs_s, L7Protocol_s, DestPort_d, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+    // Extract hostname and DNS domain from the Computer field
+    | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+    // Rename the timestamp field
+    | extend timestamp = AzureNetworkAnalytics_CL_TimeGenerated
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TI_ipEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.4.0
+kind: Scheduled

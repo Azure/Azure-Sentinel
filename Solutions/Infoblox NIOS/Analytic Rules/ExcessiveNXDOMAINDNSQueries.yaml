@@ -3,9 +3,10 @@ name: Excessive NXDOMAIN DNS Queries
 description: |
   'This creates an incident in the event a client generates excessive amounts of DNS queries for non-existent domains.'
 severity: Medium
+status: Available
 requiredDataConnectors:
   - connectorId: InfobloxNIOS
-    dataTypes: 
+    dataTypes:
       - Syslog
 queryFrequency: 1h
 queryPeriod: 1h
@@ -17,24 +18,21 @@ relevantTechniques:
   - T1568
   - T1008
 query: |
-
   let threshold = 200;
-  InfobloxNIOS
-  | where ProcessName =~ "named" and Log_Type =~ "client"
-  | where isnotempty(ResponseCode)
-  | where ResponseCode =~ "NXDOMAIN"
-  | summarize count() by Client_IP, bin(TimeGenerated,15m)
+  Infoblox_dnsclient
+  | where isnotempty(DnsResponseCode)
+  | where DnsResponseCode =~ "NXDOMAIN"
+  | summarize count() by SrcIpAddr, bin(TimeGenerated,15m)
   | where count_ > threshold
-  | join kind=inner (InfobloxNIOS
-      | where ProcessName =~ "named" and Log_Type =~ "client"
-      | where isnotempty(ResponseCode)
-      | where ResponseCode =~ "NXDOMAIN"
-      ) on Client_IP
-  | extend timestamp = TimeGenerated, IPCustomEntity = Client_IP
+  | join kind=inner (Infoblox_dnsclient
+      | where isnotempty(DnsResponseCode)
+      | where DnsResponseCode =~ "NXDOMAIN"
+      ) on SrcIpAddr
+  | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.0.2
 kind: Scheduled

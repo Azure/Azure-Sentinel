@@ -1,0 +1,55 @@
+id: 19abc034-139e-4e64-a05d-cb07ce8b003b
+name: Malicious Connection to LDAP port for CVE-2021-44228 vulnerability
+description: |
+  'This hunting query looks for connection to the default LDAP ports to find possible exploitation attempts for CVE-2021-44228 involving log4j vulnerability.
+   The attack is not limited only to these ports. Log4j is an open-source Apache logging library that is used in many Java-based applications. 
+   Awareness of normal baseline traffic of an environment for java.exe while using this query will help determine normal from anomalous.
+   Refrence: https://www.microsoft.com/security/blog/2021/12/11/guidance-for-preventing-detecting-and-hunting-for-cve-2021-44228-log4j-2-exploitation/'
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection 
+    dataTypes: 
+      - DeviceNetworkEvents
+  - connectorId: AzureMonitor(VMInsights) 
+    dataTypes:
+      - VMConnection
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+tags:
+  - CVE-2021-44228
+  - log4j 
+  - log4shell
+query: |
+  let Port = dynamic(['389', '1389']); 
+  (union isfuzzy=true
+  (DeviceNetworkEvents
+  | where InitiatingProcessFileName has_any ("javaw.exe","java.exe")
+  | where ActionType has "ConnectionSuccess"
+  | where RemotePort in ('389', '1389')
+  | where InitiatingProcessCommandLine has_any ('curl', 'wget')
+  | where RemoteIPType =~ 'Public'
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by ActionType, DestinationIP = RemoteIP, RemoteUrl, DestinationPort = RemotePort, SourceIP = LocalIP, Type, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath,  InitiatingProcessParentFileName, ProcessName = InitiatingProcessFileName, Computer = DeviceName
+  ),
+  (VMConnection
+  | where ProcessName has_any ("javaw","java")
+  | where DestinationPort in ('389', '1389')
+  | where ipv4_is_private(DestinationIp) == false
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by TimeGenerated, SourceIP = SourceIp , DestinationIP = DestinationIp, DestinationPort,  BytesReceived, BytesSent, ProcessName, Computer
+  )
+  )
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend IP_0_Address = DestinationIP
+entityMappings: 
+- entityType: IP
+  fieldMappings:
+    - identifier: Address
+      columnName: DestinationIP
+- entityType: Host
+  fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain

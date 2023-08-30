@@ -1,0 +1,51 @@
+id: 3bd33158-3f0b-47e3-a50f-7c20a1b88038
+name: AV detections related to SpringShell Vulnerability
+description: |
+  'This query looks for Microsoft Defender AV detections related to the SpringShell vulnerability. In Microsoft Sentinel, the SecurityAlerts table includes only the Device Name of the affected device.
+    This query joins the DeviceInfo table to clearly connect other information such as device group, IP, logged-on users, etc. This would allow the Microsoft Sentinel analyst to have more context related to the alert, if available.
+    Reference: https://www.microsoft.com/security/blog/2022/04/04/springshell-rce-vulnerability-guidance-for-protecting-against-and-detecting-cve-2022-22965/'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - CVE-2022-22965
+  - SpringShell 
+  - Spring4Shell
+query: |
+  let SpringShell_threats = dynamic(["Trojan:Python/SpringShellExpl", "Exploit:Python/SpringShell", "Backdoor:PHP/Remoteshell.V", "SpringShell"]);
+  DeviceInfo
+  | extend DeviceName = tolower(DeviceName)
+  | join kind=inner ( SecurityAlert
+  | where ProviderName =~ "MDATP"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)
+  | where ThreatName in~ (SpringShell_threats) or ThreatFamilyName in~ (SpringShell_threats)
+  | extend CompromisedEntity = tolower(CompromisedEntity)
+  ) on $left.DeviceName == $right.CompromisedEntity
+  | summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities
+  | extend HostName = iff(CompromisedEntity has '.', substring(CompromisedEntity,0,indexof(CompromisedEntity,'.')),CompromisedEntity)
+  | extend DnsDomain = iff(CompromisedEntity has '.', substring(CompromisedEntity,indexof(CompromisedEntity,'.')+1),"")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIP
+version: 1.0.2
+kind: Scheduled

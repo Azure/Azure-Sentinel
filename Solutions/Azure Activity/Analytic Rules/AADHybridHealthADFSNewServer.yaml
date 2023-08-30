@@ -1,0 +1,44 @@
+id: 88f453ff-7b9e-45bb-8c12-4058ca5e44ee
+name: Azure Active Directory Hybrid Health AD FS New Server
+description: |
+  'This detection uses AzureActivity logs (Administrative category) to identify the creation or update of a server instance in an Azure AD Hybrid Health AD FS service.
+  A threat actor can create a new AD Health ADFS service and create a fake server instance to spoof AD FS signing logs. There is no need to compromise an on-premises AD FS server.
+  This can be done programmatically via HTTP requests to Azure. More information in this blog: https://o365blog.com/post/hybridhealthagent/'
+severity: Medium
+status: Available 
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1578
+tags:
+  - SimuLand
+query: |
+  AzureActivity
+  | where CategoryValue =~ 'Administrative'
+  | where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'
+  | where _ResourceId has 'AdFederationService'
+  | where OperationNameValue =~ 'Microsoft.ADHybridHealthService/services/servicemembers/action'
+  | extend claimsJson = parse_json(Claims)
+  | extend AppId = tostring(claimsJson.appid), AccountName = tostring(claimsJson.name), Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  | project-away claimsJson
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.0.1
+kind: Scheduled

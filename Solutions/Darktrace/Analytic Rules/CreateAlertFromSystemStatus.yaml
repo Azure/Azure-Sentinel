@@ -1,0 +1,56 @@
+id: 2e629769-60eb-4a14-8bfc-bde9be66ebeb
+name: Darktrace System Status
+description: |
+  'This rule creates Microsoft Sentinel Alerts based on Darktrace system status alerts for health monitoring, fetched every 5 minutes.'
+severity: Informational
+requiredDataConnectors:
+  - connectorId: DarktraceRESTConnector
+    dataTypes:
+      - darktrace_model_alerts_CL
+queryFrequency: 5m
+queryPeriod: 5m 
+triggerOperator: gt
+triggerThreshold: 0
+tactics: # none
+relevantTechniques: # none
+query: |
+  darktrace_model_alerts_CL //anything starting with 'Dt' is not an ASIM mapping 
+  | where dtProduct_s =="System Alert"
+  | extend EventVendor="Darktrace", EventProduct="Darktrace DETECT"
+  | project-rename ThreatCategory=dtProduct_s, EventStartTime=time_s, NetworkRuleName=friendlyName_s, SrcIpAddr=deviceIP_s, SrcHostname=hostname_s, ThreatRiskLevel=priority_code_d, ThreatRiskCategory=priority_s, DtSeverity=Severity, DtName=name_s, DtStatus=status_s, DtMessage=Message, DtURL=url_s, DtUUID=uuid_g
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+customDetails:
+  EventStartTime: EventStartTime
+  NetworkRuleName: NetworkRuleName
+  ThreatRiskLevel: ThreatRiskLevel
+  ThreatRiskCategory: ThreatRiskCategory
+  DtName: DtName
+  DtStatus: DtStatus
+  DtMessage: DtMessage
+  DtSeverity: DtSeverity
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Darktrace: {{ThreatRiskLevel}} - {{NetworkRuleName}}'
+  alertDescriptionFormat: '{{DtMessage}}'
+  alertTacticsColumnName: # none
+  alertSeverityColumnName: # none 
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: DtURL
+    - alertProperty: ProviderName
+      value: EventVendor
+    - alertProperty: ProductName
+      value: EventProduct
+    - alertProperty: ProductComponentName
+      value: ThreatCategory
+version: 1.1.0
+kind: Scheduled

@@ -1,0 +1,49 @@
+id: aac495a9-feb1-446d-b08e-a1164a539452
+name: TI map IP entity to GitHub_CL
+description: |
+  'Identifies a match in GitHub_CL table from any IP IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  ThreatIntelligenceIndicator
+  | where Action == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  // Taking the first non-empty value based on potential IOC match availability
+  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  | join (
+    GitHubAudit
+    | extend GitHubAudit_TimeGenerated = TimeGenerated
+  )
+  on $left.TI_ipEntity == $right.IPaddress
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | extend timestamp = GitHubAudit_TimeGenerated, IPCustomEntity = IPaddress, AccountCustomEntity = Actor
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled

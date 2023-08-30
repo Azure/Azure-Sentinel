@@ -1,0 +1,179 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Restrict MDE Ip Address - Entity Triggered",
+        "description": "This playbook will and generate alert and block threat indicators for the IP entity in MDE for 90 days.",
+        "prerequisites": "- **For Gov Only** \n\n You will need to update the HTTP action URL to the correct URL documented [here](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/gov?view=o365-worldwide#api) \n\n - You will need to grant Ti.ReadWrite permissions and assign Microsoft Sentinel Reader to the resource group for the managed identity. Run the following code replacing the managed identity object id, subscriptionId and resource group. You find the managed identity object id on the Identity blade under Settings for the Logic App. \n\n ```powershell \n\n $MIGuid = '<Enter your managed identity guid here>' \n\n $SubscriptionId = '<Enter your subsciption id here>' \n\n $ResourceGroup = '<Enter your resource group here>' \n\n $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid \n\n $MDEAppId = 'fc780465-2017-40d4-a0c5-307022471b92' \n\n $PermissionName = 'Ti.ReadWrite' \n\n $RoleName = 'Microsoft Sentinel Responder' \n\n $MDEServicePrincipal = Get-AzureADServicePrincipal -Filter 'appId eq '$MDEAppId'' \n\n $AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains 'Application'} \n\n New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId ` -ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id \n\n New-AzRoleAssignment -ObjectId $MIGuid -RoleDefinitionName $RoleName -Scope /subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup \n\n ```",
+        "postDeployment": [],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2023-02-26T00:00:00Z",
+        "entities": [
+            "Ip"
+        ],
+        "tags": [
+            "Remediation"
+        ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Sarah van den Bovenkamp"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Restrict-MDEIP-entityTrigger",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_entity_(IP)": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "path": "/entity/@{encodeURIComponent('IP')}"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<p>An AlertAndBlock request has been sent to the security centre API for the IP address@{triggerBody()?['Entity']?['properties']?['Address']} . Note that the expiration time for this request is 90 days.<br>\nHTTP Response of AlertAndBlock request: @{outputs('HTTP_-_Alert_And_Block_IP')['statusCode']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP_-_Alert_And_Block_IP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['IncidentArmID']",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "HTTP_-_Alert_And_Block_IP": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://api.securitycenter.windows.com",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "body": {
+                                    "action": "AlertAndBlock",
+                                    "application": "Microsoft Sentinel",
+                                    "description": "IP blocked by Restrict-MDEIP-entityTrigger Logic app from an entity in Sentinel Incident (ARM ID): @{triggerBody()?['IncidentArmID']}. Properties: @{triggerBody()?['Entity']?['properties']}",
+                                    "expirationTime": "@{addDays(utcNow(), 90)}",
+                                    "indicatorType": "IpAddress",
+                                    "indicatorValue": "@{triggerBody()?['Entity']?['properties']?['Address']}",
+                                    "title": "@{guid()}"
+                                },
+                                "headers": {
+                                    "Content-type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "https://api.securitycenter.windows.com/api/indicators"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Restrict-MDEIP-entityTrigger",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

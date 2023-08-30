@@ -1,0 +1,406 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+		"comment": "",
+		"author": "Dmytro Branitskyi, Recorded Future"
+	},
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Recorded_Future_Identity_Add_Risky_User_to_Security_Group",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
+        "AzureADIdentityProtectionConnectionName": "[concat('azureadip-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureADIdentityProtectionConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "properties": {
+                                        "active_directory_domain": {
+                                            "type": "string"
+                                        },
+                                        "risky_user_email": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_if_AD_Identity_Protection_risky_users_list_contains_the_user": {
+                            "runAfter": {
+                                "Response_-_Risky_user_was_not_found_in_Active_Directory": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/beta/riskyUsers/@{encodeURIComponent(body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id'])}"
+                            }
+                        },
+                        "Confirm_the_user_is_indeed_compromised": {
+                            "runAfter": {
+                                "Check_if_AD_Identity_Protection_risky_users_list_contains_the_user": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "userIds": [
+                                        "@body('Check_if_AD_Identity_Protection_risky_users_list_contains_the_user')?['id']"
+                                    ]
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/beta/riskyUsers/confirmCompromised"
+                            }
+                        },
+                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": {
+                            "runAfter": {
+                                "If_Active_Directory_domain_parameter_is_not_null_and_not_empty": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuread']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v1.0/users/@{encodeURIComponent(variables('user_principal_name'))}"
+                            }
+                        },
+                        "If_Active_Directory_domain_parameter_is_not_null_and_not_empty": {
+                            "actions": {
+                                "Set_Active_Directory_user_principal_name_to_user_email's_username_+_AD_domain": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "user_principal_name",
+                                        "value": "@{concat(split(triggerBody()?['risky_user_email'], '@')[0], '@', triggerBody()?['active_directory_domain'])}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_-_Active_Directory_user_principal_name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_Active_Directory_user_principal_name_to_user's_email": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "user_principal_name",
+                                            "value": "@triggerBody()?['risky_user_email']"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['active_directory_domain']",
+                                                "@null"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['active_directory_domain']",
+                                                ""
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_-_Active_Directory_user_principal_name": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "user_principal_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response_-_Failed_to_confirm_user_at_risk_is_compromised": {
+                            "runAfter": {
+                                "Response_-_Successfully_confirmed_user_at_risk_is_indeed_compromised": [
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "active_directory_identity_protection_results_for_risky_user": "@body('Check_if_AD_Identity_Protection_risky_users_list_contains_the_user')",
+                                        "parameters_passed": {
+                                            "active_directory_domain": "@triggerBody()?['active_directory_domain']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        },
+                                        "user_id_in_active_directory": "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']",
+                                        "user_principal_name": "@variables('user_principal_name')"
+                                    },
+                                    "reason": "Failed to confirm user at risk is compromised. Maybe the user was not present in Active Directory Identity Protection risky users list.",
+                                    "status": "Error"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "active_directory_identity_protection_results_for_risky_user": {
+                                                    "properties": {},
+                                                    "type": "object"
+                                                },
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "active_directory_domain": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "user_id_in_active_directory": {
+                                                    "type": "string"
+                                                },
+                                                "user_principal_name": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "reason": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 422
+                            }
+                        },
+                        "Response_-_Risky_user_was_not_found_in_Active_Directory": {
+                            "runAfter": {
+                                "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "parameters_passed": {
+                                            "active_directory_domain": "@triggerBody()?['active_directory_domain']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        },
+                                        "user_principal_name": "@variables('user_principal_name')"
+                                    },
+                                    "reason": "Risky user was not found in Active Directory.",
+                                    "status": "Error"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "active_directory_domain": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "user_principal_name": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "reason": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 404
+                            }
+                        },
+                        "Response_-_Successfully_confirmed_user_at_risk_is_indeed_compromised": {
+                            "runAfter": {
+                                "Confirm_the_user_is_indeed_compromised": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "active_directory_identity_protection_results_for_risky_user": "@body('Check_if_AD_Identity_Protection_risky_users_list_contains_the_user')",
+                                        "parameters_passed": {
+                                            "active_directory_domain": "@triggerBody()?['active_directory_domain']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        },
+                                        "user_id_in_active_directory": "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']",
+                                        "user_principal_name": "@variables('user_principal_name')"
+                                    },
+                                    "status": "Confirmed user at risk is indeed compromised."
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "active_directory_identity_protection_results_for_risky_user": {
+                                                    "properties": {},
+                                                    "type": "object"
+                                                },
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "active_directory_domain": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "user_id_in_active_directory": {
+                                                    "type": "string"
+                                                },
+                                                "user_principal_name": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 200
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuread": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+                                "connectionName": "[variables('AzureADConnectionName')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuread')]"
+                            },
+                            "azureadip": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADIdentityProtectionConnectionName'))]",
+                                "connectionName": "[variables('AzureADIdentityProtectionConnectionName')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azureadip')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('AzureADConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuread')]"
+				},
+                "displayName": "[variables('AzureADConnectionName')]"
+			}
+		},
+        {
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('AzureADIdentityProtectionConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azureadip')]"
+				},
+                "displayName": "[variables('AzureADIdentityProtectionConnectionName')]"
+			}
+		}
+    ]
+}

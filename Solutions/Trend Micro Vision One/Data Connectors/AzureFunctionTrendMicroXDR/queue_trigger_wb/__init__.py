@@ -146,6 +146,12 @@ def main(wbMsg: func.QueueMessage, rcaMsg: func.Out[typing.List[str]]) -> None:
 
         # get workbench detail
         workbench_detail = get_workbench_detail(token, workbench_id)
+        
+        if not workbench_detail:
+            logging.warning(
+                f'Could not get workbench data. Workbench id: {workbench_id}.'
+            )
+            return
 
         # transform data
         customized_workbench_json = customize_json(

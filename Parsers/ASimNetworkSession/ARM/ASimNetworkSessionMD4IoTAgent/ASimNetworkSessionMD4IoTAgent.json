@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionMD4IoTAgent",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for Microsoft Defender for IoT micro agent",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionMD4IoTAgent",
+            "query": "let DirectionNetworkEvents =\n  SecurityIoTRawEvent | where not(disabled)\n  | where RawEventName == \"NetworkActivity\"\n  | parse EventDetails with * ',\"LocalPort\":' LocalPort:int ',\"RemotePort\":' RemotePort:int ',' *\n  | extend outbound = LocalPort > RemotePort\n;\nlet parser = (T: (EventDetails: string)) {\n  T \n   | parse EventDetails with \n    '{\"LocalAddress\":\"' LocalAddress:string '\",'\n    '\"RemoteAddress\":\"' RemoteAddress:string '\",'\n    *\n    '\"BytesIn\":' BytesIn:long ','\n    '\"BytesOut\":' BytesOut:long ','\n    '\"Protocol\":\"' Protocol:string '\",'\n    '\"ProcessId\":' ProcessId:string ','\n    '\"UserId\":' UserId:string ','\n    '\"ApplicationProtocol\":\"' ApplicationProtocol:string '\",'\n    * // '\"AzureResourceId\":\"' AzureResourceId:string '\",'\n    '\"DeviceId\":\"' DeviceId:string '\",'\n    '\"MessageSource\":\"' MessageSource:string '\",'\n    '\"OriginalEventId\":\"' OriginalEventId:string '\",'\n    '\"TimestampUTC\":\"' TimestampUTC:datetime '\",'\n    *\n}\n; \nlet OutboundNetworkEvents = \n  DirectionNetworkEvents\n  | where outbound\n  | invoke parser ()\n  | project-rename\n     SrcBytes = BytesOut,\n     DstBytes = BytesIn,\n     SrcPortNumber = LocalPort,\n     DstIpAddr = RemoteAddress,\n     DstPortNumber = RemotePort,\n     SrcProcessId = ProcessId\n  | extend\n     SrcIpAddr = LocalAddress,\n     SrcDvcIdType = \"MD4IoTid\",\n     SrcUserId = UserId,\n     SrcUserIdType = \"UID\",\n     SrcDvcId = DeviceId,\n     Process = SrcProcessId, // alias\n     SrcDvcOs = iif (MessageSource == \"Linux\", \"Linux\", \"Windows\")\n;\nlet InboundNetworkEvents = \n  DirectionNetworkEvents\n  | where not(outbound)\n  | invoke parser ()\n  | project-rename\n     DstBytes = BytesOut,\n     SrcBytes = BytesIn,\n     DstPortNumber = LocalPort,\n     SrcIpAddr = RemoteAddress,\n     SrcPortNumber = RemotePort,\n     DstProcessId = ProcessId\n   | extend\n      DstIpAddr = LocalAddress,\n     DstDvcIdType = \"MD4IoTid\",\n     DstUserId = UserId,\n     DstUserIdType = \"UID\",\n     DstDvcId = DeviceId,\n     Process = DstProcessId, // alias\n     DstDvcOs = iif (MessageSource == \"Linux\", \"Linux\", \"Windows\")\n;\nlet NetworkSessionMD4IoT = \n  union InboundNetworkEvents, OutboundNetworkEvents\n   | extend\n    EventCount = int(1),\n    EventProduct = 'Azure Defender for IoT', \n    EventVendor = 'Microsoft',\n    EventSchemaVersion = '0.2.0',\n    EventSchema = \"NetworkSession\", \n    EventType = 'NetworkSession',\n    EventStartTime = TimeGenerated, // Open question about timestamps\n    EventEndTime = TimeGenerated,  // Open question about timestamps\n    EventResult = 'Success',\n    EventSeverity = 'Informational'\n  | project-rename\n     EventProductVersion = AgentVersion, // Not available in Windows\n     _ResourceId = AssociatedResourceId, \n     _SubscriptionId = AzureSubscriptionId, \n    EventOriginalUid = OriginalEventId,  // OK pending question\n    DvcOs = MessageSource,\n    NetworkProtocol = Protocol,\n    NetworkApplicationProtocol = ApplicationProtocol,\n    DvcId = DeviceId,\n    DvcIpAddr = LocalAddress\n  | extend\n    Dvc = DvcId,\n    DvcIdType = \"MD4IoTid\",\n    User = UserId,\n    IpAddr = SrcIpAddr,\n    Src = SrcIpAddr,\n    Dst = DstIpAddr\n  | project-away outbound\n;\nNetworkSessionMD4IoT\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+id: 6b9b4ee6-f4c1-4b86-8c8c-beb0bb59ae44
+name: S3 bucket exposed via ACL
+description: |
+  'Detected S3 bucket publicly exposed via ACL, which could lead for sensitive information leakage to the public. Verify the S3 object configurations.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1537
+query: |
+  AWSCloudTrail
+  | where EventName == "PutBucketAcl" and isempty(ErrorCode) and isempty(ErrorMessage)
+  | extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant
+  | mvexpand Grant
+  | extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))
+  | extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.["xsi:type"], xamzacl = parse_json(cannedacl).["x-amz-acl"]
+  | where (type == "Group" and (URI endswith "AllUsers" or URI endswith "AuthenticatedUsers"))
+    or xamzacl in ("authenticated-read","public-read","public-read-write")
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

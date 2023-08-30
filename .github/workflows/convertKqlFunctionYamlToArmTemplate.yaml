@@ -1,0 +1,84 @@
+# Each pull request that updates ASimDns, ASimNetworkSession, or ASimWebSession parsers triggers the script.
+# The script generates deployable ARM templates based on ASim parsers YAML files and pushes them to the pull request branch.
+name: Convert Kql function yaml to ARM template
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled]
+    paths:
+       - 'Parsers/ASimDns/Parsers/**'
+       - 'Parsers/ASimNetworkSession/Parsers/**'
+       - 'Parsers/ASimWebSession/Parsers/**'
+       - 'Parsers/ASimProcessEvent/Parsers/**'
+       - 'Parsers/ASimAuditEvent/Parsers/**'
+       - 'Parsers/ASimAuthentication/Parsers/**'
+       - 'Parsers/ASimFileEvent/Parsers/**'
+       - 'Parsers/ASimRegistryEvent/Parsers/**'
+jobs:
+  kqlFuncYaml2Arm:
+    # The workflow should not run on forked repositories for security reasons
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
+        with:
+            ref: ${{github.event.pull_request.head.ref}}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
+            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      - name: Install python
+        uses: actions/setup-python@v3
+        with:
+            python-version: '3.x'
+            architecture: 'x64'
+      - name: Install yamale package
+        uses: BSFishy/pip-action@v1
+        with:
+            packages: |
+                yamale
+      - name: Setup git config
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
+      - name: Merge master into pull request branch
+        run: |
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
+      - name: Run kqlFuncYaml2Arm script
+        run: |
+          .script/kqlFuncYaml2Arm.ps1
+        shell: pwsh  
+      - name: Commit changes
+        run: |
+          # Stage the files and commit
+          git add Parsers/*
+          if git diff --staged --quiet; then
+            echo "armTemplatesChanged=false" >> $GITHUB_ENV
+            echo "Arm templates didn't changed, no changes to commit"
+          else
+            echo "armTemplatesChanged=true" >> $GITHUB_ENV
+            git commit -m '[ASIM Parsers] Generate deployable ARM templates from KQL function YAML files.'
+            echo "Arm templates were changed. Changes were committed"
+          fi
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        if: ${{ env.armTemplatesChanged == 'true' }}
+        with:
+            github_token: ${{ secrets.GITHUB_TOKEN }}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
+            branch: ${{ github.head_ref }}
+      - name: Add comment
+        uses: mshick/add-pr-comment@v1
+        if: ${{ env.armTemplatesChanged == 'true' }}
+        with:
+          message: |
+            ASIM parsers have been changed. ARM templates were regenerated from the updated KQL function YAML files.
+            To find the new ARM templates, pull your branch.
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token-user-login: 'github-actions[bot]' # The user.login for temporary GitHub tokens
+          allow-repeats: false # This is the default

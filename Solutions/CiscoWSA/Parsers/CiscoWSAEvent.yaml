@@ -1,0 +1,137 @@
+id: 32aa549f-5c46-4bd0-acd1-81f0d862da32
+Function:
+  Title: Parser for CiscoWSAEvent
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: CiscoWSAEvent
+FunctionAlias: CiscoWSAEvent
+FunctionQuery: |
+    let AllData = Syslog
+    | where ProcessName =~ "sentinel"
+    | extend LogType = iff(SyslogMessage matches regex @"\d{10}\.\d{3}\s\d+\s\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", "Squid Logs" , iif(SyslogMessage matches regex @"\d{4}\-\d{2}\-\d{2}\s\d{2}:\d{2}:\d{2}\s\d{10}\.\d{3}", "W3C Logs",dynamic("")))
+    | extend EventVendor = 'Cisco'
+    | extend EventProduct = 'Web Security Appliance'
+    | extend EventType = 'Access Log';
+    let SquidLogData = AllData
+    | where LogType == "Squid Logs"
+    | parse SyslogMessage with * " " EventStartTimeEpoch:real " " Latency:int " " SrcIpAddr " " EventResultDetails "/" HttpStatusCode:int " " DstBytes:int " " HttpRequestMethod:string " " UrlOriginal:string " " SrcUserName:string " " ContactedServerCode:string "/" DstDvcHostname:string " " ResponseBodyMimeType " " DvcAction:string "-" PolicyGroupName "-" IdentityPolicyGroupName:string "-" OutboundMalwareScanningPolicyGroupName:string "-" DataSecurityPolicyGroupName:string "-" ExternalDplPolicyGroupName:string "-" RoutingPolicy:string "<" ScanningVerdictFields ">" * " " * " " RemainingMessage
+    | extend ScanningVerdictFields =  split(ScanningVerdictFields,',')
+    | parse-kv RemainingMessage as (Date:string, ["Dst-IP"]:string, UserAgent: string, ADGroup:string, AuthMethod:string, TransID:long, TotalBytes:int, RequestBytes:int, ResponseBytes:int, ElapseTime:int) with (pair_delimiter=' ', kv_delimiter=':', quote='"')
+    | extend EventStartTime = unixtime_seconds_todatetime(todouble(EventStartTimeEpoch))
+    , SuspectedUserAgent = UserAgent
+    , UrlCategory = trim('"',tostring(ScanningVerdictFields[0]))
+    , WebReputationScore = tostring(ScanningVerdictFields[1])
+    , MalwareScanningVerdict = tostring(ScanningVerdictFields[2])
+    , ThreatName = trim('"',tostring(ScanningVerdictFields[3]))
+    , ThreatRiskRatioValue = tostring(ScanningVerdictFields[4])
+    , ThreatIdentifier = tostring(ScanningVerdictFields[5])
+    , TraceIdentifier = tostring(ScanningVerdictFields[6])
+    , McAfeeMalwareScanningVerdict = tostring(ScanningVerdictFields[7])
+    , McAfeeScannedFileName = trim('"',tostring(ScanningVerdictFields[8]))
+    , McAfeeScanError = tostring(ScanningVerdictFields[9])
+    , McAfeeDetectionType = tostring(ScanningVerdictFields[10])
+    , McAfeeThreatCategory = tostring(ScanningVerdictFields[11])
+    , McAfeeThreatName = trim('"',tostring(ScanningVerdictFields[12]))
+    , SophosScanningVerdict = tostring(ScanningVerdictFields[13])
+    , SophosScanReturnCode = tostring(ScanningVerdictFields[14])
+    , SophosScannedFileName = trim('"',tostring(ScanningVerdictFields[15]))
+    , SophosThreatName = trim('"',tostring(ScanningVerdictFields[16]))
+    , CiscoDataSecurityScanningVerdict = case(tostring(ScanningVerdictFields[17]) == '0', 'Allow',
+                                         tostring(ScanningVerdictFields[17]) == '1', 'Block',
+                                         '-')
+    , ExternalDlpScannningVerdict = case(tostring(ScanningVerdictFields[18]) == '0', 'Allow',
+                                   tostring(ScanningVerdictFields[18]) == '1', 'Block',
+                                   '-')
+    , ResponseSideScanningUrlCategoryVerdict = trim('"',tostring(ScanningVerdictFields[19]))
+    , DcaUrlCategoryVerdict = tostring(ScanningVerdictFields[20])
+    , ResponseThreatCategory = trim('"',tostring(ScanningVerdictFields[21]))
+    , WebReputationThreatType = trim('"',tostring(ScanningVerdictFields[22]))
+    , GteEncapsulatedUrl = trim('"',tostring(ScanningVerdictFields[23]))
+    , AvcApplicationName = trim('"',tostring(ScanningVerdictFields[24]))
+    , AvcApplicationType = trim('"',tostring(ScanningVerdictFields[25]))
+    , AvcApplicationBehavior = trim('"',tostring(ScanningVerdictFields[26]))
+    , SafeBrowsingScanningVerdict = trim('"',tostring(ScanningVerdictFields[27]))
+    , ['AvgBandwidth(Kb/sec)'] = tostring(ScanningVerdictFields[28])
+    , Throttled = tostring(ScanningVerdictFields[29])
+    , UserType = tostring(ScanningVerdictFields[30])
+    , RequestSideAntiMalwareScanningVerdict = trim('"',tostring(ScanningVerdictFields[31]))
+    , ClientRequestThreatName = trim('"',tostring(ScanningVerdictFields[32]))
+    , AmpScanningVerdict = tostring(ScanningVerdictFields[33])
+    , AmpThreatName = trim('"',tostring(ScanningVerdictFields[34]))
+    , AmpReputationScore = tostring(ScanningVerdictFields[35])
+    , AmpUploadIndicator = tostring(ScanningVerdictFields[36])
+    , AmpFileName = trim('"',tostring(ScanningVerdictFields[37]))
+    , AmpFileHashSha256 = trim('"',tostring(ScanningVerdictFields[38]))
+    , ArchiveScanningVerdict = tostring(ScanningVerdictFields[39])
+    , ArchiveScanningVerdictDetail = tostring(ScanningVerdictFields[40])
+    , ArchiveScannerFileVerdict = trim('"',tostring(ScanningVerdictFields[41]))
+    , WebTapBehavior = tostring(ScanningVerdictFields[42])
+    , YouTubeUrlCategory = tostring(ScanningVerdictFields[43])
+    , BlockedFileTypeDetail = tostring(ScanningVerdictFields[44]);
+    let W3CLogData = AllData
+    | where LogType == "W3C Logs"
+    | extend EventFields = split(SyslogMessage, ' ')
+    | extend EventStartTime = strcat(EventFields[0], ' ', EventFields[1])
+    , Latency = toint(EventFields[3])
+    , SrcIpAddr = tostring(EventFields[5])
+    , EventResultDetails = tostring(EventFields[6])
+    , DstBytes = toint(EventFields[8])
+    , HttpRequestMethod = tostring(EventFields[9])
+    , UrlOriginal = tostring(EventFields[10])
+    , SrcUserName = tostring(EventFields[13])
+    , DstIpAddr = tostring(EventFields[11])
+    , DstDvcHostname = tostring(EventFields[18])
+    , ResponseBodyMimeType = tostring(EventFields[14])
+    , DvcAction = tostring(EventFields[15])
+    , SuspectedUserAgent = tostring(EventFields[62])
+    , UrlCategory = tostring(EventFields[21])
+    , McAfeeMalwareScanningVerdict = tostring(EventFields[28])
+    , McAfeeScannedFileName = (EventFields[29])
+    , McAfeeScanError = tostring(EventFields[30])
+    , McAfeeDetectionType = tostring(EventFields[31])
+    , McAfeeThreatCategory = tostring(EventFields[32])
+    , McAfeeThreatName = tostring(EventFields[33])
+    , SophosScanningVerdict = tostring(EventFields[34])
+    , SophosScanReturnCode = tostring(EventFields[35])
+    , SophosScannedFileName = tostring(EventFields[36])
+    , SophosThreatName = tostring(EventFields[37])
+    , CiscoDataSecurityScanningVerdict = tostring(EventFields[38])
+    , ExternalDlpScannningVerdict = tostring(EventFields[39])
+    , ResponseSideScanningUrlCategoryVerdict = tostring(EventFields[41])
+    , AvcApplicationName = tostring(EventFields[43])
+    , AvcApplicationType = tostring(EventFields[44])
+    , AvcApplicationBehavior = tostring(EventFields[45])
+    , SafeBrowsingScanningVerdict = tostring(EventFields[46])
+    , ['AvgBandwidth(Kb/sec)'] = todouble(EventFields[47])
+    , Throttled = tostring(EventFields[48])
+    , UserType = tostring(EventFields[49])
+    , AmpScanningVerdict = tostring(EventFields[56])
+    , AmpThreatName = tostring(EventFields[57])
+    , AmpReputationScore = tostring(EventFields[58])
+    , AmpUploadIndicator = tostring(EventFields[59])
+    , AmpFileName = tostring(EventFields[60])
+    , AmpFileHashSha256 = tostring(EventFields[61])
+    , HttpReferrerOriginal = tostring(EventFields[4])
+    , SrcBytes = toint(EventFields[7])
+    , RequestUri = tostring(EventFields[12])
+    , HttpRequestXff = tostring(EventFields[16])
+    , SrcPortNumber = tostring(EventFields[17])
+    , DstPortNumber = tostring(EventFields[19])
+    , NetworkApplicationProtocol = tostring(EventFields[20])
+    , WbrsScore = tostring(EventFields[22])
+    , WebrootScanningVerdict = tostring(EventFields[23])
+    , WebrootThreatName = tostring(EventFields[24])
+    , WebrootThreatRiskRatio = tostring(EventFields[25])
+    , WebrootSpyId = tostring(EventFields[26])
+    , WebrootTraceId = tostring(EventFields[27])
+    , RequestSideScanningUrlCategoryVerdict = tostring(EventFields[40])
+    , WebReputationThreatCategory = tostring(EventFields[42])
+    , ResponseSideThreatName = tostring(EventFields[50])
+    , ResponseSideThreatCategoryCode = tostring(EventFields[51])
+    , ResponseSideThreatCategory = tostring(EventFields[52])
+    , RequestSideDvsThreatName = tostring(EventFields[53])
+    , RequestSideDvsScanningVerdict = tostring(EventFields[54])
+    , RequestSideDvsVerdictName = tostring(EventFields[55])
+    , NetworkBytes = toint(EventFields[63]);
+    union SquidLogData, W3CLogData

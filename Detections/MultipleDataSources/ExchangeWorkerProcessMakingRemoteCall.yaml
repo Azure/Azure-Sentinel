@@ -1,0 +1,57 @@
+id: 2c701f94-783c-4cd4-bc9b-3b3334976090
+name: Exchange Worker Process Making Remote Call
+description: |
+  'This query dynamically identifies Exchange servers and then looks for instances where the IIS worker process
+  initiates a call out to a remote URL using either cmd.exe or powershell.exe. This behaviour was described as
+  post-compromise behaviour following exploitation of CVE-2022-41040 and CVE-2022-41082, this pattern of activity was
+  use to download additional tools to the server. This suspicious activity is generic.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - DeviceProcessEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt 
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059.001
+  - T1059.003
+query: |
+  let suspiciousCmdLineKeywords = dynamic(["http://", "https://"]);
+  // Identify exchange servers based on known paths
+  // Summarize these to get a list of exchange server hostnames
+  let exchangeServers = W3CIISLog
+  | where csUriStem has_any("/owa/","/ews/","/ecp/","/autodiscover/")
+  // Only where successful, rule out failed scanning
+  | where scStatus startswith "2"
+  | summarize by Computer;
+  DeviceProcessEvents
+  | where DeviceName in~ (exchangeServers)
+  // Where the IIS worker process initiated CMD or PowerShell
+  | where InitiatingProcessParentFileName == "w3wp.exe"
+  | where InitiatingProcessFileName has_any("cmd.exe", "powershell.exe")
+  // Where CMD or PowerShell command line included parameters associated with CVE-2022-41040/CVE-2022-41082 exploitation
+  | where ProcessCommandLine has_any(suspiciousCmdLineKeywords)
+  | project TimeGenerated, DeviceId, DeviceName, InitiatingProcessFileName, ProcessCommandLine
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: petebryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Application" ]

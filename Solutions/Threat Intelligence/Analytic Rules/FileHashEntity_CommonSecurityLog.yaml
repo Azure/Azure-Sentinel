@@ -1,0 +1,79 @@
+id: 5d33fc63-b83b-4913-b95e-94d13f0d379f
+name: TI map File Hash to CommonSecurityLog Event
+description: |
+  'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let fileHashIndicators = ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  | where isnotempty(FileHashValue);
+  // Handle matches against both lower case and uppercase versions of the hash:
+  (fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
+  | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  |  join kind=innerunique (
+    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
+    | where isnotempty(FileHash)
+    | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+    )
+  on $left.FileHashValue == $right.FileHash
+  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,
+  RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType
+  | extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))
+  | extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])
+  | extend timestamp = CommonSecurityLog_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: FileHashType
+version: 1.3.3
+kind: Scheduled

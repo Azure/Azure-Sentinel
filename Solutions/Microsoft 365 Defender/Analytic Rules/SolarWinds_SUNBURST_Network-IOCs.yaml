@@ -1,0 +1,59 @@
+id: ce1e7025-866c-41f3-9b08-ec170e05e73e
+name: SUNBURST network beacons
+description: |
+  Identifies SolarWinds SUNBURST domain beacon IOCs in DeviceNetworkEvents
+  References:
+  - https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html
+  - https://gist.github.com/olafhartong/71ffdd4cab4b6acd5cbcd1a0691ff82f
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - Persistence
+  - InitialAccess
+relevantTechniques:
+  - T1195
+  - T1059
+  - T1546
+query:  |
+  let SunburstURL=dynamic(["panhardware.com","databasegalore.com","avsvmcloud.com","freescanonline.com","thedoccloud.com","deftsecurity.com"]);
+  DeviceNetworkEvents
+  | where ActionType == "ConnectionSuccess"
+  | where RemoteUrl in(SunburstURL)
+  | extend timestamp = TimeGenerated,AccountEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),HashAlgorithm = 'MD5'
+  | extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RemoteUrl
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: HashAlgorithm
+      - identifier: Value
+        columnName: InitiatingProcessMD5
+version: 1.0.4
+kind: Scheduled

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimWebSessionPaloAltoCEF",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM parser for Palo Alto Networks URL Filtering",
+            "category": "ASIM",
+            "FunctionAlias": "ASimWebSessionPaloAltoCEF",
+            "query": "let parser=(disabled:bool=false){\n    let EventLookup=datatable(DeviceAction:string, DvcAction:string,EventResult:string,HttpStatusCode:string)\n    [\n        \"alert\", \"Allow\", \"Success\",\"200\"\n        , \"allow\", \"Allow\", \"Success\", \"200\"\n        , \"continue\", \"Allow\", \"Success\", \"200\"\n        , \"override\", \"Allow\", \"Success\", \"200\"\n        , \"block-continue\", \"Allow\", \"Partial\", \"200\"\n        , \"block-url\", \"Deny\", \"Failure\", \"503\"\n        , \"block-override\", \"Deny\", \"Failure\", \"302\"\n        , \"override-lockout\", \"Deny\", \"Failure\",\"503\"\n        , \"reset client\", \"Reset Source\", \"Failure\", \"503\"\n        , \"reset server\", \"Reset Destination\", \"Failure\", \"503\"\n        , \"reset both\", \"Reset\", \"Failure\", \"503\"\n        , \"deny\", \"Deny\", \"Failure\", \"503\"\n        , \"drop\", \"Drop\", \"Failure\", \"503\"\n        , \"drop ICMP\", \"Drop ICMP\", \"Failure\", \"503\"\n    ];\n    let SeverityLookup=datatable(LogSeverity:string,EventSeverity:string)\n    [   1, \"Informational\" \n        , 2, \"Low\" \n        , 3, \"Medium\"\n        , 4, \"Medium\" \n        , 5, \"High\"\n    ];\n    CommonSecurityLog\n    | where DeviceVendor == \"Palo Alto Networks\"\n        and DeviceProduct == \"PAN-OS\"\n        and Activity == \"THREAT\"\n        and DeviceEventClassID == \"url\"\n    | parse-kv AdditionalExtensions as (PanOSXForwarderfor:string, PanXFFIP:string, PanOSReferer:string, PanOSRuleUUID:string, PanSrcHostname:string, PanSrcMac:string, PanSrcDeviceCat:string, PanSrcDAG:string, PanOSSrcUUID:string, PanSrcDeviceProf:string, PanSrcDeviceModel:string, PanSrcDeviceVendor:string, PanSrcDeviceOS:string, PanSrcDeviceOSv:string, PanDstHostname:string, PanDstMac:string, PanDstDeviceCat:string, PanDstDAG:string, PanOSDstUUID:string, PanDstDeviceProf:string, PanDstDeviceModel:string, PanDstDeviceVendor:string, PanDstDeviceOS:string, PanDstDeviceOSv:string) with (pair_delimiter=';', kv_delimiter='=')\n    | extend \n        HttpRequestXff            = coalesce(PanOSXForwarderfor, PanXFFIP)\n    | lookup EventLookup on DeviceAction\n    | lookup SeverityLookup on LogSeverity\n    | project-rename \n        DvcHostname                 = Computer\n        , HttpReferrer                = PanOSReferer\n        , DstMacAddr                = PanDstMac\n        , SrcMacAddr                = PanSrcMac\n        , DstHostname               = PanDstHostname\n        , SrcHostname               = PanSrcHostname\n        , Url                       = RequestURL\n        , DvcId                     = DeviceExternalID\n        , SrcZone                   = DeviceCustomString4\n        , DstZone                   = DeviceCustomString5\n        , UrlCategory               = DeviceCustomString2\n        , DvcOriginalAction         = DeviceAction\n        , EventUid                  = _ItemId\n        , EventOriginalSeverity     = LogSeverity\n        , EventProductVersion       = DeviceVersion\n        , DvcInboundInterface       = DeviceInboundInterface\n        , DvcOutboundInterface      = DeviceOutboundInterface\n        , DstIpAddr                 = DestinationIP\n        , DstPortNumber             = DestinationPort\n        , SrcIpAddr                 = SourceIP\n        , SrcPortNumber             = SourcePort\n        , SrcUsername               = SourceUserName\n        , DstUsername               = DestinationUserName\n        , NetworkRuleName           = DeviceCustomString1\n        , ThreatOriginalConfidence  = ThreatConfidence\n        , DstNatIpAddr              = DestinationTranslatedAddress\n        , DstNatPortNumber          = DestinationTranslatedPort\n        , SrcNatIpAddr              = SourceTranslatedAddress\n        , SrcNatPortNumber          = SourceTranslatedPort\n        , HttpUserAgent             = RequestClientApplication\n    | extend\n        Dvc                         = DvcHostname\n        , DvcIdType                 = \"Other\"\n        , EventType                 = \"HTTPsession\"\n        , EventSchema               = \"WebSession\"\n        , EventSchemaVersion        = \"0.2.5\"\n        , EventProduct              = \"Palo Alto\"\n        , EventVendor               = \"PanOS\"\n        , EventStartTime            = TimeGenerated\n        , EventEndTime              = TimeGenerated\n        , HttpRequestMethod         = toupper(RequestMethod)\n        , EventResultDetails        = \"NA\"\n        , HttpContentFormat         = RequestContext\n        , DstFQDN                   = iif(Url contains \":\", split(tostring(split(trim('\"',Url),\"/\")[0]),\":\")[0],tostring(split(trim('\"',Url),\"/\")[0]))\n        , DstDomainType             = \"FQDN\"\n        , Src                       = SrcIpAddr\n        , SrcUsernameType           = \"Windows\"\n        , DstUsernameType           = \"Windows\"\n        , NetworkProtocolVersion    = case(\n            DstIpAddr contains \".\"  , \"IPv4\"\n            , DstIpAddr contains \":\", \"IPv6\"\n            , \"\")\n        , NetworkDirection          = case(\n            FlexString2 == \"client-to-server\", \"Outbound\"\n            , FlexString2 == \"server-to-client\", \"Inbound\"\n            , \"\")\n        , IpAddr                    = SrcIpAddr\n        , NetworkProtocol           = toupper(Protocol)\n        , User                      = SrcUsername\n        , Rule                      = NetworkRuleName\n        , NetworkSessionId          = tostring(DeviceCustomNumber1)\n        , DvcInterface              = DvcInboundInterface\n        , Hostname                  = DstHostname\n    | extend \n        SessionId                 = NetworkSessionId\n        , ThreatField               = case(\n          isnotempty(ThreatOriginalConfidence) and NetworkDirection == \"Outbound\", \"SrcIpAddr\"\n          , isnotempty(ThreatOriginalConfidence) and NetworkDirection == \"Inbound\", \"DstIpAddr\"\n          , \"\")\n        , Dst                       = DstFQDN\n    | extend \n        ThreatIpAddr                = case(\n          ThreatField == \"SrcIpAddr\", SrcIpAddr\n        , ThreatField == \"DstIpAddr\", DstIpAddr\n        , \"\")\n    | project DeviceVendor, Dst, DstDomainType, DstFQDN, DstHostname, DstIpAddr, DstMacAddr, DstNatIpAddr, DstNatPortNumber, DstPortNumber, DstUsername, DstUsernameType, DstZone, Dvc, DvcAction, DvcHostname, DvcId, DvcIdType, DvcInboundInterface, DvcInterface, DvcOriginalAction, DvcOutboundInterface, EventCount, EventEndTime, EventOriginalSeverity, EventProduct, EventProductVersion, EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventSeverity, EventStartTime, EventType, EventUid, EventVendor, Hostname, HttpContentFormat, HttpRequestMethod, HttpRequestXff, HttpStatusCode, IpAddr, NetworkDirection, NetworkProtocol, NetworkProtocolVersion, NetworkRuleName, NetworkSessionId, Protocol, RequestContext, RequestMethod, Rule, SessionId, Src, SrcHostname, SrcIpAddr, SrcMacAddr, SrcNatIpAddr, SrcNatPortNumber, SrcPortNumber, SrcUsername, SrcUsernameType, SrcZone, ThreatField, ThreatIpAddr, ThreatOriginalConfidence, TimeGenerated, Type, Url, UrlCategory, User\n};\nparser (disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

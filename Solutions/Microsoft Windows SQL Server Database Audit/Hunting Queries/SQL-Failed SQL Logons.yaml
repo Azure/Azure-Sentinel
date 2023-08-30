@@ -1,0 +1,44 @@
+id: d98256d5-0c9a-4ffc-8618-66a3404412f8
+name: Failed Logon Attempts on SQL Server
+description: |
+  This query is based on the SQLEvent KQL Parser function (link below) and detects failed logons on SQL Server 
+  SQLEvent KQL Parser provided at https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/SQLSever
+  Detailed blog post on Monitoring SQL Server with Microsoft Sentinel https://techcommunity.microsoft.com/t5/azure-sentinel/monitoring-sql-server-with-azure-sentinel/ba-p/1502960
+requiredDataConnectors:
+  - connectorId: AzureMonitor(WindowsEventLogs)
+    dataTypes:
+      - Event
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+      // SQLEvent is not the table name, it is the function name that should already be imported into your workspace.
+      // The underlying table where the data exists is the Event table.
+      SQLEvent
+      | where LogonResult has "failed"
+      | summarize by TimeGenerated, CurrentUser, Reason, ClientIP
+      | extend Name = iff(CurrentUser contains '@', tostring(split(CurrentUser, '@', 0)[0]), CurrentUser)
+      | extend UPNSuffix = iff(CurrentUser contains '@', tostring(split(CurrentUser, '@', 1)[0]), '')
+      | extend Name = iff(CurrentUser contains '\\', tostring(split(CurrentUser, '\\', 1)[0]), Name)
+      | extend NTDomain = iff(CurrentUser contains '\\', tostring(split(CurrentUser, '\\', 0)[0]), '')
+      | extend Account_0_Name = Name
+      | extend Account_0_UPNSuffix = UPNSuffix
+      | extend Account_0_NTDomain = NTDomain
+      | extend IP_0_Address = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 2.0.0
+
+

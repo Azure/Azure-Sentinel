@@ -38,8 +38,8 @@ Function Get-AzSentinelAnalyticsRuleTemplates ($workspaceName, $resourceGroupNam
         'Authorization' = 'Bearer ' + $token.AccessToken 
     }
     
-    $urlTemplates = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/alertruletemplates?api-version=2019-01-01-preview"
-	$urlDataConnectors = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2019-01-01-preview"
+    $urlTemplates = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/alertruletemplates?api-version=2021-10-01"
+	$urlDataConnectors = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2021-10-01"
 	
 	Write-Host -ForegroundColor Cyan "Fetching configured Data Connectors"
 	$resultDataConnectors = (Invoke-RestMethod -Method "GET" -Uri $urlDataConnectors -Headers $authHeader ).value
@@ -152,7 +152,7 @@ Function New-AzSentinelAnalyticsRulesFromTemplate ($workspaceName, $resourceGrou
 			#Create the GUId for the alert and create it.
 			$guid = (New-Guid).Guid
 			#Create the URI we need to create the alert.
-			$uri = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/alertRules/$($guid)?api-version=2019-01-01-preview"
+			$uri = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/alertRules/$($guid)?api-version=2021-10-01"
 			try {
 				Write-Host -ForegroundColor Cyan "Attempting to create rule $($template.properties.displayName)"				
 				$verdict = Invoke-RestMethod -Uri $uri -Method Put -Headers $authHeader -Body ($body | ConvertTo-Json -EnumsAsStrings)

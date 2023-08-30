@@ -1,0 +1,66 @@
+id: 011c84d8-85f0-4370-b864-24c13455aa94
+name: Detect CoreBackUp Deletion Activity from related Security Alerts
+description: |
+  'The query identifies any efforts by an attacker to delete backup containers, while also searching for any security alerts that may be linked to the same activity, in order to uncover additional information about the attacker's actions.' 
+  Though such an activity could be legitimate as part of business operation, some ransomware actors may perform such operation to cause interruption to regular business services.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+  SecurityAlert
+  | extend Extprop = parse_json(ExtendedProperties)
+  | mv-expand todynamic(Entities)
+  | extend HostName = iff(isnotempty(tostring(Extprop["Compromised Host"])), tolower(tostring(Extprop["Compromised Host"])), tolower(tostring(parse_json(Entities).HostName)))
+  | where isnotempty(HostName)
+  | mv-expand todynamic(split(HostName, ','))
+  | extend DnsDomain = iff(isnotempty(tostring(Extprop["Machine Domain"])), tostring(Extprop["Machine Domain"]), tostring(parse_json(Entities).DnsDomain))
+  | extend UserName = iff(isnotempty(tostring(Extprop["User Name"])), tostring(Extprop["User Name"]), iff(tostring(parse_json(Entities).Type) == 'account', tostring(parse_json(Entities).Name), ''))
+  | extend NTDomain = iff(isnotempty(tostring(Extprop["User Domain"])), tostring(Extprop["User Domain"]), tostring(parse_json(Entities).NTDomain))
+  | extend IpAddress = iff(tostring(parse_json(Entities).Type) == 'ip', tostring(parse_json(Entities).Address), tostring(parse_json(Extprop).["IpAddress"]))
+  | summarize timestamp = arg_max(TimeGenerated, *) by AlertName, tostring(HostName)
+  | project timestamp, AlertName, UserName, NTDomain, tostring(HostName), DnsDomain, IpAddress
+  | join kind=inner
+  (
+  CoreAzureBackup
+  | where State =~ "Deleted"
+  | where OperationName =~ "BackupItem"
+  | extend data = split(BackupItemUniqueId, ";")
+  | extend AzureLocation = data[0], VaultId=data[1], HostName=tolower(tostring(data[2])), DrivesBackedUp=data[3]
+  | project timestamp = TimeGenerated, AzureLocation, VaultId, HostName, DrivesBackedUp, State, BackupItemUniqueId, _ResourceId, OperationName, BackupItemFriendlyName
+  )
+  on HostName
+  | project timestamp, AlertName, HostName, DnsDomain, UserName, NTDomain, _ResourceId, IpAddress, VaultId, AzureLocation, DrivesBackedUp, State, BackupItemUniqueId, OperationName, BackupItemFriendlyName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: _ResourceId
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+version: 1.0.1
+kind: Scheduled

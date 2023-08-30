@@ -1,31 +1,65 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "CiscoISE-False Positives Clear Policies",
+        "description": "This playbook gets triggered when a new sentinel incident is created\n1.For each MAC address (MACAddress provided in the alert custom entities) in the incident checks if it is was rejected in Cisco ISE.\n2.If MAC address was rejected, checks if it is in the safe list (safe list is a custom [Watchlist](https://docs.microsoft.com/azure/sentinel/watchlists) that contains safe MAC addresses). If it is in safe list, releases endpoint with this MAC address in Cisco ISE.\n3.Adds comment to the incident with information about the released endpoints.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, Cisco ISE Connector needs to be deployed under the same subscription.",
+            "2. Obtain Cisco ISE ERS API credentials. Refer to Cisco ISE Custom Connector documentation.",
+            "3. [Watchlist](https://docs.microsoft.com/azure/sentinel/watchlists) with safe MAC addresses list needs to be created."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Click the Microsoft Sentinel connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**b. Configurations in Sentinel**",
+            "1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have the *MACAddress* custom entity that contains MAC address of an endpoint in Cisco ISE. It can be obtained from the corresponding field in Cisco ISE logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.",
+            "2. Configure the automation rules to trigger the playbook."
+        ],
+        "lastUpdateTime": "2022-08-03T00:00:00.000Z",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Vitalii Uslystyi"
+        }
+    },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "CiscoISE-FalsePositivesClearPolicies",
             "type": "String"
         },
         "WatchlistName": {
-            "defaultValue": "[parameters('WatchlistName')]",
+            "defaultValue": "safe_MAC_addresses_list",
             "type": "String",
             "metadata": {
                 "description": "Name of the Watchlist that contains safe MAC addresses list"
             }
         },
         "WatchlistFieldName": {
-            "defaultValue": "[parameters('WatchlistFieldName')]",
+            "defaultValue": "Watchlist field name that contains MAC address",
             "type": "String",
             "metadata": {
                 "description": "Watchlist field name that contains MAC address"
             }
+        },
+        "customApis_ciscoise_name": {
+            "defaultValue": "CiscoISE",
+            "type": "String"
         }
     },
     "variables": {
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
         "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
-        "CiscoISEConnectionName": "[concat('ciscoise-connection-', parameters('PlaybookName'))]",
-        "customApis_ciscoise_name": "CiscoISE"
+        "CiscoISEConnectionName": "[concat('ciscoise-connection-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -66,7 +100,7 @@
                     "authType": "basic"
                 },
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', variables('customApis_ciscoise_name'))]"
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/',  parameters('customApis_ciscoise_name'))]"
                 }
             }
         },
@@ -474,7 +508,7 @@
                             "ciscoise": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('CiscoISEConnectionName'))]",
                                 "connectionName": "[variables('CiscoISEConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', variables('customApis_ciscoise_name'))]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/',  parameters('customApis_ciscoise_name'))]"
                             }
                         }
                     }

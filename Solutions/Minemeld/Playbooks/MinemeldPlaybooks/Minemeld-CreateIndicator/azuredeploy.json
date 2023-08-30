@@ -1,0 +1,894 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Create Indicator - Minemeld",
+        "description": "This playbook search for indicators in Minemeld related to the entities(IP, filehash, URL) gathered from Sentinel incident. If the search result is positive a comment stating the indicator is already present or it creates a new indicator in Minemeld.",
+        "prerequisites": ["1. Minemeld Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
+        "2. Basic authentication of user and password is required for accessing Minemeld API"],
+        "postDeployment": ["1. Once deployment is complete, you will need to authorize each connection (if required).",
+        "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter User and Password --> Save"],
+        "prerequisitesDeployTemplateFile": "../../CustomConnector/MinemeldCustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2022-10-07T00:00:00.000Z",
+        "entities": ["ip","filehash","url"],
+        "tags": ["Enrichment","Notification","ThreatIntelligence", "Minemeld"],
+        "support": {
+            "tier": "microsoft",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Minemeld-CreateIndicator",
+            "type": "string"
+        },
+		"CustomConnectorName":  {
+            "defaultValue":  "MinemeldCustomConnector",
+            "type":  "string",
+        "metadata": {
+          "description": "Name of the custom connector, if you want to change the default name, make sure to use the same in all OpenCTI automation playbooks as well"
+        }            
+        },
+        "Miner DB Node": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Miner DB Node"
+            }
+        }
+    },
+    "variables": {
+        "MinemeldcustomconnectorConnectionName": "[concat('Minemeldcustomconnector-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Miner DB Node": {
+                            "defaultValue": "[parameters('Miner DB Node')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Compose": {
+                            "runAfter": {
+                                "For_each_-_getting_list_of_old_indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@variables('oldindicators')"
+                        },
+                        "Compose_2": {
+                            "runAfter": {
+                                "For_each_-_getting_list_of_URL_indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@variables('newURLindicators')"
+                        },
+                        "Compose_3": {
+                            "runAfter": {
+                                "For_each_-_getting_list_of_file_hash_indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@variables('newFileHashindicators')"
+                        },
+                        "Compose_4": {
+                            "runAfter": {
+                                "Getting_list_of_IP_indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@variables('newIPindicators')"
+                        },
+                        "For_each_-_getting_list_of_URL_indicators": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "Condition_2": {
+                                    "actions": {
+                                        "Condition_5": {
+                                            "actions": {
+                                                "Append_to_array_variable_3": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "newURLindicators",
+                                                        "value": "@items('For_each_-_getting_list_of_URL_indicators')?['properties']?['friendlyName']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@variables('oldindicators')",
+                                                                "@items('For_each_-_getting_list_of_URL_indicators')?['properties']?['friendlyName']"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each_-_getting_list_of_URL_indicators')['kind']",
+                                                    "Url"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Compose": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_-_getting_list_of_file_hash_indicators": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "Condition_3": {
+                                    "actions": {
+                                        "Condition_6": {
+                                            "actions": {
+                                                "Append_to_array_variable_4": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "newFileHashindicators",
+                                                        "value": "@items('For_each_-_getting_list_of_file_hash_indicators')?['properties']?['hashValue']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@variables('oldindicators')",
+                                                                "@items('For_each_-_getting_list_of_file_hash_indicators')?['properties']?['hashValue']"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each_-_getting_list_of_file_hash_indicators')['kind']",
+                                                    "FileHash"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Compose": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_-_getting_list_of_old_indicators": {
+                            "foreach": "@body('Get_Indicators')?['result']",
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "oldindicators",
+                                        "value": "@items('For_each_-_getting_list_of_old_indicators')?['indicator']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_Indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Indicators": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['MinemeldCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/config/data/@{encodeURIComponent(parameters('Miner DB Node'),'_indicators')}",
+                                "queries": {
+                                    "t": "localdb"
+                                }
+                            }
+                        },
+                        "Getting_list_of_IP_indicators": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Condition_4": {
+                                            "actions": {
+                                                "Append_to_array_variable_2": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "newIPindicators",
+                                                        "value": "@items('Getting_list_of_IP_indicators')?['properties']?['address']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@variables('oldindicators')",
+                                                                "@items('Getting_list_of_IP_indicators')?['properties']?['address']"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('Getting_list_of_IP_indicators')['kind']",
+                                                    "Ip"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Compose": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_-for_storing_type_of_hash_value": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Type",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_for_storing_new_IP_indicators": {
+                            "runAfter": {
+                                "Initialize_variable_-for_storing_type_of_hash_value": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "newIPindicators",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_for_storing_new_URL_indicators": {
+                            "runAfter": {
+                                "Initialize_variable_for_storing_new_IP_indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "newURLindicators",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_for_storing_new_file_hash_indicators": {
+                            "runAfter": {
+                                "Initialize_variable_for_storing_new_URL_indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "newFileHashindicators",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_for_storing_old_indicators": {
+                            "runAfter": {
+                                "Initialize_variable_for_storing_new_file_hash_indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "oldindicators",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Initialize_variable_for_storing_old_indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "properties": {
+                                                "properties": {
+                                                    "address": {
+                                                        "type": "string"
+                                                    },
+                                                    "algorithm": {
+                                                        "type": "string"
+                                                    },
+                                                    "friendlyName": {
+                                                        "type": "string"
+                                                    },
+                                                    "hashValue": {
+                                                        "type": "string"
+                                                    },
+                                                    "url": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "id",
+                                            "type",
+                                            "kind",
+                                            "properties"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "check_for_empty_array": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_6": {
+                                    "runAfter": {
+                                        "For_each_-_adding_new_IP's_indicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>Provided IP's indicators are added :<br>\n@{variables('newIPindicators')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "For_each_-_adding_new_IP's_indicators": {
+                                    "foreach": "@variables('newIPindicators')",
+                                    "actions": {
+                                        "Add_delete_update_indicator_3": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "comment": "Entry added by sentinel @{triggerBody()?['object']?['properties']?['title']}",
+                                                    "confidence": 90,
+                                                    "indicator": "@{items('For_each_-_adding_new_IP''s_indicators')}",
+                                                    "ttl": "disable",
+                                                    "type": "IPv4"
+                                                },
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['MinemeldCustomConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/config/data/@{encodeURIComponent(parameters('Miner DB Node'),'_indicators')}/append",
+                                                "queries": {
+                                                    "h": "@parameters('Miner DB Node')",
+                                                    "t": "localdb"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Compose_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_comment_to_incident_(V3)": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p>Provided IP indicators are already present or none are provided for adding</p>"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('newIPindicators'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "check_for_empty_array1": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_4": {
+                                    "runAfter": {
+                                        "For_each_-_adding_new_indicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>Provided URL's indicators has been added :<br>\n@{variables('newURLindicators')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "For_each_-_adding_new_indicators": {
+                                    "foreach": "@variables('newURLindicators')",
+                                    "actions": {
+                                        "Add_delete_update_indicator": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "comment": "Entry added by sentinel @{triggerBody()?['object']?['properties']?['title']}",
+                                                    "confidence": 90,
+                                                    "indicator": "@{items('For_each_-_adding_new_indicators')}",
+                                                    "ttl": "disable",
+                                                    "type": "URL"
+                                                },
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['MinemeldCustomConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/config/data/@{encodeURIComponent(parameters('Miner DB Node'),'_indicators')}/append",
+                                                "queries": {
+                                                    "h": "@parameters('Miner DB Node')",
+                                                    "t": "localdb"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Compose_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_comment_to_incident_(V3)_2": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p>Provided URL indicators are already present or none are provided for adding</p>"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('newURLindicators'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "check_for_empty_array2": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_5": {
+                                    "runAfter": {
+                                        "For_each_-adding_new_file_hash_indicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>Provided filehash's indicators has been added :<br>\n@{variables('newFileHashindicators')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "For_each_-adding_new_file_hash_indicators": {
+                                    "foreach": "@variables('newFileHashindicators')",
+                                    "actions": {
+                                        "Add_delete_update_indicator_2": {
+                                            "runAfter": {
+                                                "Condition_7": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "comment": "Entry added by sentinel @{triggerBody()?['object']?['properties']?['title']}",
+                                                    "confidence": 90,
+                                                    "indicator": "@{items('For_each_-adding_new_file_hash_indicators')}",
+                                                    "ttl": "disable",
+                                                    "type": "@variables('Type')"
+                                                },
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['MinemeldCustomConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/config/data/@{encodeURIComponent(parameters('Miner DB Node'),'_indicators')}/append",
+                                                "queries": {
+                                                    "h": "@parameters('Miner DB Node')",
+                                                    "t": "localdb"
+                                                }
+                                            }
+                                        },
+                                        "Condition_7": {
+                                            "actions": {
+                                                "Set_variable": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Type",
+                                                        "value": "md5"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Condition_8": {
+                                                        "actions": {
+                                                            "Set_variable_2": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Type",
+                                                                    "value": "SHA-1"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "else": {
+                                                            "actions": {
+                                                                "Condition_9": {
+                                                                    "actions": {
+                                                                        "Set_variable_3": {
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "Type",
+                                                                                "value": "sha256"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {},
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "greater": [
+                                                                                    "@mul(length(items('For_each_-adding_new_file_hash_indicators')),8)",
+                                                                                    160
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "greater": [
+                                                                        "@mul(length(items('For_each_-adding_new_file_hash_indicators')),8)",
+                                                                        128
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "lessOrEquals": [
+                                                                        "@mul(length(items('For_each_-adding_new_file_hash_indicators')),8)",
+                                                                        160
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "lessOrEquals": [
+                                                            "@mul(length(items('For_each_-adding_new_file_hash_indicators')),8)",
+                                                            128
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Compose_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_comment_to_incident_(V3)_3": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p>Provided Filehash indicators are already present or none are provided for adding</p>"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('newFileHashindicators'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "MinemeldCustomConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MinemeldcustomconnectorConnectionName'))]",
+                                "connectionName": "[variables('MinemeldcustomconnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Minemeld-CreateIndicator",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MinemeldcustomconnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MinemeldcustomconnectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MinemeldcustomconnectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}
