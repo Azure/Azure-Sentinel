@@ -2060,16 +2060,16 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "ExchangeAdminAuditLogs",
-                "category": "Samples",
+                "displayName": "Parser for ExchangeAdminAuditLogs",
+                "category": "Microsoft Sentinel Parser",
                 "functionAlias": "ExchangeAdminAuditLogs",
-                "query": "\nlet cVIPs = _GetWatchlist('ExchangeVIP') | project tostring(canonicalName) ;\r\nlet sVIPs = _GetWatchlist('ExchangeVIP') | project tostring(sAMAccountName) ;\r\nlet CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true);\r\nlet SensitiveCmdlets = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true) | project tostring(Cmdlet) ;\r\nlet Env = ExchangeConfiguration(SpecificSectionList=\"ESIEnvironment\")\r\n| extend DomainFQDN_ = tostring(CmdletResultValue.DomainFQDN)\r\n| project DomainFQDN_, ESIEnvironment;\r\nlet MSExchange_Management = (){\r\n    Event\r\n    | where EventLog == 'MSExchange Management'\r\n    | where EventID in (1,6) // 1 = Success, 6 = Failure\r\n    | parse ParameterXml with '<Param>' CmdletName '</Param><Param>' CmdletParameters '</Param><Param>' Caller '</Param><Param>' *\r\n    | extend TargetObject = iif( CmdletParameters has \"-Identity \", split(split(CmdletParameters,'-Identity ')[1],'\"')[1], iif( CmdletParameters has \"-Name \", split(split(CmdletParameters,'-Name ')[1],'\"')[1], \"\"))\r\n    | extend Status = case( EventID == 1, 'Success', 'Failure')\r\n    | extend IsVIP = iif(TargetObject in (cVIPs) or TargetObject in (sVIPs), true, false)\r\n    | extend CmdletNameJoin = tolower(CmdletName)\r\n    | join kind=leftouter  ( \r\n        CmdletCheck\r\n    | extend CmdletNameJoin = tolower(Cmdlet)\r\n    ) on CmdletNameJoin\r\n    | extend DomainEnv = replace_string(Computer,strcat(tostring(split(Computer,'.',0)[0]),'.'),'')\r\n    | join kind=leftouter  ( \r\n        Env\r\n    ) on $left.DomainEnv == $right.DomainFQDN_\r\n    | extend ESIEnvironment = iif (isnotempty(ESIEnvironment), ESIEnvironment, strcat(\"Unknown-\",DomainEnv))\r\n    | extend IsSenstiveCmdlet = iif( isnotempty(CmdletNameJoin1) , true, false) \r\n    | extend IsRestrictedCmdLet = iif(IsSenstiveCmdlet == true, iif( RestrictToParameter == \"Yes\", true, false), dynamic(null))\r\n    | extend RestrictedParameters = iif(IsSenstiveCmdlet == true, split(tolower(Parameters),';'), dynamic(null))\r\n    | extend ExtractedParameters = iif(IsSenstiveCmdlet == true,extract_all(@\"\\B(-\\w+)\", tolower(CmdletParameters)), dynamic(null))\r\n    | extend IsSenstiveCmdletParameters = iif(IsSenstiveCmdlet == true,iif( array_length(set_difference(ExtractedParameters,RestrictedParameters)) == array_length(ExtractedParameters), false, true ) , false)\r\n    | extend IsSensitive = iif( ( IsSenstiveCmdlet == true and IsRestrictedCmdLet == false ) or (IsSenstiveCmdlet == true and IsRestrictedCmdLet == true and IsSenstiveCmdletParameters == true ), true, false )\r\n    //| project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters\r\n    | project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters,IsSensitive,UserOriented, ESIEnvironment\r\n};\r\nMSExchange_Management\r\n",
+                "query": "let cVIPs = _GetWatchlist('ExchangeVIP') | project tostring(canonicalName) ;\nlet sVIPs = _GetWatchlist('ExchangeVIP') | project tostring(sAMAccountName) ;\nlet CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true);\nlet SensitiveCmdlets = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true) | project tostring(Cmdlet) ;\nlet Env = ExchangeConfiguration(SpecificSectionList=\"ESIEnvironment\")\n| extend DomainFQDN_ = tostring(CmdletResultValue.DomainFQDN)\n| project DomainFQDN_, ESIEnvironment;\nlet MSExchange_Management = (){\n    Event\n    | where EventLog == 'MSExchange Management'\n    | where EventID in (1,6) // 1 = Success, 6 = Failure\n    | parse ParameterXml with '<Param>' CmdletName '</Param><Param>' CmdletParameters '</Param><Param>' Caller '</Param><Param>' *\n    | extend TargetObject = iif( CmdletParameters has \"-Identity \", split(split(CmdletParameters,'-Identity ')[1],'\"')[1], iif( CmdletParameters has \"-Name \", split(split(CmdletParameters,'-Name ')[1],'\"')[1], \"\"))\n    | extend Status = case( EventID == 1, 'Success', 'Failure')\n    | extend IsVIP = iif(TargetObject in (cVIPs) or TargetObject in (sVIPs), true, false)\n    | extend CmdletNameJoin = tolower(CmdletName)\n    | join kind=leftouter  ( \n        CmdletCheck\n    | extend CmdletNameJoin = tolower(Cmdlet)\n    ) on CmdletNameJoin\n    | extend DomainEnv = replace_string(Computer,strcat(tostring(split(Computer,'.',0)[0]),'.'),'')\n    | join kind=leftouter  ( \n        Env\n    ) on $left.DomainEnv == $right.DomainFQDN_\n    | extend ESIEnvironment = iif (isnotempty(ESIEnvironment), ESIEnvironment, strcat(\"Unknown-\",DomainEnv))\n    | extend IsSenstiveCmdlet = iif( isnotempty(CmdletNameJoin1) , true, false) \n    | extend IsRestrictedCmdLet = iif(IsSenstiveCmdlet == true, iif( RestrictToParameter == \"Yes\", true, false), dynamic(null))\n    | extend RestrictedParameters = iif(IsSenstiveCmdlet == true, split(tolower(Parameters),';'), dynamic(null))\n    | extend ExtractedParameters = iif(IsSenstiveCmdlet == true,extract_all(@\"\\B(-\\w+)\", tolower(CmdletParameters)), dynamic(null))\n    | extend IsSenstiveCmdletParameters = iif(IsSenstiveCmdlet == true,iif( array_length(set_difference(ExtractedParameters,RestrictedParameters)) == array_length(ExtractedParameters), false, true ) , false)\n    | extend IsSensitive = iif( ( IsSenstiveCmdlet == true and IsRestrictedCmdLet == false ) or (IsSenstiveCmdlet == true and IsRestrictedCmdLet == true and IsSenstiveCmdletParameters == true ), true, false )\n    //| project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters\n    | project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters,IsSensitive,UserOriented, ESIEnvironment\n};\nMSExchange_Management\n",
                 "functionParameters": "",
-                "version": 1,
+                "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "ExchangeAdminAuditLogs"
+                    "value": ""
                   }
                 ]
               }
@@ -2111,7 +2111,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('_parserContentId1')]",
         "contentKind": "Parser",
-        "displayName": "ExchangeAdminAuditLogs",
+        "displayName": "Parser for ExchangeAdminAuditLogs",
         "contentProductId": "[variables('_parsercontentProductId1')]",
         "id": "[variables('_parsercontentProductId1')]",
         "version": "[variables('parserVersion1')]"
@@ -2124,16 +2124,16 @@
       "location": "[parameters('workspace-location')]",
       "properties": {
         "eTag": "*",
-        "displayName": "ExchangeAdminAuditLogs",
-        "category": "Samples",
+        "displayName": "Parser for ExchangeAdminAuditLogs",
+        "category": "Microsoft Sentinel Parser",
         "functionAlias": "ExchangeAdminAuditLogs",
-        "query": "\nlet cVIPs = _GetWatchlist('ExchangeVIP') | project tostring(canonicalName) ;\r\nlet sVIPs = _GetWatchlist('ExchangeVIP') | project tostring(sAMAccountName) ;\r\nlet CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true);\r\nlet SensitiveCmdlets = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true) | project tostring(Cmdlet) ;\r\nlet Env = ExchangeConfiguration(SpecificSectionList=\"ESIEnvironment\")\r\n| extend DomainFQDN_ = tostring(CmdletResultValue.DomainFQDN)\r\n| project DomainFQDN_, ESIEnvironment;\r\nlet MSExchange_Management = (){\r\n    Event\r\n    | where EventLog == 'MSExchange Management'\r\n    | where EventID in (1,6) // 1 = Success, 6 = Failure\r\n    | parse ParameterXml with '<Param>' CmdletName '</Param><Param>' CmdletParameters '</Param><Param>' Caller '</Param><Param>' *\r\n    | extend TargetObject = iif( CmdletParameters has \"-Identity \", split(split(CmdletParameters,'-Identity ')[1],'\"')[1], iif( CmdletParameters has \"-Name \", split(split(CmdletParameters,'-Name ')[1],'\"')[1], \"\"))\r\n    | extend Status = case( EventID == 1, 'Success', 'Failure')\r\n    | extend IsVIP = iif(TargetObject in (cVIPs) or TargetObject in (sVIPs), true, false)\r\n    | extend CmdletNameJoin = tolower(CmdletName)\r\n    | join kind=leftouter  ( \r\n        CmdletCheck\r\n    | extend CmdletNameJoin = tolower(Cmdlet)\r\n    ) on CmdletNameJoin\r\n    | extend DomainEnv = replace_string(Computer,strcat(tostring(split(Computer,'.',0)[0]),'.'),'')\r\n    | join kind=leftouter  ( \r\n        Env\r\n    ) on $left.DomainEnv == $right.DomainFQDN_\r\n    | extend ESIEnvironment = iif (isnotempty(ESIEnvironment), ESIEnvironment, strcat(\"Unknown-\",DomainEnv))\r\n    | extend IsSenstiveCmdlet = iif( isnotempty(CmdletNameJoin1) , true, false) \r\n    | extend IsRestrictedCmdLet = iif(IsSenstiveCmdlet == true, iif( RestrictToParameter == \"Yes\", true, false), dynamic(null))\r\n    | extend RestrictedParameters = iif(IsSenstiveCmdlet == true, split(tolower(Parameters),';'), dynamic(null))\r\n    | extend ExtractedParameters = iif(IsSenstiveCmdlet == true,extract_all(@\"\\B(-\\w+)\", tolower(CmdletParameters)), dynamic(null))\r\n    | extend IsSenstiveCmdletParameters = iif(IsSenstiveCmdlet == true,iif( array_length(set_difference(ExtractedParameters,RestrictedParameters)) == array_length(ExtractedParameters), false, true ) , false)\r\n    | extend IsSensitive = iif( ( IsSenstiveCmdlet == true and IsRestrictedCmdLet == false ) or (IsSenstiveCmdlet == true and IsRestrictedCmdLet == true and IsSenstiveCmdletParameters == true ), true, false )\r\n    //| project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters\r\n    | project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters,IsSensitive,UserOriented, ESIEnvironment\r\n};\r\nMSExchange_Management\r\n",
+        "query": "let cVIPs = _GetWatchlist('ExchangeVIP') | project tostring(canonicalName) ;\nlet sVIPs = _GetWatchlist('ExchangeVIP') | project tostring(sAMAccountName) ;\nlet CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true);\nlet SensitiveCmdlets = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true) | project tostring(Cmdlet) ;\nlet Env = ExchangeConfiguration(SpecificSectionList=\"ESIEnvironment\")\n| extend DomainFQDN_ = tostring(CmdletResultValue.DomainFQDN)\n| project DomainFQDN_, ESIEnvironment;\nlet MSExchange_Management = (){\n    Event\n    | where EventLog == 'MSExchange Management'\n    | where EventID in (1,6) // 1 = Success, 6 = Failure\n    | parse ParameterXml with '<Param>' CmdletName '</Param><Param>' CmdletParameters '</Param><Param>' Caller '</Param><Param>' *\n    | extend TargetObject = iif( CmdletParameters has \"-Identity \", split(split(CmdletParameters,'-Identity ')[1],'\"')[1], iif( CmdletParameters has \"-Name \", split(split(CmdletParameters,'-Name ')[1],'\"')[1], \"\"))\n    | extend Status = case( EventID == 1, 'Success', 'Failure')\n    | extend IsVIP = iif(TargetObject in (cVIPs) or TargetObject in (sVIPs), true, false)\n    | extend CmdletNameJoin = tolower(CmdletName)\n    | join kind=leftouter  ( \n        CmdletCheck\n    | extend CmdletNameJoin = tolower(Cmdlet)\n    ) on CmdletNameJoin\n    | extend DomainEnv = replace_string(Computer,strcat(tostring(split(Computer,'.',0)[0]),'.'),'')\n    | join kind=leftouter  ( \n        Env\n    ) on $left.DomainEnv == $right.DomainFQDN_\n    | extend ESIEnvironment = iif (isnotempty(ESIEnvironment), ESIEnvironment, strcat(\"Unknown-\",DomainEnv))\n    | extend IsSenstiveCmdlet = iif( isnotempty(CmdletNameJoin1) , true, false) \n    | extend IsRestrictedCmdLet = iif(IsSenstiveCmdlet == true, iif( RestrictToParameter == \"Yes\", true, false), dynamic(null))\n    | extend RestrictedParameters = iif(IsSenstiveCmdlet == true, split(tolower(Parameters),';'), dynamic(null))\n    | extend ExtractedParameters = iif(IsSenstiveCmdlet == true,extract_all(@\"\\B(-\\w+)\", tolower(CmdletParameters)), dynamic(null))\n    | extend IsSenstiveCmdletParameters = iif(IsSenstiveCmdlet == true,iif( array_length(set_difference(ExtractedParameters,RestrictedParameters)) == array_length(ExtractedParameters), false, true ) , false)\n    | extend IsSensitive = iif( ( IsSenstiveCmdlet == true and IsRestrictedCmdLet == false ) or (IsSenstiveCmdlet == true and IsRestrictedCmdLet == true and IsSenstiveCmdletParameters == true ), true, false )\n    //| project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters\n    | project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters,IsSensitive,UserOriented, ESIEnvironment\n};\nMSExchange_Management\n",
         "functionParameters": "",
-        "version": 1,
+        "version": 2,
         "tags": [
           {
             "name": "description",
-            "value": "ExchangeAdminAuditLogs"
+            "value": ""
           }
         ]
       }
@@ -2190,16 +2190,16 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "ExchangeConfiguration",
-                "category": "Samples",
+                "displayName": "Parser for ExchangeConfiguration",
+                "category": "Microsoft Sentinel Parser",
                 "functionAlias": "ExchangeConfiguration",
+                "query": "let _SpecificSectionList = split(SpecificSectionList,',');\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\n// Building Base Request\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \n    | where TimeGenerated > _targetDate\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \n    | where ScopedEnvironment in (_configurationEnv)\n    | extend EntryDate = todatetime(EntryDate_s)\n    | project-away EntryDate_s);\n// Find Config Id (can be multiple id in all)\nlet findConfigDate = baseRequest\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\n    | top-nested of Env by Ignore0=max(1), \n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \n    | project GenerationInstanceID_g;\n// Parse Result\nlet ParseExchangeConfig = () { baseRequest \n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\n | extend TimeGenerated = EntryDate\n | extend Identity = IdentityString_s\n | extend CmdletResultValue = parse_json(rawData_s)\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\n | project-away TenantId,SourceSystem,Type,EntryDate\n};\nParseExchangeConfig\n",
                 "functionParameters": "SpecificSectionList:string = \"\", SpecificConfigurationDate:string = \"lastdate\", Target:string = \"On-Premises\", SpecificConfigurationEnv:string = \"All\"",
-                "query": "\nlet _SpecificSectionList = split(SpecificSectionList,',');\r\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\r\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\r\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\r\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\r\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \r\n    | where TimeGenerated > _targetDate\r\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\r\n    | where _target == 'All' or Source == _target\r\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n    | where ScopedEnvironment in (_configurationEnv)\r\n    | extend EntryDate = todatetime(EntryDate_s)\r\n    | project-away EntryDate_s);\r\nlet findConfigDate = baseRequest\r\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\r\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\r\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\r\n    | top-nested of Env by Ignore0=max(1), \r\n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \r\n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \r\n    | project GenerationInstanceID_g;\r\nlet ParseExchangeConfig = () { baseRequest \r\n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\r\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\r\n | extend TimeGenerated = EntryDate\r\n | extend Identity = IdentityString_s\r\n | extend CmdletResultValue = parse_json(rawData_s)\r\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\r\n | project-away TenantId,SourceSystem,Type,EntryDate\r\n};\r\nParseExchangeConfig",
-                "version": 1,
+                "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "ExchangeConfiguration"
+                    "value": ""
                   }
                 ]
               }
@@ -2241,7 +2241,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('_parserContentId2')]",
         "contentKind": "Parser",
-        "displayName": "ExchangeConfiguration",
+        "displayName": "Parser for ExchangeConfiguration",
         "contentProductId": "[variables('_parsercontentProductId2')]",
         "id": "[variables('_parsercontentProductId2')]",
         "version": "[variables('parserVersion2')]"
@@ -2254,16 +2254,16 @@
       "location": "[parameters('workspace-location')]",
       "properties": {
         "eTag": "*",
-        "displayName": "ExchangeConfiguration",
-        "category": "Samples",
+        "displayName": "Parser for ExchangeConfiguration",
+        "category": "Microsoft Sentinel Parser",
         "functionAlias": "ExchangeConfiguration",
-		    "functionParameters": "SpecificSectionList:string = \"\", SpecificConfigurationDate:string = \"lastdate\", Target:string = \"On-Premises\", SpecificConfigurationEnv:string = \"All\"",
-        "query": "\nlet _SpecificSectionList = split(SpecificSectionList,',');\r\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\r\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\r\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\r\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\r\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \r\n    | where TimeGenerated > _targetDate\r\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\r\n    | where _target == 'All' or Source == _target\r\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n    | where ScopedEnvironment in (_configurationEnv)\r\n    | extend EntryDate = todatetime(EntryDate_s)\r\n    | project-away EntryDate_s);\r\nlet findConfigDate = baseRequest\r\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\r\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\r\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\r\n    | top-nested of Env by Ignore0=max(1), \r\n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \r\n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \r\n    | project GenerationInstanceID_g;\r\nlet ParseExchangeConfig = () { baseRequest \r\n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\r\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\r\n | extend TimeGenerated = EntryDate\r\n | extend Identity = IdentityString_s\r\n | extend CmdletResultValue = parse_json(rawData_s)\r\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\r\n | project-away TenantId,SourceSystem,Type,EntryDate\r\n};\r\nParseExchangeConfig",
-        "version": 1,
+        "query": "let _SpecificSectionList = split(SpecificSectionList,',');\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\n// Building Base Request\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \n    | where TimeGenerated > _targetDate\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \n    | where ScopedEnvironment in (_configurationEnv)\n    | extend EntryDate = todatetime(EntryDate_s)\n    | project-away EntryDate_s);\n// Find Config Id (can be multiple id in all)\nlet findConfigDate = baseRequest\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\n    | top-nested of Env by Ignore0=max(1), \n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \n    | project GenerationInstanceID_g;\n// Parse Result\nlet ParseExchangeConfig = () { baseRequest \n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\n | extend TimeGenerated = EntryDate\n | extend Identity = IdentityString_s\n | extend CmdletResultValue = parse_json(rawData_s)\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\n | project-away TenantId,SourceSystem,Type,EntryDate\n};\nParseExchangeConfig\n",
+        "functionParameters": "SpecificSectionList:string = \"\", SpecificConfigurationDate:string = \"lastdate\", Target:string = \"On-Premises\", SpecificConfigurationEnv:string = \"All\"",
+        "version": 2,
         "tags": [
           {
             "name": "description",
-            "value": "ExchangeConfiguration"
+            "value": ""
           }
         ]
       }
@@ -2320,16 +2320,16 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "ExchangeEnvironmentList",
-                "category": "Samples",
+                "displayName": "Parser for ExchangeEnvironmentList",
+                "category": "Microsoft Sentinel Parser",
                 "functionAlias": "ExchangeEnvironmentList",
+                "query": "let _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\nlet ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange*\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target;\n// Base Request\nScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s\n",
                 "functionParameters": "Target:string = \"On-Premises\"",
-                "query": "\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\r\nlet ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange*\r\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\r\n    | where _target == 'All' or Source == _target;\r\nScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s",
-                "version": 1,
+                "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "ExchangeEnvironmentList"
+                    "value": ""
                   }
                 ]
               }
@@ -2371,7 +2371,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('_parserContentId3')]",
         "contentKind": "Parser",
-        "displayName": "ExchangeEnvironmentList",
+        "displayName": "Parser for ExchangeEnvironmentList",
         "contentProductId": "[variables('_parsercontentProductId3')]",
         "id": "[variables('_parsercontentProductId3')]",
         "version": "[variables('parserVersion3')]"
@@ -2384,16 +2384,16 @@
       "location": "[parameters('workspace-location')]",
       "properties": {
         "eTag": "*",
-        "displayName": "ExchangeEnvironmentList",
-        "category": "Samples",
+        "displayName": "Parser for ExchangeEnvironmentList",
+        "category": "Microsoft Sentinel Parser",
         "functionAlias": "ExchangeEnvironmentList",
+        "query": "let _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\nlet ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange*\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target;\n// Base Request\nScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s\n",
         "functionParameters": "Target:string = \"On-Premises\"",
-        "query": "\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\r\nlet ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange*\r\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\r\n    | where _target == 'All' or Source == _target;\r\nScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s",
-        "version": 1,
+        "version": 2,
         "tags": [
           {
             "name": "description",
-            "value": "ExchangeEnvironmentList"
+            "value": ""
           }
         ]
       }
@@ -2498,7 +2498,7 @@
                     {
                       "contentId": "ESI-ExchangeAdminAuditLogEvents",
                       "kind": "DataConnector"
-                    }
+                                        }
                   ]
                 }
               }
@@ -2589,7 +2589,7 @@
                     {
                       "contentId": "ESI-ExchangeAdminAuditLogEvents",
                       "kind": "DataConnector"
-                    }
+                                        }
                   ]
                 }
               }
@@ -2680,7 +2680,7 @@
                     {
                       "contentId": "ESI-ExchangeAdminAuditLogEvents",
                       "kind": "DataConnector"
-                    }
+                                        }
                   ]
                 }
               }
@@ -2771,7 +2771,7 @@
                     {
                       "contentId": "ESI-ExchangeAdminAuditLogEvents",
                       "kind": "DataConnector"
-                    }
+                                        }
                   ]
                 }
               }
@@ -2828,10 +2828,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "ESI-ExchangeAdminAuditLogEvents",
                     "dataTypes": [
                       "Event"
-                    ]
+                    ],
+                    "connectorId": "ESI-ExchangeAdminAuditLogEvents"
                   }
                 ],
                 "tactics": [
@@ -2846,48 +2846,48 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Mailbox",
                     "fieldMappings": [
                       {
-                        "identifier": "MailboxPrimaryAddress",
-                        "columnName": "TargetObject"
+                        "columnName": "TargetObject",
+                        "identifier": "MailboxPrimaryAddress"
                       }
-                    ]
+                    ],
+                    "entityType": "Mailbox"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "identifier": "FullName",
-                        "columnName": "Computer"
+                        "columnName": "Computer",
+                        "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Sid",
-                        "columnName": "TargetObject"
+                        "columnName": "TargetObject",
+                        "identifier": "Sid"
                       },
                       {
-                        "identifier": "ObjectGuid",
-                        "columnName": "TargetObject"
+                        "columnName": "TargetObject",
+                        "identifier": "ObjectGuid"
                       },
                       {
-                        "identifier": "FullName",
-                        "columnName": "TargetObject"
+                        "columnName": "TargetObject",
+                        "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "Caller"
+                        "columnName": "Caller",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -2970,10 +2970,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "ESI-ExchangeAdminAuditLogEvents",
                     "dataTypes": [
                       "Event"
-                    ]
+                    ],
+                    "connectorId": "ESI-ExchangeAdminAuditLogEvents"
                   }
                 ],
                 "tactics": [
@@ -2988,48 +2988,48 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Mailbox",
                     "fieldMappings": [
                       {
-                        "identifier": "MailboxPrimaryAddress",
-                        "columnName": "userPrincipalName"
+                        "columnName": "userPrincipalName",
+                        "identifier": "MailboxPrimaryAddress"
                       },
                       {
-                        "identifier": "Upn",
-                        "columnName": "userPrincipalName"
+                        "columnName": "userPrincipalName",
+                        "identifier": "Upn"
                       }
-                    ]
+                    ],
+                    "entityType": "Mailbox"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "identifier": "FullName",
-                        "columnName": "Computer"
+                        "columnName": "Computer",
+                        "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "identifier": "HostName",
-                        "columnName": "ServerCmdletTargetObject"
+                        "columnName": "ServerCmdletTargetObject",
+                        "identifier": "HostName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "Caller"
+                        "columnName": "Caller",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "ObjectGuid",
-                        "columnName": "TargetObject"
+                        "columnName": "TargetObject",
+                        "identifier": "ObjectGuid"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
