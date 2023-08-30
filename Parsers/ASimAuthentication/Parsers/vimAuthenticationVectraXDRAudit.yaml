@@ -1,0 +1,60 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Vectra XDR Audit Logs Event
+  Version: '0.1'
+  LastUpdated: Apr 18 2023
+Product:
+  Name: Vectra
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Vectra XDR Audit Logs Event in the Audits_Data_CL table to the ASIM Authentication schema.
+ParserName: vimAuthenticationVectraXDRAudit
+EquivalentBuiltInParser: _Im_Authentication_VectraXDRAudit
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+ParserQuery: |
+  let parser = (disabled:bool = false, starttime:datetime=datetime(null), endtime:datetime=datetime(null))
+  {
+    Audits_Data_CL
+    | where not(disabled) and event_action_s in ("login","logout") and (isnull(starttime) or event_timestamp_t >= starttime) and (isnull(endtime) or event_timestamp_t <= endtime)
+    | extend
+          EventCount = int(1),
+          EventEndTime = event_timestamp_t,
+          EventProduct = 'Vectra XDR',
+          EventResult = case(result_status_s=="success", "Success", result_status_s=="failure", "Failure","NA"),
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.3",
+          EventStartTime = event_timestamp_t,
+          EventType = case(event_action_s=="login", "Logon", event_action_s=="logout", "Logoff",""),
+          EventVendor = 'Vectra',
+          ActorUserId = tostring(toint(user_id_d)),
+          ActorUserIdType = "VectraUserId",
+          ActorUsernameType = "UPN",
+          EventUid = tostring(toint(id_d))
+    | project-rename
+          DvcIpAddr = source_ip_s,
+          ActorOriginalUserType = user_type_s,
+          ActorUsername = username_s,
+          EventMessage = Message,
+          EventProductVersion = version_s
+    | extend
+          User = ActorUsername,
+          Dvc = DvcIpAddr
+    | project-away
+          *_d, *_s, event_timestamp_t, api_client_id_g, TenantId, _ResourceId, RawData, SourceSystem, Computer, MG, ManagementGroupName
+  };
+  parser (disabled=disabled, starttime=starttime, endtime=endtime)

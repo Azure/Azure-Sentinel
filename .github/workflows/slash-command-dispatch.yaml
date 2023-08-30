@@ -11,12 +11,12 @@ on:
 
 jobs:
   checkAutomatedPR:
-    if: ${{ !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && contains(github.event.comment.body, '/package') }}
+    if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && (contains(github.event.comment.body, '/package') || contains(github.event.comment.body, '/Package')) }}
     uses: ./.github/workflows/checkAutomatedPR.yaml
 
   pullRequestStatus:
     needs: checkAutomatedPR
-    if: ${{ !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && contains(github.event.comment.body, '/package') }}
+    if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && (contains(github.event.comment.body, '/package') || contains(github.event.comment.body, '/Package')) }}
     uses: ./.github/workflows/pullRequestStatus.yaml
 
   slashCommandDispatch:
@@ -28,7 +28,19 @@ jobs:
         uses: peter-evans/slash-command-dispatch@67dfeb76529b35541a7c536976cba367cd2d364b
         with:
           token: ${{ env.GITHUB_TOKEN }}
-          commands: package
+          commands: |
+            package
+            Package
+            PACKAGE
           repository: ${{env.REPO_OWNER}}/${{env.REPO_NAME}}
           issue-type: pull-request
           reactions: false
+
+  addAutoPackageLabel:
+    name: Add Label of Auto-Package
+    needs: slashCommandDispatch
+    if: ${{ success() }} 
+    uses: ./.github/workflows/addLabelOnPr.yaml
+    with:
+      labelName: "auto-package"
+    secrets: inherit
