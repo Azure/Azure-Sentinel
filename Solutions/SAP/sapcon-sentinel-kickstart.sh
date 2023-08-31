@@ -218,6 +218,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--http-proxy)
 		HTTPPROXY="$2"
+		shift 2
 		;;
 	--confirm-all-prompts)
 		CONFIRMALL=1
@@ -750,17 +751,18 @@ while [ -z "$SDKFILELOC" ] || [ ! -f "$SDKFILELOC" ]; do
 	SDKFILELOC="${SDKFILELOC/#\~/$HOME}"
 done
 
-#Verifying SDK version
-
-unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
-SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
-sdkok=$?
-rm -rf /tmp/nwrfcsdk
-if [ ! $sdkok -eq 0 ]; then
-	echo "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
-	echo $SDKLOADRESULT
-	echo "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
-	exit 1
+#Verifying SDK version only in case of non-fedora OS
+if [ "$os" != "fedora" ]; then
+	unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
+	SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
+	sdkok=$?
+	rm -rf /tmp/nwrfcsdk
+	if [ ! $sdkok -eq 0 ]; then
+		echo "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
+		echo $SDKLOADRESULT
+		echo "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
+		exit 1
+	fi
 fi
 
 #Building the container
@@ -848,10 +850,10 @@ elif [ "$MODE" == 'cfgf' ]; then
     jq --arg logwsidjs "$logwsid" '.azure_credentials += {"loganalyticswsid": $logwsidjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg logpubkeyjs "$logpubkey" '.azure_credentials += {"publickey": $logpubkeyjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
-    jq --arg uservarjs "$uservar" '.abap_central_instance += {"user": $uservarjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	if [ ! $USESNC ]; then
-    	jq --arg passjs "$passvar" '.abap_central_instance += {"passwd": $passvar}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-		
+    	jq --arg uservarjs "$uservar" '.abap_central_instance += {"user": $uservarjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    	jq --arg passjs "$passvar" '.abap_central_instance += {"passwd": $passjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+	else
 		#workaround for blank username with SNC used causing a fail during audit log ollection
     	jq '.abap_central_instance += {"user": "X509"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	fi
