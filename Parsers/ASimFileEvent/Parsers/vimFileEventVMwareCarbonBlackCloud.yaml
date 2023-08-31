@@ -20,6 +20,10 @@ Description: |
   This ASIM parser supports normalizing VMware Carbon Black Cloud logs to the ASIM File Event normalized schema. VMware Carbon Black Cloud events are captured through VMware Carbon Black Cloud data connector which ingests Carbon Black Audit, Notification and Event data into Microsoft Sentinel through the REST API.
 ParserName: vimFileEventVMwareCarbonBlackCloud
 EquivalentBuiltInParser: _Im_FileEvent_VMwareCarbonBlackCloud
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
   let EventFieldsLookup = datatable(
       sensor_action_s: string,
@@ -51,7 +55,7 @@ ParserQuery: |
       "ACTION_FILE_MOD_OPEN", "FileAccessed",
       "ACTION_FILE_OPEN_READ", "FileAccessed"
   ];
-  let parser = () {
+  let parser = (disabled: bool=false) {
       CarbonBlackEvents_CL
       | where eventType_s == "endpoint.event.filemod" and isnotempty(filemod_name_s)
       | where action_s !in ("ACTION_INVALID", "ACTION_FILE_UNDELETE")
@@ -92,7 +96,7 @@ ParserQuery: |
       | project-rename
           ActorUsername = process_username_s,
           DvcIpAddr = device_external_ip_s,
-          EventUid = _ResourceId,
+          EventUid = _ItemId,
           DvcScope = device_group_s,
           ActingProcessCommandLine = process_cmdline_s,
           ActingProcessName = process_path_s,
@@ -108,7 +112,8 @@ ParserQuery: |
           EventProduct = "Carbon Black Cloud",
           EventSchema = "FileEvent",
           EventSchemaVersion = "0.2.1",
-          EventVendor = "VMware"
+          EventVendor = "VMware",
+          EventCount = int(1)
       | extend
           EventEndTime = EventStartTime,
           Dvc = coalesce(DvcId, DvcIpAddr, DvcHostname),
@@ -119,12 +124,13 @@ ParserQuery: |
           Hash = coalesce(TargetFileSHA256, TargetFileSHA256)
       | extend
           ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+          ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           HashType = case(
                 isnotempty(TargetFileSHA256),
-                "SHA256",
+                "TargetFileSHA256",
                 isnotempty(TargetFileMD5),
-                "MD5",
+                "TargetFileMD5",
                 ""
             )
       | project-away
@@ -132,6 +138,7 @@ ParserQuery: |
           *_d,
           *_g,
           *_b,
+          _ResourceId,
           Computer,
           MG,
           ManagementGroupName,
@@ -140,4 +147,4 @@ ParserQuery: |
           TenantId,
           temp_action
   };
-  parser()
+  parser(disabled=disabled)
