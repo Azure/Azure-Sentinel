@@ -1,7 +1,7 @@
 id: 1f40ed57-f54b-462f-906a-ac3a89cc90d4
 name: Cross-Cloud Password Spray detection
 description: |
-  'This detection focuses on identifying potential cross-cloud brute force attempts involving Azure and AWS platforms. It monitors sign-in activities within the Azure Portal and AWS ConsoleLogins where brute force attempts are successful on both platforms in a synchronized manner.'
+  'This detection focuses on identifying potential cross-cloud brute force / Password Spray attempts involving Azure and AWS platforms. It monitors sign-in activities within the Azure Portal and AWS ConsoleLogins where brute force attempts are successful on both platforms in a synchronized manner.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AWS
@@ -32,32 +32,25 @@ query: |
         | where AppDisplayName == "Azure Portal"
   // Exclude entries with empty OriginalRequestId
       | where isnotempty(OriginalRequestId)
-  // Limit the time range to the last 1 day
-      | where TimeGenerated >= ago(1d)
   // Summarize various counts and sets based on brute force criteria
       | summarize 
-          SuccessfulEvent = countif(ResultType == 0), 
-          FailedEvent = countif(ResultType != 0), 
-          totalAzureLoginEventId = dcount(OriginalRequestId), 
-          FailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), 
-          SuccessfuleventsCount = dcountif(OriginalRequestId, ResultType == 0),
-          SetOfFailedevents = makeset(iff(ResultType != 0, OriginalRequestId, ""), 5), 
-          SetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, ""), 5) 
-  // Grouping by various attributes
-          by 
-          IPAddress, 
-          UserPrincipalName, 
-          bin(TimeGenerated, 1min), 
-          UserAgent,
-          ConditionalAccessStatus,
-          OperationName,
-          RiskDetail,
-          AuthenticationRequirement,
-          ClientAppUsed
-  // Filtering based on conditions for failed and successful events
-      | where FailedEventsCount >= 5
-          and SuccessfuleventsCount >= 1
-          and FailedEvent > SuccessfulEvent
+        AzureSuccessfulEvent = countif(ResultType == 0), 
+        AzureFailedEvent = countif(ResultType != 0), 
+        totalAzureLoginEventId = dcount(OriginalRequestId), 
+        AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), 
+        AzureSuccessfuleventsCount = dcountif(OriginalRequestId, ResultType == 0),
+        AzureSetOfFailedevents = makeset(iff(ResultType != 0, OriginalRequestId, ""), 5), 
+        AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, ""), 5) 
+        by 
+        IPAddress, 
+        UserPrincipalName, 
+        bin(TimeGenerated, 1min), 
+        UserAgent,
+        ConditionalAccessStatus,
+        OperationName,
+        RiskDetail,
+        AuthenticationRequirement,
+        ClientAppUsed
   // Extracting the name and UPN suffix from UserPrincipalName
       | extend
           Name = tostring(split(UserPrincipalName, '@')[0]),
@@ -73,24 +66,24 @@ query: |
       | extend ActionType = tostring(parse_json(ResponseElements).ConsoleLogin)  
   // Summarize various counts and sets based on  brute force criteria 
       | summarize 
-          Successful = countif(ActionType == "Success"), 
-          Failed = countif(ActionType == "Failure"), 
-          totalAwsEventId = dcount(AwsEventId), 
-          FailedEventsCount = dcountif(AwsEventId, ActionType == "Failure"), 
-          SuccessfuleventsCount = dcountif(AwsEventId, ActionType == "Success"), 
-          Failedevents = makeset(iff(ActionType == "Failure", AwsEventId, ""), 5), 
-          SuccessfulEvents = makeset(iff(ActionType == "Success", AwsEventId, ""), 5) 
+          AWSSuccessful=countif(ActionType == "Success"), 
+          AWSFailed = countif(ActionType == "Failure"), 
+          totalAwsEventId= dcount(AwsEventId), 
+          AWSFailedEventsCount = dcountif(AwsEventId, ActionType == "Failure"), 
+          AWSSuccessfuleventsCount = dcountif(AwsEventId, ActionType == "Success"), 
+          AWSFailedevents = makeset(iff(ActionType == "Failure", AwsEventId, ""), 5), 
+          AWSSuccessfulEvents = makeset(iff(ActionType == "Success", AwsEventId, ""), 5)  
   // Grouping by various attributes
           by 
           SourceIpAddress, 
           UserIdentityUserName,
           bin(TimeGenerated, 1min), 
-          UserAgent 
-  // Filtering based on conditions for failed and successful events
-      | where FailedEventsCount >= 4 and SuccessfuleventsCount >= 1);
+          UserAgent );
   // Joining the Azure_Bruforce and AWS_Bruforce tables on matching IP addresses and UserAgents
   Azure_Bruforce
-    |join kind=inner AWS_Bruforce on $left.IPAddress == $right.SourceIpAddress and UserAgent
+  | join kind=inner AWS_Bruforce on $left.IPAddress == $right.SourceIpAddress and $left.UserAgent == $right.UserAgent
+  // Filtering based on conditions for failed and successful events
+  | where (AWSFailedEventsCount >= 4 and AWSSuccessfuleventsCount >= 1 and AWSFailedEventsCount > AWSSuccessfuleventsCount) or (AzureFailedEventsCount >= 5 and AzureSuccessfuleventsCount >= 1 and AzureFailedEvent > AzureSuccessfulEvent)
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -102,5 +95,10 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
+  - customDetails:
+      AwsUser: UserIdentityUserName
+      UserAgent: UserAgent
+      AzureUser: UserPrincipalName
+      AzureClientAppUsed: ClientAppUsed
 kind: Scheduled
 version: 1.0.0
