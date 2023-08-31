@@ -1,3 +1,4 @@
+`".$_-0/build_ArmisUpdateAlertStatus.js
 # ArmisUpdateAlertStatus
 
 ## Summary
@@ -40,4 +41,4 @@ Once deployment is complete, authorize each connection like Microsoft Sentinel, 
 2. Configure the automation rules to trigger the playbook.
 #### Sample analytics rule query
 ```
-<Armis Alerts Table Name> | where Type == "<Type field of the custom log table>" and status_s == "<Armis Alert Status>" and severity_s != "Low"
+<Armis Alerts Table Name> | where Type == "<Type field of the custom log table>" and status_s == "<Armis Alert Status>" and severity_s != "Low""`
