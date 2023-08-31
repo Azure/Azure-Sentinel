@@ -1,3 +1,4 @@
+`".$_-0/build_BaselinePattern.txt.js
 // Baseline a pattern of interest 
 // Identify new occurrences of a pattern of interest versus history of occurrences of these patterns in a baseline period
 // newInstances(timeRange:timespan, historicalBaselineTimerange:timespan)
@@ -29,5 +30,4 @@ let baselineEnd = ago(ResultRecentTimeSpan);
 instanceSet | where TimeGenerated >= ago(ResultRecentTimeSpan) 
 | join kind = anti (instanceSet | where TimeGenerated between(baselineStart..baselineEnd)) on historicalFeature
 };
-//newInstances(1d, 7d) | take 10;
-
+//newInstances(1d, 7d) | take 10;"`
