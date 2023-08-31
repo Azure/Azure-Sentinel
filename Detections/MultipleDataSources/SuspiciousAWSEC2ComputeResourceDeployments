@@ -1,5 +1,5 @@
 id: 9e457dc4-81f0-4d25-bc37-a5fa4a17946a
-name: Extensive AWS Compute Resurse Deployements
+name: Suspicious AWS EC2 Compute Resource Deployments
 description: |
   'This detection focused on Suspicious deployment of AWS EC2 resource (virtual machine) scale sets was detected. This behavior might indicate that the threat actor is deploying computing resources for cryptocurrency mining activities.This detection centers around identifying suspicious instances of AWS EC2 resource deployment, particularly scale sets. Such behavior raises concerns of potential threat actor involvement, potentially indicative of efforts to deploy computing resources for the purpose of cryptocurrency mining activities.
 severity: Medium
@@ -18,7 +18,6 @@ relevantTechniques:
 query: |
   // Retrieve AWS CloudTrail events generated within the last day
   AWSCloudTrail
-  | where TimeGenerated >= ago(1d)
   // Filter events related to instance creation
   | where EventName =~ "RunInstances"
   // Exclude events with error messages
@@ -30,18 +29,15 @@ query: |
   | extend instance = tostring(parse_json(RequestParameters).instanceType),platform = tostring(parse_json(ResponseElements).instancesSet.items[0].platform)
   // Determine the operating system platform
   | extend OSplatform = iff(isempty(platform), tostring("Linux"), platform),CPU = tostring(parse_json(ResponseElements).instancesSet.items[0].cpuOptions),core = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.coreCount),corThread = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.threadsPerCore),InstanceId = tostring(parse_json(ResponseElements).instancesSet.items[0].instanceId)
-  // Calculate the total compute based on core and thread counts
-  | extend totalCorecompute = core * corThread
   // Filter out instances with empty core values
   | where isnotempty(core)
+  // Calculate the total compute based on core and thread counts
+  | extend totalCorecompute = core * corThread
   // Summarize relevant information for analysis
-  | summarize Start = min(TimeGenerated),
-             end = max(TimeGenerated),
-             totalgpu = sum(totalCorecompute),
-             make_set(UserAgent),
-             make_set(UserIdentityPrincipalid)
-     by SourceIpAddress,
-        UserIdentityType
+  | summarize Start= min(TimeGenerated),
+    end=   max(TimeGenerated),
+    totalgpu= sum(totalCorecompute)
+    by SourceIpAddress, WorkspaceId, UserIdentityArn,UserAgent
   // Filter results based on total GPU compute and time duration
   | where totalgpu > 800
   | where datetime_diff('hour', end, Start) < 8
@@ -50,5 +46,9 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
+  - customDetails:
+      UserAgent: UserAgent
+      AWSUser: UserIdentityArn
+      SourceIpAddress: SourceIpAddress
 kind: Scheduled
 version: 1.0.0
