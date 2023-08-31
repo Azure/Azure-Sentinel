@@ -7,11 +7,13 @@
         "prerequisites":  [
             "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
             "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
-            "3. To perform an IOC scan the IOC YARA rule should be available.",
-            "4. Obtain Teams GroupId and ChannelId",
-            "5. Store Service account credentials in Key Vault and obtain keyvault name and tenantId",
+            "3. Rubrik custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.",
+            "4. To perform an IOC scan the IOC YARA rule should be available.",
+            "5. Obtain Teams GroupId and ChannelId",
+            "6. Store Service account credentials in Key Vault and obtain keyvault name and tenantId",
                 "a. Create a Key Vault with unique name",
-                "b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively"
+                "b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively",
+            "7. Make sure that RubrikIOCScan and RubrikPollAsyncResult playbook is deployed before deploying RubrikRansomwareDiscoveryAndVMRecovery playbook."
         ],
         "postDeployment":  [
             "**a. Authorize connections**",
@@ -24,7 +26,7 @@
             "6. Repeat steps for other connections"
         ],
         "prerequisitesDeployTemplateFile": "Azure-Sentinel/Solutions/RubrikSecurityCloud/Playbooks/RubrikCustomConnector/Rubrik_custom_conn.json",
-        "lastUpdateTime": "2022-09-26T00:00:00.000Z",
+        "lastUpdateTime":  "2022-01-20T00:00:00.000Z",
         "entities":  ["account","url"],
         "tags":  ["Recovery","Ransomware Discovery","Security","Rubrik"],
         "support":  {
@@ -197,7 +199,6 @@
                                 "RubrikIOCScan":  [
                                     "Succeeded",
                                     "Failed",
-                                    "Skipped",
                                     "TimedOut"
                                 ]
                             },
@@ -216,7 +217,7 @@
                                             "statusCode":  400
                                         }
                                     },
-                                    "Set_variable_25":  {
+                                    "Set_IOC_Scan_ErrorMessage":  {
                                         "runAfter":  {
                                         },
                                         "type":  "SetVariable",
@@ -253,7 +254,7 @@
                                             }
                                         },
                                         "runAfter":  {
-                                            "Set_variable_25":  [
+                                            "Set_IOC_Scan_ErrorMessage":  [
                                                 "Succeeded"
                                             ]
                                         },
@@ -366,7 +367,7 @@
                             },
                             "else":  {
                                 "actions":  {
-                                    "Set_variable_22":  {
+                                    "Set_Error_message":  {
                                         "runAfter":  {
                                         },
                                         "type":  "SetVariable",
@@ -375,9 +376,9 @@
                                             "value":  "Status Code:  @{outputs('Get_VM_metadata')['statusCode']}, Error message: @{body('Get_VM_metadata')?['message']}"
                                         }
                                     },
-                                    "Set_variable_24":  {
+                                    "Set_Flow2skip_status":  {
                                         "runAfter":  {
-                                            "Set_variable_22":  [
+                                            "Set_Error_message":  [
                                                 "Succeeded"
                                             ]
                                         },
@@ -416,7 +417,7 @@
                                             }
                                         },
                                         "runAfter":  {
-                                            "Set_variable_24":  [
+                                            "Set_Flow2skip_status":  [
                                                 "Succeeded"
                                             ]
                                         },
@@ -506,7 +507,7 @@
                         },
                         "Collect_IOC_scan_and_general_recovery_data":  {
                             "runAfter":  {
-                                "Initialize_HostId":  [
+                                "Initialize_Esxi_ClusterId":  [
                                     "Succeeded"
                                 ]
                             },
@@ -540,7 +541,7 @@
                             "type":  "Http",
                             "inputs":  {
                                 "body":  {
-                                    "query":  "mutation TakeVSphereSnapshotMutation($snappableId: UUID!, $slaID: String) {\r\n    vsphereOnDemandSnapshot(snappableFid: $snappableId, slaID: $slaID) {\r\n      id\r\n      status\r\n    }\r\n  }",
+                                    "query":  "mutation TakeVSphereSnapshotMutation($snappableId: String!, $slaID: String) {\r\n    vsphereOnDemandSnapshot(input: { id: $snappableId, config: {slaId: $slaID} }) {\r\n      id\r\n      status\r\n    }\r\n  }",
                                     "variables":  {
                                         "snappableId":  "@{triggerBody()?['ObjectId']}"
                                     }
@@ -950,7 +951,7 @@
                             "type":  "Http",
                             "inputs":  {
                                 "body":  {
-                                    "query":  "query VSphereDetailQuery($id: UUID!) {\r\n  vSphereDetailData: vSphereVmNew(fid: $id) {\r\n    id\r\n    authorizedOperations\r\n    name\r\n    isRelic\r\n    effectiveSlaDomain {\r\n      ...EffectiveSLADomainFragment\r\n      __typename\r\n    }\r\n    effectiveSlaSourceObject {\r\n      fid\r\n      name\r\n      objectType\r\n      __typename\r\n    }\r\n    pendingSla {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    protectionDate\r\n    reportSnappable {\r\n      id\r\n      logicalBytes\r\n      physicalBytes\r\n      archiveStorage\r\n      __typename\r\n    }\r\n    cluster {\r\n      id\r\n      name\r\n      status\r\n      version\r\n      lastConnectionTime\r\n      defaultAddress\r\n      ...ClusterNodeConnectionFragment\r\n      ...ClusterStateFragment\r\n      ...ClusterGlobalManagerFragment\r\n      __typename\r\n    }\r\n    primaryClusterLocation {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    arrayIntegrationEnabled\r\n    snapshotConsistencyMandate\r\n    agentStatus {\r\n      agentStatus\r\n      __typename\r\n    }\r\n    preBackupScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    postBackupScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    postSnapScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    logicalPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    physicalPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    vsphereTagPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    oldestSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      __typename\r\n    }\r\n    totalSnapshots: snapshotConnection {\r\n      count\r\n      __typename\r\n    }\r\n    replicatedObjects {\r\n      id\r\n      primaryClusterLocation {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      cluster {\r\n        name\r\n        id\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestArchivedSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      archivalLocations {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestReplicatedSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      replicationLocations {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      __typename\r\n    }\r\n    onDemandSnapshotCount\r\n    vmwareToolsInstalled\r\n    cdmLink\r\n    __typename\r\n  }\r\n}\r\n\r\nfragment EffectiveSLADomainFragment on SlaDomain {\r\n  id\r\n  name\r\n  ... on ClusterSlaDomain {\r\n    fid\r\n    cluster {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterNodeConnectionFragment on Cluster {\r\n  clusterNodeConnection {\r\n    nodes {\r\n      id\r\n      status\r\n      ipAddress\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterStateFragment on Cluster {\r\n  state {\r\n    connectedState\r\n    clusterRemovalState\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterGlobalManagerFragment on Cluster {\r\n  passesConnectivityCheck\r\n  globalManagerConnectivityStatus {\r\n    urls {\r\n      url\r\n      isReachable\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  connectivityLastUpdated\r\n  __typename\r\n}",
+                                    "query":  "query VSphereDetailQuery($id: UUID!) {\r\n  vSphereDetailData: vSphereVmNew(fid: $id) {\r\n    id\r\n    authorizedOperations\r\n    name\r\n    isRelic\r\n    effectiveSlaDomain {\r\n      ...EffectiveSLADomainFragment\r\n      __typename\r\n    }\r\n    effectiveSlaSourceObject {\r\n      fid\r\n      name\r\n      objectType\r\n      __typename\r\n    }\r\n    pendingSla {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    protectionDate\r\n    reportWorkload {\r\n      id\r\n      logicalBytes\r\n      physicalBytes\r\n      archiveStorage\r\n      __typename\r\n    }\r\n    cluster {\r\n      id\r\n      name\r\n      status\r\n      version\r\n      lastConnectionTime\r\n      defaultAddress\r\n      ...ClusterNodeConnectionFragment\r\n      ...ClusterStateFragment\r\n      ...ClusterGlobalManagerFragment\r\n      __typename\r\n    }\r\n    primaryClusterLocation {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    arrayIntegrationEnabled\r\n    snapshotConsistencyMandate\r\n    agentStatus {\r\n      agentStatus\r\n      __typename\r\n    }\r\n    preBackupScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    postBackupScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    postSnapScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    logicalPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    physicalPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    vsphereTagPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    oldestSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      __typename\r\n    }\r\n    totalSnapshots: snapshotConnection {\r\n      count\r\n      __typename\r\n    }\r\n    replicatedObjects {\r\n      id\r\n      primaryClusterLocation {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      cluster {\r\n        name\r\n        id\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestArchivedSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      archivalLocations {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestReplicatedSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      replicationLocations {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      __typename\r\n    }\r\n    onDemandSnapshotCount\r\n    vmwareToolsInstalled\r\n    cdmLink\r\n    __typename\r\n  }\r\n}\r\n\r\nfragment EffectiveSLADomainFragment on SlaDomain {\r\n  id\r\n  name\r\n  ... on ClusterSlaDomain {\r\n    fid\r\n    cluster {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterNodeConnectionFragment on Cluster {\r\n  clusterNodeConnection {\r\n    nodes {\r\n      id\r\n      status\r\n      ipAddress\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterStateFragment on Cluster {\r\n  state {\r\n    connectedState\r\n    clusterRemovalState\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterGlobalManagerFragment on Cluster {\r\n  passesConnectivityCheck\r\n  globalManagerConnectivityStatus {\r\n    urls {\r\n      url\r\n      isReachable\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  connectivityLastUpdated\r\n  __typename\r\n}",
                                     "variables":  {
                                         "id":  "@{triggerBody()?['ObjectId']}"
                                     }
@@ -961,6 +962,22 @@
                                 },
                                 "method":  "POST",
                                 "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
+                            }
+                        },
+                        "Initialize_DatastoreId":  {
+                            "runAfter":  {
+                                "Initialize_HostId":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "DatastoreId",
+                                        "type":  "string"
+                                    }
+                                ]
                             }
                         },
                         "Initialize_Error_Message_for_flow_Start_IOC_Scan":  {
@@ -990,6 +1007,22 @@
                                 "variables":  [
                                     {
                                         "name":  "ErrorMessage1",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Esxi_ClusterId":  {
+                            "runAfter":  {
+                                "Initialize_DatastoreId":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "EsxiClusterId",
                                         "type":  "string"
                                     }
                                 ]
@@ -1142,18 +1175,47 @@
                                             "actions":  {
                                                 "Are_there_any_recoverable_snapshots":  {
                                                     "actions":  {
-                                                        "Default_value_of_HostId":  {
+                                                        "Default_value_of_HostId_and_Esxi_ClusterId":  {
                                                             "foreach":  "@body('Parse_response_of_Get_HostID')?['data']?['vSphereDetailData']?['physicalPath']",
                                                             "actions":  {
-                                                                "Condition_3":  {
+                                                                "Check_for_Cluster_ObjectType":  {
                                                                     "actions":  {
-                                                                        "Set_variable_2":  {
+                                                                        "Set_Default_value_of_Esxi_ClusterId":  {
+                                                                            "runAfter":  {
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "EsxiClusterId",
+                                                                                "value":  "@items('Default_value_of_HostId_and_Esxi_ClusterId')?['fid']"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter":  {
+                                                                        "Check_for_Host_ObjectType":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression":  {
+                                                                        "and":  [
+                                                                            {
+                                                                                "equals":  [
+                                                                                    "@items('Default_value_of_HostId_and_Esxi_ClusterId')?['objectType']",
+                                                                                    "VSphereComputeCluster"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type":  "If"
+                                                                },
+                                                                "Check_for_Host_ObjectType":  {
+                                                                    "actions":  {
+                                                                        "Set_Default_value_of_HostId":  {
                                                                             "runAfter":  {
                                                                             },
                                                                             "type":  "SetVariable",
                                                                             "inputs":  {
                                                                                 "name":  "HostId",
-                                                                                "value":  "@items('Default_value_of_HostId')?['fid']"
+                                                                                "value":  "@items('Default_value_of_HostId_and_Esxi_ClusterId')?['fid']"
                                                                             }
                                                                         }
                                                                     },
@@ -1163,7 +1225,7 @@
                                                                         "and":  [
                                                                             {
                                                                                 "equals":  [
-                                                                                    "@items('Default_value_of_HostId')?['objectType']",
+                                                                                    "@items('Default_value_of_HostId_and_Esxi_ClusterId')?['objectType']",
                                                                                     "VSphereHost"
                                                                                 ]
                                                                             }
@@ -1185,7 +1247,7 @@
                                                             "type":  "Http",
                                                             "inputs":  {
                                                                 "body":  {
-                                                                    "query":  "query VSphereDetailQuery($id: UUID!) {\r\n  vSphereDetailData: vSphereVmNew(fid: $id) {\r\n    id\r\n    authorizedOperations\r\n    name\r\n    isRelic\r\n    effectiveSlaDomain {\r\n      ...EffectiveSLADomainFragment\r\n      __typename\r\n    }\r\n    effectiveSlaSourceObject {\r\n      fid\r\n      name\r\n      objectType\r\n      __typename\r\n    }\r\n    pendingSla {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    protectionDate\r\n    reportSnappable {\r\n      id\r\n      logicalBytes\r\n      physicalBytes\r\n      archiveStorage\r\n      __typename\r\n    }\r\n    cluster {\r\n      id\r\n      name\r\n      status\r\n      version\r\n      lastConnectionTime\r\n      defaultAddress\r\n      ...ClusterNodeConnectionFragment\r\n      ...ClusterStateFragment\r\n      ...ClusterGlobalManagerFragment\r\n      __typename\r\n    }\r\n    primaryClusterLocation {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    arrayIntegrationEnabled\r\n    snapshotConsistencyMandate\r\n    agentStatus {\r\n      agentStatus\r\n      __typename\r\n    }\r\n    preBackupScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    postBackupScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    postSnapScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    logicalPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    physicalPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    vsphereTagPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    oldestSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      __typename\r\n    }\r\n    totalSnapshots: snapshotConnection {\r\n      count\r\n      __typename\r\n    }\r\n    replicatedObjects {\r\n      id\r\n      primaryClusterLocation {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      cluster {\r\n        name\r\n        id\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestArchivedSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      archivalLocations {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestReplicatedSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      replicationLocations {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      __typename\r\n    }\r\n    onDemandSnapshotCount\r\n    vmwareToolsInstalled\r\n    cdmLink\r\n    __typename\r\n  }\r\n}\r\n\r\nfragment EffectiveSLADomainFragment on SlaDomain {\r\n  id\r\n  name\r\n  ... on ClusterSlaDomain {\r\n    fid\r\n    cluster {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterNodeConnectionFragment on Cluster {\r\n  clusterNodeConnection {\r\n    nodes {\r\n      id\r\n      status\r\n      ipAddress\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterStateFragment on Cluster {\r\n  state {\r\n    connectedState\r\n    clusterRemovalState\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterGlobalManagerFragment on Cluster {\r\n  passesConnectivityCheck\r\n  globalManagerConnectivityStatus {\r\n    urls {\r\n      url\r\n      isReachable\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  connectivityLastUpdated\r\n  __typename\r\n}",
+                                                                    "query":  "query VSphereDetailQuery($id: UUID!) {\r\n  vSphereDetailData: vSphereVmNew(fid: $id) {\r\n    id\r\n    authorizedOperations\r\n    name\r\n    isRelic\r\n    effectiveSlaDomain {\r\n      ...EffectiveSLADomainFragment\r\n      __typename\r\n    }\r\n    effectiveSlaSourceObject {\r\n      fid\r\n      name\r\n      objectType\r\n      __typename\r\n    }\r\n    pendingSla {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    protectionDate\r\n    reportWorkload {\r\n      id\r\n      logicalBytes\r\n      physicalBytes\r\n      archiveStorage\r\n      __typename\r\n    }\r\n    cluster {\r\n      id\r\n      name\r\n      status\r\n      version\r\n      lastConnectionTime\r\n      defaultAddress\r\n      ...ClusterNodeConnectionFragment\r\n      ...ClusterStateFragment\r\n      ...ClusterGlobalManagerFragment\r\n      __typename\r\n    }\r\n    primaryClusterLocation {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    arrayIntegrationEnabled\r\n    snapshotConsistencyMandate\r\n    agentStatus {\r\n      agentStatus\r\n      __typename\r\n    }\r\n    preBackupScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    postBackupScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    postSnapScript {\r\n      scriptPath\r\n      failureHandling\r\n      timeoutMs\r\n      __typename\r\n    }\r\n    logicalPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    physicalPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    vsphereTagPath {\r\n      fid\r\n      objectType\r\n      name\r\n      __typename\r\n    }\r\n    oldestSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      __typename\r\n    }\r\n    totalSnapshots: snapshotConnection {\r\n      count\r\n      __typename\r\n    }\r\n    replicatedObjects {\r\n      id\r\n      primaryClusterLocation {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      cluster {\r\n        name\r\n        id\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestArchivedSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      archivalLocations {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestReplicatedSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      replicationLocations {\r\n        id\r\n        name\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    newestSnapshot {\r\n      id\r\n      date\r\n      isIndexed\r\n      __typename\r\n    }\r\n    onDemandSnapshotCount\r\n    vmwareToolsInstalled\r\n    cdmLink\r\n    __typename\r\n  }\r\n}\r\n\r\nfragment EffectiveSLADomainFragment on SlaDomain {\r\n  id\r\n  name\r\n  ... on ClusterSlaDomain {\r\n    fid\r\n    cluster {\r\n      id\r\n      name\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterNodeConnectionFragment on Cluster {\r\n  clusterNodeConnection {\r\n    nodes {\r\n      id\r\n      status\r\n      ipAddress\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterStateFragment on Cluster {\r\n  state {\r\n    connectedState\r\n    clusterRemovalState\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterGlobalManagerFragment on Cluster {\r\n  passesConnectivityCheck\r\n  globalManagerConnectivityStatus {\r\n    urls {\r\n      url\r\n      isReachable\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  connectivityLastUpdated\r\n  __typename\r\n}",
                                                                     "variables":  {
                                                                         "id":  "@{triggerBody()?['ObjectId']}"
                                                                     }
@@ -1211,7 +1273,7 @@
                                                                 "actions":  {
                                                                     "Response_4":  {
                                                                         "runAfter":  {
-                                                                            "Set_variable_32":  [
+                                                                            "Set_Error_from_GetHostID":  [
                                                                                 "Succeeded"
                                                                             ]
                                                                         },
@@ -1222,7 +1284,7 @@
                                                                             "statusCode":  "@outputs('Get_HostID')['statusCode']"
                                                                         }
                                                                     },
-                                                                    "Set_variable_32":  {
+                                                                    "Set_Error_from_GetHostID":  {
                                                                         "runAfter":  {
                                                                         },
                                                                         "type":  "SetVariable",
@@ -1296,24 +1358,39 @@
                                                                         "actions":  {
                                                                             "Response_14":  {
                                                                                 "runAfter":  {
-                                                                                    "Set_variable_10":  [
+                                                                                    "Set_Error_in_Recovery_Poll_Async":  [
                                                                                         "Succeeded"
                                                                                     ]
                                                                                 },
                                                                                 "type":  "Response",
                                                                                 "kind":  "Http",
                                                                                 "inputs":  {
-                                                                                    "body":  "@concat('Recovery of VM using recoverable snapshot id ',body('Response_RubrikIOCScan')?['RecoverableSnapshotid'],'did not complete.')",
+                                                                                    "body":  "@body('RubrikPollAsyncResult_2')?['error']?['message']",
                                                                                     "statusCode":  200
                                                                                 }
                                                                             },
-                                                                            "Set_variable_10":  {
+                                                                            "Set_Error_in_Recovery_Poll_Async":  {
                                                                                 "runAfter":  {
                                                                                 },
                                                                                 "type":  "SetVariable",
                                                                                 "inputs":  {
                                                                                     "name":  "ErrorMessage",
-                                                                                    "value":  "@{concat('Recovery of VM using recoverable snapshot id ',body('Response_RubrikIOCScan')?['RecoverableSnapshotid'],'did not complete.')}"
+                                                                                    "value":  "@{body('RubrikPollAsyncResult_2')?['error']?['message']}"
+                                                                                }
+                                                                            },
+                                                                            "Terminate_17":  {
+                                                                                "runAfter":  {
+                                                                                    "Response_14":  [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type":  "Terminate",
+                                                                                "inputs":  {
+                                                                                    "runError":  {
+                                                                                        "code":  "400",
+                                                                                        "message":  "@variables('ErrorMessage')"
+                                                                                    },
+                                                                                    "runStatus":  "Failed"
                                                                                 }
                                                                             }
                                                                         }
@@ -1338,8 +1415,8 @@
                                                                         "body":  {
                                                                             "BaseUrl":  "@triggerBody()?['BaseUrl']",
                                                                             "ClusterId":  "@triggerBody()?['ClusterId']",
-                                                                            "PollingInterval":  "@body('Collect_IOC_scan_and_general_recovery_data')?['data']?['polling interval for recovery']",
-                                                                            "PollingTimeout":  "@body('Collect_IOC_scan_and_general_recovery_data')?['data']?['polling timeout for IOC Scan']",
+                                                                            "PollingInterval":  "@if(or(empty(string(body('Collect_IOC_scan_and_general_recovery_data')?['data']?['polling interval for recovery'])),lessOrEquals(int(body('Collect_IOC_scan_and_general_recovery_data')?['data']?['polling interval for recovery']),0)),5,int(body('Collect_IOC_scan_and_general_recovery_data')?['data']?['polling interval for recovery']))",
+                                                                            "PollingTimeout":  "@variables('Polling Timeout')",
                                                                             "RequestId":  "@{if(empty(body('Parse_Response_of_Live-Mount_recovered_snapshot')?['data']?['vSphereVMInitiateLiveMountV2']?['id']),body('Parse_JSON')?['data']?['vSphereVMExportSnapshotV2']?['id'],body('Parse_Response_of_Live-Mount_recovered_snapshot')?['data']?['vSphereVMInitiateLiveMountV2']?['id'])}"
                                                                         },
                                                                         "host":  {
@@ -1885,7 +1962,7 @@
                                                                             "actions":  {
                                                                                 "Response_8":  {
                                                                                     "runAfter":  {
-                                                                                        "Set_variable_11":  [
+                                                                                        "Set_Error_in_LiveMount_Recovery_API":  [
                                                                                             "Succeeded"
                                                                                         ]
                                                                                     },
@@ -1896,7 +1973,7 @@
                                                                                         "statusCode":  200
                                                                                     }
                                                                                 },
-                                                                                "Set_variable_11":  {
+                                                                                "Set_Error_in_LiveMount_Recovery_API":  {
                                                                                     "runAfter":  {
                                                                                     },
                                                                                     "type":  "SetVariable",
@@ -1932,6 +2009,39 @@
                                                                                             "content":  "@body('Live-Mount_recovered_snapshot')",
                                                                                             "schema":  {
                                                                                                 "properties":  {
+                                                                                                    "data":  {
+                                                                                                        "properties":  {
+                                                                                                            "vsphereVmInitiateLiveMountV2":  {
+                                                                                                                "properties":  {
+                                                                                                                    "__typename":  {
+                                                                                                                        "type":  "string"
+                                                                                                                    },
+                                                                                                                    "id":  {
+                                                                                                                        "type":  "string"
+                                                                                                                    },
+                                                                                                                    "status":  {
+                                                                                                                        "type":  "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "type":  "object"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "type":  "object"
+                                                                                                    },
+                                                                                                    "errors":  {
+                                                                                                        "items":  {
+                                                                                                            "properties":  {
+                                                                                                                "message":  {
+                                                                                                                    "type":  "string"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "required":  [
+                                                                                                                "message"
+                                                                                                            ],
+                                                                                                            "type":  "object"
+                                                                                                        },
+                                                                                                        "type":  "array"
+                                                                                                    }
                                                                                                 },
                                                                                                 "type":  "object"
                                                                                             }
@@ -1962,7 +2072,7 @@
                                                                         "actions":  {
                                                                             "Response_5":  {
                                                                                 "runAfter":  {
-                                                                                    "Set_variable_12":  [
+                                                                                    "Set_Error_in_LiveMount_Recovery":  [
                                                                                         "Succeeded"
                                                                                     ]
                                                                                 },
@@ -1973,7 +2083,7 @@
                                                                                     "statusCode":  "@outputs('Live-Mount_recovered_snapshot')['statusCode']"
                                                                                 }
                                                                             },
-                                                                            "Set_variable_12":  {
+                                                                            "Set_Error_in_LiveMount_Recovery":  {
                                                                                 "runAfter":  {
                                                                                 },
                                                                                 "type":  "SetVariable",
@@ -2015,9 +2125,9 @@
                                                                     "actions":  {
                                                                         "Does_Get_Vsphere_Host_ID_get_status_code_200":  {
                                                                             "actions":  {
-                                                                                "Condition":  {
+                                                                                "Check_that_API_response_does_not_contain_any_errors":  {
                                                                                     "actions":  {
-                                                                                        "Set_variable_13":  {
+                                                                                        "Set_API_error_Get_hostId_LiveMount":  {
                                                                                             "runAfter":  {
                                                                                             },
                                                                                             "type":  "SetVariable",
@@ -2129,7 +2239,7 @@
                                                                                                     }
                                                                                                 }
                                                                                             },
-                                                                                            "Set_variable":  {
+                                                                                            "Set_HostId_LiveMount":  {
                                                                                                 "runAfter":  {
                                                                                                     "Response_of_Get_Vsphere_Host_ID":  [
                                                                                                         "Succeeded"
@@ -2164,7 +2274,7 @@
                                                                             },
                                                                             "else":  {
                                                                                 "actions":  {
-                                                                                    "Set_variable_14":  {
+                                                                                    "Set_Error_from_Get_Vsphere_HostID_LiveMount":  {
                                                                                         "runAfter":  {
                                                                                         },
                                                                                         "type":  "SetVariable",
@@ -2193,7 +2303,7 @@
                                                                             "type":  "Http",
                                                                             "inputs":  {
                                                                                 "body":  {
-                                                                                    "query":  "query vSphereHostsQuery($first: Int!, $after: String, $filter: [Filter!], $sortBy: HierarchySortByField, $sortOrder: HierarchySortOrder) {\r\n  vSphereHostConnection(\r\n    first: $first\r\n    after: $after\r\n    filter: $filter\r\n    sortBy: $sortBy\r\n    sortOrder: $sortOrder\r\n  ) {\r\n    edges {\r\n      node {\r\n        id\r\n        ...VSphereHostNameFragment\r\n        ...VSphereHostPhysicalPathFragment\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    pageInfo {\r\n      endCursor\r\n      hasNextPage\r\n      hasPreviousPage\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}\r\n \r\nfragment VSphereHostNameFragment on VSphereHost {\r\n  name\r\n  __typename\r\n}\r\n \r\nfragment VSphereHostPhysicalPathFragment on VSphereHost {\r\n  physicalPath {\r\n    fid\r\n    name\r\n    objectType\r\n    __typename\r\n  }\r\n  __typename\r\n}",
+                                                                                    "query":  "query vSphereHostsQuery($first: Int!, $after: String, $filter: [Filter!], $sortBy: HierarchySortByField, $sortOrder: SortOrder) {\r\n  vSphereHostConnection(\r\n    first: $first\r\n    after: $after\r\n    filter: $filter\r\n    sortBy: $sortBy\r\n    sortOrder: $sortOrder\r\n  ) {\r\n    edges {\r\n      node {\r\n        id\r\n        ...VSphereHostNameFragment\r\n        ...VSphereHostPhysicalPathFragment\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    pageInfo {\r\n      endCursor\r\n      hasNextPage\r\n      hasPreviousPage\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}\r\n \r\nfragment VSphereHostNameFragment on VsphereHost {\r\n  name\r\n  __typename\r\n}\r\n \r\nfragment VSphereHostPhysicalPathFragment on VsphereHost {\r\n  physicalPath {\r\n    fid\r\n    name\r\n    objectType\r\n    __typename\r\n  }\r\n  __typename\r\n}",
                                                                                     "variables":  {
                                                                                         "filter":  [
                                                                                             {
@@ -2225,7 +2335,7 @@
                                                                                 },
                                                                                 "method":  "POST",
                                                                                 "path":  "/api/graphql",
-                                                                                "uri":  "https://rubrik-rcf-2512.my.rubrik.com/api/graphql"
+                                                                                "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
                                                                             }
                                                                         }
                                                                     },
@@ -2257,20 +2367,21 @@
                                                                     "type":  "Http",
                                                                     "inputs":  {
                                                                         "body":  {
-                                                                            "query":  "\r\n  mutation vSphereLiveMountMutation(\r\n    $snappableId: String!\r\n    $hostId: String\r\n    $clusterId: String\r\n    $resourcePoolId: String\r\n    $snapshotFid: String\r\n    $shouldRecoverTags: Boolean!\r\n    $keepMacAddresses: Boolean!\r\n    $powerOn: Boolean!\r\n    $removeNetworkDevices: Boolean!\r\n    $vmName: String\r\n    $vNicBindings: [VmwareVNicBindingInfoV2Input!]\r\n    $recoveryPoint: DateTime\r\n  ) {\r\n    vSphereVMInitiateLiveMountV2(\r\n      id: $snappableId\r\n      config: {\r\n        hostId: $hostId\r\n        resourcePoolId: $resourcePoolId\r\n        clusterId: $clusterId\r\n        shouldRecoverTags: $shouldRecoverTags\r\n        vNicBindings: $vNicBindings\r\n        requiredRecoveryParameters: {\r\n          snapshotId: $snapshotFid\r\n          recoveryPoint: $recoveryPoint\r\n        }\r\n        mountExportSnapshotJobCommonOptionsV2: {\r\n          keepMacAddresses: $keepMacAddresses\r\n          powerOn: $powerOn\r\n          removeNetworkDevices: $removeNetworkDevices\r\n          vmName: $vmName\r\n        }\r\n      }\r\n    ) {\r\n      id\r\n      status\r\n    }\r\n  }\r\n",
+                                                                            "query":  "\r\n  mutation vSphereLiveMountMutation($snappableId: String!, $hostId: String, $clusterId: String, $resourcePoolId: String, $snapshotFid: String, $shouldRecoverTags: Boolean!, $keepMacAddresses: Boolean!, $powerOn: Boolean!, $removeNetworkDevices: Boolean!, $vmName: String, $vNicBindings: [VmwareVnicBindingInfoV2Input!], $recoveryPoint: DateTime, $shouldMigrateImmediately: Boolean!, $migrationConfig: RelocateMountConfigV2Input) {\r\n    vsphereVmInitiateLiveMountV2(\r\n      input: {\r\n        id: $snappableId, config: { hostId: $hostId, resourcePoolId: $resourcePoolId, clusterId: $clusterId, shouldRecoverTags: $shouldRecoverTags, vNicBindings: $vNicBindings, requiredRecoveryParameters: { snapshotId: $snapshotFid, recoveryPoint: $recoveryPoint}mountExportSnapshotJobCommonOptionsV2: { keepMacAddresses: $keepMacAddresses, powerOn: $powerOn, removeNetworkDevices: $removeNetworkDevices, vmName: $vmName}, shouldMigrateImmediately: $shouldMigrateImmediately, migrationConfig: $migrationConfig}}\r\n    ) {\r\n        id\r\n      status\r\n      __typename\r\n    }\r\n  }\r\n",
                                                                             "variables":  {
-                                                                                "clusterId":  "@{triggerBody()?['ClusterId']}",
+                                                                                "clusterId":  null,
                                                                                 "hostId":  "@variables('HostId')",
                                                                                 "keepMacAddresses":  false,
-                                                                                "powerOn":  true,
+                                                                                "migrationConfig":  null,
+                                                                                "powerOn":  false,
                                                                                 "removeNetworkDevices":  false,
                                                                                 "resourcePoolId":  null,
+                                                                                "shouldMigrateImmediately":  false,
                                                                                 "shouldRecoverTags":  true,
-                                                                                "snappableId":  "@{body('Response_RubrikIOCScan')?['RadarIOCScan']?['data']?['threatHuntResult']?['results'][0]?['object']?['id']}",
-                                                                                "snapshotFid":  "@{body('RubrikIOCScan')?['RecoverableSnapshotid']}",
-                                                                                "vNicBindings":  [
-                                                                                ],
-                                                                                "vmName":  null
+                                                                                "snappableId":  "@{triggerBody()?['ObjectId']}",
+                                                                                "snapshotFid":  "@{body('Response_RubrikIOCScan')?['RecoverableSnapshotid']}",
+                                                                                "vNicBindings":  null,
+                                                                                "vmName":  "@body('Collect_recovery_data_for_live-mounting_VM')?['data']?['live-mounted VM name']"
                                                                             }
                                                                         },
                                                                         "headers":  {
@@ -2289,7 +2400,7 @@
                                                                 }
                                                             },
                                                             "runAfter":  {
-                                                                "Default_value_of_HostId":  [
+                                                                "Default_value_of_HostId_and_Esxi_ClusterId":  [
                                                                     "Succeeded"
                                                                 ]
                                                             },
@@ -2297,11 +2408,11 @@
                                                                 "actions":  {
                                                                     "Check_Export_recovered_snapshot_response_code":  {
                                                                         "actions":  {
-                                                                            "Condition_2":  {
+                                                                            "Check_that_Export_Recovery_API_contains_errors":  {
                                                                                 "actions":  {
                                                                                     "Response_10":  {
                                                                                         "runAfter":  {
-                                                                                            "Set_variable_34":  [
+                                                                                            "Set_Error_for_Export_Recovery_API":  [
                                                                                                 "Succeeded"
                                                                                             ]
                                                                                         },
@@ -2312,7 +2423,7 @@
                                                                                             "statusCode":  200
                                                                                         }
                                                                                     },
-                                                                                    "Set_variable_34":  {
+                                                                                    "Set_Error_for_Export_Recovery_API":  {
                                                                                         "runAfter":  {
                                                                                         },
                                                                                         "type":  "SetVariable",
@@ -2386,32 +2497,31 @@
                                                                         },
                                                                         "runAfter":  {
                                                                             "Export_recovered_snapshot":  [
-                                                                                "Succeeded",
-                                                                                "Failed"
+                                                                                "Succeeded"
                                                                             ]
                                                                         },
                                                                         "else":  {
                                                                             "actions":  {
                                                                                 "Response_7":  {
                                                                                     "runAfter":  {
-                                                                                        "Set_variable_33":  [
+                                                                                        "Set_Error_for_Export_Recovery":  [
                                                                                             "Succeeded"
                                                                                         ]
                                                                                     },
                                                                                     "type":  "Response",
                                                                                     "kind":  "Http",
                                                                                     "inputs":  {
-                                                                                        "body":  "@body('Export_recovered_snapshot')?['message']",
+                                                                                        "body":  "@variables('ErrorMessage')",
                                                                                         "statusCode":  "@outputs('Export_recovered_snapshot')['statusCode']"
                                                                                     }
                                                                                 },
-                                                                                "Set_variable_33":  {
+                                                                                "Set_Error_for_Export_Recovery":  {
                                                                                     "runAfter":  {
                                                                                     },
                                                                                     "type":  "SetVariable",
                                                                                     "inputs":  {
                                                                                         "name":  "ErrorMessage",
-                                                                                        "value":  "Status Code: @{outputs('Export_recovered_snapshot')['statusCode']}, message: @{body('Export_recovered_snapshot')?['message']}"
+                                                                                        "value":  "Status Code: @{outputs('Export_recovered_snapshot')['statusCode']}, message: @{body('Export_recovered_snapshot')?['errors'][0]?['message']}"
                                                                                     }
                                                                                 },
                                                                                 "Terminate_16":  {
@@ -2423,8 +2533,7 @@
                                                                                     "type":  "Terminate",
                                                                                     "inputs":  {
                                                                                         "runError":  {
-                                                                                            "code":  "@{outputs('Export_recovered_snapshot')['statusCode']}",
-                                                                                            "message":  "@{body('Export_recovered_snapshot')?['message']}"
+                                                                                            "code":  "@{outputs('Export_recovered_snapshot')['statusCode']}"
                                                                                         },
                                                                                         "runStatus":  "Failed"
                                                                                     }
@@ -2473,7 +2582,7 @@
                                                                                 "actions":  {
                                                                                     "Response_9":  {
                                                                                         "runAfter":  {
-                                                                                            "Set_variable_17":  [
+                                                                                            "Set_Error_for_Get_DataStoreId_Export_API":  [
                                                                                                 "Succeeded"
                                                                                             ]
                                                                                         },
@@ -2484,7 +2593,7 @@
                                                                                             "statusCode":  200
                                                                                         }
                                                                                     },
-                                                                                    "Set_variable_17":  {
+                                                                                    "Set_Error_for_Get_DataStoreId_Export_API":  {
                                                                                         "runAfter":  {
                                                                                         },
                                                                                         "type":  "SetVariable",
@@ -2629,7 +2738,7 @@
                                                                             "actions":  {
                                                                                 "Response_6":  {
                                                                                     "runAfter":  {
-                                                                                        "Set_variable_18":  [
+                                                                                        "Set_Error_Get_DataStoreId_Export":  [
                                                                                             "Succeeded"
                                                                                         ]
                                                                                     },
@@ -2640,13 +2749,13 @@
                                                                                         "statusCode":  "@output('Get_Vsphere_Datastore_ID')['statusCode']"
                                                                                     }
                                                                                 },
-                                                                                "Set_variable_18":  {
+                                                                                "Set_Error_Get_DataStoreId_Export":  {
                                                                                     "runAfter":  {
                                                                                     },
                                                                                     "type":  "SetVariable",
                                                                                     "inputs":  {
                                                                                         "name":  "ErrorMessage",
-                                                                                        "value":  "Status Code: @{output('Get_Vsphere_Datastore_ID')['statusCode']}, Error message:  @{body('Get_Vsphere_Datastore_ID')['message']}"
+                                                                                        "value":  "Status Code: @{outputs('Get_Vsphere_Datastore_ID')['statusCode']}, Error message:  @{body('Get_Vsphere_Datastore_ID')['message']}"
                                                                                     }
                                                                                 },
                                                                                 "Terminate_14":  {
@@ -2680,55 +2789,131 @@
                                                                     },
                                                                     "Export_recovered_snapshot":  {
                                                                         "runAfter":  {
-                                                                            "Does_Get_Vsphere_Datastore_ID_get_status_code_200":  [
+                                                                            "For_each_2":  [
                                                                                 "Succeeded"
                                                                             ]
                                                                         },
                                                                         "type":  "Http",
                                                                         "inputs":  {
                                                                             "body":  {
-                                                                                "query":  "mutation vSphereExportSnapshotV2Mutation($config: ExportSnapshotJobConfigV2Input!, $id: String!) {\r\n  vSphereVMExportSnapshotV2(config: $config, id: $id) {\r\n    id\r\n  }\r\n}",
+                                                                                "query":  "mutation vSphereExportSnapshotV2Mutation(\r\n    $input: VsphereVmExportSnapshotV2Input!\r\n  ) {\r\n    vsphereVmExportSnapshotV2(input: $input) {\r\n      id\r\n    }\r\n  }\r\n",
                                                                                 "variables":  {
-                                                                                    "config":  {
-                                                                                        "datastoreId":  "@body('Response_of_Get_Vsphere_Datastore_ID')?['data']?['vSphereHost']?['descendantConnection']?['edges'][0]?['node']?['id']",
-                                                                                        "hostId":  "@variables('HostId')",
-                                                                                        "mountExportSnapshotJobCommonOptionsV2":  {
-                                                                                            "keepMacAddresses":  false,
-                                                                                            "removeNetworkDevices":  false,
-                                                                                            "vmName":  ""
+                                                                                    "input":  {
+                                                                                        "config":  {
+                                                                                            "clusterId":  "@{variables('EsxiClusterId')}",
+                                                                                            "datastoreId":  "@{variables('DatastoreId')}",
+                                                                                            "mountExportSnapshotJobCommonOptionsV2":  {
+                                                                                                "keepMacAddresses":  false,
+                                                                                                "powerOn":  false,
+                                                                                                "removeNetworkDevices":  false
+                                                                                            },
+                                                                                            "requiredRecoveryParameters":  {
+                                                                                                "snapshotId":  "@{body('Response_RubrikIOCScan')?['RecoverableSnapshotid']}"
+                                                                                            },
+                                                                                            "shouldRecoverTags":  true,
+                                                                                            "shouldUseHotAddProxy":  false,
+                                                                                            "vNicBindings":  [
+                                                                                            ]
                                                                                         },
-                                                                                        "requiredRecoveryParameters":  {
-                                                                                            "snapshotId":  "@{body('Response_RubrikIOCScan')?['RecoverableSnapshotid']}"
-                                                                                        },
-                                                                                        "shouldRecoverTags":  false
-                                                                                    },
-                                                                                    "id":  "@triggerBody()?['ObjectId']"
+                                                                                        "id":  "@{triggerBody()?['ObjectId']}"
+                                                                                    }
                                                                                 }
                                                                             },
                                                                             "headers":  {
                                                                                 "Authorization":  "Bearer @{variables('access_token')}",
                                                                                 "Content-Type":  "application/json"
                                                                             },
-                                                                            "host":  {
-                                                                                "connection":  {
-                                                                                    "name":  "@parameters('$connections')['RubrikCustomConnector']['connectionId']"
-                                                                                }
-                                                                            },
                                                                             "method":  "POST",
-                                                                            "path":  "/api/graphql",
                                                                             "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
                                                                         }
                                                                     },
-                                                                    "Get_Vsphere_Datastore_ID":  {
+                                                                    "For_each":  {
+                                                                        "foreach":  "@body('Response_of_Get_Vsphere_Host_ID_-_2')?['data']?['vSphereHostConnection']?['edges']",
+                                                                        "actions":  {
+                                                                            "For_each_3":  {
+                                                                                "foreach":  "@items('For_each')?['node']?['physicalPath']",
+                                                                                "actions":  {
+                                                                                    "Check_for_ObjectType_equals_to_Cluster":  {
+                                                                                        "actions":  {
+                                                                                            "Set_Esxi_ClusterId":  {
+                                                                                                "runAfter":  {
+                                                                                                },
+                                                                                                "type":  "SetVariable",
+                                                                                                "inputs":  {
+                                                                                                    "name":  "EsxiClusterId",
+                                                                                                    "value":  "@items('For_each_3')?['fid']"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "runAfter":  {
+                                                                                        },
+                                                                                        "expression":  {
+                                                                                            "and":  [
+                                                                                                {
+                                                                                                    "equals":  [
+                                                                                                        "@items('For_each_3')?['objectType']",
+                                                                                                        "VSphereComputeCluster"
+                                                                                                    ]
+                                                                                                }
+                                                                                            ]
+                                                                                        },
+                                                                                        "type":  "If"
+                                                                                    }
+                                                                                },
+                                                                                "runAfter":  {
+                                                                                    "Set_HostId":  [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type":  "Foreach"
+                                                                            },
+                                                                            "Set_HostId":  {
+                                                                                "runAfter":  {
+                                                                                },
+                                                                                "type":  "SetVariable",
+                                                                                "inputs":  {
+                                                                                    "name":  "HostId",
+                                                                                    "value":  "@items('For_each')?['node']?['id']"
+                                                                                }
+                                                                            }
+                                                                        },
                                                                         "runAfter":  {
                                                                             "Is_Vsphere_host_name_provided_for_exporting_vm":  [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type":  "Foreach"
+                                                                    },
+                                                                    "For_each_2":  {
+                                                                        "foreach":  "@body('Response_of_Get_Vsphere_Datastore_ID')?['data']?['vSphereHost']?['descendantConnection']?['edges']",
+                                                                        "actions":  {
+                                                                            "Set_DatastoreId":  {
+                                                                                "runAfter":  {
+                                                                                },
+                                                                                "type":  "SetVariable",
+                                                                                "inputs":  {
+                                                                                    "name":  "DatastoreId",
+                                                                                    "value":  "@items('For_each_2')?['node']?['id']"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "runAfter":  {
+                                                                            "Does_Get_Vsphere_Datastore_ID_get_status_code_200":  [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type":  "Foreach"
+                                                                    },
+                                                                    "Get_Vsphere_Datastore_ID":  {
+                                                                        "runAfter":  {
+                                                                            "For_each":  [
                                                                                 "Succeeded"
                                                                             ]
                                                                         },
                                                                         "type":  "Http",
                                                                         "inputs":  {
                                                                             "body":  {
-                                                                                "query":  "query VSphereHostDatastoresQuery($hostId: UUID!, $first: Int, $after: String, $filter: [Filter!], $sortBy: HierarchySortByField, $sortOrder: HierarchySortOrder) {\r\n  vSphereHost(fid: $hostId) {\r\n    descendantConnection(\r\n      first: $first\r\n      after: $after\r\n      filter: $filter\r\n      sortBy: $sortBy\r\n      sortOrder: $sortOrder\r\n      typeFilter: [VSphereDatastore]\r\n    ) {\r\n      edges {\r\n        node {\r\n          id\r\n          ...HierarchyObjectNameColumnFragment\r\n          ... on VSphereDatastore {\r\n            capacity\r\n            isLocal\r\n            freeSpace\r\n            datastoreType\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      pageInfo {\r\n        endCursor\r\n        hasNextPage\r\n        hasPreviousPage\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}\r\n \r\nfragment HierarchyObjectNameColumnFragment on HierarchyObject {\r\n  name\r\n  __typename\r\n}",
+                                                                                "query":  "query VSphereHostDatastoresQuery($hostId: UUID!, $first: Int, $after: String, $filter: [Filter!], $sortBy: HierarchySortByField, $sortOrder: SortOrder) {\r\n  vSphereHost(fid: $hostId) {\r\n    descendantConnection(\r\n      first: $first\r\n      after: $after\r\n      filter: $filter\r\n      sortBy: $sortBy\r\n      sortOrder: $sortOrder\r\n      typeFilter: [VSphereDatastore]\r\n    ) {\r\n      edges {\r\n        node {\r\n          id\r\n          ...HierarchyObjectNameColumnFragment\r\n          ... on VsphereDatastore {\r\n            capacity\r\n            isLocal\r\n            freeSpace\r\n            datastoreType\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      pageInfo {\r\n        endCursor\r\n        hasNextPage\r\n        hasPreviousPage\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}\r\n \r\nfragment HierarchyObjectNameColumnFragment on HierarchyObject {\r\n  name\r\n  __typename\r\n}",
                                                                                 "variables":  {
                                                                                     "filter":  [
                                                                                         {
@@ -2764,7 +2949,20 @@
                                                                                 "actions":  {
                                                                                     "Does_Get_Vsphere_Host_ID_-_2_API_response_contains_errors":  {
                                                                                         "actions":  {
-                                                                                            "Set_variable_16":  {
+                                                                                            "Response_15":  {
+                                                                                                "runAfter":  {
+                                                                                                    "Set_Error_for_Get_HostId_Export_API":  [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type":  "Response",
+                                                                                                "kind":  "Http",
+                                                                                                "inputs":  {
+                                                                                                    "body":  "While Getting HostID for Live-Mount : @{body('Get_Vsphere_Host_ID_-_2')?['errors'][0]?['message']}",
+                                                                                                    "statusCode":  200
+                                                                                                }
+                                                                                            },
+                                                                                            "Set_Error_for_Get_HostId_Export_API":  {
                                                                                                 "runAfter":  {
                                                                                                 },
                                                                                                 "type":  "SetVariable",
@@ -2775,7 +2973,7 @@
                                                                                             },
                                                                                             "Terminate_12":  {
                                                                                                 "runAfter":  {
-                                                                                                    "Set_variable_16":  [
+                                                                                                    "Response_15":  [
                                                                                                         "Succeeded"
                                                                                                     ]
                                                                                                 },
@@ -2790,108 +2988,6 @@
                                                                                         },
                                                                                         "runAfter":  {
                                                                                         },
-                                                                                        "else":  {
-                                                                                            "actions":  {
-                                                                                                "Response_of_Get_Vsphere_Host_ID_-_2":  {
-                                                                                                    "runAfter":  {
-                                                                                                    },
-                                                                                                    "type":  "ParseJson",
-                                                                                                    "inputs":  {
-                                                                                                        "content":  "@body('Get_Vsphere_Host_ID_-_2')",
-                                                                                                        "schema":  {
-                                                                                                            "properties":  {
-                                                                                                                "data":  {
-                                                                                                                    "properties":  {
-                                                                                                                        "vSphereHostConnection":  {
-                                                                                                                            "properties":  {
-                                                                                                                                "__typename":  {
-                                                                                                                                    "type":  "string"
-                                                                                                                                },
-                                                                                                                                "edges":  {
-                                                                                                                                    "items":  {
-                                                                                                                                        "properties":  {
-                                                                                                                                            "__typename":  {
-                                                                                                                                                "type":  "string"
-                                                                                                                                            },
-                                                                                                                                            "node":  {
-                                                                                                                                                "properties":  {
-                                                                                                                                                    "__typename":  {
-                                                                                                                                                        "type":  "string"
-                                                                                                                                                    },
-                                                                                                                                                    "id":  {
-                                                                                                                                                        "type":  "string"
-                                                                                                                                                    },
-                                                                                                                                                    "name":  {
-                                                                                                                                                        "type":  "string"
-                                                                                                                                                    },
-                                                                                                                                                    "physicalPath":  {
-                                                                                                                                                        "items":  {
-                                                                                                                                                            "properties":  {
-                                                                                                                                                                "__typename":  {
-                                                                                                                                                                    "type":  "string"
-                                                                                                                                                                },
-                                                                                                                                                                "fid":  {
-                                                                                                                                                                    "type":  "string"
-                                                                                                                                                                },
-                                                                                                                                                                "name":  {
-                                                                                                                                                                    "type":  "string"
-                                                                                                                                                                },
-                                                                                                                                                                "objectType":  {
-                                                                                                                                                                    "type":  "string"
-                                                                                                                                                                }
-                                                                                                                                                            },
-                                                                                                                                                            "required":  [
-                                                                                                                                                                "fid",
-                                                                                                                                                                "name",
-                                                                                                                                                                "objectType",
-                                                                                                                                                                "__typename"
-                                                                                                                                                            ],
-                                                                                                                                                            "type":  "object"
-                                                                                                                                                        },
-                                                                                                                                                        "type":  "array"
-                                                                                                                                                    }
-                                                                                                                                                },
-                                                                                                                                                "type":  "object"
-                                                                                                                                            }
-                                                                                                                                        },
-                                                                                                                                        "required":  [
-                                                                                                                                            "node",
-                                                                                                                                            "__typename"
-                                                                                                                                        ],
-                                                                                                                                        "type":  "object"
-                                                                                                                                    },
-                                                                                                                                    "type":  "array"
-                                                                                                                                },
-                                                                                                                                "pageInfo":  {
-                                                                                                                                    "properties":  {
-                                                                                                                                        "__typename":  {
-                                                                                                                                            "type":  "string"
-                                                                                                                                        },
-                                                                                                                                        "endCursor":  {
-                                                                                                                                            "type":  "string"
-                                                                                                                                        },
-                                                                                                                                        "hasNextPage":  {
-                                                                                                                                            "type":  "boolean"
-                                                                                                                                        },
-                                                                                                                                        "hasPreviousPage":  {
-                                                                                                                                            "type":  "boolean"
-                                                                                                                                        }
-                                                                                                                                    },
-                                                                                                                                    "type":  "object"
-                                                                                                                                }
-                                                                                                                            },
-                                                                                                                            "type":  "object"
-                                                                                                                        }
-                                                                                                                    },
-                                                                                                                    "type":  "object"
-                                                                                                                }
-                                                                                                            },
-                                                                                                            "type":  "object"
-                                                                                                        }
-                                                                                                    }
-                                                                                                }
-                                                                                            }
-                                                                                        },
                                                                                         "expression":  {
                                                                                             "and":  [
                                                                                                 {
@@ -2903,6 +2999,107 @@
                                                                                             ]
                                                                                         },
                                                                                         "type":  "If"
+                                                                                    },
+                                                                                    "Response_of_Get_Vsphere_Host_ID_-_2":  {
+                                                                                        "runAfter":  {
+                                                                                            "Does_Get_Vsphere_Host_ID_-_2_API_response_contains_errors":  [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type":  "ParseJson",
+                                                                                        "inputs":  {
+                                                                                            "content":  "@body('Get_Vsphere_Host_ID_-_2')",
+                                                                                            "schema":  {
+                                                                                                "properties":  {
+                                                                                                    "data":  {
+                                                                                                        "properties":  {
+                                                                                                            "vSphereHostConnection":  {
+                                                                                                                "properties":  {
+                                                                                                                    "__typename":  {
+                                                                                                                        "type":  "string"
+                                                                                                                    },
+                                                                                                                    "edges":  {
+                                                                                                                        "items":  {
+                                                                                                                            "properties":  {
+                                                                                                                                "__typename":  {
+                                                                                                                                    "type":  "string"
+                                                                                                                                },
+                                                                                                                                "node":  {
+                                                                                                                                    "properties":  {
+                                                                                                                                        "__typename":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        },
+                                                                                                                                        "id":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        },
+                                                                                                                                        "name":  {
+                                                                                                                                            "type":  "string"
+                                                                                                                                        },
+                                                                                                                                        "physicalPath":  {
+                                                                                                                                            "items":  {
+                                                                                                                                                "properties":  {
+                                                                                                                                                    "__typename":  {
+                                                                                                                                                        "type":  "string"
+                                                                                                                                                    },
+                                                                                                                                                    "fid":  {
+                                                                                                                                                        "type":  "string"
+                                                                                                                                                    },
+                                                                                                                                                    "name":  {
+                                                                                                                                                        "type":  "string"
+                                                                                                                                                    },
+                                                                                                                                                    "objectType":  {
+                                                                                                                                                        "type":  "string"
+                                                                                                                                                    }
+                                                                                                                                                },
+                                                                                                                                                "required":  [
+                                                                                                                                                    "fid",
+                                                                                                                                                    "name",
+                                                                                                                                                    "objectType",
+                                                                                                                                                    "__typename"
+                                                                                                                                                ],
+                                                                                                                                                "type":  "object"
+                                                                                                                                            },
+                                                                                                                                            "type":  "array"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    "type":  "object"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "required":  [
+                                                                                                                                "node",
+                                                                                                                                "__typename"
+                                                                                                                            ],
+                                                                                                                            "type":  "object"
+                                                                                                                        },
+                                                                                                                        "type":  "array"
+                                                                                                                    },
+                                                                                                                    "pageInfo":  {
+                                                                                                                        "properties":  {
+                                                                                                                            "__typename":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            },
+                                                                                                                            "endCursor":  {
+                                                                                                                                "type":  "string"
+                                                                                                                            },
+                                                                                                                            "hasNextPage":  {
+                                                                                                                                "type":  "boolean"
+                                                                                                                            },
+                                                                                                                            "hasPreviousPage":  {
+                                                                                                                                "type":  "boolean"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type":  "object"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "type":  "object"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "type":  "object"
+                                                                                                    }
+                                                                                                },
+                                                                                                "type":  "object"
+                                                                                            }
+                                                                                        }
                                                                                     }
                                                                                 },
                                                                                 "runAfter":  {
@@ -2912,23 +3109,39 @@
                                                                                 },
                                                                                 "else":  {
                                                                                     "actions":  {
-                                                                                        "Set_variable_15":  {
+                                                                                        "Response_16":  {
+                                                                                            "runAfter":  {
+                                                                                                "Set_Error_Get_Vsphere_HostID_Export":  [
+                                                                                                    "Succeeded"
+                                                                                                ]
+                                                                                            },
+                                                                                            "type":  "Response",
+                                                                                            "kind":  "Http",
+                                                                                            "inputs":  {
+                                                                                                "body":  "@variables('ErrorMessage')",
+                                                                                                "statusCode":  400
+                                                                                            }
+                                                                                        },
+                                                                                        "Set_Error_Get_Vsphere_HostID_Export":  {
                                                                                             "runAfter":  {
                                                                                             },
                                                                                             "type":  "SetVariable",
                                                                                             "inputs":  {
                                                                                                 "name":  "ErrorMessage",
-                                                                                                "value":  "Status Code: , Error Message: "
+                                                                                                "value":  "Status Code: @{outputs('Get_Vsphere_Host_ID_-_2')['statusCode']}, Error Message: @{body('Get_Vsphere_Host_ID_-_2')?['message']}"
                                                                                             }
                                                                                         },
                                                                                         "Terminate_11":  {
                                                                                             "runAfter":  {
-                                                                                                "Set_variable_15":  [
+                                                                                                "Response_16":  [
                                                                                                     "Succeeded"
                                                                                                 ]
                                                                                             },
                                                                                             "type":  "Terminate",
                                                                                             "inputs":  {
+                                                                                                "runError":  {
+                                                                                                    "message":  "@variables('ErrorMessage')"
+                                                                                                },
                                                                                                 "runStatus":  "Failed"
                                                                                             }
                                                                                         }
@@ -2952,19 +3165,19 @@
                                                                                 "type":  "Http",
                                                                                 "inputs":  {
                                                                                     "body":  {
-                                                                                        "query":  "query vSphereHostsQuery($first: Int!, $after: String, $filter: [Filter!], $sortBy: HierarchySortByField, $sortOrder: HierarchySortOrder) {\r\n  vSphereHostConnection(\r\n    first: $first\r\n    after: $after\r\n    filter: $filter\r\n    sortBy: $sortBy\r\n    sortOrder: $sortOrder\r\n  ) {\r\n    edges {\r\n      node {\r\n        id\r\n        ...VSphereHostNameFragment\r\n        ...VSphereHostPhysicalPathFragment\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    pageInfo {\r\n      endCursor\r\n      hasNextPage\r\n      hasPreviousPage\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}\r\n \r\nfragment VSphereHostNameFragment on VSphereHost {\r\n  name\r\n  __typename\r\n}\r\n \r\nfragment VSphereHostPhysicalPathFragment on VSphereHost {\r\n  physicalPath {\r\n    fid\r\n    name\r\n    objectType\r\n    __typename\r\n  }\r\n  __typename\r\n}",
+                                                                                        "query":  "query vSphereHostsQuery($first: Int!, $after: String, $filter: [Filter!], $sortBy: HierarchySortByField, $sortOrder: SortOrder) {\r\n  vSphereHostConnection(\r\n    first: $first\r\n    after: $after\r\n    filter: $filter\r\n    sortBy: $sortBy\r\n    sortOrder: $sortOrder\r\n  ) {\r\n    edges {\r\n      node {\r\n        id\r\n        ...VSphereHostNameFragment\r\n        ...VSphereHostPhysicalPathFragment\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    pageInfo {\r\n      endCursor\r\n      hasNextPage\r\n      hasPreviousPage\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}\r\n \r\nfragment VSphereHostNameFragment on VsphereHost {\r\n  name\r\n  __typename\r\n}\r\n \r\nfragment VSphereHostPhysicalPathFragment on VsphereHost {\r\n  physicalPath {\r\n    fid\r\n    name\r\n    objectType\r\n    __typename\r\n  }\r\n  __typename\r\n}",
                                                                                         "variables":  {
                                                                                             "filter":  [
                                                                                                 {
                                                                                                     "field":  "CLUSTER_ID",
                                                                                                     "texts":  [
-                                                                                                        "@triggerBody()?['ClusterId']"
+                                                                                                        "@{triggerBody()?['ClusterId']}"
                                                                                                     ]
                                                                                                 },
                                                                                                 {
                                                                                                     "field":  "NAME",
                                                                                                     "texts":  [
-                                                                                                        "@body('Collect_recovery_data_for_exporting_VM')?['data']?['name to search for a Vsphere host in exporting']"
+                                                                                                        "@{body('Collect_recovery_data_for_exporting_VM')?['data']?['name to search for a Vsphere host in exporting']}"
                                                                                                     ]
                                                                                                 }
                                                                                             ],
@@ -3014,7 +3227,7 @@
                                                                     {
                                                                         "equals":  [
                                                                             "@body('Collect_IOC_scan_and_general_recovery_data')?['data']?['live-mount or export']",
-                                                                            "LIVE-MOUNT"
+                                                                            "Live-Mount"
                                                                         ]
                                                                     }
                                                                 ]
@@ -3026,7 +3239,7 @@
                                                     },
                                                     "else":  {
                                                         "actions":  {
-                                                            "Set_variable_9":  {
+                                                            "Set_No_recoverable_snapshot_found_status":  {
                                                                 "runAfter":  {
                                                                 },
                                                                 "type":  "SetVariable",
@@ -3101,7 +3314,7 @@
                                                 "not":  {
                                                     "equals":  [
                                                         "@body('Collect_IOC_scan_and_general_recovery_data')?['data']?['live-mount or export']",
-                                                        "NO RECOVERY"
+                                                        "No Recovery"
                                                     ]
                                                 }
                                             }
@@ -3228,8 +3441,7 @@
                                 "variables":  [
                                     {
                                         "name":  "ObjectId",
-                                        "type":  "string",
-                                        "value":  "0cc517e9-23f7-5579-86f1-d9cb8e5d67a7"
+                                        "type":  "string"
                                     }
                                 ]
                             }
@@ -3246,7 +3458,7 @@
                                     {
                                         "name":  "ObjectType",
                                         "type":  "string",
-                                        "value":  "Vmware"
+                                        "value":  "@triggerBody()?['ObjectType']"
                                     }
                                 ]
                             }
@@ -3627,7 +3839,7 @@
                                                             },
                                                             "type":  "array"
                                                         },
-                                                        "reportSnappable":  {
+                                                        "reportWorkload":  {
                                                             "properties":  {
                                                                 "__typename":  {
                                                                     "type":  "string"
@@ -3704,16 +3916,16 @@
                         "Response":  {
                             "runAfter":  {
                                 "Does_Create_Snapshot_for_evidence_get_status_code_200":  [
-                                    "Succeeded",
                                     "Failed",
-                                    "Skipped",
-                                    "TimedOut"
-                                ],
-                                "Is_IOC_Scan_successful_(check_for_ERROR)":  [
-                                    "Succeeded",
                                     "TimedOut",
                                     "Skipped",
-                                    "Failed"
+                                    "Succeeded"
+                                ],
+                                "Is_IOC_Scan_successful_(check_for_ERROR)":  [
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed",
+                                    "Succeeded"
                                 ],
                                 "Is_IOC_Scan_successful_(check_for_FINISHED)":  [
                                     "Succeeded",
@@ -3722,10 +3934,10 @@
                                     "Failed"
                                 ],
                                 "Is_IOC_Scan_successful_(check_for_RUNNING)":  [
-                                    "Succeeded",
                                     "Failed",
                                     "Skipped",
-                                    "TimedOut"
+                                    "TimedOut",
+                                    "Succeeded"
                                 ]
                             },
                             "type":  "Response",

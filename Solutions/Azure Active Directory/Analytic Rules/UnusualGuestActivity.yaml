@@ -34,7 +34,11 @@ query: |
   | extend InitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
   // Uncomment the following line to filter events where the inviting user was a guest user
   //| where InitiatedBy has_any ("live.com#", "#EXT#")
-  | extend InvitedUser = TargetResources[0].userPrincipalName
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend InvitedUser = tostring(TargetResource.userPrincipalName)
+    )
   | mv-expand UserToCompare = pack_array(InitiatedBy, InvitedUser) to typeof(string)
   | where UserToCompare has_any ("live.com#", "#EXT#")
   | extend
@@ -65,18 +69,24 @@ query: |
       )
       on parsedUser
   | project InvitationTime, InitiatedBy, OperationName, InvitedUser, SigninTime, SigninCategory = Category1, SigninUserPrincipalName = UserPrincipalName, IPAddress, AppDisplayName, ResourceDisplayName, UserAgent, InvitationAdditionalDetails = AdditionalDetails, InvitationTargetResources = TargetResources
+  | extend InvitedUserName = tostring(split(InvitedUser,'@',0)[0]), InvitedUserUPNSuffix = tostring(split(InvitedUser,'@',1)[0]), 
+           InitiatedByName = tostring(split(InitiatedBy,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatedBy,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: InvitedUser
+      - identifier: Name
+        columnName: InvitedUserName
+      - identifier: UPNSuffix
+        columnName: InvitedUserUPNSuffix
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: InitiatedBy
+      - identifier: Name
+        columnName: InitiatedByName
+      - identifier: UPNSuffix
+        columnName: InitiatedByUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.6
+version: 1.0.7
 kind: Scheduled

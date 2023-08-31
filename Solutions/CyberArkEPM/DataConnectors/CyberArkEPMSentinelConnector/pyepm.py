@@ -3,8 +3,8 @@ Author: Steven Steiner <steven.steiner@cyberark.com>
 Version: 0.0.1
 Date Created: 6/10/2019 16:19
 """
-import certifi, json, requests, urllib3
-
+import json, requests, urllib3, urllib
+from lxml import html
 
 def epmAuth(dispatcher, username, password):
     """
@@ -37,8 +37,64 @@ def epmAuth(dispatcher, username, password):
     # make the Rest API call
     urllib3.disable_warnings()
 
-    return requests.post(myURL, headers=hdr, data=logonBody, verify=False)
+    return requests.post(myURL, headers=hdr, data=logonBody)
 
+def samlAuth(dispatcher, username, password, identityTenantID, identityTenantURL, identityAppKey):
+
+    #StartAuth
+    url = identityTenantURL + "/Security/StartAuthentication"
+
+    payload = "{\r\n    \"TenantId\": \"" + identityTenantID + "\",\r\n    \"User\": \"" + username + "\",\r\n    \"Version\": \"1.0\"        \r\n}\r\n\r\n"
+    headers = {
+    'X-CENTRIFY-NATIVE-CLIENT': 'true',
+    'Content-Type': 'application/json'
+    }
+
+    urllib3.disable_warnings()
+    session = requests.Session()
+
+    # response = requests.request("POST", url, headers=headers, data = payload, verify = False)
+    response = session.post(url, headers=headers, data = payload)
+
+    json_data = json.loads(response.text)
+    session_id = json_data.get("Result").get("SessionId")
+    mechanism_id = json_data.get("Result").get("Challenges")[0].get("Mechanisms")[0].get("MechanismId")
+
+    #AdvanceAuthentication
+    url = identityTenantURL + "/Security/AdvanceAuthentication?X-CENTRIFY-NATIVE-CLIENT=true&"
+
+    payload = "{\r\n    \"TenantId\": \"" + identityTenantID + "\",\r\n    \"SessionId\": \"" + session_id + "\",\r\n    \"MechanismId\": \"" + mechanism_id + "\",\r\n    \"Action\": \"Answer\",\r\n    \"Answer\": \"" + password + "\"\r\n}"
+    headers = {
+    'Content-Type': 'application/json',
+    'X-CENTRIFY-NATIVE-CLIENT': 'true'
+    }
+
+    session.post(url, headers=headers, data = payload)
+
+    #AppClick
+
+    url = identityTenantURL + "/uprest/HandleAppClick?appkey=" + identityAppKey + "&markAppVisited=true"
+
+    payload={}
+    headers = {
+    'X-CENTRIFY-NATIVE-CLIENT': 'true',
+    'Authorization': 'bearer AuthorizationToken'
+    }
+    response = session.get(url, headers=headers, data = payload)
+
+
+    tree = html.fromstring(response.content)
+    samlresponse = tree.xpath('//input[@name="SAMLResponse"]/@value[last()]')[0]
+
+    #SAML Logon
+    url = dispatcher + "/SAML/Logon"
+
+    payload='SAMLResponse=' + urllib.parse.quote(samlresponse)
+
+    headers = {
+    'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    return session.post(url, headers=headers, data=payload)
 
 def winAuth(epmsrv, username, password, version=None):
     """
@@ -63,7 +119,7 @@ def winAuth(epmsrv, username, password, version=None):
 
     # make the Rest API call
     urllib3.disable_warnings()
-    return requests.post(myURL, headers=hdr, data=logonBody, verify=False)
+    return requests.post(myURL, headers=hdr, data=logonBody)
 
 
 def getVersion(dispatcher, version=None):
@@ -79,7 +135,7 @@ def getVersion(dispatcher, version=None):
 
     # make the Rest API call
     urllib3.disable_warnings()
-    return requests.get(myURL, verify=False)
+    return requests.get(myURL)
 
 
 def getSetsList(epmserver, epmToken, authType, version=None):
@@ -105,7 +161,7 @@ def getSetsList(epmserver, epmToken, authType, version=None):
 
     # make the Rest API call
     urllib3.disable_warnings()
-    return requests.get(myURL, headers=hdr, verify=False)
+    return requests.get(myURL, headers=hdr)
 
 
 def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
@@ -138,9 +194,9 @@ def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor=
     # check to see if there are any keyword arguments passed in to this function
     # if so, use them
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, verify=False, data=data, params=kwargs)
+        return requests.post(myURL, headers=hdr, data=data, params=kwargs)
     else:
-        return requests.post(myURL, headers=hdr, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, data=data)
 
 
 def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
@@ -174,9 +230,9 @@ def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
     else:
-        return requests.post(myURL, headers=hdr, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, data=data)
 
 
 def getAggregatedPolicyAudits(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
@@ -209,9 +265,9 @@ def getAggregatedPolicyAudits(epmserver, epmToken, authType, setid, data, next_c
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
     else:
-        return requests.post(myURL, headers=hdr, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, data=data)
 
 
 def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000,
@@ -245,6 +301,51 @@ def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, ne
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
     else:
-        return requests.post(myURL, headers=hdr, verify=False, data=data)
+        return requests.post(myURL, headers=hdr, data=data)
+
+def getAdminAuditEvents(epmserver, epmToken, authType, setid, start_time, end_time, limit=100):
+    """
+        Get Admin Audit Data
+        This method enables the user to retrieve Admin Audit Data from EPM according
+        to a range of time (between start_time and end_time)
+    """
+    # build the header
+    hdr = {}
+    hdr['Content-Type'] = 'application/json'
+    if authType == 'EPM':
+        authToken = 'basic ' + epmToken
+        hdr['Authorization'] = authToken
+    else:
+        authToken = epmToken
+        hdr['VFUser'] = authToken
+
+    # make the Rest API call
+    urllib3.disable_warnings()
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+
+    rowsCount = 0
+    offset = 0
+    events_json = []
+
+    while True:
+        #build the URL
+        myURL = epmserver + "/EPM/API/Sets/" + setid + "/AdminAudit?DateFrom=" + start_time + "&DateTo=" + end_time + "&limit=" + str(limit) + "&offset=" + str(offset)
+        r = requests.get(myURL, headers=hdr).json()
+        events_json += r["AdminAudits"]
+        #Get TotalCount from JSON
+        total_count = r["TotalCount"]
+        rowsCount += len(r["AdminAudits"])
+
+        if total_count > rowsCount:
+            offset += limit
+        else:
+            break;
+    if (len(events_json) > 0):
+        for adminauditevent in events_json:
+            adminauditevent["event_type"] = "admin_audit"
+
+    return(events_json)

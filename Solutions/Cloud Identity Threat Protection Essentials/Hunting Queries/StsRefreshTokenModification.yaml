@@ -1,7 +1,7 @@
 id: 4696e072-aca8-4a4f-bf05-89fddc5ac3c9
 name: Interactive STS refresh token modifications
 description: |
-  'This will show Active Directory Security Token Service (STS) refresh token modifications by Service Principals and Applications other than DirectorySync. Refresh tokens are used to validate identification and obtain access tokens.
+  'This query searches for Active Directory Security Token Service (STS) refresh token modifications by Service Principals and Applications other than DirectorySync. Refresh tokens are used to validate identification and obtain access tokens.
   This event is not necessarily an indication of malicious activity but can also be generated when legitimate administrators manually expire token validation or keep longer refresh tokens for better login experience with less prompts.
   Also an allowlist has been included to filter known accounts which can be customized after careful review of past historical activity.
   Analyze the results for unusual operations performed by administrators to extend a refresh token of a compromised account in order to extend the time they can use it without the need to re-authenticate (and thus potentially lose access).
@@ -14,8 +14,6 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AuditLogs
-queryFrequency: 1d
-queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -33,7 +31,7 @@ query: |
   | mv-expand TargetResourcesModProps
   | where tostring(TargetResourcesModProps.displayName) =~ 'StsRefreshTokensValidFrom'
   | extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
-  | where InitiatingUserOrApp !in (AllowedUserList)
+  | where InitiatingUserOrApp !in~ (AllowedUserList)
   | extend targetUserOrApp = TargetResources[0].userPrincipalName
   | extend eventName = tostring(TargetResourcesModProps.displayName)
   | extend oldStsRefreshValidFrom = todatetime(parse_json(tostring(TargetResourcesModProps.oldValue))[0])
@@ -42,14 +40,27 @@ query: |
   | extend tokenMinutesRemaining = datetime_diff('minute',TimeGenerated,newStsRefreshValidFrom)
   | project-reorder Result, AADOperationType
   | extend InitiatingIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
-  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingUserOrApp, IPCustomEntity = InitiatingIpAddress
+  | extend UserName = iff(InitiatingUserOrApp has '@', tostring(split(InitiatingUserOrApp, '@')[0]), '')
+  | extend UPNSuffix = iff(InitiatingUserOrApp has '@', tostring(split(InitiatingUserOrApp, '@')[1]), '')
+  | extend CloudApplicationName = iff(InitiatingUserOrApp !has '@', tostring(InitiatingUserOrApp), '')
+  | extend Account_0_Name = UserName
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = InitiatingIpAddress
+  | extend CloudApplication_0_Name = CloudApplicationName
 
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: InitiatingIpAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApplicationName
+version: 1.0.1

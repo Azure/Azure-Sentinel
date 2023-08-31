@@ -21,6 +21,13 @@ After deployment, you can run this playbook manually on an alert or attach it to
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Active%2520Directory%2FPlaybooks%2FReset-AADUserPassword%2Falert-trigger%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Active%2520Directory%2FPlaybooks%2FReset-AADUserPassword%2Falert-trigger%2Fazuredeploy.json)
 
+**Deploy with entity trigger**
+
+After deployment, you can run this playbook manually from an entity context in the incident.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FReset-AADUserPassword%2Fentity-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FReset-AADUserPassword%2Fentity-trigger%2Fazuredeploy.json)
+
 
 ## Prerequisites
 
@@ -57,3 +64,6 @@ New-AzRoleAssignment -ObjectId $MIGuid -RoleDefinitionName $SentinelRoleName -Sc
 **Alert Trigger**<br>
 ![Alert Trigger](./alert-trigger/images/alertTrigger_light.png)<br>
 ![Alert Trigger](./alert-trigger/images/alertTrigger_dark.png)<br>
+**Entity Trigger**<br>
+![Entity Trigger](./entity-trigger/images/entityTrigger_light.png)<br>
+![Entity Trigger](./entity-trigger/images/entityTrigger_dark.png)<br>

@@ -201,4 +201,4 @@ ThreatIntelligenceIndicator
 
 9. Select the Done editing button. You’ve created a new chart for your workbook 😀.
 
-**Congratulations, you have completed Module 7!**. You can now continue to **[Module 8 - Microsoft Sentinel Solutions](./Module-8-Azure-Sentinel-Solutions.md)**
+**Congratulations, you have completed Module 7!**. You can now continue to **[Module 8 - Microsoft Sentinel Solutions](./Module-8-Sentinel-Solutions.md)**

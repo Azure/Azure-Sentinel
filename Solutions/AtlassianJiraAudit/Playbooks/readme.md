@@ -57,13 +57,13 @@ All Logic Apps need to be updated with the correct ID's of the fields.
 | Closure Reason | customfield_10047 | Select List (Single choice) |
 | Tenant Name | customfield_10149 | Select List (Single Choice) |
 | Created At | customfield_10154 | Date Time Picker |
-| Att&ck Tactics | customfield_10055 | Select List (Multiple choices) |
-| Affected User | customfield_10058 | Text Field (Multiline) |
+| Att&ck Tactics | customfield_10155 | Select List (Multiple choices) |
+| Affected User | customfield_10158 | Text Field (Multiline) |
 | Subscription ID | customfield_10162 | Text Field (Singline) |
 | Sentinel Resource Group | customfield_10169 | Text Field (Singline) |
-| Sentinel Workspace Name | customfield_10070 | Text Field (Singline) |
+| Sentinel Workspace Name | customfield_10170 | Text Field (Singline) |
 | Sentinel Workspace ID | customfield_10172 | Text Field (Singline) |
-| Sentinel Incident ID | customfield_10172 | Text Field (Singline) |
+| Sentinel Incident ID | customfield_10173 | Text Field (Singline) |
 | Sentinel Incident ARM ID | customfield_10175 | Text Field (Singline) |
 
 The Att&ck Tactics list contains all Sentinel Tactics.

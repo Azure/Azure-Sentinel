@@ -1,0 +1,91 @@
+id: f090f8f4a-b986-42d2-b536-e0795c723e25
+name: Known Nylon Typhoon Registry modifications patterns
+description: |
+   'This query identifies instances where malware intentionally configures the browser settings for its use by modifying the following registry entries by Nylon Typhoon threat actor.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceRegistryEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1546.012
+query: |
+  let reg_paths = dynamic(["HKEY_CURRENT_USER\\Software\\Microsoft\\Internet Explorer\\Main", 
+                          "HKEY_CURRENT_USER\\Software\\Microsoft\\Internet Explorer\\Recovery", 
+                          "HKEY_CURRENT_USER\\Software\\Microsoft\\Internet Explorer\\Privacy", 
+                          "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ZoneMap"
+                          ]);
+  let reg_keys = dynamic(["Start Page", "DisableFirstRunCustomize", "RunOnceComplete", "RunOnceHasShown", "Check_Associations", "AutoRecover", "ClearBrowsingHistoryOnExit", "Completed", "IEHarden"]);
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where EventID == 4657
+  | where ObjectName has_any (reg_paths) and ObjectValueName has_any (reg_keys)
+  | summarize Count=count() by Computer, Account, ObjectName
+  | extend AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (
+  WindowsEvent
+  | where EventID == 4657 and EventData  has_any (reg_paths) and EventData has_any (reg_keys)
+  | extend ObjectName = tostring(EventData.ObjectName)
+  | extend ObjectValueName = tostring(EventData.ObjectValueName)
+  | where ObjectName has_any (reg_paths) and ObjectValueName has_any (reg_keys)
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | summarize Count=count() by Computer, Account, ObjectName
+  | extend AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (
+  Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID in (12, 13)
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | where TargetObject has_any (reg_paths) and TargetObject has_any (reg_keys)
+  | summarize Count=count() by Computer, UserName, tostring(TargetObject)
+  | extend AccountCustomEntity = UserName, HostCustomEntity = Computer
+  ),
+  (
+  imRegistry
+  | where RegistryKey has_any (reg_paths) and RegistryValue has_any (reg_keys)
+  | summarize Count=count() by Dvc, Username, RegistryKey
+  | extend AccountCustomEntity = Username, HostCustomEntity = Dvc
+  )
+  )
+  | extend NTDomain = tostring(split(AccountCustomEntity, '\\', 0)[0]), Name = tostring(split(AccountCustomEntity, '\\', 1)[0])
+  | extend HostName = tostring(split(HostCustomEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostCustomEntity, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1

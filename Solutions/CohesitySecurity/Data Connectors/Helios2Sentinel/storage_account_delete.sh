@@ -8,7 +8,7 @@ cd "$SCRIPTPATH"
 function get_storage_account_by_prefix()
 {
     az storage account list \
-        -g "$resourcegroup" \
+        -g "$resource_group" \
         | jq --arg v "$1" '.[] | select(.name|test($v)) | .name'
 }
 
@@ -21,7 +21,7 @@ function delete_storage_account_by_prefix()
         az storage account delete \
             --yes \
             -n "$STORAGE_ACCOUNT_TO_DELETED" \
-            -g "$resourcegroup"
+            -g "$resource_group"
     fi
 }
 

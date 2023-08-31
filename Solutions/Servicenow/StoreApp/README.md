@@ -98,7 +98,7 @@ To identify the incidents created from Microsoft Sentinel incidents, we will cre
 
 Install the application in your ServiceNow instance from the ServiceNow store:
 
-1. In the ServiceNow store, search for "Microsoft Azure Sentinel"
+1. In the ServiceNow store, search for "Microsoft Sentinel"
 
    ![Import the app](media/storeinstall1.png)
 

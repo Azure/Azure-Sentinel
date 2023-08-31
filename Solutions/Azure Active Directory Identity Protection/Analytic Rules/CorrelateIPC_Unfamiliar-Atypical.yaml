@@ -1,5 +1,5 @@
 id: a3df4a32-4805-4c6d-8699-f3c888af2f67
-name: Correlate Unfamiliar sign-in properties and atypical travel alerts
+name: Correlate Unfamiliar sign-in properties & atypical travel alerts
 description: |
   'The combination of an Unfamiliar sign-in properties alert and an Atypical travel alert about the same user within a +10m or -10m window is considered a high severity incident.'
 severity: High
@@ -20,13 +20,15 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-    let Alert1 = 
+    // We can use this configuration TimeDeltaInMinutes if you want to chnage the time window that we try to match the alerts
+    let TimeDeltaInMinutes = 10;
+    let Alert_UnfamiliarSignInProps = 
     SecurityAlert
     | where TimeGenerated > ago(1d)
-    | where ProductName == "Azure Active Directory Identity Protection"
-    | where AlertName == "Unfamiliar sign-in properties"
+    | where ProductName =~ "Azure Active Directory Identity Protection"
+    | where AlertName =~ "Unfamiliar sign-in properties"
     | mv-expand Entity = todynamic(Entities)
-    | where Entity.Type == "account"
+    | where Entity.Type =~ "account"
     | extend AadTenantId = tostring(Entity.AadTenantId)
     | extend AadUserId = tostring(Entity.AadUserId)
     | join kind=inner (
@@ -41,18 +43,18 @@ query: |
     $left.AadTenantId == $right.AccountTenantId,
     $left.AadUserId == $right.AccountObjectId
     | extend CompromisedEntity = iff(CompromisedEntity == "N/A" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)
-    | extend Alert1Time = TimeGenerated
-    | extend Alert1 = AlertName
-    | extend Alert1Severity = AlertSeverity
-    | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert1, Alert1Severity, Alert1Time, UserAccount, UserName
+    | extend Alert_UnfamiliarSignInProps_Time = TimeGenerated
+    | extend Alert_UnfamiliarSignInProps_Name = AlertName
+    | extend Alert_UnfamiliarSignInProps_Severity = AlertSeverity
+    | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, UserAccount, UserName
     ;
-    let Alert2 = 
+    let Alert_AtypicalTravels = 
     SecurityAlert
     | where TimeGenerated > ago(1d)
-    | where ProductName == "Azure Active Directory Identity Protection"
-    | where AlertName == "Atypical travel"
+    | where ProductName =~ "Azure Active Directory Identity Protection"
+    | where AlertName =~ "Atypical travel"
     | mv-expand Entity = todynamic(Entities)
-    | where Entity.Type == "account"
+    | where Entity.Type =~ "account"
     | extend AadTenantId = tostring(Entity.AadTenantId)
     | extend AadUserId = tostring(Entity.AadUserId)
     | join kind=inner (
@@ -67,30 +69,48 @@ query: |
     $left.AadTenantId == $right.AccountTenantId,
     $left.AadUserId == $right.AccountObjectId
     | extend CompromisedEntity = iff(CompromisedEntity == "N/A" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)
-    | extend Alert2Time = TimeGenerated
-    | extend Alert2 = AlertName
-    | extend Alert2Severity = AlertSeverity
-    | extend CurrentLocation = strcat(tostring(parse_json(tostring(parse_json(Entities)[2].Location)).CountryCode), "|", tostring(parse_json(tostring(parse_json(Entities)[2].Location)).State), "|", tostring(parse_json(tostring(parse_json(Entities)[2].Location)).City))
-    | extend PreviousLocation = strcat(tostring(parse_json(tostring(parse_json(Entities)[3].Location)).CountryCode), "|", tostring(parse_json(tostring(parse_json(Entities)[3].Location)).State), "|", tostring(parse_json(tostring(parse_json(Entities)[3].Location)).City))
-    | extend CurrentIPAddress = tostring(parse_json(Entities)[2].Address)
-    | extend PreviousIPAddress = tostring(parse_json(Entities)[3].Address)
-    | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert2, Alert2Severity, Alert2Time, CurrentIPAddress, PreviousIPAddress, CurrentLocation, PreviousLocation, UserAccount, UserName
+    | extend Alert_AtypicalTravels_Time = TimeGenerated
+    | extend Alert_AtypicalTravels_Name = AlertName
+    | extend Alert_AtypicalTravels_Severity = AlertSeverity
+    | extend ExtendedProperties_json= parse_json(ExtendedProperties)
+    | extend CurrentLocation = tostring(ExtendedProperties_json.["Current Location"])
+    | extend PreviousLocation = tostring(ExtendedProperties_json.["Previous Location"])
+    | extend CurrentIPAddress = tostring(ExtendedProperties_json.["Current IP Address"])
+    | extend PreviousIPAddress = tostring(ExtendedProperties_json.["Previous IP Address"])
+    | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, CurrentIPAddress, PreviousIPAddress, CurrentLocation, PreviousLocation, UserAccount, UserName, CompromisedEntity
     ;
-    Alert1
-    | join kind=inner Alert2 on UserAccount
-    | where abs(datetime_diff('minute', Alert1Time, Alert2Time)) <=10
-    | extend TimeDelta = Alert1Time - Alert2Time
-    | project UserAccount, Alert1, Alert1Time, Alert1Severity, Alert2, Alert2Time, Alert2Severity, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress, UserName
-    | extend AccountCustomEntity = UserAccount
-    | extend IPCustomEntity = CurrentIPAddress
+    Alert_UnfamiliarSignInProps
+    | join kind=inner Alert_AtypicalTravels on UserAccount
+    | where abs(datetime_diff('minute', Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Time)) <= TimeDeltaInMinutes
+    | extend TimeDelta = Alert_UnfamiliarSignInProps_Time - Alert_AtypicalTravels_Time
+    | project UserAccount, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress, UserName
+    | extend UserEmailName = split(UserAccount,'@')[0], UPNSuffix = split(UserAccount,'@')[1]
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: Name
+        columnName: UserEmailName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.3
+        columnName: CurrentIPAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PreviousIPAddress
+customDetails:
+    Alert1_Name: Alert_UnfamiliarSignInProps_Name
+    Alert1_Time: Alert_UnfamiliarSignInProps_Time
+    Alert1_Severity: Alert_UnfamiliarSignInProps_Severity
+    Alert2_Name: Alert_AtypicalTravels_Name
+    Alert2_Time: Alert_AtypicalTravels_Time
+    Alert2_Severity: Alert_AtypicalTravels_Severity
+    TimeDelta: TimeDelta
+    CurrentLocation: CurrentLocation
+    PreviousLocation: PreviousLocation
+    CurrentIPAddress: CurrentIPAddress
+    PreviousIPAddress: PreviousIPAddress
+version: 1.0.6
 kind: Scheduled

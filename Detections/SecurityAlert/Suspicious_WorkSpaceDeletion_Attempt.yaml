@@ -29,11 +29,16 @@ query: |
     | where TimeGenerated > ago(1d)
     | where ProductName == "Azure Active Directory Identity Protection"
     | where AlertName == "Sign-in from an infected device"
-    | mv-expand Entity = todynamic(Entities)
-    | where Entity.Type == "account"
-    | extend AadTenantId = tostring(Entity.AadTenantId)
-    | extend AadUserId = tostring(Entity.AadUserId)
-    | extend IpAddress = tostring(parse_json(Entities)[2].Address)
+    | mv-apply EntityAccount=todynamic(Entities) on
+    (
+    where EntityAccount.Type == "account"
+    | extend AadTenantId = tostring(EntityAccount.AadTenantId), AadUserId = tostring(EntityAccount.AadUserId)
+    )
+    | mv-apply EntityIp=todynamic(Entities) on
+    (
+    where EntityIp.Type == "ip"
+    | extend IpAddress = tostring(EntityIp.Address)
+    )
     | join kind=inner (
     IdentityInfo
     | distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName
@@ -64,7 +69,11 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.5
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: _ResourceId
+version: 1.0.6
 kind: Scheduled
 metadata:
     source:

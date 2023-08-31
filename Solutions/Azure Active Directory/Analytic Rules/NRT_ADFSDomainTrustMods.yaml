@@ -21,23 +21,34 @@ query: |
   //| where Result =~ "success"   // commenting out, as it may be interesting to capture failed attempts
   | mv-expand TargetResources
   | extend modifiedProperties = parse_json(TargetResources).modifiedProperties
-  | mv-expand modifiedProperties
-  | extend targetDisplayName = tostring(parse_json(modifiedProperties).displayName), NewDomainValue=tostring(parse_json(modifiedProperties).newValue)
+  | mv-apply Property = modifiedProperties on 
+    (
+        where Property.displayName =~ "LiveType"
+        | extend targetDisplayName = tostring(Property.displayName),
+                 NewDomainValue = tostring(Property.newValue)
+    )
   | extend Federated = iif(OperationName =~ "Set domain authentication", iif(NewDomainValue has "Federated", True, False), True)
   | where Federated == True
   | mv-expand AdditionalDetails
-  | extend UserAgent = iff(AdditionalDetails.key == "User-Agent",tostring(AdditionalDetails.value),"")
+  | mv-apply AdditionalDetail = AdditionalDetails on 
+    (
+        where AdditionalDetail.key =~ "User-Agent"
+        | extend UserAgent = tostring(AdditionalDetail.value)
+    )
   | extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
   | extend InitiatingIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
   | project-reorder TimeGenerated, OperationName, InitiatingUserOrApp, AADOperationType, targetDisplayName, Result, InitiatingIpAddress, UserAgent, CorrelationId, TenantId, AADTenantId
+  | extend Name = tostring(split(InitiatingUserOrApp,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUserOrApp,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: InitiatingUserOrApp
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: InitiatingIpAddress
-version: 1.0.0
+version: 1.0.1
 kind: NRT

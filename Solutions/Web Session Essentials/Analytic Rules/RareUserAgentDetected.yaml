@@ -1,0 +1,151 @@
+id: 2d50d937-d7f2-4c05-b151-9af7f9ec747e
+name: Detect presence of uncommon user agents in web requests (ASIM Web Session)
+description: |
+  'This rule assists in detecting rare user agents, which may indicate web browsing activity by an 
+    unconventional process different from the usual ones. The rule specifically searches for UserAgent 
+    strings that have not been seen in the past 14 days. This query will perform better when run over summarized data'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let lookBack = 14d;
+  let timeframe = 1h;
+  // calculate avg. eps(events per second)
+  let eps = materialize(_Im_WebSession(starttime=ago(1d))
+      | project TimeGenerated
+      | summarize AvgPerSec = count() / 3600 by bin(TimeGenerated, 1h)
+      | summarize round(avg(AvgPerSec))
+      );
+  let summarizationexist  = (
+      union isfuzzy=true 
+          (
+          WebSession_Summarized_SrcInfo_CL
+          | where EventTime_t > ago(1d) 
+          | project v = int(2)
+          ),
+          (
+          print int(1) 
+          | project v = print_0
+          )
+      | summarize maxv = max(v)
+      | extend sumexist = (maxv > 1)
+      );
+  let allUserAgents = union isfuzzy=true
+          (
+          (datatable(exists: int, sumexist: bool)[1, false]
+          | where toscalar(eps) > 1000
+          | join (summarizationexist) on sumexist)
+          | join (
+              _Im_WebSession(starttime=todatetime(ago(2d)), endtime=bin(ago(timeframe), 1h), eventresult='Success')
+              | where isnotempty(HttpUserAgent)
+              | summarize UserAgentsSet =  make_set(HttpUserAgent) // This could contain upto 10,48,576 unique values
+              | extend exists=int(1)
+              )
+              on exists
+          | project-away exist*, maxv, sum*
+          ),
+          (
+          (datatable(exists: int, sumexist: bool)[1, false]
+          | where toscalar(eps) between (501 .. 1000)
+          | join (summarizationexist) on sumexist)
+          | join (
+              _Im_WebSession(starttime=todatetime(ago(3d)), endtime=bin(ago(timeframe), 1h), eventresult='Success')
+              | where isnotempty(HttpUserAgent)
+              | summarize UserAgentsSet = make_set(HttpUserAgent) // This could contain upto 10,48,576 unique values
+              | extend exists=int(1)
+              )
+              on exists
+          | project-away exist*, maxv, sum*
+          ),
+          (
+          (datatable(exists: int, sumexist: bool)[1, false]
+          | where toscalar(eps) <= 500
+          | join (summarizationexist) on sumexist)
+          | join (
+              _Im_WebSession(starttime=todatetime(ago(4d)), endtime=bin(ago(timeframe), 1h), eventresult='Success')
+              | where isnotempty(HttpUserAgent)
+              | summarize UserAgentsSet = make_set(HttpUserAgent) // This could contain upto 10,48,576 unique values
+              | extend exists=int(1)
+              )
+              on exists
+          | project-away exist*, maxv, sum*
+          ),
+          (
+          WebSession_Summarized_SrcInfo_CL
+          | where EventTime_t between (ago(14d) .. ago(timeframe))
+              and isnotempty(HttpUserAgent_s)
+              and EventResult_s =~ 'Success'
+          | summarize UserAgentsSet = make_set(HttpUserAgent_s) // This could contain upto 10,48,576 unique values
+          );
+  _Im_WebSession (starttime=bin(ago(timeframe), 1h), eventresult='Success')
+  | project
+      SrcIpAddr,
+      SrcUsername,
+      SrcHostname,
+      DstIpAddr,
+      DstPortNumber,
+      Url,
+      HttpUserAgent,
+      TimeGenerated
+  | where isnotempty(HttpUserAgent) and HttpUserAgent !in~ (allUserAgents)
+  | summarize
+      EventCount=count(),
+      EventStartTime=min(TimeGenerated),
+      EventEndTime=max(TimeGenerated)
+      by
+      SrcIpAddr,
+      SrcUsername,
+      SrcHostname,
+      DstIpAddr,
+      Url,
+      HttpUserAgent,
+      DstPortNumber
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  EventCount: EventCount
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+  HttpUserAgent: HttpUserAgent
+  DstPortNumber: DstPortNumber
+alertDetailsOverride:
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with IP '{{SrcIpAddr}}' has been observed accessing URL '{{Url}}' using a rare user agent."
+  alertDescriptionFormat: "The user agent '{{HttpUserAgent}}' has not been observed in the past 14 days. Conduct research on the user agent string to determine if it is associated with a known legitimate bot or if it is potentially linked to malicious activity. The URL is associated with the IP address '{{DstIpAddr}}'."
+version: 1.0.0
+kind: Scheduled
