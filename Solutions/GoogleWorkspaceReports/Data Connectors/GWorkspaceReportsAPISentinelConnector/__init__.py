@@ -28,7 +28,9 @@ pickle_str = os.environ['GooglePickleString']
 pickle_string = base64.b64decode(pickle_str)
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
-MAX_SCRIPT_EXEC_TIME_MINUTES = 10
+MAX_SCRIPT_EXEC_TIME_MINUTES = os.getenv('MAX_SCRIPT_EXEC_TIME_MINUTES',10)
+schedule = os.getenv('Schedule')
+functionTimeout = os.getenv('FunctionTimeout')
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
 activities = [
             "access_transparency", 
