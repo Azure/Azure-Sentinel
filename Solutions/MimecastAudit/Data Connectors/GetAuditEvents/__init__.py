@@ -5,7 +5,7 @@ import os
 import azure.functions as func
 
 from Helpers.date_helper import DateHelper
-from Parsers.audit_parser import AuditParser
+from TransformData.audit_parser import AuditParser
 from Helpers.request_helper import RequestHelper
 from Helpers.response_helper import ResponseHelper
 from Helpers.azure_monitor_collector import AzureMonitorCollector
