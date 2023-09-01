@@ -10,7 +10,7 @@ from ..Helpers.azure_monitor_collector import AzureMonitorCollector
 from ..Models.Request.get_ttp_url_logs import GetTTPUrlLogsRequest
 from ..Models.Error.errors import MimecastRequestError, AzureMonitorCollectorRequestError
 from ..Models.Enum.mimecast_endpoints import MimecastEndpoints
-from ..Parsers.ttp_url_parser import TTPUrlParser
+from ..TransformData.ttp_url_parser import TTPUrlParser
 
 
 def main(mytimer: func.TimerRequest, checkpoint3: str) -> str:

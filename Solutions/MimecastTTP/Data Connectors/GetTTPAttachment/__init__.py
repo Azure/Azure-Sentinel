@@ -10,7 +10,7 @@ from ..Helpers.azure_monitor_collector import AzureMonitorCollector
 from ..Models.Request.get_ttp_attachment_logs import GetTTPAttachmentLogsRequest
 from ..Models.Error.errors import MimecastRequestError, AzureMonitorCollectorRequestError
 from ..Models.Enum.mimecast_endpoints import MimecastEndpoints
-from ..Parsers.ttp_attachment_parser import TTPAttachmentParser
+from ..TransformData.ttp_attachment_parser import TTPAttachmentParser
 
 
 def main(mytimer: func.TimerRequest, checkpoint1: str) -> str:

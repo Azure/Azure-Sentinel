@@ -10,7 +10,7 @@ from ..Helpers.azure_monitor_collector import AzureMonitorCollector
 from ..Models.Request.get_ttp_impersonation_logs import GetTTPImpersonationLogsRequest
 from ..Models.Error.errors import MimecastRequestError, AzureMonitorCollectorRequestError
 from ..Models.Enum.mimecast_endpoints import MimecastEndpoints
-from ..Parsers.ttp_impersonation_parser import TTPImpersonationParser
+from ..TransformData.ttp_impersonation_parser import TTPImpersonationParser
 
 
 def main(mytimer: func.TimerRequest, checkpoint2: str) -> str:
