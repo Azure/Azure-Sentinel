@@ -26,7 +26,7 @@ ParserQuery: |
   let parser = (
       disabled:bool = false
   ) {
-      let EventIDLookup = datatable(EventID:int, EventType:string, EventSubtype:string, GroupType:string)
+      let EventIDLookup = datatable(EventID:int, EventType:string, EventSubType:string, GroupType:string)
       [   
           "4720", "UserCreated", "UserCreated", "", 
           "4722", "UserEnabled", "UserModified", "", 
@@ -65,13 +65,13 @@ ParserQuery: |
       let UserEventID = toscalar(
           EventIDLookup
           | where not(disabled)
-          | where EventSubtype in("UserCreated","UserModified") 
+          | where EventSubType in("UserCreated","UserModified") 
           | summarize make_set(EventID)
       );
       let GroupEventID = toscalar(
           EventIDLookup
           | where not(disabled)
-          | where EventSubtype in("GroupCreated","GroupModified")  
+          | where EventSubType in("GroupCreated","GroupModified")  
           | summarize make_set(EventID)
       );
       union (
@@ -216,12 +216,13 @@ ParserQuery: |
               GroupIdType = iif(isnotempty(GroupId), "SID","")
       )
   | lookup EventIDLookup on EventID
-  | extend UpdatedPropertyName = EventSubtype
+  | extend UpdatedPropertyName = EventSubType
   | invoke _ASIM_ResolveDvcFQDN ("Computer")
   | lookup UserTypeLookup on ActorOriginalUserType
-  | extend DvcId = coalesce(_ResourceId, SourceComputerId)
+  | extend 
+      DvcId = coalesce(_ResourceId, SourceComputerId),
+      EventOriginalType = tostring(EventID)
   | project-rename 
-      EventOriginalType = tostring(EventID),
       EventUid = _ItemId
   | extend 
       ActorDomain = SubjectDomainName,
@@ -239,7 +240,7 @@ ParserQuery: |
       EventStartTime = TimeGenerated,
       EventVendor = 'Microsoft',
       Hostname = DvcHostname
-  | project-away Subject*, Computer, _ResourceId, SourceComputerId
+  | project-away Subject*, Computer, _ResourceId, SourceComputerId,EventID
   | extend
       ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
       ActorUserType = _ASIM_GetUserType(ActorUsername,ActorUserId),
