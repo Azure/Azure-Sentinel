@@ -1,0 +1,50 @@
+id: 58b3074c-519b-4812-b784-e8bd7712089a
+Function:
+  Title: Parser for SymantecProxySG
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: SymantecProxySG
+FunctionAlias: SymantecProxySG
+FunctionQuery: |
+    Syslog
+    | where Computer in ("datasource") and Facility == "local0"
+    // Parse 1/3 of SyslogMessage. Seperated due to extract_all() operator limited to 16 regex groups
+    | extend Parser = extract_all(@'^(\d{4}\-\d{2}-\d{2})\s+(\d{2}\:\d{2}:\d{2})\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\"([\w\s\)\(;\/_-]+)\"\s+(\S+)\s+(\d+)\s+([\S\s]+)',dynamic([1,2,3,4,5,6,7,8,9,10,11,12]), SyslogMessage)
+    | mv-expand Parser
+    | extend logTime = todatetime(strcat(tostring(Parser[0]),'T',tostring(Parser[1]))), 
+        time_taken = tolong(Parser[2]), 
+        c_ip = tostring(Parser[3]), 
+        cs_userdn = tostring(Parser[4]), 
+        cs_auth_groups= replace(@"%20",@'',tostring(Parser[5])), 
+        exception_id = tostring(Parser[6]), 
+        sc_filter_result = tostring(Parser[7]), 
+        cs_categories = split(Parser[8],";"), 
+        cs_referrer = tostring(Parser[9]), 
+        sc_status = tostring(Parser[10]), 
+        RemainingString1 = Parser[11]
+    // Parse 2/3 of SyslogMessage
+    | extend Parser2 = extract_all(@'^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\"([\w\s\)\,\.\(\;\:\/\_\-\|\}\{\%\=\+\?\<\>\#\]\[]+)\"|(\S+))\s+(\S+)\s+(\S+)\s+([\S\s]+)',dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), tostring(RemainingString1))
+    | mv-expand Parser2
+    // Parse 3/3 of SyslogMessage
+    | extend s_action = tostring(Parser2[0]), 
+        cs_method= tostring(Parser2[1]), 
+        content_type = split(replace(@"%20",@'',tostring(Parser2[2])),";"), 
+        cs_uri_scheme = tostring(Parser2[3]), 
+        cs_host = tostring(Parser2[4]), 
+        cs_uri_port = tostring(Parser2[5]), 
+        cs_uri_path = tostring(Parser2[6]), 
+        cs_uri_query = tostring(Parser2[7]), 
+        cs_uri_extension = tostring(Parser2[8]), 
+        cs_user_agent = tostring(Parser2[10]), s_ip = tostring(Parser2[12]), 
+        sent_bytes =  tolong(Parser2[13]), RemainingString2 = Parser2[14]
+    | extend Parser3 = extract_all(@'^(\d+)\s+(\S+)\s+\"([\w].+)\"\s+\"([\w].+)\"\s+(\d+)\s+(\S+)\s+(\S+)',dynamic([1,2,3,4,5,6,7]), tostring(RemainingString2))
+    | mv-expand Parser3
+    | extend received_bytes = tolong(Parser3[0]), 
+        virus_id = tostring(Parser3[1]), 
+        app_name = tostring(Parser3[2]), 
+        app_operation = tostring(Parser3[3]), 
+        src_port = tostring(Parser3[4]), 
+        cs_threat_risk = tostring(Parser3[6]),
+        country = replace(@"%20",@' ',tostring(Parser3[5]))
+    | project-away Parser, Parser2, Parser3, RemainingString1, RemainingString2

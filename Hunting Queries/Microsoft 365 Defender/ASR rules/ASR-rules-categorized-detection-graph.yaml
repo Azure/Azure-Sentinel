@@ -1,0 +1,26 @@
+id: 4a7bf574-fe5f-4168-97e7-5a8aa19a5eed
+name: ASR rules categorized detection graph
+description: |
+  This query offers daily categorization of ASR rules, helping SOC analysts monitor specific categories like office-related activities or WMI among the 16 rules. 
+  It aids in tracking detection rates and organizational trends.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+tactics: []
+query: |
+   DeviceEvents
+   | where Timestamp > ago(7d)
+   | where ActionType startswith "asr"
+   | extend Parsed = parse_json(AdditionalFields)
+   // | where Parsed.IsAudit == "true" 
+   | where Parsed.IsAudit == "false" 
+   | summarize Email = countif(ActionType in ("AsrExecutableEmailContentBlocked", "AsrOfficeCommAppChildProcessBlocked")),
+               Script = countif(ActionType in ("AsrObfuscatedScriptBlocked", "AsrScriptExecutableDownloadBlocked")),
+               WMI = countif(ActionType in ("AsrPersistenceThroughWmiBlocked", "AsrPsexecWmiChildProcessBlocked")),
+               OfficeApp = countif(ActionType in ("AsrOfficeChildProcessBlocked", "AsrOfficeMacroWin32ApiCallsBlocked", "AsrExecutableOfficeContentBlocked", "AsrOfficeProcessInjectionBlocked")),
+               3rdPartyApp = countif(ActionType == "AsrAdobeReaderChildProcessBlocked"),
+               WindowsCredentials = countif(ActionType == "AsrLsassCredentialTheftBlocked"),
+               PolymorphicThreats = countif(ActionType in ("AsrUntrustedExecutableBlocked", "AsrUntrustedUsbProcessBlocked", "AsrRansomwareBlocked", "AsrVulnerableSignedDriverBlocked")) by bin(Timestamp, 1d)
+   | render columnchart
+   
