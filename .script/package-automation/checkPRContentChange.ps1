@@ -1,8 +1,15 @@
-param ($solutionName, $pullRequestNumber, $runId)
+param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey)
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 
 try {
     $customProperties = @{ 'RunId' = "$runId"; 'PullRequestNumber' = "$pullRequestNumber"; "EventName" = "CheckContentPR"; }
 
+    if ($instrumentationKey -ne '')
+    {
+        Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CheckContentPR" -CustomProperties $customProperties
+
+        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CheckContentPR started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+    }
     function GetValidDataConnectorFileNames { 
         Param
         (
@@ -28,7 +35,7 @@ try {
     Write-Host "List of files in Pull Request: $diff"
 
     # FILTER OUT FILES AND CHECK IF THERE ARE ANY CHNAGES IN FILES BY WHICH USER CAN CREATE PACKAGE.
-    $filterDataFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) }
+    $filterDataFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
 
     $filterAnalyticRuleFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Analytic Rules/*" } | Where-Object { $_ -match ([regex]::Escape(".yaml") -or ([regex]::Escape(".yml"))) }
 
@@ -102,11 +109,21 @@ try {
         Write-Host "Changes found in Content Package!"
         Write-Output "hasContentPackageChange=$true" >> $env:GITHUB_OUTPUT
         $customProperties["hasContentPackageChange"] = 'true'
+
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CheckContentPR" -CustomProperties $customProperties
+        }
     }
     else {
         Write-Host "Changes Not found in Content Package"
         Write-Output "hasContentPackageChange=$false" >> $env:GITHUB_OUTPUT
         $customProperties = @{ 'RunId' = "$runId"; 'PullRequestNumber' = "$pullRequestNumber"; "EventName" = "CheckContentPR"; "hasContentPackageChange" = "false"; }
+
+        if ($instrumentationKey -ne '')
+        {
+            Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CheckContentPR" -CustomProperties $customProperties
+        }
     }
 }
 catch {
@@ -115,6 +132,10 @@ catch {
     $errorInfo = $_.Exception
     Write-Output "Error Details $errorDetails , Error Info $errorInfo"
     
+    if ($instrumentationKey -ne '')
+    {
+        Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "CheckContentPR : Error occured in catch block: $_"; 'EventName' = "CheckContentPR"; "hasContentPackageChange" = "false"; }
+    }
     Write-Host "Package-generator: Error occured in catch block!"
     exit 1
 }

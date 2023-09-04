@@ -198,5 +198,7 @@ export enum ConnectorCategory {
   AzureDevOpsAuditing="AzureDevOpsAuditing",
   ThreatIntelligenceIndicator="ThreatIntelligenceIndicator",
   MicrosoftPurviewInformationProtection="MicrosoftPurviewInformationProtection",
-  Dynamics365Activity="Dynamics365Activity"
+  Dynamics365Activity="Dynamics365Activity",
+  CrowdstrikeReplicatorV2="CrowdstrikeReplicatorV2",
+  BloodHoundEnterprise="BloodHoundEnterprise"
 }
