@@ -135,12 +135,12 @@ class Auth0Connector:
                         self.sentinel.flush()
                     if self.check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
-                        return
+                        break
                 except Exception as err:
                     logging.error("Something wrong. Exception error text: {}".format(err))
                     break
             return last_log_id, events           
-        logging.info(f'\t New last log id: {last_log_id}\n at date {events[0]["date"]}. Events extracted.')
+        #logging.info(f'\t New last log id: {last_log_id}\n at date {events[0]["date"]}. Events extracted.')
         return last_log_id, events
 
     def _get_last_log_id(self, config: dict) -> Union[str, None]:
