@@ -1,12 +1,9 @@
 ﻿using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Schema.Generation;
 using Newtonsoft.Json.Schema;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using Newtonsoft.Json;
 
 namespace Kqlvalidations.Tests
 {
@@ -25,56 +22,76 @@ namespace Kqlvalidations.Tests
         public override List<string> GetFilesNames()
         {
             List<string> validFiles = new List<string>();
+
             try
             {
                 var directoryPaths = GetDirectoryPaths();
+                var gitHubApiClient = GitHubApiClient.Instance;
 
-                return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
+                // Fetch the PR number using the singleton instance
+                int prNumber = gitHubApiClient.GetPullRequestNumber();
+
+                var basePath = Utils.GetTestDirectory(TestFolderDepth);
+                var prFilesListModified = new List<string>();
+
+                if (prNumber != 0)
                 {
-                    var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories)?.ToList();
+                    // Fetch pull request files using the singleton instance
+                    var prFiles = gitHubApiClient.GetPullRequestFiles();
 
-                    if (files != null)
+                    foreach (var file in prFiles)
                     {
-                        files.ForEach(filePath =>
+                        var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
+                        prFilesListModified.Add(modifiedFile);
+                    }
+                }
+
+                foreach (var directoryPath in directoryPaths)
+                {
+                    var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories);
+
+                    if (prNumber != 0 && prFilesListModified != null && prFilesListModified.Count != 0)
+                    {
+                        files = files.Where(file => prFilesListModified.Contains(file)).ToArray();
+                    }
+
+                    foreach (var filePath in files)
+                    {
+                        try
                         {
-                            try
-                            {
-                                JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
+                            JSchema dataConnectorJsonSchema = JSchema.Parse(File.ReadAllText("DataConnectorSchema.json"));
 
-                                var jsonString = File.ReadAllText(filePath);
-                                JObject dataConnectorJsonObject = JObject.Parse(jsonString);
+                            var jsonString = File.ReadAllText(filePath);
+                            JObject dataConnectorJsonObject = JObject.Parse(jsonString);
 
-                                if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
-                                {
-                                    validFiles.Add(filePath);
-                                }
-                                else
-                                {
-                                    throw new Exception("Invalid JSON schema for file: " + filePath);
-                                }
-                            }
-                            catch (JsonReaderException ex)
+                            if (dataConnectorJsonObject.IsValid(dataConnectorJsonSchema))
                             {
-                                Console.WriteLine("Invalid JSON file: " + filePath);
-                                Console.WriteLine("Error message: " + ex.Message);
+                                validFiles.Add(filePath);
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                Console.WriteLine("An error occurred while processing file: " + filePath);
-                                Console.WriteLine("Error message: " + ex.Message);
+                                throw new Exception("Invalid JSON schema for file: " + filePath);
                             }
-                        });
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log the error and continue processing other files
+                            Console.WriteLine("An error occurred while processing file: " + filePath);
+                            Console.WriteLine("Error message: " + ex.Message);
+                        }
                     }
-                    else
-                    {
-                        Console.WriteLine("No JSON files found in directory: " + directoryPath);
-                    }
+                }
 
-                    return accumulator.Concat(validFiles).ToList();
-                });
+                if (validFiles.Count == 0)
+                {
+                    validFiles.Add("NoFile.json");
+                }
+
+                return validFiles;
             }
             catch (Exception ex)
             {
+                // Log the error
                 Console.WriteLine("An error occurred while retrieving directory paths.");
                 Console.WriteLine("Error message: " + ex.Message);
             }
