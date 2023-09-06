@@ -14,7 +14,6 @@ from greynoise import GreyNoise
 from .stixGen import GreyNoiseStixGenerator
 
 
-
 REQUIRED_ENVIRONMENT_VARIABLES = [
     "GREYNOISE_KEY",
     "CLIENT_ID",
