@@ -7,6 +7,7 @@ from collections import namedtuple
 
 import msal
 import requests
+from requests.exceptions import HTTPError
 from requests_ratelimiter import LimiterSession
 import azure.functions as func
 from greynoise import GreyNoise
@@ -91,6 +92,7 @@ class GreuNoiseSentinelUpdater(object):
                 error_code = result.get("error")
                 error_message = result.get("error_description")
                 logging.info("Error acquiring token for tenant with code: {0}".format(error_code))
+                logging.info(error_message)
                 raise ValueError(error_message)
 
         except requests.exceptions.RequestException as e:
@@ -130,8 +132,11 @@ class GreuNoiseSentinelUpdater(object):
                                         json=payload)
             response.raise_for_status()
         except requests.HTTPError as e:
-            logging.error(e)
-        
+            logging.error('Did you add the Azure Sentinel Contributor role to your service principal?')
+            logging.error(e.response.text)
+            logging.error('Cannot upload indicators to Azure Sentinel, exiting.')
+            sys.exit(1)
+            
         return response.json()
 
 
@@ -150,7 +155,7 @@ class GreuNoiseSentinelUpdater(object):
         token = self.get_token()
         while not complete:
             try:
-                if self.greynoise_size <= 1000:
+                if self.greynoise_size <= 2000:
                     payload = self.session.query(
                         query=self.greynoise_query,
                         size=self.greynoise_size,
@@ -158,7 +163,9 @@ class GreuNoiseSentinelUpdater(object):
                     )
                 else:
                     payload = self.session.query(
-                        query=self.greynoise_query, scroll=scroll
+                        query=self.greynoise_query, 
+                        scroll=scroll,
+                        size=2000
                     )
 
                 # this protects from bad / invalid queries
@@ -181,7 +188,7 @@ class GreuNoiseSentinelUpdater(object):
                         # reset counter and stix_objects
                         counter = 0
                         stix_objects = []
-                        logging.info("Sent 100 GreyNoise indicators to Sentinel" )
+                        logging.debug("Sent 100 GreyNoise indicators to Sentinel" )
 
 
                 # the scroll is for pagination but does not always exist because
