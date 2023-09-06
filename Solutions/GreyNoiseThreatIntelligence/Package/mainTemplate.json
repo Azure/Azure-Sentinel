@@ -34,6 +34,12 @@
     "_solutionVersion": "3.0.0",
     "solutionId": "greynoiseintelligenceinc1681236078693.greynoise-byol-enterprise",
     "_solutionId": "[variables('solutionId')]",
+    "analyticRuleVersion1": "1.0.0",
+    "analyticRulecontentId1": "e50657d7-8bca-43ff-a647-d407fae440d6",
+    "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
+    "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
+    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1'))))]",
+    "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('_analyticRulecontentId1'),'-', variables('analyticRuleVersion1'))))]",
     "uiConfigId1": "GreyNoise2SentinelAPI",
     "_uiConfigId1": "[variables('uiConfigId1')]",
     "dataConnectorContentId1": "GreyNoise2SentinelAPI",
@@ -46,6 +52,124 @@
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "GreyNoise_IPEntity_CustomSecurityLog_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRulecontentId1')]",
+              "apiVersion": "2022-04-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "This query maps GreyNoise IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in CommonSecurityLog.",
+                "displayName": "GreyNoise TI Map IP Entity to CommonSecurityLog",
+                "enabled": false,
+                "query": "let IPRegex = '[0-9]{1,3}\\\\.[0-9]{1,3}\\\\.[0-9]{1,3}\\\\.[0-9]{1,3}';\nlet dt_lookBack = 1h; // Look back 1 hour for CommonSecurityLog events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where SourceSystem == 'GreyNoise'\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\";\n// Perform a join between IP indicators and CommonSecurityLog events\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      CommonSecurityLog\n      | where TimeGenerated >= ago(dt_lookBack)\n      | extend MessageIP = extract(IPRegex, 0, Message)\n      | extend CS_ipEntity = iff(isnotempty(SourceIP), SourceIP, DestinationIP)\n      | extend CS_ipEntity = iff(isempty(CS_ipEntity) and isnotempty(MessageIP), MessageIP, CS_ipEntity)\n      | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.CS_ipEntity\n  // Filter out logs that occurred after the expiration of the corresponding indicator\n  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and CS_ipEntity, and keep the log entry with the latest timestamp\n  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, CS_ipEntity\n  // Select the desired output fields\n  | project timestamp = CommonSecurityLog_TimeGenerated, SourceIP, DestinationIP, MessageIP, Message, DeviceVendor, DeviceProduct, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, TI_ipEntity, CS_ipEntity, LogSeverity, DeviceAction, Type\n",
+                "queryFrequency": "PT4H",
+                "queryPeriod": "P14D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "ThreatIntelligenceIndicator"
+                    ],
+                    "connectorId": "ThreatIntelligence"
+                  },
+                  {
+                    "dataTypes": [
+                      "CommonSecurityLog"
+                    ],
+                    "connectorId": "CEF"
+                  },
+                  {
+                    "dataTypes": [
+                      "ThreatIntelligenceIndicator"
+                    ],
+                    "connectorId": "MicrosoftDefenderThreatIntelligence"
+                  },
+                  {
+                    "dataTypes": [
+                      "ThreatIntelligenceIndicator"
+                    ],
+                    "connectorId": "GreyNoise2SentinelAPI"
+                  }
+                ],
+                "tactics": [
+                  "Impact"
+                ],
+                "entityMappings": [
+                  {
+                    "fieldMappings": [
+                      {
+                        "identifier": "Address",
+                        "columnName": "CS_ipEntity"
+                      }
+                    ],
+                    "entityType": "IP"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
+              "properties": {
+                "description": "GreyNoiseThreatIntelligence Analytics Rule 1",
+                "parentId": "[variables('analyticRuleId1')]",
+                "contentId": "[variables('_analyticRulecontentId1')]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "GreyNoiseThreatIntelligence",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "JP Bourget jp@bluecycle.net"
+                },
+                "support": {
+                  "name": "GreyNoise",
+                  "email": "support@greynoise.io",
+                  "tier": "Partner",
+                  "link": "https://www.greynoise.io/contact/general"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_analyticRulecontentId1')]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "GreyNoise TI Map IP Entity to CommonSecurityLog",
+        "contentProductId": "[variables('_analyticRulecontentProductId1')]",
+        "id": "[variables('_analyticRulecontentProductId1')]",
+        "version": "[variables('analyticRuleVersion1')]"
+      }
+    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
@@ -413,7 +537,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "GreyNoiseThreatIntelligence",
         "publisherDisplayName": "GreyNoise",
-        "descriptionHtml": "<p><strong>Note:</strong> <em>There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</em></p>\n<p>The <a href=\"https://www.greynoise.io/\">GreyNoise Threat Intelligence</a> solution for Microsoft Sentinel provides context to IP addresses seen in your environment by querying the GreyNoise API.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> <em>There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</em></p>\n<p>The <a href=\"https://www.greynoise.io/\">GreyNoise Threat Intelligence</a> solution for Microsoft Sentinel provides context to IP addresses seen in your environment by querying the GreyNoise API.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -437,6 +561,11 @@
         "dependencies": {
           "operator": "AND",
           "criteria": [
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRulecontentId1')]",
+              "version": "[variables('analyticRuleVersion1')]"
+            },
             {
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId1')]",
