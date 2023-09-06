@@ -1,0 +1,89 @@
+id: 6a71687f-00cf-44d3-93fc-8cbacc7b5615
+name: Detect potential presence of a malicious file with a double extension (ASIM Web Session)
+description: |
+  'Double extension vulnerability is a significant concern in file uploads, as it can lead to various 
+    issues if an attacker successfully uploads a virus-infected file.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - Persistence
+  - CommandAndControl
+relevantTechniques:
+  - T1036
+  - T1505
+  - T1071
+query: |
+  let common_file_ext_list = dynamic([".txt", ".xlsx", ".doc", ".docx", ".csv", ".pdf", ".png", ".jpg", ".jpeg"]); // Add list of common files as per your environment
+  _Im_WebSession (starttime=ago(1h), eventresult='Success')
+  | where HttpRequestMethod in~ ("POST", "PUT") 
+  | project
+      Url,
+      SrcIpAddr,
+      SrcUsername,
+      SrcHostname,
+      DstIpAddr,
+      DstPortNumber,
+      DstHostname,
+      TimeGenerated
+  | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]), '/')[-1])
+  | extend FileWithdualextension = extract(@'([\w-]+\.\w+\.\w+)$', 1, requestedFileName, typeof(string))
+  | extend SecondExt = tostring(split(FileWithdualextension, '.')[-1])
+  | where strcat('.', SecondExt) in~ (common_file_ext_list) // Second extension is mostly from the common files
+  | summarize
+      EventCount=count(),
+      EventStartTime=min(TimeGenerated),
+      EventEndTime=max(TimeGenerated)
+      by
+      SrcIpAddr,
+      Url,
+      FileWithdualextension,
+      SrcUsername,
+      SrcHostname,
+      DstIpAddr,
+      DstPortNumber,
+      DstHostname
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileWithdualextension
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  EventCount: EventCount
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+  DstHostname: DstHostname
+alertDetailsOverride:
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with IP address '{{SrcIpAddr}}' has been observed with posting potentially risky dual extension file"
+  alertDescriptionFormat: "User posted file '{{FileWithdualextension}}' which potentially contain dual extensions. This type of activity could be malicious and performed to bypass file upload filters or security measures implemented by the application. Destination server name this request was targetted to - '{{DstHostname}}'"
+version: 1.0.0
+kind: Scheduled

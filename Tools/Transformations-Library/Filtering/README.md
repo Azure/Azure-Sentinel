@@ -63,3 +63,20 @@ OfficeActivity | where OrganizationName == 'contoso-<country_name>.onmicrosoft.c
 ```
 
 This will of course vary for each implementation and data type, but this gives an idea on how to do it.
+
+## Limitations
+
+* Microsoft.Insights/dataCollectionRules must be deployed in same location than their target Azure Logs Analytics.
+* From a syntax perspective
+  * Targeted table name is defined by streams value (Microsoft-Table-AWSVPCFlow, Microsoft-Syslog...). See documentation for supported values.
+
+
+## References
+
+* https://learn.microsoft.com/en-us/azure/sentinel/data-transformation
+* https://learn.microsoft.com/en-us/azure/sentinel/configure-data-transformation
+* https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/data-collection-transformations
+* https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-workspace-transformations-portal
+* https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/microsoft-sentinel-support-for-ingestion-time-data/ba-p/3244531
+* https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Transformations-Library
+* https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Transformations-Library/Filtering/FilteringRowsDCR.json
