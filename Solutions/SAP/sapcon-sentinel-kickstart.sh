@@ -269,6 +269,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--abapserver <servername>"
 		echo "--systemnr <system number>"
 		echo "--sid <SID>"
+  		echo "--hostnetwork"
 		echo "--clientnumber <client number>"
 		echo "--messageserverhost <servername>"
 		echo "--messageserverport <servername>"
