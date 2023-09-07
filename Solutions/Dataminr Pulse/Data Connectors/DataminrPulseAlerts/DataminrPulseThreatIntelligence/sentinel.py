@@ -125,7 +125,6 @@ class MicrosoftSentinel:
                     url=create_indicator_url,
                     headers=headers,
                     data=json.dumps(indicators_data),
-                    ssl=False,
                 )
                 if response.status >= 200 and response.status <= 299:
                     applogger.info(
