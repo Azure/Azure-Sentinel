@@ -136,6 +136,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--keymode [kvmi|kvsi]"
 		echo "--configpath <path>"
 		echo "--sdk <filename>"
+		echo "--hostnetwork"
 		echo "--network <network>"
 		echo "--appid <guid>"
 		echo "--appsecret <secret>"
