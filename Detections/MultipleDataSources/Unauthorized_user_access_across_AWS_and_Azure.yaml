@@ -31,7 +31,8 @@ relevantTechniques:
   - T1580
   - T1619
 query: |
-  '// Define a variable 'AwsAlert' to collect Unauthorized user access alerts from AWS GuardDuty table
+  '
+    // Define a variable 'AwsAlert' to collect Unauthorized user access alerts from AWS GuardDuty table
     let AwsAlert = materialize (
         AWSGuardDuty
         | where ActivityType has_any ("UnauthorizedAccess:IAMUser/TorIPCaller", "UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom", 
@@ -74,35 +75,35 @@ query: |
             InstanceType,
             APICallName,
             APICallCount      
-    );
-    // Define a variable 'Azure_sigin' to collect Azure portal Signing activity from SigninLogs Table
-    let Azure_sigin = materialize (SigninLogs
-        | where AppDisplayName == "Azure Portal"
-        | where isnotempty(OriginalRequestId)
-        | summarize 
-            totalAzureLoginEventId = dcount(OriginalRequestId), 
-            AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), 
-            AzureSuccessfulEventsCount = dcountif(OriginalRequestId, ResultType == 0),
-            AzureSetOfFailedEvents = makeset(iff(ResultType != 0, OriginalRequestId, ""), 5), 
-            AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, ""), 5) 
-        by 
-            IPAddress, 
-            UserPrincipalName, 
-            bin(TimeGenerated, 1min), 
-            UserAgent,
-            ConditionalAccessStatus,
-            OperationName,
-            RiskDetail,
-            AuthenticationRequirement,
-            ClientAppUsed 
-        // Extracting the name and UPN suffix from UserPrincipalName
-        | extend
-            Name = tostring(split(UserPrincipalName, "@")[0]),
-            UPNSuffix = tostring(split(UserPrincipalName, "@")[1])
-    );
-    // Join 'AwsAlert' and 'Azure_sigin' on the AWS Network Entity and Azure IP Address
-    AwsAlert
-    | join kind=inner Azure_sigin on $left.AWSNetworkEntity == $right.IPAddress
+        );
+        // Define a variable 'Azure_sigin' to collect Azure portal Signing activity from SigninLogs Table
+        let Azure_sigin = materialize (SigninLogs
+            | where AppDisplayName == "Azure Portal"
+            | where isnotempty(OriginalRequestId)
+            | summarize 
+                totalAzureLoginEventId = dcount(OriginalRequestId), 
+                AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), 
+                AzureSuccessfulEventsCount = dcountif(OriginalRequestId, ResultType == 0),
+                AzureSetOfFailedEvents = makeset(iff(ResultType != 0, OriginalRequestId, ""), 5), 
+                AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, ""), 5) 
+            by 
+                IPAddress, 
+                UserPrincipalName, 
+                bin(TimeGenerated, 1min), 
+                UserAgent,
+                ConditionalAccessStatus,
+                OperationName,
+                RiskDetail,
+                AuthenticationRequirement,
+                ClientAppUsed 
+            // Extracting the name and UPN suffix from UserPrincipalName
+            | extend
+                Name = tostring(split(UserPrincipalName, "@")[0]),
+                UPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+        );
+        // Join 'AwsAlert' and 'Azure_sigin' on the AWS Network Entity and Azure IP Address
+        AwsAlert
+        | join kind=inner Azure_sigin on $left.AWSNetworkEntity == $right.IPAddress
   '
 entityMappings:
   - entityType: IP
