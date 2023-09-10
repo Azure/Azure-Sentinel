@@ -22,12 +22,13 @@ ParserParams:
     Default: false
 ParserQuery: |
     let parser=(disabled:bool=false){	
+    		let emptyTable = datatable(TimeGenerated:datetime)[];
 		let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
 		let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED','DENY']);
 		let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
 		// https://developer.okta.com/docs/reference/api/event-types/#catalog
-		let OktaV1 = 
-		Okta_CL | where not(disabled)
+		let OktaV1 = union isfuzzy=true
+		emptyTable, Okta_CL | where not(disabled)
 		| where eventType_s in (OktaSigninEvents)
 		| extend 
 			EventProduct='Okta'
@@ -48,8 +49,8 @@ ParserQuery: |
 		| project-rename 
 			EventMessage=displayMessage_s
 			,EventOriginalResultDetails=outcome_reason_s
-			, LogonMethod=authenticationContext_credentialType_s
-			, TargetSessionId=authenticationContext_externalSessionId_s
+			, LogonMethod=column_ifexists('authenticationContext_credentialType_s',"")
+			, TargetSessionId=column_ifexists('authenticationContext_externalSessionId_s',"")
 			, TargetUserId=actor_id_s
 			, TargetUsername=actor_alternateId_s
 			, TargetUserType=actor_type_s
@@ -68,8 +69,8 @@ ParserQuery: |
 			  , IpAddr=SrcIpAddr
 			| project-away *_s, *_d, *_b, *_g, *_t;
 		};
-		let OktaV2 =
-		OktaSSONativePollerV2_CL
+		let OktaV2 = union isfuzzy=true
+		emptyTable, OktaSSONativePollerV2_CL
 		| where EventOriginalType in (OktaSigninEvents)
 		| extend 
 			EventProduct='Okta'
