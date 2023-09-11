@@ -7,7 +7,6 @@ from collections import namedtuple
 
 import msal
 import requests
-from requests.exceptions import HTTPError
 from requests_ratelimiter import LimiterSession
 import azure.functions as func
 from greynoise import GreyNoise
