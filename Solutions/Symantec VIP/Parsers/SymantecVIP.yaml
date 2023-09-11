@@ -1,0 +1,34 @@
+id: ed8a116c-07b4-441c-b74b-395937c264a1
+Function:
+  Title: Parser for SymantecVIP
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: SymantecVIP
+FunctionAlias: SymantecVIP
+FunctionQuery: |
+    Syslog 
+    | where Computer in ("datasource") and Facility == "local5"
+    | extend parser = extract_all(@'^([A-Z]+)\s\"([0-9\.\-\s\:GMT]+)\"\s(\S+)\s([\w]+)\:(\d+)\s(\d+)\s(\d+)\s(\d+)\s\"text\=([\S\s]+)\"\sThread-(\d+)\s(.*)',dynamic([1,2,3,4,5,6,7,8,9,10,11]), SyslogMessage)
+    | mv-expand todynamic(parser)
+    | extend 
+        LogLevel = tostring(parser[0]),
+        LogTime = todatetime(parser[1]),
+        ClientIP = tostring(parser[2]),
+        Component = tostring(parser[3]),
+        TransactionID = tostring(parser[5]),
+        SessionID= tostring(parser[7]),
+        ErrorCode = tostring(parser[6]),
+        RawMessage = split(tostring(parser[8]),","),
+        ThreadID = tostring(parser[9]),
+        SourceClassName = tostring(parser[10])
+    | extend Message = extract(@"([\w\s\-\_\[\]\\]+)\.",1,tostring(RawMessage[0]))
+    | extend User = extract(@"(for\s)?(U|u)ser\s\[(\S+)\]",3,tostring(RawMessage[0]))
+    | extend Reason = extract(@'reason=(\d+)+\s([\w\s]+)',2,tostring(RawMessage[1]))
+    | extend TokenID = extract(@'tokenid=([A-Z0-9]+)',1,tostring(RawMessage[1]))
+    | extend AccessResult = extract(@"Access\s(GRANTED|DENIED)",1,tostring(RawMessage[0]))
+    | extend AuthResult = extract(@"Authentication\s(\S+)\s",1,tostring(RawMessage[0]))
+    | extend StatusMessage = extract(@'StatusMessage:\s(0x0:\s)?([\w\s]+)[&."]',2,tostring(RawMessage[1]))
+    | extend RADIUSAuth = extract(@'Acces-(\S+)\s',1,tostring(RawMessage[0]))
+    | extend StatusCode = extract(@'StatusCode\:\s(\d+)',1,tostring(RawMessage[0]))
+    | project-away parser
