@@ -1,1 +1,0 @@
-Veritas NetBackup Analytics Rules
