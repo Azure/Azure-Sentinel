@@ -72,7 +72,7 @@ def get_credentials():
     creds = None
     if pickle_string:
         try:
-            creds =  pickle.loads(pickle_string)
+            creds =  pickle.loads(pickle.dumps(pickle_string))
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
     else:
@@ -166,6 +166,7 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
     string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
     bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
     decoded_key = base64.b64decode(shared_key)
+    test=base64.encode("","ascii")
     encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
     authorization = "SharedKey {}:{}".format(customer_id,encoded_hash)
     return authorization
