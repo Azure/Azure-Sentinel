@@ -72,7 +72,7 @@ def get_credentials():
     creds = None
     if pickle_string:
         try:
-            creds =  pickle.loads(pickle.dumps(pickle_string))
+            creds =  json.loads(pickle_string)
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
     else:
