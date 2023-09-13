@@ -1,0 +1,74 @@
+id: 0576750e-6b61-4545-845f-f5b8f29a0cc4
+name: Email Forwarding Configuration with SAP download
+description: |
+    'This query could help detect any external email forwarding configuration activity with SAP download for sensitive financial transaction related keywords. Attackers may perform such operation for financial gain, Intellectual Property theft or to cause disruption of operation to an organization.'
+requiredDataConnectors:
+  - connectorId: SAP
+    dataTypes:
+     - SAPAuditLog
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+     - EmailEvents
+  - connectorId: Office365
+    dataTypes:
+     - OfficeActivity
+tactics:
+  - InitialAccess
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1078
+  - T1114
+  - T1020
+query: |
+     let Keywords = dynamic(["payroll", "invoice", "payment", "statement", "confidential", "bank account", "wire", "wire transfer"]);
+     EmailEvents
+     | extend Account = tostring(split(SenderFromAddress, '@', 0)[0]), UPNSuffix = tostring(split(SenderFromAddress, '@', 1)[0])
+     | project NetworkMessageId, Account, RecipientEmailAddress, SenderIPv4, Subject, EmailAction, DeliveryLocation, TenantId
+     | join kind=innerunique 
+     (OfficeActivity 
+     | where OfficeWorkload =~ "Exchange"
+     | where Operation in~ ("Set-Mailbox", "New-InboxRule", "Set-InboxRule")
+     | where Parameters has_any ("ForwardTo", "RedirectTo", "ForwardingSmtpAddress")
+     | extend Events=todynamic(Parameters)
+     | where UserId has "@"
+     | extend Account = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
+     | parse Events  with * "SubjectContainsWords" SubjectContainsWords '}'*
+     | parse Events  with * "BodyContainsWords" BodyContainsWords '}'*
+     | parse Events  with * "SubjectOrBodyContainsWords" SubjectOrBodyContainsWords '}'*
+     | where SubjectContainsWords has_any (Keywords) or BodyContainsWords has_any (Keywords) or SubjectOrBodyContainsWords has_any (Keywords)
+     | extend ClientIPAddress = case( ClientIP has ".", tostring(split(ClientIP,":")[0]), ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))), ClientIP )
+     | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))
+     | extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\')[-1]))
+     | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail,Account) 
+     on Account
+     | join kind=inner 
+     (
+     SAPAuditLog 
+     | where MessageID == "AUY" //AUY= Download bytes
+     | extend ByteCount= toint(replace_string(replace_string(Variable1, ".",""), ",","")), Code=Variable2, Path= Variable3
+     | summarize DownloadsByUser = count(), Paths= make_set(Variable3, 10), ByteCount=sum(ByteCount) by SystemID, ClientID, User, TerminalIPv6, Email, Host, TransactionCode, Instance
+     | where Paths has_any (Keywords)
+     ) on $left.Account == $right.User, $left.RecipientEmailAddress == $right. Email
+     | project StartTimeUtc, Account, SenderIPv4, Email, Host, Keyword, NetworkMessageId, OfficeObjectId, Paths, Subject, SystemID, TenantId, ClientID, DeliveryLocation, TransactionCode
+     | extend UserName = tostring(split(Account, '@', 0)[0]), UPNSuffix = tostring(split(Account, '@', 1)[0])
+     | extend Account_0_Name = UserName
+     | extend Account_0_UPNSuffix = UPNSuffix
+     | extend IP_0_Address = SenderIPv4
+     | extend Host_0_HostName = Host
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Host
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SenderIPv4
+version: 1.0.0

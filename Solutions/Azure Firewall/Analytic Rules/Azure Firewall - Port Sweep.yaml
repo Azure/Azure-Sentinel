@@ -31,20 +31,23 @@ query: |
   AZFWApplicationRule
   | where DestinationPort !in (ExcludedPorts)
   | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold),
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
+  | mv-expand Fqdn = AlertTimedCountHostsInBinTime),
   (AZFWNetworkRule
   | extend Fqdn = DestinationIp
   | where DestinationPort !in (ExcludedPorts)
   | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold),
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
+  | mv-expand Fqdn = AlertTimedCountHostsInBinTime),
   (AzureDiagnostics
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
   | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
   | where DestinationPort !in (ExcludedPorts)
   | where isnotempty(Fqdn) and isnotempty(SourceIp) and isnotempty(DestinationPort)
   | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated, BinTime), DestinationPort
-  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold)
-  | project bin(TimeGenerated, BinTime), SourceIp, DestinationPort, AlertTimedCountHostsInBinTime
+  | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
+  | mv-expand Fqdn = AlertTimedCountHostsInBinTime)
+  | project bin(TimeGenerated, BinTime), SourceIp, DestinationPort, AlertTimedCountHostsInBinTime, Fqdn
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -54,5 +57,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Fqdn
-version: 1.2.0
+version: 1.2.2
 kind: Scheduled
