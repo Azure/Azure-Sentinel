@@ -31,7 +31,7 @@ Use the following steps to create your content structure:
   * Analytic Rules – yaml file templates of analytic rules goes in this folder.
   * Hunting queries – yaml file templates of hunting queries goes in this folder.
   * Playbooks – json playbook and Azure Logic Apps custom connectors can go in this folder. 
-  * Parser – txt file for Kusto Functions or Parsers can go in this folder.
+  * Parser – yaml file for Kusto Functions or Parsers can go in this folder. Use [this](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Parsers/CrowdStrikeReplicatorV2.yaml) as reference.
   
   For example, see the folder structure for our [Cisco ISE solution](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cisco%20ISE).
 
@@ -88,6 +88,7 @@ If you or your company is a first-time app publisher on Azure Marketplace, [foll
 The following steps reference the Partner Center's more detailed documentation.
 
 1.	[Create an Azure application type offer](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer) and configure the offer setup details as per the relevant  guidance.
+> Ensure that the OfferID contains the keyword "sentinel". Consider using the format: `microsoft-sentinel-solution-<productname>`
 
 2.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
 

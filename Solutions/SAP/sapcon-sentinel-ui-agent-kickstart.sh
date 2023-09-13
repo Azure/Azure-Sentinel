@@ -61,6 +61,10 @@ while [[ $# -gt 0 ]]; do
 		APPID="$2"
 		shift 2
 		;;
+  	--hostnetwork)
+		HOSTNETWORK=1
+		shift 1
+		;;
 	--appsecret)
 		APPSECRET="$2"
 		shift 2
@@ -132,6 +136,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--keymode [kvmi|kvsi]"
 		echo "--configpath <path>"
 		echo "--sdk <filename>"
+		echo "--hostnetwork"
 		echo "--network <network>"
 		echo "--appid <guid>"
 		echo "--appsecret <secret>"
@@ -371,17 +376,19 @@ if [ $USESNC ]; then
 	sudo chown root:root "$sysfileloc"sec >/dev/null 2>&1
 fi
 
-#Verifying SDK version
-unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
-sudo chmod +x -R /tmp/nwrfcsdk/lib/*.so
-SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
-sdkok=$?
-rm -rf /tmp/nwrfcsdk
-if [ ! $sdkok -eq 0 ]; then
-	log "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
-	log "$SDKLOADRESULT"
-	log "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
-	exit 1
+#Verifying SDK version only in case of non-fedora OS
+if [ "$os" != "fedora" ]; then
+	unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
+	sudo chmod +x -R /tmp/nwrfcsdk/lib/*.so
+	SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
+	sdkok=$?
+	rm -rf /tmp/nwrfcsdk
+	if [ ! $sdkok -eq 0 ]; then
+		log "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
+		log "$SDKLOADRESULT"
+		log "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
+		exit 1
+	fi
 fi
 
 #Building the container
@@ -422,7 +429,9 @@ elif [ "$MODE" == "kvsi" ]; then
 	log "Creating agent and configuring to use Azure Key vault and application authentication"
 	cmdparams+=" -e AZURE_CLIENT_ID=$APPID -e AZURE_CLIENT_SECRET=$APPSECRET -e AZURE_TENANT_ID=$TENANT"
 fi
-
+if [ $HOSTNETWORK ]; then
+	cmdparams+=" --network host"
+fi
 sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams --name "$containername" $dockerimage$tagver >/dev/null
 
 log 'Created Microsoft Sentinel SAP agent '"$AGENTNAME"

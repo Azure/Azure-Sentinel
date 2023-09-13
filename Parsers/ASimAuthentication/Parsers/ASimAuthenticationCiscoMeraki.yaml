@@ -1,0 +1,161 @@
+Parser:
+  Title: ASIM Authentication parser for Cisco Meraki
+  Version: '0.1'
+  LastUpdated: Jun 12 2023
+Product:
+  Name: Cisco Meraki
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Cisco Meraki Documentation
+  Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
+Description: |
+  This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Authentication normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
+ParserName: ASimAuthenticationCiscoMeraki
+EquivalentBuiltInParser: _ASim_Authentication_CiscoMeraki
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let LogSubTypeList = dynamic(["8021x_auth", "wpa_auth", "splash_auth", "8021x_deauth", "8021x_client_deauth", "wpa_deauth", "8021x_eap_failure", "8021x_eap_success"]);
+  let EventResultDetailsLookup = datatable (reason: string, EventResultDetails: string)
+      [
+      "0", "Other",
+      "1", "Other",
+      "2", "Password expired",
+      "3", "Other",
+      "4", "Session expired",
+      "5", "Other",
+      "6", "Other",
+      "7", "Other",
+      "8", "Other",
+      "9", "Other",
+      "10", "Logon violates policy",
+      "11", "Logon violates policy",
+      "12", "Other",
+      "13", "Logon violates policy",
+      "14", "Other",
+      "15", "Other",
+      "16", "Other",
+      "17", "Other",
+      "18", "Incorrect key",
+      "19", "Incorrect key",
+      "20", "Incorrect key",
+      "21", "Other",
+      "22", "Other",
+      "23", "Other",
+      "24", "Logon violates policy",
+  ];
+  let EventFieldsLookup = datatable (
+      LogSubType: string,
+      EventResult: string,
+      EventType: string,
+      EventSeverity: string
+  )
+      [
+      "8021x_auth", "Success", "Logon", "Informational",
+      "wpa_auth", "Success", "Logon", "Informational",
+      "splash_auth", "Success", "Logon", "Informational",
+      "8021x_eap_success", "Success", "Logon", "Informational",
+      "8021x_deauth", "Success", "Logoff", "Informational",
+      "8021x_client_deauth", "Success", "Logoff", "Informational",
+      "wpa_deauth", "Success", "Logoff", "Informational",
+      "8021x_eap_failure", "Failure", "Logon", "Low",
+      "disassociation", "Failure", "Logon", "Low",
+  ];
+  let parser = (disabled: bool=false) {
+      union isfuzzy=true
+          (
+          meraki_CL
+          | project-rename LogMessage =  Message
+          ),
+          (
+          Syslog
+          | where Computer in (_ASIM_GetSourceBySourceType('CiscoMeraki'))
+          | project-rename LogMessage =  SyslogMessage
+          )
+      | where not(disabled)
+          and LogMessage has "events"
+          and (LogMessage has_any (LogSubTypeList) or LogMessage has_all("disassociation","auth_neg_failed"))
+      | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
+      | extend
+          Epoch = tostring(Parser[0]),
+          Device = tostring(Parser[1]),
+          LogType = tostring(Parser[2]),
+          Substring = tostring(Parser[3])
+      | where LogType == "events"
+      | parse Substring with * "type=" LogSubType:string " " restOfMessage:string
+      | where LogSubType in (LogSubTypeList) or (LogSubType == "disassociation" and Substring has "auth_neg_failed")
+      | extend EpochTimestamp = split(Epoch, ".")
+      | extend EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
+      | extend EventEndTime = EventStartTime
+      | invoke _ASIM_ResolveDvcFQDN('Device')
+      | parse-kv Substring as(last_known_client_ip: string, ip: string, client_ip: string, client_mac: string, identity: string, reason: string, aid: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+      | extend Dvc = DvcHostname, 
+            aid = trim('"', aid)
+      | extend
+          SrcIpAddr = tostring(split(coalesce(last_known_client_ip, ip, client_ip), " ")[0]),
+          DvcMacAddr = client_mac,
+          TargetUsername = identity,
+          AdditionalFields = bag_pack("aid", aid),
+          EventOriginalType = LogType,
+          EventOriginalSubType = LogSubType,
+          EventUid = _ResourceId
+      | extend
+          SrcIpAddr = trim('"', SrcIpAddr),
+          DvcMacAddr = trim('"', DvcMacAddr),
+          TargetUsername = trim('"', TargetUsername),
+          reason = trim('"', reason)
+      | extend
+          DvcIpAddr = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          User = TargetUsername,
+          TargetUsernameType = iff(isnotempty(TargetUsername), "Simple", "")
+      | lookup EventFieldsLookup on LogSubType
+      | lookup EventResultDetailsLookup on reason
+      | extend EventResultDetails = iff(tolong(reason) between (25 .. 65535), "Other", EventResultDetails)
+      | extend
+          EventCount=int(1),
+          EventProduct="Meraki",
+          EventVendor="Cisco",
+          EventSchema="Authentication",
+          EventSchemaVersion="0.1.3"
+      | project-away
+          LogMessage,
+          Parser,
+          Epoch,
+          EpochTimestamp,
+          Device,
+          Substring,
+          LogType,
+          LogSubType,
+          restOfMessage,
+          reason,
+          last_known_client_ip,
+          client_ip,
+          ip,
+          client_mac,
+          identity,
+          aid,
+          TenantId,
+          SourceSystem,
+          Computer,
+          _ResourceId,
+          MG,
+          ManagementGroupName,
+          RawData,
+          EventTime,
+          Facility,
+          HostName,
+          SeverityLevel,
+          ProcessID,
+          HostIP,
+          ProcessName
+  };
+  parser(disabled=disabled)
