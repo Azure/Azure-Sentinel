@@ -53,13 +53,17 @@ Risk lists are curated lists that contain Indicators of Compromise (IOCs), such 
 
 The following article describes roles and permissions in Microsoft Sentinel [Roles and permissions in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/roles).
 
-To install and manage Playbooks/Logic Apps, the following permissions are required on the resource group [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) + [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
+To install and manage Playbooks/Logic Apps, the following permissions are required on the resource group [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) and [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
 
-The **Threat Intelligence Platforms Data Connector** in Sentinel must be enabled in order for indicators to be forwarded from the Graph Security API to Sentinel. (This connector is being deprecated by Microsoft and future updates of this solution will use the new API).
+The **Threat Intelligence Upload Indicators API** in Sentinel must be enabled in order for indicators to be forwarded to Sentinel ThreatIntelligenceIndicator table.
+
+![](Images/2023-09-13-15-51-44.png)
+
+DEPRECATED! The **Threat Intelligence Platforms Data Connector** in Sentinel must be enabled in order for indicators to be forwarded from the Graph Security API to Sentinel. (This connector is being deprecated by Microsoft and future updates of this solution will use the Threat Intelligence Upload Indicators API).
 
 ![](Images/2023-04-19-16-28-20.png)
 
-## Connector authorization 
+## Connectors Authorization 
 Each connector need to be authorized after playbook/logic app installation. Expand all nodes in the logic app after installation and look for blocks marked with a warning sign. Open and authorize all connections.
 
 Recorded Future requires API keys to communicate with our API. To obtain API keys, please visit [Recorded Future Requesting API Tokens](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens) (Require Recorded Future Login) and request API token for ```Recorded Future for Microsoft Sentinel``` or/and ```Recorded Future Sandbox for Microsoft Sentinel```.
@@ -67,8 +71,6 @@ Recorded Future requires API keys to communicate with our API. To obtain API key
 or 
 
 ![](Images/2023-09-08-12-13-54.png)
-
-
 
 
 The Recorded Future solution uses the following connectors:
@@ -98,7 +100,7 @@ There are two options for installing playbooks and starting automate threat resp
 
 - Installing the solution from [Content Hub](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/dontDiscardJourney~/true/id/recordedfuture1605638642586.recorded_future_sentinel_solution). (Recommended)
 
-- Installing the playbooks one by one by from this Readme.
+- Installing the playbooks one by one by from this Readme further down in this document.
 
 ## Content Hub Installation
 
@@ -118,7 +120,7 @@ To install individual playbooks one by one, use the buttons next to the descript
 # Upgrade from previous versions
 
 ### From version 2.4
-We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. You need to install the new IndicatorImport playbooks and configure them to pull you selection of risk lists. 
+We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. You need to install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Investigate the risk lists being downloaded and the cadence and use the same configuration using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting. 
 ### From version 1
 If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Install the new all IndicatorImport and enrichment -playbooks. Select a different name than the once already installed and reauthenticate them. Configure the IndicatorImport playbooks to pull your selection of risk lists. After validating that the new playbooks works as expected you can deactivate the V1 versions. 
 
@@ -146,7 +148,7 @@ Select the **RecordedFuture-IP-IndicatorImport** template from ```Automation -> 
 Change the risk list to download and modify the description in the ```RecordedFuture-Threatlntelligencelmport``` step in the logic app. 
 ![](Images/2023-09-08-12-01-37.png)
 
-## Configure cadence of Risk list ingestion 
+## Configure Cadence of Risk List Ingestion 
 Its possible to adjust the cadence of risk list download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
 
 The first step of all TIProcessing Playbooks is a recurrence step, it is possible to adjust the cadence by modifying the interval and frequency parameters.
@@ -182,7 +184,7 @@ ThreatIntelligenceIndicator
 
 ![](Images/2023-04-18-16-39-00.png)
 
-## Activate Analytic Rules for IOC detection 
+## Activate Analytic Rules for IoC detection 
 Automatically enrich IOCs in incidents by following the steps below: 
 
 1. Open Microsoft Sentinel.
@@ -443,3 +445,12 @@ Retrieves the [Risk List – Ukraine Threat List of Related IOCs](https://suppor
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FPlaybooks%2FRecordedFuture-Ukraine-IndicatorProcessor%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FPlaybooks%2FRecordedFuture-Ukraine-IndicatorProcessor%2Fazuredeploy.json)
+
+
+# Known Issues 
+## Version 2.5
+Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
+![](Images/2023-09-13-19-16-24.png)
+
+A workaround is to reinstall and overwrite the playbooks from the template in Playbook Template tab and not using the upgrade wizard. Before overwriting an active playbook make note of the risk list downloaded, the description, cadence of downloading. 
+![](Images/2023-09-13-19-24-54.png)
