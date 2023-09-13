@@ -73,7 +73,7 @@ def get_credentials():
     creds = None
     if pickle_string:
         try:
-            creds = service_account.Credentials.from_service_account_info(pickle_string, scopes=['https://www.googleapis.com/auth/admin.reports.audit.readonly'])
+            creds = json.loads(pickle_string)
             #creds =  json.loads(pickle_string)
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
@@ -144,7 +144,7 @@ def GetDates(logType):
 
 def get_result(activity,start_time, end_time):
     result_activities = []
-    service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False)
+    service = build('admin', 'reports_v1', credentials=creds)
     results = service.activities().list(userKey='all', applicationName=activity,
                                               maxResults=1000, startTime=start_time, endTime=end_time).execute()
     next_page_token = results.get('nextPageToken', None)
