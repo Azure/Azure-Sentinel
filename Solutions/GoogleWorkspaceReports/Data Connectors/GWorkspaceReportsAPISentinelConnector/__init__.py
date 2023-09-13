@@ -15,6 +15,7 @@ import time
 import re
 from .state_manager import StateManager
 from datetime import datetime, timedelta
+from google.oauth2 import service_account
 
 customer_id = os.environ['WorkspaceID']
 fetchDelay = os.getenv('FetchDelay',10)
@@ -72,7 +73,8 @@ def get_credentials():
     creds = None
     if pickle_string:
         try:
-            creds =  json.loads(pickle_string)
+            creds = service_account.Credentials.from_service_account_info(pickle_string, scopes=['https://www.googleapis.com/auth/admin.reports.audit.readonly'])
+            #creds =  json.loads(pickle_string)
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
     else:
