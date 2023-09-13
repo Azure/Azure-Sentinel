@@ -24,8 +24,7 @@ chatFetchDelay = os.getenv('ChatFetchDelay',1)
 userAccountsFetchDelay = os.getenv('UserAccountsFetchDelay',3)
 loginFetchDelay = os.getenv('LoginFetchDelay',6)
 shared_key = os.environ['WorkspaceKey']
-pickle_str = os.environ['GooglePickleString']
-pickle_string = base64.b64decode(pickle_str)
+pickle_string = os.environ['GooglePickleString']
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
@@ -73,7 +72,7 @@ def get_credentials():
     creds = None
     if pickle_string:
         try:
-            creds = pickle.loads(pickle_string)
+            creds =  pickle.loads(pickle_string)
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
     else:
