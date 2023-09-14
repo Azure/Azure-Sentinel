@@ -83,11 +83,11 @@ function install_package() {
 # cfgf - Config File
 
 # CONNECTIONMODE is one of
-# abap
-# mserv
+# java
+# sapcontrol
 
 MODE="kvmi"
-CONNECTIONMODE="abap"
+CONNECTIONMODE=""
 CONFIGPATH="/opt"
 TRUSTEDCA=()
 CLOUD='public'
@@ -106,12 +106,44 @@ while [[ $# -gt 0 ]]; do
 		CONNECTIONMODE="$2"
 		shift 2
 		;;
-	--abapserver)
-		ABAPSERVER="$2"
+	--abapospass)
+		ABAPOSPASS="$2"
 		shift 2
 		;;
-	--systemnr)
-		SYSTEMNR="$2"
+	--abaposuser)
+		ABAPOSUSER="$2"
+		shift 2
+		;;
+	--javaospass)
+		JAVAOSPASS="$2"
+		shift 2
+		;;
+	--javaosuser)
+		JAVAOSUSER="$2"
+		shift 2
+		;;
+	--abapspserver)
+		ABAPSPSERVER="$2"
+		shift 2
+		;;
+	--abapsptz)
+		ABAPSPTZ="$2"
+		shift 2
+		;;
+	--abapspinstance)
+		ABAPSPINSTANCE="$2"
+		shift 2
+		;;
+	--javaappserver)
+		JAVAAPPSERVER="$2"
+		shift 2
+		;;
+	--javainstance)
+		JAVAINSTANCE="$2"
+		shift 2
+		;;
+	--javatz)
+		JAVATZ="$2"
 		shift 2
 		;;
 	--sid)
@@ -125,30 +157,6 @@ while [[ $# -gt 0 ]]; do
     --azureresourceid)
 		AZURERESOURCEID="$2"
 		shift 
-		;;
-	--clientnumber)
-		CLIENTNUMBER="$2"
-		shift 2
-		;;
-	--messageserverhost)
-		MESSAGESERVERHOST="$2"
-		shift 2
-		;;
-	--messageserverport)
-		MESSAGESERVERPORT="$2"
-		shift 2
-		;;
-	--logongroup)
-		LOGONGROUP="$2"
-		shift 2
-		;;
-	--sapusername)
-		uservar="$2"
-		shift 2
-		;;
-	--sappassword)
-		passvar="$2"
-		shift 2
 		;;
 	--sdk)
 		SDKFILELOC="$2"
@@ -177,51 +185,6 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--loganalyticskey)
 		logpubkey="$2"
-		shift 2
-		;;
-	--use-snc)
-		USESNC=1
-		shift
-		;;
-	--cryptolib)
-		SAPCRYPTOLIB="$2"
-		SAPCRYPTOLIB="${SAPCRYPTOLIB/#\~/$HOME}"
-		shift 2
-		;;
-	--sapgenpse)
-		SAPGENPSE="$2"
-		SAPGENPSE="${SAPGENPSE/#\~/$HOME}"
-		shift 2
-		;;
-	--client-cert)
-		CLIENTCERT="$2"
-		CLIENTCERT="${CLIENTCERT/#\~/$HOME}"
-		shift 2
-		;;
-	--client-key)
-		CLIENTKEY="$2"
-		CLIENTKEY="${CLIENTKEY/#\~/$HOME}"
-		shift 2
-		;;
-	--cacert)
-		ca="$2"
-		ca="${ca/#\~/$HOME}"
-		TRUSTEDCA+=("$ca")
-		shift 2
-		;;
-	--client-pfx)
-		CLIENTPFX="$2"
-		CLIENTPFX="${CLIENTPFX/#\~/$HOME}"
-		shift 2
-		;;
-	--client-pfx-passwd)
-		CLIENTPFXPWD="$2"
-		CLIENTPFXPWD="${CLIENTPFXPWD/#\~/$HOME}"
-		shift 2
-		;;
-	--server-cert)
-		SERVERCERT="$2"
-		SERVERCERT="${SERVERCERT/#\~/$HOME}"
 		shift 2
 		;;
 	--http-proxy)
@@ -271,17 +234,11 @@ while [[ $# -gt 0 ]]; do
 	-*)
 		echo "Unknown option $1"
 		echo "Valid options are"
-		echo "--keymode [kvmi|kvsi|cfgf]"
 		echo "--connectionmode [abap|mserv]"
-		echo "--configpath <path>"
 		echo "--abapserver <servername>"
 		echo "--systemnr <system number>"
 		echo "--sid <SID>"
-  		echo "--hostnetwork"
 		echo "--clientnumber <client number>"
-		echo "--messageserverhost <servername>"
-		echo "--messageserverport <servername>"
-		echo "--logongroup <logon group>"
 		echo "--sapusername <username>"
 		echo "--sappassword <password>"
 		echo "--sdk <filename>"
@@ -301,9 +258,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--client-pfx-passwd <password>"
 		echo "--server-cert <server certificate filename>"
 		echo "--http-proxy <proxy url>"
-		echo "--confirm-all-prompts"
 		echo "--preview"
-		echo "--multi-clients"
 		exit 1
 		;;
 	*)
@@ -318,10 +273,27 @@ if [ "$MODE" != 'kvsi' ] && [ "$MODE" != 'kvmi' ] && [ "$MODE" != 'cfgf' ]; then
 	exit 1
 fi
 
-if [ "$CONNECTIONMODE" != 'abap' ] && [ "$CONNECTIONMODE" != 'mserv' ]; then
-	echo 'Invalid setting for --connectionmode. Supported values are "abap", "mserv"'
+if [ "$CONNECTIONMODE" != 'java' ] && [ "$CONNECTIONMODE" != 'sapcontrol' ]; then
+	echo 'Invalid setting for --connectionmode. Supported values are "java", "sapcontrol"'
 	exit 1
 fi
+
+if [ "$CONNECTIONMODE" == "java" ]; then
+	if [ -z "$JAVAAPPSERVER" ] || [ -z "$JAVAINSTANCE" ] || [ -z "$JAVATZ" ] || [ -z "$JAVAOSUSER" ] || [ -z "$JAVAOSPASS" ]; then
+		echo "Error: Missing required variables for Java connection mode"
+        echo "Required variables: JAVAAPPSERVER, JAVAINSTANCE, JAVATZ, JAVAOSUSER, JAVAOSPASS"
+		exit 1
+	fi
+fi
+
+if [ "$CONNECTIONMODE" == "sapcontrol" ]; then
+	if [ -z "$ABAPSPSERVER" ] || [ -z "$ABAPSPTZ" ] || [ -z "$ABAPSPINSTANCE" ] || [ -z "$ABAPOSPASS" ] || [ -z "$ABAPOSUSER" ]; then
+		echo "Error: Missing required variables for SAPControl connection mode"
+		echo "Required variables: ABAPSPSERVER, ABAPSPTZ, ABAPSPINSTANCE, ABAPOSPASS, ABAPOSUSER"
+		exit 1
+	fi
+fi
+
 
 if [ "$MODE" == 'kvsi' ] && { [ -z "$APPID" ] || [ -z "$APPSECRET" ] || [ -z "$TENANT" ] || [ -z "$kv" ]; }; then
 	printf 'Missing parameter values. -m kvsi requires --appid, --appsecret, --tenantid, --kvaultname parameters.\nProvide values interactively now or rerun the script with relevant switches.'
@@ -329,64 +301,6 @@ if [ "$MODE" == 'kvsi' ] && { [ -z "$APPID" ] || [ -z "$APPSECRET" ] || [ -z "$T
 	read_value APPSECRET "Application Secret"
 	read_value TENANT "Tenant ID"
 	read_value kv "Keyvault Name"
-fi
-
-if [ $USESNC ] && { [ -z "$SAPCRYPTOLIB" ] || [ -z "$SAPGENPSE" ] || [ -z "$SERVERCERT" ] || { { [ -z "$CLIENTKEY" ] || [ -z "$CLIENTCERT" ]; } && [ -z "$CLIENTPFX" ]; }; }; then
-	echo 'Invalid parameters --use-snc requires --cryptolib, --sapgenpse, --server-cert, --client-cert, --client-key, or --client-pfx parameters'
-	exit 1
-elif [ ! $USESNC ] && { [ -n "$SAPCRYPTOLIB" ] || [ -n "$SAPGENPSE" ] || [ -n "$CLIENTCERT" ] || [ -n "$SERVERCERT" ] || [ -n "$CLIENTKEY" ] || [ -n "$CLIENTPFX" ] || [ -n "$CLIENTPFXPWD" ] || [ -n "${TRUSTEDCA[0]}" ]; }; then
-	echo 'Invalid parameters. If using --cryptolib, --sapgenpse, --client-cert, --client-key , --client-pfx, --server-cert parameters, --cacert, specify --use-snc'
-	exit 1
-fi
-
-if [ -n "$ABAPSERVER" ] && { [ -n "$MESSAGESERVERHOST" ] || [ -n "$MESSAGESERVERPORT" ] || [ -n "$LOGONGROUP" ]; }; then
-	echo 'Invalid parameters. --abapserver cannot be used in conjunction with --messageserverhost, --messageserverport or --logongroup'
-	exit 1
-fi
-
-if [ $USESNC ] && [ "$MODE" != 'cfgf' ]; then
-	echo 'SNC connectivity only supported in cfgf keymode'
-	exit 1
-fi
-
-if [ $USESNC ] && [ ! -f "$SAPCRYPTOLIB" ]; then
-	echo 'Invalid SAP Crypto lib path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ ! -f "$SAPGENPSE" ]; then
-	echo 'Invalid sapgenpse path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ -n "$CLIENTCERT" ] && [ ! -f "$CLIENTCERT" ]; then
-	echo 'Invalid client certificate path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ -n "$CLIENTKEY" ] && [ ! -f "$CLIENTKEY" ]; then
-	echo 'Invalid client pfx path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ -n "$CLIENTPFX" ] && [ ! -f "$CLIENTPFX" ]; then
-	echo 'Invalid client key path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ ! -f "$SERVERCERT" ]; then
-	echo 'Invalid server certificate path'
-	exit 1
-fi
-
-if [ $USESNC ] && [ -n "${TRUSTEDCA[0]}" ]; then
-	for i in "${TRUSTEDCA[@]}"; do
-		:
-		if [ ! -f "$i" ]; then
-			echo 'Invalid ca file path'
-			exit 1
-		fi
-	done
 fi
 
 if [ -n "$SDKFILELOC" ] && [ ! -f "$SDKFILELOC" ]; then
@@ -593,61 +507,12 @@ if [ -z $LOCALIMG ]; then
 	echo 'Latest Azure Sentinel data connector downloaded successfully.'
 fi
 
-if [ "$CONNECTIONMODE" == 'abap' ]; then
-	read_value ABAPSERVER 'ABAP Server Hostname'
-elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	read_value MESSAGESERVERHOST 'Message Server Hostname'
-	read_value MESSAGESERVERPORT 'Message Server Service Name (port)'
-	read_value LOGONGROUP 'Logon Group'
-fi
-
-read_value SYSTEMNR 'System Number'
-
 if [ -z "$SID" ]; then
 	read -r -p 'SID : ' SID
 	while [ ${#SID} -ne 3 ]; do
 		echo 'Invalid SID, SID length should be 3'
 		read -r -p 'SID: ' SID
 	done
-fi
-
-if [ -z "$CLIENTNUMBER" ]; then
-	read -r -p 'Client: ' CLIENTNUMBER
-	while [ ${#CLIENTNUMBER} -ne 3 ]; do
-		echo 'Invalid Client number, Client number length should be 3'
-		read -r -p 'Client: ' CLIENTNUMBER
-	done
-fi
-
-if [ "$CONNECTIONMODE" == 'abap' ] && [ ! $USESNC ]; then
-	portnumber=32$SYSTEMNR
-elif [ "$CONNECTIONMODE" == 'abap' ] && [ $USESNC ]; then
-	portnumber=48$SYSTEMNR
-elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	portnumber=$MESSAGESERVERPORT
-fi
-
-if [ "$CONNECTIONMODE" == 'abap' ]; then
-	echo 'Testing network access to ABAP server'
-	timeout 2 nc -z "$ABAPSERVER" "$portnumber" >/dev/null 2>&1
-	portcheck1=$?
-elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	echo 'Testing network access to Message server'
-	timeout 2 nc -z "$MESSAGESERVERHOST" "$portnumber" >/dev/null 2>&1
-	portcheck1=$?
-fi
-
-if [ ! $portcheck1 -eq 0 ]; then
-	echo "Port $portnumber is not accessible. Allow access and run this script again."
-	exit 1
-else
-	echo 'SAP system is reachable'
-fi
-
-if [ $MULTICLIENTS ]; then
-	intprefix="$SID-$CLIENTNUMBER"
-else
-	intprefix="$SID"
 fi
 
 sysfileloc=$CONFIGPATH/$containername/$intprefix/
@@ -658,87 +523,6 @@ if [ ! $? -eq 0 ]; then
 	exit 1
 fi
 
-# If SNC is used, copy files required for SNC inside container mountpoint.
-# Container init script looks for the specific location (config folder/sec) and specific filenames (client.crt, client.key, server.crt etc)
-if [ $USESNC ]; then
-	# Cleanup old data, if exists
-	if [ -d "$sysfileloc"sec ]; then
-		sudo rm -rf "$sysfileloc"sec
-	fi
-	sudo mkdir -p "$sysfileloc"sec
-	sudo chown "$USER" "$sysfileloc"sec
-
-	if [ -f "$CLIENTPFX" ]; then
-		#PFX file exists. unpack it
-		openssl pkcs12 -in "$CLIENTPFX" -out "$sysfileloc"sec/client.p12 -nodes -passin pass:$CLIENTPFXPWD
-		MYCERT=$(openssl pkcs12 -info -in "$CLIENTPFX" -nodes -nokeys -clcerts -passin pass:$CLIENTPFXPWD | awk '/-----BEGIN/{a=1}/-----END/{print;a=0}a' | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
-	fi
-
-	if [ ! -f "$CLIENTPFX" ]; then
-		#CRT/KEY file go concatenated to client.p12
-		cat "$CLIENTCERT" "$CLIENTKEY" >"$sysfileloc"sec/client.p12
-	fi
-
-	if [ -n "${TRUSTEDCA[0]}" ]; then
-		# Add any CAs to be trusted
-		for i in "${TRUSTEDCA[@]}"; do
-			:
-			if [ -z "$RLINE" ]; then
-				RLINE="-r $i"
-				mkdir "$sysfileloc"sec/ca
-			else
-				RLINE+=" -r $i"
-			fi
-			cp "$i" "$sysfileloc"sec/ca/
-		done
-	fi
-	chmod +x "$SAPGENPSE"
-	sapgenpseresult=$(echo -e "\n" | "$SAPGENPSE" import_p12 -p "$sysfileloc"sec/snc.pse $RLINE "$sysfileloc"sec/client.p12 2>&1)
-	if [ ! $? -eq 0 ]; then
-		#sapgenpse failed
-		echo "Generating PSE environment failed. Failure reason:"
-		echo "$sapgenpseresult"
-		exit 1
-	fi
-
-	#Not doing anything for now, as in kvmi and kvsi modes client key is stored on disk for now
-	#if [ "$MODE" == "kvmi" ] || [ "$MODE" == "kvsi" ]; then
-	#az keyvault certificate import --vault-name "$kv" -n "$SID"-USERCERT -f "$sysfileloc"sec/client.p12
-	#Figure out name of the KV item
-	#	rm "$sysfileloc"sec/client.p12
-	#fi
-	cp "$SAPCRYPTOLIB" "$sysfileloc"sec/libsapcrypto.so
-	cp "$SERVERCERT" "$sysfileloc"sec/server.crt
-	cp "$SAPGENPSE" "$sysfileloc"sec/sapgenpse
-	chmod -R 600 "$sysfileloc"sec/*
-	chmod 700 "$sysfileloc"sec/libsapcrypto.so
-	chmod 700 "$sysfileloc"sec/sapgenpse
-	chmod 700 "$sysfileloc"sec
-	sudo chown root:root "$sysfileloc"sec
-fi
-
-
-if [ ! $USESNC ]; then
-	if [ -z $uservar ]; then
-		read -rp 'SAP Username: ' uservar
-		while [ -z "$uservar" ]; do
-			echo 'SAP Username is empty - try again'
-			read -rp 'SAP Username: ' uservar
-		done
-		uservar=$(echo "$uservar" | tr '[:upper:]' '[:lower:]')
-	fi
-
-	if [ "$uservar" == 'sap*' ]; then
-		pause 'Note: Using sap* as the connector user may create additional alerts. Press ENTER to continue.'
-	fi
-
-	#echo -n 'SAP Password: '
-	read_password passvar "SAP Password"
-	while [ -z "$passvar" ]; do
-		echo 'SAP Password empty - try again'
-		read_password passvar "SAP Password"
-	done
-fi
 if [ -z "$logwsid" ]; then
 	read -r -p 'Log Analytics Workspace ID : ' logwsid
 	while [ -z "$logwsid" ]; do
@@ -783,6 +567,8 @@ if [ "$os" != "fedora" ]; then
 	fi
 fi
 
+intprefix="$SID"
+
 #Building the container
 containername="$containername-$intprefix"
 
@@ -792,10 +578,6 @@ if [ $? -eq 0 ]; then
 	pause 'Press any key to update'
 	sudo docker stop "$containername" >/dev/null
 	sudo docker container rm "$containername" >/dev/null
-fi
-sncline=""
-if [ $USESNC ]; then
-	sncline="-e SECUDIR=/sapcon-app/sapcon/config/system/sec/"
 fi
 
 if [ -n "$HTTPPROXY" ]; then
@@ -811,13 +593,13 @@ fi
 
 if [ "$MODE" == "kvmi" ]; then
 	echo "Creating docker container for use with Azure Key vault and managed VM identity"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
 elif [ "$MODE" == "kvsi" ]; then
 	echo "Creating docker container for use with Azure Key vault and application authentication"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
 elif [ "$MODE" == "cfgf" ]; then
 	echo "Creating docker container for use with secrets in config file"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
 fi
 echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
 
@@ -834,31 +616,35 @@ GUID=$(uuidgen)
 
 # jq --arg guid "$GUID" '{ ($guid): . }' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
-if [ "$CONNECTIONMODE" == 'abap' ]; then
-    jq --arg ashost "$ABAPSERVER" '.abap_central_instance += {"ashost": $ashost}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-    jq --arg mshost "$MESSAGESERVERHOST" '.abap_central_instance += {"mshost": $mshost}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-    jq --arg msserv "$MESSAGESERVERPORT" '.abap_central_instance += {"msserv": $msserv}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-    jq --arg group "$LOGONGROUP" '.abap_central_instance += {"group": $group}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+if [ "$CONNECTIONMODE" == 'java' ]; then
+    jq --arg j2etz "$JAVATZ" '.file_extraction_java += {"javatz": $j2etz}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg j2einstance "$JAVAINSTANCE" '.file_extraction_java += {"javainstance": $j2einstance}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg j2eappserver "$JAVAAPPSERVER" '.file_extraction_java += {"javaappserver": $j2eappserver}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
+    jq --arg abapinstance "$ABAPSPINSTANCE" '.file_extraction_abap += {"instance": $abapinstance}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg abaptz "$ABAPSPTZ" '.file_extraction_abap += {"abaptz": $abaptz}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg appserver "$ABAPSPSERVER" '.file_extraction_abap += {"appserver": $appserver}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 fi
 
 if [ -n "$AZURERESOURCEID" ]; then
     jq --arg azure_resource_id "$AZURERESOURCEID" '.Azure Credentials += {"azure_resource_id": $azure_resource_id}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 fi
 
-jq --arg sysnr "$SYSTEMNR" '.abap_central_instance += {"sysnr": $sysnr}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-jq --arg client "$CLIENTNUMBER" '.abap_central_instance += {"client": $client}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 jq --arg sysid "$SID" '.abap_central_instance += {"sysid": $sysid}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
     jq '.secrets_source += {"secrets": "AZURE_KEY_VAULT"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg intprefix "$intprefix" '.secrets_source += {"intprefix": $intprefix}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg keyvault "$kv" '.secrets_source += {"keyvault": $keyvault}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-
-	if [ ! $USESNC ]; then
-		az keyvault secret set --name "$intprefix"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
-		az keyvault secret set --name "$intprefix"-ABAPUSER --value "$uservar" --description SECRET_ABAP_USER --vault-name "$kv" >/dev/null
+	
+	if [ "$CONNECTIONMODE" == 'java' ]; then
+		az keyvault secret set --name "$intprefix"-JAVAOSUSER --value "$javaosuser" --description SECRET_JAVA_OS_PASS --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-JAVAOSPASS --value "$javaospass" --description SECRET_JAVA_OS_PASS --vault-name "$kv" >/dev/null
+	elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
+		az keyvault secret set --name "$intprefix"-ABAPOSUSER --value "$abaposuser" --description SECRET_ABAP_OS_USER --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-ABAPOSPASS --value "$abapospass" --description SECRET_ABAP_OS_USER --vault-name "$kv" >/dev/null
 	fi
+
 	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
 	if [ ! $? -eq 0 ]; then
 		log 'Unable to set secrets in Azure Key Vault'
@@ -871,24 +657,14 @@ elif [ "$MODE" == 'cfgf' ]; then
     jq '.secrets_source += {"secrets": "DOCKER_FIXED"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg logwsidjs "$logwsid" '.azure_credentials += {"loganalyticswsid": $logwsidjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg logpubkeyjs "$logpubkey" '.azure_credentials += {"publickey": $logpubkeyjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-
-	if [ ! $USESNC ]; then
-    	jq --arg uservarjs "$uservar" '.abap_central_instance += {"user": $uservarjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-    	jq --arg passjs "$passvar" '.abap_central_instance += {"passwd": $passjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-	else
-		#workaround for blank username with SNC used causing a fail during audit log ollection
-    	jq '.abap_central_instance += {"user": "X509"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+	
+	if [ "$CONNECTIONMODE" == 'java' ]; then
+		jq --arg j2eosuser "$javaosuser" '.file_extraction_java += {"javaosuser": $j2eosuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq --arg j2eospasswd "$javaospasswd" '.file_extraction_java += {"javaospasswd": $j2eospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+	elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
+		jq --arg osuser "$OSSPUSER" '.abap_central_instance += {"osuser": $osuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq --arg ospasswd "$OSSPPASSWD" '.abap_central_instance += {"ospasswd": $ospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	fi
-fi
-
-if [ $USESNC ]; then
-    jq '.abap_central_instance += {"snc_lib": "/sapcon-app/sapcon/config/system/sec/libsapcrypto.so"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-	if [ -z "$CLIENTPFX" ]; then
-		MYCERT=$(openssl x509 -in "$CLIENTCERT" | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
-	fi
-    jq --arg mycertjs "$MYCERT" '.abap_central_instance += {"x509cert": $mycertjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-	PARTNERNAME=$(openssl x509 -in "$SERVERCERT" -text -noout | grep Subject: | awk -F: '{print $2}')
-    jq --arg partnernamejs "$PARTNERNAME" '.abap_central_instance += {"snc_partnername": "p:$partnernamejs"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 fi
 
 jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
