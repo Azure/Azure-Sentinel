@@ -616,6 +616,14 @@ GUID=$(uuidgen)
 
 # jq --arg guid "$GUID" '{ ($guid): . }' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
+# Attempt to run the jq commands
+if jq '.abap_table_selector |= map_values(. = "False")' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf" && \
+   jq '.logs_activation_status |= map_values(. = "False")' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"; then
+	echo "Successfully updated config file"
+else
+	echo "Error: Failed to update config file. Please update abap_table_selector and logs_activation_status manually"
+fi
+
 if [ "$CONNECTIONMODE" == 'java' ]; then
     jq --arg j2etz "$JAVATZ" '.file_extraction_java += {"javatz": $j2etz}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg j2einstance "$JAVAINSTANCE" '.file_extraction_java += {"javainstance": $j2einstance}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
@@ -661,11 +669,14 @@ elif [ "$MODE" == 'cfgf' ]; then
 	if [ "$CONNECTIONMODE" == 'java' ]; then
 		jq --arg j2eosuser "$javaosuser" '.file_extraction_java += {"javaosuser": $j2eosuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 		jq --arg j2eospasswd "$javaospasswd" '.file_extraction_java += {"javaospasswd": $j2eospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq '.logs_activation_status += {"javafileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
 		jq --arg osuser "$OSSPUSER" '.abap_central_instance += {"osuser": $osuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 		jq --arg ospasswd "$OSSPPASSWD" '.abap_central_instance += {"ospasswd": $ospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq '.logs_activation_status += {"abapfileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	fi
 fi
+
 
 jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
