@@ -158,10 +158,14 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 
 # Iterate through each detection recieved from the API call and assign the variables (Column Names in LA) to each XML variable
 Function Parse-and-Send($qualysResponse){
+try 
+{
 	$detections = @()
 	$results = "NA"
 	#iterate over the HOST LIST AND DETECTION LIST to have gerenralised detections
+	Write-Output $qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST
 	$qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST | ForEach-Object {
+		Write-Output "Host List Data = $qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST"
         $hostObject = New-Object -TypeName PSObject
         Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "HostId" -Value $_.ID
         Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "IpAddress" -Value $_.IP
@@ -267,8 +271,19 @@ Function Parse-and-Send($qualysResponse){
 		$responseCode = 0
 		$detections = @()
 	}# end of hostObject for loop
-} # end of Parse-and-Send Function
-
+ # end of Parse-and-Send Function	
+}
+catch{
+	$exp = $_.Exception
+	$expStatusCode = $exp.Response.StatusCode.value__
+	$line = $_.InvocationInfo.ScriptLineNumber
+	if (-not ($expStatusCode -eq 200)){
+		Write-Host "APIStatusCode:$expStatusCode `nAPIStatusMessage:$exp.Message. `nError @ line #$line. `nI'm exiting!"
+	}
+	Invoke-WebRequest -Headers $hdrs -Uri "$($base)/session/" -Method Post -Body "action=logout" -WebSession $LogonSession
+	Exit
+}
+}
 #===================================== main =====================================#
 [bool] $keep_running = $true
 
