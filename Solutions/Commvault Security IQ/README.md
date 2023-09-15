@@ -1,5 +1,5 @@
 # Commvault -- Sentinel Integration
-This Sentinel integration enables Commvault users to ingest alerts and other data into their Sentinel instance. With Analytic Rules, Sentinel can automatically create Sentinel incidents from incoming Commvault syslogs. 
+This Sentinel integration enables Commvault users to ingest alerts and other data into their Sentinel instance. With Analytic Rules, Sentinel can automatically create Sentinel incidents from incoming events and logs. 
 
 ### Key Features
 - Using Azure KeyVault, Commvault access tokens are automatically rotated, providing enhanced security. 
@@ -8,7 +8,7 @@ This Sentinel integration enables Commvault users to ingest alerts and other dat
 ## Prerequisites
 - Administrative access to your Commvault/Metallic environment.
 - Administrative access to your Azure Resource Group and Subscription.
-- An Azure Sentinel instance in the aforementioned Azure Resource Group.
+- A Microsoft Sentinel instance in the aforementioned Azure Resource Group.
 - An Azure Log Analytic Workspace in the aformentioned Azure Resource Group.
 
 ## Inventory of Required Assets
