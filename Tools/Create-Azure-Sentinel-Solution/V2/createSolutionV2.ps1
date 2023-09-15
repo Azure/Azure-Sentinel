@@ -2339,7 +2339,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
                                 dependsOn  =  @(
-                                    "[variables('_parserName$parserCounter')]"
+                                    "[variables('_parserId$parserCounter')]"
                                 );
                                 properties = [PSCustomObject]@{
                                     parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
