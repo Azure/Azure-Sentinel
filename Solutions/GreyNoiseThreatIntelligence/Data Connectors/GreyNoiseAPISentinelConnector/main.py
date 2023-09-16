@@ -15,6 +15,7 @@ from .stixGen import GreyNoiseStixGenerator
 
 REQUIRED_ENVIRONMENT_VARIABLES = [
     "GREYNOISE_KEY",
+    "GREYNOISE_LIMIT",
     "CLIENT_ID",
     "CLIENT_SECRET",
     "TENANT_ID",
@@ -136,6 +137,11 @@ class GreuNoiseSentinelUpdater(object):
             sys.exit(1)
             
         return response.json()
+    
+    def chunks(self, l: list, chunk_size: int):
+        """Yield successive n-sized chunks from list."""
+        for i in range(0, len(l), chunk_size):
+            yield l[i:i + chunk_size]
 
 
     def consume_ips(self):
@@ -143,9 +149,10 @@ class GreuNoiseSentinelUpdater(object):
             "Starting consumption of GreyNoise indicators with query %s"
             % (self.greynoise_query)
         )
-        total_addresses = 0
+        total_addresses = 0             # counter for total IPs consumed
+        payload_size = None             # total IPs available from query
         tries = int(self.greynoise_tries)
-        scroll = ""
+        scroll = ""                     # scroll token for pagination
         complete = False
 
         # MS Graph TI Upload API limits are 100 indicators per request and 100 requests per minute.
@@ -153,7 +160,7 @@ class GreuNoiseSentinelUpdater(object):
         token = self.get_token()
         while not complete:
             try:
-                if self.greynoise_size <= 2000:
+                if self.greynoise_size != 0 and self.greynoise_size<= 2000:
                     payload = self.session.query(
                         query=self.greynoise_query,
                         size=self.greynoise_size,
@@ -167,27 +174,33 @@ class GreuNoiseSentinelUpdater(object):
                     )
 
                 # this protects from bad / invalid queries
-                # and exists out before proceeding
+                # and exits out before proceeding
                 if payload["count"] == 0:
                     logging.info("GreyNoise Query return no results, exiting")
                     sys.exit(1)
 
+                # Capture the total number of indicators available
+                elif payload["count"] and payload_size is None:
+                    payload_size = int(payload["count"])
+                    logging.info("Total Indicators found: %s results" % payload_size)
+
                 # Loop to generate STIX objects and upload to Sentinel
                 stix_objects = []
                 counter = 0
-                for gn_object in payload["data"]:
-                    stix_object = self.gn_stix_generator.generate_indicator(gn_object)
-
-                    stix_objects.append(stix_object)
-                    counter += 1
-                    if counter == 100:
-                        # send batch to sentinel
-                        self.upload_indicators_to_sentinel(token, stix_objects)
-                        # reset counter and stix_objects
-                        counter = 0
-                        stix_objects = []
-                        logging.debug("Sent 100 GreyNoise indicators to Sentinel" )
-
+                chunk_size = 100    # MS Graph TI Upload API limits are 100 indicators per request and 100 requests per minute.
+                for batch in self.chunks(payload["data"], chunk_size):
+                    for gn_object in batch:
+                        stix_object = self.gn_stix_generator.generate_indicator(gn_object)
+                        expected_chunk_size = len(batch)
+                        stix_objects.append(stix_object)
+                        counter += 1
+                        if counter == expected_chunk_size:
+                            # send batch to sentinel
+                            # self.upload_indicators_to_sentinel(token, stix_objects)
+                            # reset counter and stix_objects
+                            counter = 0
+                            stix_objects = []
+                            # logging.info("Sent 100 GreyNoise indicators to Sentinel" )
 
                 # the scroll is for pagination but does not always exist because
                 # we have consumed all the IPs
@@ -206,9 +219,15 @@ class GreuNoiseSentinelUpdater(object):
                 # you limit the results on a query, the complete flag doesn't flip to
                 # true correctly
                 if (
-                    self.greynoise_size != ""
-                    and int(self.greynoise_size) < int(payload["count"])  # noqa: W503
-                    and int(self.greynoise_size) == int(total_addresses)  # noqa: W503
+                    self.greynoise_size == 0
+                    # and self.greynoise_size < int(payload["count"])  # noqa: W503
+                    and total_addresses >=  payload_size # noqa: W503
+                ):
+                    break
+                elif (
+                    self.greynoise_size != 0
+                    and self.greynoise_size < int(payload["count"])  # noqa: W503
+                    and self.greynoise_size <= total_addresses # noqa: W503
                 ):
                     break
 
@@ -226,7 +245,7 @@ class GreuNoiseSentinelUpdater(object):
                     sys.exit(3)
 
         logging.info(
-            "Ingest process completed.  Inserted %s Indicators into redis."
+            "Ingest process completed.  Inserted %s Indicators into Microsoft Sentinel Threat Intelligence."
             % total_addresses
         )
 
@@ -282,7 +301,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
     # SET VARS
     query_time = "1"
-    size = "50000"
+    size = int(env.get("GREYNOISE_LIMIT", 0))
 
     # our classifications are formatted for greynoise
     classifications = build_query_string(env)
@@ -311,16 +330,16 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("Querying GreyNoise API")
         try:
             size = int(size)
-            if size > 500000 or size < 1:
-                logging.error("Size input is not a valid integer between 1 and 500000")
-                sys.exit(1)
-            else:
+            if size == 0:
+                logging.info("No size limit provided, returning all indicators available")
+            elif size <= 1:
                 logging.info("Limiting results to %s" % str(size))
 
         except ValueError:
             logging.error("Input for size is not valid")
             sys.exit(1)
     else:
+        size = 0
         logging.info("No size limited provided, returning all indicators available")
 
      # set up everything required to pass into the updater
