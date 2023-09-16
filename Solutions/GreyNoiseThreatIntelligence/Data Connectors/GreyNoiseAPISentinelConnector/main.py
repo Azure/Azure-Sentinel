@@ -196,7 +196,7 @@ class GreuNoiseSentinelUpdater(object):
                         counter += 1
                         if counter == expected_chunk_size:
                             # send batch to sentinel
-                            # self.upload_indicators_to_sentinel(token, stix_objects)
+                            self.upload_indicators_to_sentinel(token, stix_objects)
                             # reset counter and stix_objects
                             counter = 0
                             stix_objects = []
