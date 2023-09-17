@@ -3100,7 +3100,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
             apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$global:parserCounter'),'/'))))]";
             dependsOn  =  @(
-                "[variables('parserObject$global:parserCounter')._parserName$global:parserCounter]"
+                "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
                 parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
