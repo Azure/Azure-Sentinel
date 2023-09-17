@@ -23,8 +23,8 @@ try
 		$baseMetadata = $pipelineDataFileRawContent
 		$metadataCounter = 0
 		$global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-
-		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "$global:solutionId"
+		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
+		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
 		
 		$metadataAuthor = $contentToImport.Author.Split(" - ");
 		if($null -ne $metadataAuthor[1])

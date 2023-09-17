@@ -126,8 +126,8 @@ try {
         $metadataAuthor = $contentToImport.Author.Split(" - ");
 
         $global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "$global:solutionId"
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
         
         # VERIFY IF IT IS A CONTENTSPEC OR CONTENTPACKAGE RESOURCE TYPE BY VERIFYING VERSION FROM  DATA FILE
         $contentResourceDetails = returnContentResources($contentToImport.Version)
