@@ -1,7 +1,7 @@
 # this is only for build pipeline not for local use
 param ($pipelineBasePath, $pipelineSolutionName, $pipelineDataFileRawContent, $dataFileName, $dataConnectorFolderName, $dataFolderActualName, $instrumentationKey, $pullRequestNumber, $runId, $calculatedPackageVersion, $defaultPackageVersion, $isWatchListInsideOfWorkbooksFolder = $false)
 . ./Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1 # load common functions
-. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load common functions
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load app insights code
 
 try 
 {
@@ -23,8 +23,8 @@ try
 		$baseMetadata = $pipelineDataFileRawContent
 		$metadataCounter = 0
 		$global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $global:solutionId
-		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
+
+		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "$global:solutionId"
 		
 		$metadataAuthor = $contentToImport.Author.Split(" - ");
 		if($null -ne $metadataAuthor[1])
