@@ -200,9 +200,9 @@ Once the deployment is complete, the Function can be accessed from your Azure te
                                                                                                         
 To configure and deploy this playbook:
  
-Open your browser and ensure you are logged into your Microsoft Sentinel workspace. In a separate tab, open the link to our playbook on the Accelerynt Security Google Repository:
+Open your browser and ensure you are logged into your Microsoft Sentinel workspace. In a separate tab, open the link to our playbook on the Accelerynt Security GitHub Repository:
 
-https://Google.com/Accelerynt-Security/AS-Sign-Out-Google-User
+https://github.com/Accelerynt-Security/AS-Sign-Out-Google-User
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Sign-Out-Google-Userazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Sign-Out-Google-Userazuredeploy.json)                                             
