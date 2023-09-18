@@ -47,6 +47,36 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let ThreatConfidenceLookup_undefined = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_undefined: int
+  )
+      [
+      "FALSE_POSITIVE", 5,
+      "Undefined", 15,
+      "SUSPICIOUS", 25,
+      "TRUE_POSITIVE", 33 
+  ];
+  let ThreatConfidenceLookup_suspicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_suspicious: int
+  )
+      [
+      "FALSE_POSITIVE", 40,
+      "Undefined", 50,
+      "SUSPICIOUS", 60,
+      "TRUE_POSITIVE", 67 
+  ];
+  let ThreatConfidenceLookup_malicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_malicious: int
+  )
+      [
+      "FALSE_POSITIVE", 75,
+      "Undefined", 80,
+      "SUSPICIOUS", 90,
+      "TRUE_POSITIVE", 100 
+  ];
   let parser = (
       starttime: datetime=datetime(null),
       endtime: datetime=datetime(null),
@@ -58,18 +88,28 @@ ParserQuery: |
       eventtype: string='Query',
       disabled: bool=false
       ) {
-      SentinelOne_CL
-      | where not(disabled)
-          and (eventtype == '*' or eventtype == "Query")
-          and (isnull(starttime) or TimeGenerated >= starttime)
-          and (isnull(endtime) or TimeGenerated <= endtime)
-          and event_name_s == "Alerts." 
-          and alertInfo_eventType_s == "DNS"
-          and srcipaddr == '*'
-          and (array_length(domain_has_any) == 0 or alertInfo_dnsRequest_s has_any (domain_has_any))
-          and (response_has_ipv4 == '*' or has_ipv4(alertInfo_dnsResponse_s, response_has_ipv4))
-          and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(alertInfo_dnsResponse_s, response_has_any_prefix))
-      | parse alertInfo_dnsResponse_s with * "type: " DnsQueryType: int " " RestMessage
+      let alldata = SentinelOne_CL
+          | where not(disabled)
+              and (eventtype == '*' or eventtype == "Query")
+              and (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+              and event_name_s == "Alerts." 
+              and alertInfo_eventType_s == "DNS"
+              and srcipaddr == '*'
+              and (array_length(domain_has_any) == 0 or alertInfo_dnsRequest_s has_any (domain_has_any))
+              and (response_has_ipv4 == '*' or has_ipv4(alertInfo_dnsResponse_s, response_has_ipv4))
+              and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(alertInfo_dnsResponse_s, response_has_any_prefix))
+          | parse alertInfo_dnsResponse_s with * "type: " DnsQueryType: int " " RestMessage;
+      let undefineddata = alldata
+          | where ruleInfo_treatAsThreat_s == "UNDEFINED"
+          | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;
+      let suspiciousdata = alldata
+          | where ruleInfo_treatAsThreat_s == "Suspicious"
+          | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;
+      let maaliciousdata = alldata
+          | where ruleInfo_treatAsThreat_s == "Malicious"
+          | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;
+      union undefineddata, suspiciousdata, maaliciousdata
       | extend 
           DnsResponseCode = case(
                         alertInfo_dnsResponse_s has "NoError" or alertInfo_dnsResponse_s has "No Error",
@@ -120,7 +160,7 @@ ParserQuery: |
                         int(23),
                         int(0)
                     ),
-                    AdditionalFields = bag_pack(
+          AdditionalFields = bag_pack(
                         "MachineType",
                         agentDetectionInfo_machineType_s,
                         "OsRevision",
@@ -129,7 +169,8 @@ ParserQuery: |
       | extend EventResultDetails = _ASIM_LookupDnsResponseCode(DnsResponseCode)
       | where (responsecodename == '*' or EventResultDetails =~ responsecodename)
       | extend 
-          DnsQueryType = iff(isempty(DnsQueryType) and DnsResponseCode == 0, int(1), DnsQueryType)
+          DnsQueryType = iff(isempty(DnsQueryType) and DnsResponseCode == 0, int(1), DnsQueryType),
+          ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious)
       | project-rename
           EventStartTime = sourceProcessInfo_pidStarttime_t,
           DnsQuery = alertInfo_dnsRequest_s,
@@ -144,7 +185,8 @@ ParserQuery: |
           RuleName = ruleInfo_name_s,
           SrcProcessId = sourceProcessInfo_pid_s,
           SrcProcessName = sourceProcessInfo_name_s,
-          SrcUsername = sourceProcessInfo_user_s
+          SrcUsername = sourceProcessInfo_user_s,
+          ThreatOriginalConfidence = ruleInfo_treatAsThreat_s
       | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
       | extend
           Dvc = DvcId,
@@ -166,8 +208,8 @@ ParserQuery: |
           Src = SrcHostname,
           Hostname = SrcHostname,
           DnsResponseCodeName = EventResultDetails,
-          DvcIdType = iff(isnotempty(DvcId),"Other",""),
-          SrcDvcIdType = iff(isnotempty(SrcDvcId),"Other","")
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          SrcDvcIdType = iff(isnotempty(SrcDvcId), "Other", "")
       | extend
           EventCount = int(1),
           EventProduct = "SentinelOne",
@@ -190,11 +232,12 @@ ParserQuery: |
           Computer,
           MG,
           ManagementGroupName,
-          SourceSystem
+          SourceSystem,
+          ThreatConfidence_*
   };
   parser(
-      starttime=starttime, 
-      endtime=endtime, 
+      starttime=starttime,
+      endtime=endtime,
       srcipaddr=srcipaddr,
       domain_has_any=domain_has_any,
       responsecodename=responsecodename, 
