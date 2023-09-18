@@ -1,7 +1,7 @@
 Parser:
   Title: Registry Event ASIM Parser for SentinelOne
   Version: '0.1.0'
-  LastUpdated: Jul 25, 2023
+  LastUpdated: Sep 18, 2023
 Product:
   Name: SentinelOne
 Normalization:
@@ -36,7 +36,7 @@ ParserQuery: |
       RegistryKeyPrefix: string,
       RegistryKeyNormalizedPrefix: string
   )
-  [
+      [
       "MACHINE", "HKEY_LOCAL_MACHINE",
       "USER", "HKEY_USERS",
       "CONFIG", "HKEY_CURRENT_CONFIG",
@@ -46,7 +46,7 @@ ParserQuery: |
       alertInfo_registryOldValueType_s: string,
       RegistryPreviousValueType_lookup: string
   )
-  [
+      [
       "BINARY", "Reg_Binary",
       "DWORD", "Reg_DWord",
       "QWORD", "Reg_QWord",
@@ -55,26 +55,71 @@ ParserQuery: |
       "MULTI_SZ", "Reg_Multi_Sz",
       "DWORD_BIG_ENDIAN", "Reg_DWord"
   ];
+  let ThreatConfidenceLookup_undefined = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_undefined: int
+  )
+      [
+      "FALSE_POSITIVE", 5,
+      "Undefined", 15,
+      "SUSPICIOUS", 25,
+      "TRUE_POSITIVE", 33 
+  ];
+  let ThreatConfidenceLookup_suspicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_suspicious: int
+  )
+      [
+      "FALSE_POSITIVE", 40,
+      "Undefined", 50,
+      "SUSPICIOUS", 60,
+      "TRUE_POSITIVE", 67 
+  ];
+  let ThreatConfidenceLookup_malicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_malicious: int
+  )
+      [
+      "FALSE_POSITIVE", 75,
+      "Undefined", 80,
+      "SUSPICIOUS", 90,
+      "TRUE_POSITIVE", 100 
+  ];
   let parser = (disabled: bool=false) { 
-      SentinelOne_CL
+      let alldata = SentinelOne_CL 
       | where not(disabled)
           and event_name_s == "Alerts."
           and alertInfo_eventType_s in ("REGVALUEMODIFIED", "REGVALUECREATE", "REGKEYCREATE", "REGKEYDELETE", "REGVALUEDELETE", "REGKEYRENAME")
       | lookup EventTypeLookup on alertInfo_eventType_s
-      | lookup RegistryPreviousValueTypeLookup on alertInfo_registryOldValueType_s
+      | lookup RegistryPreviousValueTypeLookup on alertInfo_registryOldValueType_s;
+      let undefineddata = alldata
+      | where ruleInfo_treatAsThreat_s == "UNDEFINED"
+      | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;
+      let suspiciousdata = alldata
+      | where ruleInfo_treatAsThreat_s == "Suspicious"
+      | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;
+      let maliciousdata = alldata
+      | where ruleInfo_treatAsThreat_s == "Malicious"
+      | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;
+      union undefineddata, suspiciousdata, maliciousdata
       | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
       | extend RegistryKeyPrefix = tostring(split(alertInfo_registryKeyPath_s, @'\')[0])
       | lookup RegistryKeyPrefixLookup on RegistryKeyPrefix
       | extend RegistryKey = replace_string(alertInfo_registryKeyPath_s, RegistryKeyPrefix, RegistryKeyNormalizedPrefix)
-      | extend RegistryValue = iff(alertInfo_eventType_s in ("REGVALUEMODIFIED", "REGVALUECREATE", "REGVALUEDELETE") , tostring(split(alertInfo_registryKeyPath_s, @'\')[-1]), "")
+      | extend RegistryValue = iff(alertInfo_eventType_s in ("REGVALUEMODIFIED", "REGVALUECREATE", "REGVALUEDELETE"), tostring(split(alertInfo_registryKeyPath_s, @'\')[-1]), "")
       | extend RegistryValueType = case(
-                                 alertInfo_registryValue_s matches regex '^[0-9]+$', "Reg_Dword",
-                                 alertInfo_registryValue_s startswith "0x" and strlen(alertInfo_registryValue_s) <= 10, "Reg_DWord",
-                                 alertInfo_registryValue_s startswith "0x" and strlen(alertInfo_registryValue_s) > 10, "Reg_QWord",
-                                 alertInfo_registryValue_s matches regex '^[A-Fa-f0-9]+$', "Reg_Binary",
-                                 ""
-                             )
-      | extend RegistryValueType = iff(alertInfo_eventType_s in ("REGVALUEMODIFIED", "REGVALUECREATE") and isempty(RegistryValueType), "Reg_Sz", RegistryValueType)
+                                  alertInfo_registryValue_s matches regex '^[0-9]+$',
+                                  "Reg_Dword",
+                                  alertInfo_registryValue_s startswith "0x" and strlen(alertInfo_registryValue_s) <= 10,
+                                  "Reg_DWord",
+                                  alertInfo_registryValue_s startswith "0x" and strlen(alertInfo_registryValue_s) > 10,
+                                  "Reg_QWord",
+                                  alertInfo_registryValue_s matches regex '^[A-Fa-f0-9]+$',
+                                  "Reg_Binary",
+                                  ""
+                              )
+      | extend RegistryValueType = iff(alertInfo_eventType_s in ("REGVALUEMODIFIED", "REGVALUECREATE") and isempty(RegistryValueType), "Reg_Sz", RegistryValueType),
+              ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious)
       | project-rename
           ActingProcessId = sourceProcessInfo_pid_s,
           ActorUsername = sourceProcessInfo_user_s,
@@ -89,7 +134,9 @@ ParserQuery: |
           EventOriginalType = alertInfo_eventType_s,
           ParentProcessName = sourceParentProcessInfo_name_s,
           RegistryValueData = alertInfo_registryValue_s,
-          EventOriginalUid = alertInfo_dvEventId_s
+          EventOriginalUid = alertInfo_dvEventId_s,
+          RuleName = ruleInfo_name_s,
+          ThreatOriginalConfidence = ruleInfo_treatAsThreat_s
       | extend
           EventCount = int(1),
           EventProduct = "SentinelOne",
@@ -110,7 +157,8 @@ ParserQuery: |
           User = ActorUsername,
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           ActorUsernameType =  _ASIM_GetUsernameType(ActorUsername),
-          ActorUserType = _ASIM_GetUserType(ActorUsername, "")
+          ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
+          Rule = RuleName
       | project-away 
           *_d,
           *_s,
@@ -126,6 +174,7 @@ ParserQuery: |
           TenantId,
           RegistryKeyPrefix,
           RegistryKeyNormalizedPrefix,
-          RegistryPreviousValueType_lookup
+          RegistryPreviousValueType_lookup,
+          ThreatConfidence_*
   };
   parser(disabled = disabled)
