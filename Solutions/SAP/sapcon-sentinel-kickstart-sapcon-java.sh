@@ -443,9 +443,9 @@ if [ $DEVMODE ]; then
 	acr=$(echo "$DEVURL" | awk -F/ '{print $1}')
 	sudo docker login "$acr" -u "$DEVACRLOGIN" -p "$DEVACRPWD"
 	tagver=$(echo "$DEVURL" | awk -F: '{print ":"$2}')
-elif [ -n $LOCALIMG ]; then
-	dockerimage="$LOCALIMG"
-	tagver=''
+# elif [ -n $LOCALIMG ]; then
+# 	dockerimage="$LOCALIMG"
+# 	tagver=''
 else
 	dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
 	if [ $CLOUD == 'public' ]; then
