@@ -655,8 +655,8 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 
 	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
 	if [ ! $? -eq 0 ]; then
-		log 'Unable to set secrets in Azure Key Vault'
-		log 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
+		echo 'Unable to set secrets in Azure Key Vault'
+		echo 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
 		exit 1
 	fi
 	az keyvault secret set --name "$intprefix"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
