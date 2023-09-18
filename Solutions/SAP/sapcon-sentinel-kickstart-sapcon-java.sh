@@ -627,11 +627,13 @@ if [ "$CONNECTIONMODE" == 'java' ]; then
     jq --arg j2einstance "$JAVAINSTANCE" '.file_extraction_java += {"javainstance": $j2einstance}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg j2eappserver "$JAVAAPPSERVER" '.file_extraction_java += {"javaappserver": $j2eappserver}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	jq '.logs_activation_status += {"javafileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+	jq '.logs_activation_status.javafileslogs = "True"' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
     jq --arg abapinstance "$ABAPSPINSTANCE" '.file_extraction_abap += {"instance": $abapinstance}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg abaptz "$ABAPSPTZ" '.file_extraction_abap += {"abaptz": $abaptz}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg appserver "$ABAPSPSERVER" '.file_extraction_abap += {"appserver": $appserver}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	jq '.logs_activation_status += {"abapfileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+	jq '.logs_activation_status.abapfileslogs = "True"' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 fi
 
 if [ -n "$AZURERESOURCEID" ]; then
