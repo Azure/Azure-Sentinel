@@ -626,10 +626,12 @@ if [ "$CONNECTIONMODE" == 'java' ]; then
     jq --arg j2etz "$JAVATZ" '.file_extraction_java += {"javatz": $j2etz}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg j2einstance "$JAVAINSTANCE" '.file_extraction_java += {"javainstance": $j2einstance}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg j2eappserver "$JAVAAPPSERVER" '.file_extraction_java += {"javaappserver": $j2eappserver}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+	jq '.logs_activation_status += {"javafileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
     jq --arg abapinstance "$ABAPSPINSTANCE" '.file_extraction_abap += {"instance": $abapinstance}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg abaptz "$ABAPSPTZ" '.file_extraction_abap += {"abaptz": $abaptz}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg appserver "$ABAPSPSERVER" '.file_extraction_abap += {"appserver": $appserver}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+	jq '.logs_activation_status += {"abapfileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 fi
 
 if [ -n "$AZURERESOURCEID" ]; then
@@ -667,16 +669,14 @@ elif [ "$MODE" == 'cfgf' ]; then
 	if [ "$CONNECTIONMODE" == 'java' ]; then
 		jq --arg j2eosuser "$JAVAOSUSER" '.file_extraction_java += {"javaosuser": $j2eosuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 		jq --arg j2eospasswd "$JAVAOSPASS" '.file_extraction_java += {"javaospasswd": $j2eospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-		jq '.logs_activation_status += {"javafileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
 		jq --arg osuser "$ABAPOSUSER" '.abap_central_instance += {"osuser": $osuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 		jq --arg ospasswd "$ABAPOSPASS" '.abap_central_instance += {"ospasswd": $ospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-		jq '.logs_activation_status += {"abapfileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	fi
 fi
 
 
-jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "/opt/sapcon/PIP/systemconfig.json" > "/opt/sapcon/PIP/systemconfig.json.tmp" && mv "/opt/sapcon/PIP/systemconfig.json.tmp" "/opt/sapcon/PIP/systemconfig222.json"
 
 ### end of json config creation
 
