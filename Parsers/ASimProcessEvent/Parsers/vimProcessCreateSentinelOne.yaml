@@ -1,7 +1,7 @@
 Parser:
   Title: Process Create ASIM parser for SentinelOne
   Version: '0.1.0'
-  LastUpdated: Jul 24, 2023
+  LastUpdated: Sep 18, 2023
 Product:
   Name: SentinelOne
 Normalization:
@@ -62,6 +62,36 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let ThreatConfidenceLookup_undefined = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_undefined: int
+  )
+  [
+      "FALSE_POSITIVE", 5,
+      "Undefined", 15,
+      "SUSPICIOUS", 25,
+      "TRUE_POSITIVE", 33 
+  ];
+  let ThreatConfidenceLookup_suspicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_suspicious: int
+  )
+  [
+      "FALSE_POSITIVE", 40,
+      "Undefined", 50,
+      "SUSPICIOUS", 60,
+      "TRUE_POSITIVE", 67 
+  ];
+  let ThreatConfidenceLookup_malicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_malicious: int
+  )
+  [
+      "FALSE_POSITIVE", 75,
+      "Undefined", 80,
+      "SUSPICIOUS", 90,
+      "TRUE_POSITIVE", 100 
+  ];
   let parser = (
       starttime: datetime=datetime(null),
       endtime: datetime=datetime(null),
@@ -77,23 +107,34 @@ ParserQuery: |
       eventtype: string='*',
       hashes_has_any: dynamic=dynamic([]),
       disabled: bool=false) {
-      SentinelOne_CL
-      | where not(disabled)
-          and (isnull(starttime) or TimeGenerated >= starttime)
-          and (isnull(endtime) or TimeGenerated <= endtime)
-          and event_name_s == "Alerts."
-          and alertInfo_eventType_s == "PROCESSCREATION" 
-          and (eventtype == '*' or eventtype == 'PROCESSCREATION')
-          and array_length(dvcipaddr_has_any_prefix) == 0
-          and (targetusername_has == '*' or sourceProcessInfo_user_s has targetusername_has)
-          and (array_length(commandline_has_all) == 0 or targetProcessInfo_tgtProcCmdLine_s has_all (commandline_has_all))
-          and (array_length(commandline_has_any) == 0 or targetProcessInfo_tgtProcCmdLine_s has_any (commandline_has_any))
-          and (array_length(commandline_has_any_ip_prefix) == 0 or has_any_ipv4_prefix(targetProcessInfo_tgtProcCmdLine_s, commandline_has_any_ip_prefix))
-          and (array_length(actingprocess_has_any) == 0 or sourceProcessInfo_name_s has_any (actingprocess_has_any))
-          and (array_length(targetprocess_has_any) == 0 or targetProcessInfo_tgtProcName_s has_any (targetprocess_has_any))
-          and (array_length(parentprocess_has_any) == 0 or sourceParentProcessInfo_name_s has_any (parentprocess_has_any))
-          and (array_length(dvchostname_has_any) == 0 or agentDetectionInfo_name_s  has_any (dvchostname_has_any))
-          and array_length(hashes_has_any) == 0 or targetProcessInfo_tgtFileHashSha1_s has_any (hashes_has_any) or targetProcessInfo_tgtFileHashSha256_s has_any (hashes_has_any)
+      let alldata = SentinelOne_CL
+        | where not(disabled)
+            and (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and event_name_s == "Alerts."
+            and alertInfo_eventType_s == "PROCESSCREATION"
+            and (eventtype == '*' or eventtype == 'ProcessCreated')
+            and array_length(dvcipaddr_has_any_prefix) == 0
+            and (targetusername_has == '*' or sourceProcessInfo_user_s has targetusername_has)
+            and (array_length(commandline_has_all) == 0 or targetProcessInfo_tgtProcCmdLine_s has_all (commandline_has_all))
+            and (array_length(commandline_has_any) == 0 or targetProcessInfo_tgtProcCmdLine_s has_any (commandline_has_any))
+            and (array_length(commandline_has_any_ip_prefix) == 0 or has_any_ipv4_prefix(targetProcessInfo_tgtProcCmdLine_s, commandline_has_any_ip_prefix))
+            and (array_length(actingprocess_has_any) == 0 or sourceProcessInfo_name_s has_any (actingprocess_has_any))
+            and (array_length(targetprocess_has_any) == 0 or targetProcessInfo_tgtProcName_s has_any (targetprocess_has_any))
+            and (array_length(parentprocess_has_any) == 0 or sourceParentProcessInfo_name_s has_any (parentprocess_has_any))
+            and (array_length(dvchostname_has_any) == 0 or agentDetectionInfo_name_s has_any (dvchostname_has_any))
+            and (array_length(hashes_has_any) == 0 or targetProcessInfo_tgtFileHashSha1_s has_any (hashes_has_any) or targetProcessInfo_tgtFileHashSha256_s has_any (hashes_has_any));
+      let undefineddata = alldata
+          | where ruleInfo_treatAsThreat_s == "UNDEFINED"
+          | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;
+      let suspiciousdata = alldata
+          | where ruleInfo_treatAsThreat_s == "Suspicious"
+          | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;
+      let maaliciousdata = alldata
+          | where ruleInfo_treatAsThreat_s == "Malicious"
+          | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;
+      union undefineddata, suspiciousdata, maaliciousdata
+      | extend ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious)
       | project-rename
           DvcId = agentDetectionInfo_uuid_g,
           EventStartTime = sourceProcessInfo_pidStarttime_t,
@@ -115,7 +156,9 @@ ParserQuery: |
           TargetProcessIntegrityLevel = targetProcessInfo_tgtProcIntegrityLevel_s,
           EventOriginalType = alertInfo_eventType_s,
           EventOriginalSeverity = ruleInfo_severity_s,
-          EventOriginalUid = alertInfo_dvEventId_s
+          EventOriginalUid = alertInfo_dvEventId_s,
+          RuleName = ruleInfo_name_s,
+          ThreatOriginalConfidence = ruleInfo_treatAsThreat_s
       | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
       | extend
           ActingProcessId = sourceProcessInfo_pid_s,
@@ -127,7 +170,7 @@ ParserQuery: |
           TargetProcessSHA256 = targetProcessInfo_tgtFileHashSha256_s,
           ParentProcessMD5 = replace_string(sourceParentProcessInfo_fileHashMd5_g, "-", ""),
           ActingProcessMD5 = replace_string(sourceProcessInfo_fileHashMd5_g, "-", ""),
-          EventSeverity = iff(EventOriginalSeverity  == "Critical", "High", EventOriginalSeverity)
+          EventSeverity = iff(EventOriginalSeverity == "Critical", "High", EventOriginalSeverity)
       | extend
           EventCount = int(1),
           EventProduct = "SentinelOne",
@@ -137,14 +180,15 @@ ParserQuery: |
           EventType = "ProcessCreated",
           EventVendor = "SentinelOne",
           EventSchema = "ProcessEvent"
-      | extend 
+      | extend
           Dvc = DvcId,
           EventEndTime = EventStartTime,
           User = TargetUsername,
           ActingProcessCreationTime = EventStartTime,
           CommandLine = TargetProcessCommandLine,
-          Process = TargetProcessName
-      | extend 
+          Process = TargetProcessName,
+          Rule = RuleName
+      | extend
           HashType = case(
                 isnotempty(Hash) and isnotempty(TargetProcessSHA256),
                 "TargetProcessSHA256",
@@ -169,11 +213,12 @@ ParserQuery: |
           Computer,
           MG,
           ManagementGroupName,
-          SourceSystem
+          SourceSystem,
+          ThreatConfidence_*
   };
   parser(
-      starttime=starttime, 
-      endtime=endtime, 
+      starttime=starttime,
+      endtime=endtime,
       commandline_has_any=commandline_has_any,
       commandline_has_all=commandline_has_all,
       commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
