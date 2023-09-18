@@ -621,6 +621,7 @@ GUID=$(uuidgen)
 # Attempt to run the jq commands
 jq '.abap_table_selector = {}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 jq '.logs_activation_status = {}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+jq 'del(.abap_central_instance)' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 if [ "$CONNECTIONMODE" == 'java' ]; then
     jq --arg j2etz "$JAVATZ" '.file_extraction_java += {"javatz": $j2etz}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
