@@ -619,12 +619,8 @@ GUID=$(uuidgen)
 # jq --arg guid "$GUID" '{ ($guid): . }' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 # Attempt to run the jq commands
-if jq '.abap_table_selector |= map_values(. = "False")' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf" && \
-   jq '.logs_activation_status |= map_values(. = "False")' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"; then
-	echo "Successfully updated config file"
-else
-	echo "Error: Failed to update config file. Please update abap_table_selector and logs_activation_status manually"
-fi
+jq '.abap_table_selector = {}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+
 
 if [ "$CONNECTIONMODE" == 'java' ]; then
     jq --arg j2etz "$JAVATZ" '.file_extraction_java += {"javatz": $j2etz}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
