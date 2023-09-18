@@ -640,8 +640,6 @@ if [ -n "$AZURERESOURCEID" ]; then
     jq --arg azure_resource_id "$AZURERESOURCEID" '.Azure Credentials += {"azure_resource_id": $azure_resource_id}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 fi
 
-jq --arg sysid "$SID" '.abap_central_instance += {"sysid": $sysid}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-
 if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
     jq '.secrets_source += {"secrets": "AZURE_KEY_VAULT"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg intprefix "$intprefix" '.secrets_source += {"intprefix": $intprefix}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
@@ -672,8 +670,8 @@ elif [ "$MODE" == 'cfgf' ]; then
 		jq --arg j2eosuser "$JAVAOSUSER" '.file_extraction_java += {"javaosuser": $j2eosuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 		jq --arg j2eospasswd "$JAVAOSPASS" '.file_extraction_java += {"javaospasswd": $j2eospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
-		jq --arg osuser "$ABAPOSUSER" '.abap_central_instance += {"osuser": $osuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-		jq --arg ospasswd "$ABAPOSPASS" '.abap_central_instance += {"ospasswd": $ospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq --arg osuser "$ABAPOSUSER" '.file_extraction_abap += {"osuser": $osuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq --arg ospasswd "$ABAPOSPASS" '.file_extraction_abap += {"ospasswd": $ospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	fi
 fi
 
