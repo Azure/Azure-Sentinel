@@ -515,6 +515,8 @@ if [ -z "$SID" ]; then
 	done
 fi
 
+intprefix="$SID"
+
 sysfileloc=$CONFIGPATH/$containername/$intprefix/
 sudo mkdir -p "$sysfileloc"
 sudo chown "$USER" "$sysfileloc"
