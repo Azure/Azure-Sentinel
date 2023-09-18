@@ -646,11 +646,11 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
     jq --arg keyvault "$kv" '.secrets_source += {"keyvault": $keyvault}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	
 	if [ "$CONNECTIONMODE" == 'java' ]; then
-		az keyvault secret set --name "$intprefix"-JAVAOSUSER --value "$javaosuser" --description SECRET_JAVA_OS_PASS --vault-name "$kv" >/dev/null
-		az keyvault secret set --name "$intprefix"-JAVAOSPASS --value "$javaospass" --description SECRET_JAVA_OS_PASS --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-JAVAOSUSER --value "$JAVAOSUSER" --description SECRET_JAVA_OS_PASS --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-JAVAOSPASS --value "$JAVAOSPASS" --description SECRET_JAVA_OS_PASS --vault-name "$kv" >/dev/null
 	elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
-		az keyvault secret set --name "$intprefix"-ABAPOSUSER --value "$abaposuser" --description SECRET_ABAP_OS_USER --vault-name "$kv" >/dev/null
-		az keyvault secret set --name "$intprefix"-ABAPOSPASS --value "$abapospass" --description SECRET_ABAP_OS_USER --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-ABAPOSUSER --value "$ABAPOSUSER" --description SECRET_ABAP_OS_USER --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-ABAPOSPASS --value "$ABAPOSPASS" --description SECRET_ABAP_OS_USER --vault-name "$kv" >/dev/null
 	fi
 
 	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
@@ -667,12 +667,12 @@ elif [ "$MODE" == 'cfgf' ]; then
     jq --arg logpubkeyjs "$logpubkey" '.azure_credentials += {"publickey": $logpubkeyjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	
 	if [ "$CONNECTIONMODE" == 'java' ]; then
-		jq --arg j2eosuser "$javaosuser" '.file_extraction_java += {"javaosuser": $j2eosuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-		jq --arg j2eospasswd "$javaospasswd" '.file_extraction_java += {"javaospasswd": $j2eospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq --arg j2eosuser "$JAVAOSUSER" '.file_extraction_java += {"javaosuser": $j2eosuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq --arg j2eospasswd "$JAVAOSPASS" '.file_extraction_java += {"javaospasswd": $j2eospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 		jq '.logs_activation_status += {"javafileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
-		jq --arg osuser "$OSSPUSER" '.abap_central_instance += {"osuser": $osuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
-		jq --arg ospasswd "$OSSPPASSWD" '.abap_central_instance += {"ospasswd": $ospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq --arg osuser "$ABAPOSUSER" '.abap_central_instance += {"osuser": $osuser}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+		jq --arg ospasswd "$ABAPOSPASS" '.abap_central_instance += {"ospasswd": $ospasswd}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 		jq '.logs_activation_status += {"abapfileslogs": "True"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	fi
 fi
