@@ -648,11 +648,11 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
     jq --arg keyvault "$kv" '.secrets_source += {"keyvault": $keyvault}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	
 	if [ "$CONNECTIONMODE" == 'java' ]; then
-		az keyvault secret set --name "$intprefix"-JAVAOSUSER --value "$JAVAOSUSER" --description SECRET_JAVA_OS_PASS --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-JAVAOSUSER --value "$JAVAOSUSER" --description SECRET_JAVA_OS_USER --vault-name "$kv" >/dev/null
 		az keyvault secret set --name "$intprefix"-JAVAOSPASS --value "$JAVAOSPASS" --description SECRET_JAVA_OS_PASS --vault-name "$kv" >/dev/null
 	elif [ "$CONNECTIONMODE" == 'sapcontrol' ]; then
 		az keyvault secret set --name "$intprefix"-ABAPOSUSER --value "$ABAPOSUSER" --description SECRET_ABAP_OS_USER --vault-name "$kv" >/dev/null
-		az keyvault secret set --name "$intprefix"-ABAPOSPASS --value "$ABAPOSPASS" --description SECRET_ABAP_OS_USER --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-ABAPOSPASS --value "$ABAPOSPASS" --description SECRET_ABAP_OS_PASS --vault-name "$kv" >/dev/null
 	fi
 
 	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
