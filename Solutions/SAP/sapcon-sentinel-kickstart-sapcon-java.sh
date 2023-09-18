@@ -676,7 +676,7 @@ elif [ "$MODE" == 'cfgf' ]; then
 fi
 
 
-jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "/opt/sapcon/PIP/systemconfig.json" > "/opt/sapcon/PIP/systemconfig.json.tmp" && mv "/opt/sapcon/PIP/systemconfig.json.tmp" "/opt/sapcon/PIP/systemconfig222.json"
+jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 ### end of json config creation
 
