@@ -1,7 +1,7 @@
 Parser:
   Title: File Event Parser for SentinelOne
   Version: '0.1.0'
-  LastUpdated: July 24, 2023
+  LastUpdated: Sep 18, 2023
 Product:
   Name: SentinelOne
 Normalization:
@@ -32,6 +32,36 @@ ParserQuery: |
       "FILEDELETION", "FileDeleted",
       "FILERENAME", "FileRenamed"
   ];
+  let ThreatConfidenceLookup_undefined = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_undefined: int
+  )
+      [
+      "FALSE_POSITIVE", 5,
+      "Undefined", 15,
+      "SUSPICIOUS", 25,
+      "TRUE_POSITIVE", 33 
+  ];
+  let ThreatConfidenceLookup_suspicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_suspicious: int
+  )
+      [
+      "FALSE_POSITIVE", 40,
+      "Undefined", 50,
+      "SUSPICIOUS", 60,
+      "TRUE_POSITIVE", 67 
+  ];
+  let ThreatConfidenceLookup_malicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_malicious: int
+  )
+      [
+      "FALSE_POSITIVE", 75,
+      "Undefined", 80,
+      "SUSPICIOUS", 90,
+      "TRUE_POSITIVE", 100 
+  ];
   let parser = (disabled: bool=false) {
       let allFileData = SentinelOne_CL
           | where not(disabled)
@@ -49,9 +79,20 @@ ParserQuery: |
               TargetFilePathType = "Unix",
               TargetFileName = GetLinuxFilenamePart(targetProcessInfo_tgtFilePath_s),
               SrcFileName = GetLinuxFilenamePart(targetProcessInfo_tgtFileOldPath_s);
-      union windowsFileData, otherFileData
-      | lookup EventTypeLookup on alertInfo_eventType_s
+      let parseddata = union windowsFileData, otherFileData
+          | lookup EventTypeLookup on alertInfo_eventType_s;
+      let undefineddata = parseddata
+          | where ruleInfo_treatAsThreat_s == "UNDEFINED"
+          | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;
+      let suspiciousdata = parseddata
+          | where ruleInfo_treatAsThreat_s == "Suspicious"
+          | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;
+      let maaliciousdata = parseddata
+          | where ruleInfo_treatAsThreat_s == "Malicious"
+          | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;
+      union undefineddata, suspiciousdata, maaliciousdata
       | extend
+          ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious),
           EventSeverity = iff(ruleInfo_severity_s == "Critical", "High", ruleInfo_severity_s),
           EventVendor = "SentinelOne",
           EventProduct = "SentinelOne",
@@ -79,7 +120,8 @@ ParserQuery: |
           SrcFilePath = targetProcessInfo_tgtFileOldPath_s,
           TargetFilePath = targetProcessInfo_tgtFilePath_s,
           TargetFileSHA1 = targetProcessInfo_tgtFileHashSha1_s,
-          TargetFileSHA256 = targetProcessInfo_tgtFileHashSha256_s
+          TargetFileSHA256 = targetProcessInfo_tgtFileHashSha256_s,
+          ThreatOriginalConfidence = ruleInfo_treatAsThreat_s
       | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
       | extend
           Dvc = coalesce(DvcHostname, DvcId, EventProduct),
@@ -113,6 +155,7 @@ ParserQuery: |
           ManagementGroupName,
           RawData,
           SourceSystem,
-          TenantId
+          TenantId,
+          ThreatConfidence_*
   };
   parser(disabled = disabled)
