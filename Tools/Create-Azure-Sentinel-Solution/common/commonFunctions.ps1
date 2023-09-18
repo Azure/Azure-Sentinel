@@ -2099,7 +2099,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         if($contentToImport.TemplateSpec) {
 
-                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryId$global:huntingQueryCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject$global:huntingQueryCounter')._huntingQuerycontentId$global:huntingQueryCounter)]"
+                            #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryId$global:huntingQueryCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject$global:huntingQueryCounter')._huntingQuerycontentId$global:huntingQueryCounter)]"
 
                             if ($contentResourceDetails.apiVersion -eq '3.0.0')
                             {
@@ -2152,10 +2152,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $huntingQueryMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(variables('huntingQueryId$global:huntingQueryCounter'),'/'))))]";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject$global:huntingQueryCounter')._huntingQuerycontentId$global:huntingQueryCounter),'/'))))]";
                                 properties = [PSCustomObject]@{
                                     description = "$($solutionName) Hunting Query $global:huntingQueryCounter";
-                                    parentId  = "[variables('huntingQueryId$global:huntingQueryCounter')]";
+                                    parentId  = "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject$global:huntingQueryCounter')._huntingQuerycontentId$global:huntingQueryCounter)]";
                                     contentId = "[variables('huntingQueryObject$global:huntingQueryCounter')._huntingQuerycontentId$global:huntingQueryCounter]";
                                     kind      = "HuntingQuery";
                                     version   = "[variables('huntingQueryVersion$global:huntingQueryCounter')]";
@@ -3087,11 +3087,11 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
             apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$global:parserCounter'),'/'))))]";
             dependsOn  =  @(
-                "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
+                "[variables('_parserId$global:parserCounter')]"
             );
             properties = [PSCustomObject]@{
                 parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
-                contentId = "[variables('_parserContentId$global:parserCounter')]";
+                contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
                 kind      = "Parser";
                 version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
                 source    = [PSCustomObject]@{
@@ -3138,11 +3138,11 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
         if ($contentResourceDetails.apiVersion -eq '3.0.0')
         {
             $parserTemplateSpecContent = SetContentTemplateDefaultValuesToProperties -templateSpecResourceObj $parserTemplateSpecContent
-            $parserTemplateSpecContent.properties.contentId = "[variables('_parserContentId$global:parserCounter')]"
+            $parserTemplateSpecContent.properties.contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]"
             $parserTemplateSpecContent.properties.contentKind = "Parser"
             $parserTemplateSpecContent.properties.displayName = "$($displayDetails.displayName)"
 
-            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parsercontentProductId$global:parserCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$($ContentKindDict.ContainsKey("Parser") ? $ContentKindDict["Parser"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('_parserContentId$global:parserCounter'),'-', variables('parserObject$global:parserCounter').parserVersion$global:parserCounter)))]"
+            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parsercontentProductId$global:parserCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$($ContentKindDict.ContainsKey("Parser") ? $ContentKindDict["Parser"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject$global:parserCounter').parserContentId$global:parserCounter,'-', variables('parserObject$global:parserCounter').parserVersion$global:parserCounter)))]"
 	    $parserTemplateSpecContent.properties.contentProductId = "[variables('_parsercontentProductId$global:parserCounter')]"
             $parserTemplateSpecContent.properties.id = "[variables('_parsercontentProductId$global:parserCounter')]"
             $parserTemplateSpecContent.properties.version = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]"
@@ -3183,7 +3183,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
             );
             properties = [PSCustomObject]@{
                 parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
-                contentId = "[variables('_parserContentId$global:parserCounter')]";
+                contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
                 kind      = "Parser";
                 version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
                 source    = [PSCustomObject]@{
@@ -3260,11 +3260,11 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
 
     if ($contentResourceDetails.apiVersion -eq '3.0.0')
     {
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$global:parserCounter'))))]"
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring(variables('parserObject$global:parserCounter').parserContentId$global:parserCounter)))]"
     }
     else 
     {
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$global:parserCounter')))]"
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-pr-',uniquestring(variables('parserObject$global:parserCounter').parserContentId$global:parserCounter))]"
 
     }
 
@@ -3277,11 +3277,11 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     $objParserVariables | Add-Member -NotePropertyName "parserContentId$global:parserCounter" -NotePropertyValue "$($functionAlias)-Parser"
     $global:baseMainTemplate.variables | Add-Member -NotePropertyName "parserObject$global:parserCounter" -NotePropertyValue $objParserVariables
 
-    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parserContentId$global:parserCounter" -NotePropertyValue "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]"
+    #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parserContentId$global:parserCounter" -NotePropertyValue "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]"
 
     $global:DependencyCriteria += [PSCustomObject]@{
         kind      = "Parser";
-        contentId = "[variables('_parserContentId$global:parserCounter')]";
+        contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
         version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
     };
 
