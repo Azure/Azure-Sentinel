@@ -62,7 +62,8 @@ class GreuNoiseSentinelUpdater(object):
                                                                 'nline.com/' + self.msal_tenant_id,
                                                         client_credential=self.msal_client_secret)
             token, token_ttl = self.acquire_token(context)
-            msal_token_expiry = datetime.datetime.now() + datetime.timedelta(seconds=token_ttl - 1)
+            # Set expiry of MSAL token to 55 minutes to avoid token expiry during upload
+            msal_token_expiry = datetime.datetime.now() + datetime.timedelta(seconds=token_ttl - 300)
             return token, msal_token_expiry
         except requests.exceptions.RequestException as e:
             logging.info("Error getting token for tenant: {0}".format(self.msal_tenant_id))
@@ -111,7 +112,7 @@ class GreuNoiseSentinelUpdater(object):
             Returns:
                 A response object."""
         
-        session = LimiterSession(per_minute=90)
+        session = LimiterSession(per_minute=95)
 
         url = "https://sentinelus.azure-api.net/{0}/threatintelligence:upload-indicators".format(self.msal_workspace_id)
         headers = {
@@ -165,8 +166,10 @@ class GreuNoiseSentinelUpdater(object):
         
         while not complete:
             if datetime.datetime.now() > msal_expiry_time:
-                logging.info("MSAL token expiring, getting new token")
+                logging.info("MSAL token expiring soon, getting new token")
                 token, msal_expiry_time = self.get_token()
+                if token:
+                    logging.info("MSAL token obtained")
             try:
                 if self.greynoise_size != 0 and self.greynoise_size<= 2000:
                     payload = self.session.query(
