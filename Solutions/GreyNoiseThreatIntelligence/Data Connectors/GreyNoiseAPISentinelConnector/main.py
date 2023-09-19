@@ -61,8 +61,9 @@ class GreuNoiseSentinelUpdater(object):
                                                         authority='https://login.microsofto'
                                                                 'nline.com/' + self.msal_tenant_id,
                                                         client_credential=self.msal_client_secret)
-            token = self.acquire_token(context)
-            return token
+            token, token_ttl = self.acquire_token(context)
+            msal_token_expiry = datetime.datetime.now() + datetime.timedelta(seconds=token_ttl - 1)
+            return token, msal_token_expiry
         except requests.exceptions.RequestException as e:
             logging.info("Error getting token for tenant: {0}".format(self.msal_tenant_id))
             raise e
@@ -86,7 +87,8 @@ class GreuNoiseSentinelUpdater(object):
 
             if 'access_token' in result:
                 bearer_token = result['access_token']
-                return bearer_token
+                token_expiry_seconds = result['expires_in']
+                return bearer_token, token_expiry_seconds
             else:
                 error_code = result.get("error")
                 error_message = result.get("error_description")
@@ -157,8 +159,14 @@ class GreuNoiseSentinelUpdater(object):
 
         # MS Graph TI Upload API limits are 100 indicators per request and 100 requests per minute.
         # Get MSAL token
-        token = self.get_token()
+        token, msal_expiry_time = self.get_token()
+        if token:
+            logging.info("MSAL token obtained")
+        
         while not complete:
+            if datetime.datetime.now() > msal_expiry_time:
+                logging.info("MSAL token expiring, getting new token")
+                token, msal_expiry_time = self.get_token()
             try:
                 if self.greynoise_size != 0 and self.greynoise_size<= 2000:
                     payload = self.session.query(
