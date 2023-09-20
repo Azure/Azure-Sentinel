@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 import sys
@@ -112,7 +113,7 @@ class GreuNoiseSentinelUpdater(object):
             Returns:
                 A response object."""
         
-        session = LimiterSession(per_minute=95)
+        session = LimiterSession(per_minute=90)
 
         url = "https://sentinelus.azure-api.net/{0}/threatintelligence:upload-indicators".format(self.msal_workspace_id)
         headers = {
@@ -134,10 +135,33 @@ class GreuNoiseSentinelUpdater(object):
                                         json=payload)
             response.raise_for_status()
         except requests.HTTPError as e:
-            logging.error('Did you add the Azure Sentinel Contributor role to your service principal?')
-            logging.error(e.response.text)
+            status_retry += 1
+            if e.response.status_code == (429 or 503):
+                logging.error("HTTP: " + int(e.response.status_code))
+                if status_retry > 3:
+                    logging.error("Too many retries, exiting.")
+                    sys.exit(1)
+                sleep_for = int(e.response.message.split()[7]) + 5 if e.response.message else 60
+                logging.info("API Rate limit exceeded (HTTP 429) or Server Error (HTTP 503), waiting {0} seconds...".format(sleep_for))
+                time.sleep(sleep_for)
+                logging.info("Retrying upload...")
+                self.upload_indicators_to_sentinel(token, indicators)
+            elif e.response.status_code == 401:
+                logging.error("HTTP: " + int(e.response.status_code))
+                logging.error('Did you add the Azure Sentinel Contributor role to your service principal?')
+                logging.error('More info here: https://learn.microsoft.com/en-us/azure/sentinel/upload-indicators-api#acquire-an-access-token')
+                logging.error(e.response.text)
+            elif e.response.status_code:
+                logging.error("HTTP: " + int(e.response.status_code))
+                logging.error(e.response.text)
             logging.error('Cannot upload indicators to Azure Sentinel, exiting.')
             sys.exit(1)
+        
+        # Check for submission errors
+        if response.json().get('errors') != []:
+                logging.warning('Nonfatal error in submitting indicator. While a field failed, \n'  \
+                                'the rest of the indicator failed and we can continue.')
+                logging.warning('Error: ' + json.loads(response.json()).get('error'))
             
         return response.json()
     
