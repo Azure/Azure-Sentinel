@@ -39,7 +39,7 @@ class GreuNoiseSentinelUpdater(object):
         self.msal_client_id = msal_setup.client_id
         self.msal_client_secret = msal_setup.client_secret
         self.msal_workspace_id = msal_setup.workspace_id
-        self.limiter_session = LimiterSession(per_minute=99)
+        self.limiter_session = LimiterSession(per_minute=90, limit_statuses=[429, 503])
 
         self.session = GreyNoise(
             api_key=greynoise_setup.api_key,
@@ -113,8 +113,6 @@ class GreuNoiseSentinelUpdater(object):
                 indicators (list): the list of indicators to upload
             Returns:
                 A response object."""
-        
-        session = self.limiter_session
 
         url = "https://sentinelus.azure-api.net/{0}/threatintelligence:upload-indicators".format(self.msal_workspace_id)
         headers = {
@@ -133,14 +131,15 @@ class GreuNoiseSentinelUpdater(object):
             response = session.request("POST", url, 
                                         headers=headers,
                                         params=params,
-                                        json=payload)
+                                        json=payload,
+                                        timeout=60)
             response.raise_for_status()
         except requests.HTTPError as e:
             status_retry += 1
             if e.response.status_code == (429 or 503):
                 logging.error("HTTP: " + int(e.response.status_code))
                 if status_retry > 3:
-                    logging.error("Too many retries, exiting.")
+                    logging.error("Too many upload indicators API retries, exiting.")
                     sys.exit(1)
                 sleep_for = int(e.response.message.split()[7]) + 5 if e.response.message else 60
                 logging.info("API Rate limit exceeded (HTTP 429) or Server Error (HTTP 503), waiting {0} seconds...".format(sleep_for))
@@ -163,7 +162,7 @@ class GreuNoiseSentinelUpdater(object):
                 logging.warning('Nonfatal error in submitting indicator. While a field failed, \n'  \
                                 'the rest of the indicator failed and we can continue.')
                 logging.warning('Error: ' + json.loads(response.json()).get('error'))
-            
+        status_retry = 0   
         return response.json()
     
     def chunks(self, l: list, chunk_size: int):
