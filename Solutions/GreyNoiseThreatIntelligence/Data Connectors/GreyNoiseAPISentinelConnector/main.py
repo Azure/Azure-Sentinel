@@ -113,7 +113,7 @@ class GreuNoiseSentinelUpdater(object):
                 indicators (list): the list of indicators to upload
             Returns:
                 A response object."""
-
+        status_retry = 0
         url = "https://sentinelus.azure-api.net/{0}/threatintelligence:upload-indicators".format(self.msal_workspace_id)
         headers = {
             'Content-Type': 'application/json',
@@ -267,7 +267,7 @@ class GreuNoiseSentinelUpdater(object):
                     break
 
             except Exception as reqErr:
-                logging.error("Contacting greynoise API failed: %s" % str(reqErr))
+                logging.error("Uploading IPs failed: %s" % str(reqErr))
                 if tries != 0:
                     tries -= 1
                     logging.error("Trying again in 10 seconds using same scroll...")
