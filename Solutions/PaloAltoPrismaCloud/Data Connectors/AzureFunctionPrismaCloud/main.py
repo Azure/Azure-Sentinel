@@ -99,7 +99,7 @@ class PrismaCloudConnector:
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
 
-        if alert_start_ts_ms > last_alert_ts_ms:
+        if alert_start_ts_ms > int(last_alert_ts_ms):
             last_alert_ts_ms = (int(alert_start_ts_ms) + MAX_PERIOD_MINUTES * 60 * 1000)
         self.last_alert_ts = last_alert_ts_ms
 
