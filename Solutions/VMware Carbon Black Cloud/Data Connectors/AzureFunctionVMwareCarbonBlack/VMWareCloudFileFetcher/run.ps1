@@ -283,7 +283,7 @@ General methods
 #>
 function CreateQueuePostMessageToQueue($message)
 {
-    Wait-Debugger
+   
 try
 {
     if(-not([string]::IsNullOrWhiteSpace($message)) -and -not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueName)))
