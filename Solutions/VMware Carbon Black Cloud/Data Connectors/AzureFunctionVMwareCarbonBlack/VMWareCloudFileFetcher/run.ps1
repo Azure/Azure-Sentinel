@@ -289,7 +289,7 @@ try
     if(-not([string]::IsNullOrWhiteSpace($message)) -and -not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueName)))
     {
         $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
-        if ($null-ne $ctx)
+        if ($null -ne $ctx)
         {
           $queue = Get-AzStorageQueue –Name $queueName –Context $ctx
         }
@@ -297,26 +297,18 @@ try
         {
           Write-Host "Storage context not available"
         }
-        if ($queue -ne $null) 
+        if ($null -ne $queue) 
         {  
-            #$invisibleTimeout = [System.TimeSpan]::FromDays(1)
-            #$queueMessageconv = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($message))
+            
+           $queueMessage = [Microsoft.Azure.Storage.Queue.CloudQueueMessage]::new(($message))
 
-            #$queueMessage = [Microsoft.Azure.Storage.Queue.CloudQueueMessage]::new(($queueMessageconv))
-            $queueMessage = [Microsoft.Azure.Storage.Queue.CloudQueueMessage]::new(($message))
-# Add a new message to the queue
-           #$status=$queue.QueueClient.SendMessage($queueMessageconv)
-           #$status=$queue.QueueClient.SendMessage($queueMessageconv)
-           #$status=$queue.QueueClient.SendMessageAsync($queueMessage)
-           #$queueMessage = [Microsoft.Azure.Storage.Queue.CloudQueueMessage]::new(($queueMessageconv))
-           #$queueMessage = [Microsoft.Azure.Storage.Queue.CloudQueueMessage]::new([Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($message))
            $status=$queue.CloudQueue.AddMessageAsync($queueMessage).GetAwaiter().GetResult()
         }
         else
         {
           Write-Host "unable to get queue details"
         }
-        if($status -ne $null)
+        if($null -ne $status)
         {
           Write-Host "Queue Message added Successfully"
         }
