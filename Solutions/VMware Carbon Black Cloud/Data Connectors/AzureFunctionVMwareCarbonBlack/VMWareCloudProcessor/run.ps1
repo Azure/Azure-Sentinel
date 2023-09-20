@@ -30,7 +30,7 @@ function ProcessBucketFiles ()
     $AWSAccessKeyId = $env:AWSAccessKeyId
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
     $queueName=$env:queueName
-    $carbonBlackStorage=$env:carbonblackcloud_STORAGE
+    $carbonBlackStorage=$env:AzureWebJobsStorage
     try {
         GetBucketDetails -s3BucketName $QueueItem["s3BucketName"] -prefixFolder $QueueItem["prefixFolder"] -tableName $QueueItem["tableName"] -logtype $QueueItem["logtype"]
     }
