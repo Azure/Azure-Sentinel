@@ -155,12 +155,11 @@ def get_result(activity,start_time, end_time):
         if result_activities == None or len(result_activities) == 0:
             logging.info("Logs not founded for {} activity".format(activity))
             logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
-            return result_activities, next_page_token
         else:
             logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
-            return result_activities, next_page_token
     except Exception as err:
         logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
+    return result_activities, next_page_token
     
 def get_nextpage_results(activity,start_time, end_time, next_page_token):
     try:
@@ -177,10 +176,9 @@ def get_nextpage_results(activity,start_time, end_time, next_page_token):
             logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
         else:
             logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
-            return result_activities, next_page_token
     except Exception as err:
         logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
-    
+    return result_activities, next_page_token
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
     x_headers = 'x-ms-date:' + date
@@ -269,7 +267,7 @@ def gen_chunks_with_latesttime(data,log_type):
             logging.error("Something wrong. Exception error text: {}".format(err))
     return latest_timestamp
 
-def process_result(result_obj, start_time, postactivity_list, line, script_start_time):
+def process_result(result_obj, start_time, postactivity_list, line):
     if result_obj is not None:
         result_obj = expand_data(result_obj)
         sorted_data = sorted(result_obj, key=lambda x: x["id"]["time"],reverse=False)
@@ -300,7 +298,7 @@ def process_result(result_obj, start_time, postactivity_list, line, script_start
         postactivity_list[line] = latest_timestamp
         state = StateManager(connection_string)
         state.post(str(json.dumps(postactivity_list)))
-        return latest_timestamp 
+    return latest_timestamp 
 
 def check_if_script_runs_too_long(script_start_time):
     now = int(time.time())
@@ -331,10 +329,10 @@ def main(mytimer: func.TimerRequest) -> None:
             logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
             result_obj, next_page_token = get_result(line,latest_timestamp,end_time)
             if result_obj is not None:
-                latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
+                latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line)
                 while next_page_token is not None:
                     result_obj, next_page_token  = get_nextpage_results(line,start_time,end_time,next_page_token)
-                    latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line, script_start_time)
+                    latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line)
                     if check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         return
