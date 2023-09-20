@@ -128,11 +128,11 @@ class GreuNoiseSentinelUpdater(object):
         }
 
         try:
-            response = session.request("POST", url, 
+            response = self.limiter_session.request("POST", url, 
                                         headers=headers,
                                         params=params,
                                         json=payload,
-                                        timeout=60)
+                                        timeout=5)
             response.raise_for_status()
         except requests.HTTPError as e:
             status_retry += 1
