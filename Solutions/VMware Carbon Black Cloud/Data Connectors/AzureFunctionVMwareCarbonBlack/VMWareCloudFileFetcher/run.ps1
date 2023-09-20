@@ -51,7 +51,7 @@ function CarbonBlackAPI()
     $AWSAccessKeyId = $env:AWSAccessKeyId
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
     $queueName=$env:queueName
-    $carbonBlackStorage=$env:carbonblackcloud_STORAGE
+    $carbonBlackStorage=$env:AzureWebJobsStorage
 
     
 
@@ -134,7 +134,7 @@ function CarbonBlackAPI()
         if($LogTypeArr -contains "event")
         {
             $json = Convert-ToJSON -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable -logtype "event"
-            PostMessageToQueue($json)
+            CreateQueuePostMessageToQueue($json)
             
         }
         else{
@@ -154,7 +154,7 @@ function CarbonBlackAPI()
             if(-not([string]::IsNullOrWhiteSpace($s3BucketName)) -and -not([string]::IsNullOrWhiteSpace($AWSAccessKeyId)) -and -not([string]::IsNullOrWhiteSpace($AWSSecretAccessKey)) -and -not([string]::IsNullOrWhiteSpace($OrgKey)))
             {
                 $json = Convert-ToJSON -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable -logtype "alert"
-                PostMessageToQueue($json)
+                CreateQueuePostMessageToQueue($json)
                 
             }
         }
@@ -281,7 +281,7 @@ An example
 .NOTES
 General methods
 #>
-function PostMessageToQueue($message)
+function CreateQueuePostMessageToQueue($message)
 {
     Wait-Debugger
 try
@@ -291,7 +291,16 @@ try
         $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
         if ($null -ne $ctx)
         {
-          $queue = Get-AzStorageQueue –Name $queueName –Context $ctx
+            $queue = Get-AzStorageQueue –Name $queueName –Context $ctx
+            if(-not $queue)
+            {
+               #Creating the queue
+               $queue = New-AzStorageQueue –Name $queueName -Context $ctx  
+            }
+            else {
+                
+                #Queue already present
+            }         
         }
         else
         {
