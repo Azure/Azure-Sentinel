@@ -39,6 +39,7 @@ class GreuNoiseSentinelUpdater(object):
         self.msal_client_id = msal_setup.client_id
         self.msal_client_secret = msal_setup.client_secret
         self.msal_workspace_id = msal_setup.workspace_id
+        self.limiter_session = LimiterSession(per_minute=99)
 
         self.session = GreyNoise(
             api_key=greynoise_setup.api_key,
@@ -113,7 +114,7 @@ class GreuNoiseSentinelUpdater(object):
             Returns:
                 A response object."""
         
-        session = LimiterSession(per_minute=90)
+        session = self.limiter_session
 
         url = "https://sentinelus.azure-api.net/{0}/threatintelligence:upload-indicators".format(self.msal_workspace_id)
         headers = {
