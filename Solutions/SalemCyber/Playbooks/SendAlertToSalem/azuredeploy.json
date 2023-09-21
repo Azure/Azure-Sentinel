@@ -1,0 +1,230 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Send-Sentinel-Alerts-to-Salem",
+        "description": "Use this playbook to send Microsoft Sentinel alerts to Salem Virtual Cyber Analyst",
+        "prerequisites": [
+            "Install Salem from the Azure Marketplace",
+            "Obtain the send key from the Alerts Eventhub in the Salem resource group"
+        ],
+        "postDeployment": [
+            "**Authorize Connection**",
+            "Once the Playbook is deployed, you must authorize the API connection to Microsoft Sentinel",
+            "1. Find the newly deployed logic app resource",
+            "2. Select 'API Connections' from the left side menu",
+            "3. Select the 'Salem-MicrosoftSentinel' API connection",
+            "4. Select 'Edit API Connection' from the left side menu",
+            "5. Select 'Authorize'",
+            "6. Once Authorized, save the api connection"
+        ],
+        "lastUpdateTime": "2023-08-23T00:00:00.000Z",
+        "author": {
+            "name": "Salem Cyber"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Send-Sentinel-Alerts-to-Salem",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "string",
+            "metadata": {
+                "description": "A Globally unique name for the integration logic app"
+            }
+        },
+        "SalemEventHubConnectionString": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The Connection String from the Salem 'alerts' Event Hub"
+            }
+        },
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "Location for all resources.  Leave blank to use location of resource group"
+            }
+        }
+    },
+    "variables": {
+        "SalemEventHubConnectionName": "Salem-EventHub",
+        "SentinelConnectionName": "Salem-MicrosoftSentinel"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Initialize_variable_alert_body": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "alert_body",
+                                        "type": "object",
+                                        "value": {
+                                            "custom_details": "@json(coalesce(triggerBody()?['ExtendedProperties']?['Custom Details'],'{}'))",
+                                            "earliest": "@triggerBody()['ExtendedProperties']['Query Start Time UTC']",
+                                            "entities": "@triggerBody()?['Entities']",
+                                            "incident_id": "@body('Alert_-_Get_incident')?['properties']?['incidentNumber']",
+                                            "latest": "@triggerBody()['ExtendedProperties']['Query End Time UTC']"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_alert": {
+                            "runAfter": {
+                                "Initialize_variable_alert_body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "alert_formatted",
+                                        "type": "object",
+                                        "value": {
+                                            "alert": "@variables('alert_body')",
+                                            "alert_name": "@triggerBody()?['AlertDisplayName']",
+                                            "id": "@triggerBody()?['SystemAlertId']",
+                                            "source": "sentinel"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "Send_event": {
+                            "runAfter": {
+                                "Initialize_variable_alert": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "ContentData": "@{base64(variables('alert_formatted'))}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['eventhubs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/@{encodeURIComponent('alerts')}/events"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
+                                "connectionName": "[variables('SentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+                            },
+                            "eventhubs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SalemEventHubConnectionname'))]",
+                                "connectionName": "[variables('SalemEventHubConnectionname')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/eventhubs')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('SalemEventHubConnectionname'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SalemEventHubConnectionname')]",
+            "location": "[parameters('location')]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "Salem Event Hubs",
+                "api": {
+                    "name": "[variables('SalemEventHubConnectionname')]",
+                    "displayName": "Salem Event Hubs",
+                    "description": "Connect to The Salem Event Hub to send alerts.",
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/eventhubs')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "parameterValues": {
+                    "connectionString": "[parameters('SalemEventHubConnectionString')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SentinelConnectionName')]",
+            "location": "[parameters('location')]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "Microsoft Sentinel",
+                "api": {
+                    "name": "[variables('SentinelConnectionName')]",
+                    "displayName": "Microsoft Sentinel",
+                    "description": "Cloud-native SIEM with a built-in AI so you can focus on what matters most",
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                }
+            }
+        }
+    ]
+}

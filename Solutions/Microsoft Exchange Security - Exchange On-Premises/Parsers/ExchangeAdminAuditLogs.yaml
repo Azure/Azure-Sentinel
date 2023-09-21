@@ -1,0 +1,44 @@
+id: f79a3a19-bb9f-4f06-a109-3e3ac2001be9
+Function:
+  Title: Parser for ExchangeAdminAuditLogs
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: ExchangeAdminAuditLogs
+FunctionAlias: ExchangeAdminAuditLogs
+FunctionQuery: |
+    let cVIPs = _GetWatchlist('ExchangeVIP') | project tostring(canonicalName) ;
+    let sVIPs = _GetWatchlist('ExchangeVIP') | project tostring(sAMAccountName) ;
+    let CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv"]with(format="csv",ignoreFirstRecord=true);
+    let SensitiveCmdlets = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv"]with(format="csv",ignoreFirstRecord=true) | project tostring(Cmdlet) ;
+    let Env = ExchangeConfiguration(SpecificSectionList="ESIEnvironment")
+    | extend DomainFQDN_ = tostring(CmdletResultValue.DomainFQDN)
+    | project DomainFQDN_, ESIEnvironment;
+    let MSExchange_Management = (){
+        Event
+        | where EventLog == 'MSExchange Management'
+        | where EventID in (1,6) // 1 = Success, 6 = Failure
+        | parse ParameterXml with '<Param>' CmdletName '</Param><Param>' CmdletParameters '</Param><Param>' Caller '</Param><Param>' *
+        | extend TargetObject = iif( CmdletParameters has "-Identity ", split(split(CmdletParameters,'-Identity ')[1],'"')[1], iif( CmdletParameters has "-Name ", split(split(CmdletParameters,'-Name ')[1],'"')[1], ""))
+        | extend Status = case( EventID == 1, 'Success', 'Failure')
+        | extend IsVIP = iif(TargetObject in (cVIPs) or TargetObject in (sVIPs), true, false)
+        | extend CmdletNameJoin = tolower(CmdletName)
+        | join kind=leftouter  ( 
+            CmdletCheck
+        | extend CmdletNameJoin = tolower(Cmdlet)
+        ) on CmdletNameJoin
+        | extend DomainEnv = replace_string(Computer,strcat(tostring(split(Computer,'.',0)[0]),'.'),'')
+        | join kind=leftouter  ( 
+            Env
+        ) on $left.DomainEnv == $right.DomainFQDN_
+        | extend ESIEnvironment = iif (isnotempty(ESIEnvironment), ESIEnvironment, strcat("Unknown-",DomainEnv))
+        | extend IsSenstiveCmdlet = iif( isnotempty(CmdletNameJoin1) , true, false) 
+        | extend IsRestrictedCmdLet = iif(IsSenstiveCmdlet == true, iif( RestrictToParameter == "Yes", true, false), dynamic(null))
+        | extend RestrictedParameters = iif(IsSenstiveCmdlet == true, split(tolower(Parameters),';'), dynamic(null))
+        | extend ExtractedParameters = iif(IsSenstiveCmdlet == true,extract_all(@"\B(-\w+)", tolower(CmdletParameters)), dynamic(null))
+        | extend IsSenstiveCmdletParameters = iif(IsSenstiveCmdlet == true,iif( array_length(set_difference(ExtractedParameters,RestrictedParameters)) == array_length(ExtractedParameters), false, true ) , false)
+        | extend IsSensitive = iif( ( IsSenstiveCmdlet == true and IsRestrictedCmdLet == false ) or (IsSenstiveCmdlet == true and IsRestrictedCmdLet == true and IsSenstiveCmdletParameters == true ), true, false )
+        //| project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters
+        | project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters,IsSensitive,UserOriented, ESIEnvironment
+    };
+    MSExchange_Management
