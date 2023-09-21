@@ -4,8 +4,8 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Terminate-Okta-User-Session-From-Entity%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Terminate-Okta-User-Session-From-Entity%2Fmain%2Fazuredeploy.json)       
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Terminate-Okta-User-Session-From-Entity%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Terminate-Okta-User-Session-From-Entity%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel Entity. It will match an Okta user against the Sentinel account entity and then terminate all sessions of the matched user in Okta.
 
@@ -17,7 +17,7 @@ This playbook is intended to be run from a Microsoft Sentinel Entity. It will ma
 The following items are required under the template settings during deployment: 
 
 * An Okta Admin account and [API token](https://developer.okta.com/docs/guides/create-an-api-token/main/)
-* An [Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Terminate-Okta-User-Session-From-Entity#create-an-azure-key-vault-secret) containing your Okta API Token 
+* An [Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Terminate-Okta-User-Session-From-Entity#create-an-azure-key-vault-secret) containing your Okta API Token 
 
 
 # 
@@ -36,7 +36,7 @@ Choose a name for the secret, such as "**AS-Terminate-Okta-User-Session-From-Ent
 
 ![UserSessions_Key_Vault_2](Images/UserSessions_Key_Vault_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-Terminate-Okta-User-Session-From-Entity#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Terminate-Okta-User-Session-From-Entity#granting-access-to-azure-key-vault).
 
 ![UserSessions_Key_Vault_3](Images/UserSessions_Key_Vault_3.png)
 
@@ -50,8 +50,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-Terminate-Okta-User-Session-From-Entity
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Terminate-Okta-User-Session-From-Entity%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Terminate-Okta-User-Session-From-Entity%2Fmain%2Fazuredeploy.json)                                             
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Terminate-Okta-User-Session-From-Entity%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Terminate-Okta-User-Session-From-Entity%2Fazuredeploy.json)                                             
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
@@ -65,9 +65,9 @@ In the **Instance Details** section:
 
 * **Okta Subdomain**: Enter the name of the subdomain (tenant) in the Okta Org URL. For example, with the URL https://example-admin.okta.com/, "**example-admin**" would be entered here.
 
-* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Terminate-Okta-User-Session-From-Entity#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Terminate-Okta-User-Session-From-Entity#create-an-azure-key-vault-secret).
 
-* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Terminate-Okta-User-Session-From-Entity#create-an-azure-key-vault-secret).
+* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Terminate-Okta-User-Session-From-Entity#create-an-azure-key-vault-secret).
 
 Towards the bottom, click on “**Review + create**”. 
 
