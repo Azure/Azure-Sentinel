@@ -31,6 +31,7 @@ logAnalyticsUri = os.environ.get('logAnalyticsUri')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
 activities = [
+            "user_accounts",
             "access_transparency", 
             "admin",
             "calendar",
@@ -47,7 +48,6 @@ activities = [
             "rules", 
             "saml", 
             "token", 
-            "user_accounts", 
             "context_aware_access", 
             "chrome", 
             "data_studio"
