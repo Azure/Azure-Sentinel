@@ -118,6 +118,10 @@ while [[ $# -gt 0 ]]; do
 		SID="$2"
 		shift 2
 		;;
+    	--hostnetwork)
+		HOSTNETWORK=1
+		shift 1
+		;;
 	--clientnumber)
 		CLIENTNUMBER="$2"
 		shift 2
@@ -265,6 +269,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--abapserver <servername>"
 		echo "--systemnr <system number>"
 		echo "--sid <SID>"
+  		echo "--hostnetwork"
 		echo "--clientnumber <client number>"
 		echo "--messageserverhost <servername>"
 		echo "--messageserverport <servername>"
@@ -786,6 +791,10 @@ fi
 cmdparams=" --label Cloud=$CLOUD"
 # Generating SENTINEL_AGENT_GUID
 cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
+
+if [ $HOSTNETWORK ]; then
+	cmdparams+=" --network host"
+fi
 
 if [ "$MODE" == "kvmi" ]; then
 	echo "Creating docker container for use with Azure Key vault and managed VM identity"

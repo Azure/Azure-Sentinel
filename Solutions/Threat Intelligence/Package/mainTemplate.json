@@ -345,7 +345,8 @@
     "analyticRuleId38": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId38'))]",
     "analyticRuleTemplateSpecName38": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId38'))))]",
     "_analyticRulecontentProductId38": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('_analyticRulecontentId38'),'-', variables('analyticRuleVersion38'))))]",
-    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+    "management": "[concat('https://management','.azure','.com/')]"
   },
   "resources": [
     {
@@ -687,7 +688,7 @@
               "apiVersion": "2021-03-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
-              "kind": "StaticUI",
+              "kind": "GenericUI",
               "properties": {
                 "connectorUiConfig": {
                   "id": "[variables('_uiConfigId3')]",
@@ -701,6 +702,18 @@
                       "baseQuery": "ThreatIntelligenceIndicator | where SourceSystem != 'Microsoft Sentinel'"
                     }
                   ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Threat Intelligence APIs Indicators",
+                      "query": "ThreatIntelligenceIndicator | where SourceSystem !in ('SecurityGraph', 'Azure Sentinel', 'Microsoft Sentinel')| sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ThreatIntelligenceIndicator",
+                      "lastDataReceivedQuery": "ThreatIntelligenceIndicator| where isnotempty(TimeGenerated) and SourceSystem !in ('SecurityGraph', 'Azure Sentinel', 'Microsoft Sentinel')| summarize Time = max(TimeGenerated)"
+                    }
+                  ],
                   "connectivityCriterias": [
                     {
                       "type": "IsConnectedQuery",
@@ -709,10 +722,40 @@
                       ]
                     }
                   ],
-                  "dataTypes": [
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.SecurityInsights/threatintelligence/write",
+                        "permissionsDisplayText": "write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
                     {
-                      "name": "ThreatIntelligenceIndicator",
-                      "lastDataReceivedQuery": "ThreatIntelligenceIndicator| where isnotempty(TimeGenerated) and SourceSystem !in ('SecurityGraph', 'Azure Sentinel', 'Microsoft Sentinel')| summarize Time = max(TimeGenerated)"
+                      "description": "\n>Using an integrated Threat Intelligence Platform (TIP), such as Threat Connect, Palo Alto Networks MineMeld, MISP, and others. \n\n>Calling the Microsoft Sentinel data plane API directly from another application. ",
+                      "title": "You can connect your threat intelligence data sources to Microsoft Sentinel by either: "
+                    },
+                    {
+                      "title": "Follow These Steps to Connect to your Threat Intelligence: "
+                    },
+                    {
+                      "description": "[concat('To send request to the APIs, you need to acquire Azure Active Directory access token. You can follow instruction in this page: https://docs.microsoft.com/azure/databricks/dev-tools/api/latest/aad/app-aad-token#get-an-azure-ad-access-token \n  - Notice: Please request AAD access token with scope value: ', variables('management'), '.default')]",
+                      "title": "1. Get AAD Access Token"
+                    },
+                    {
+                      "description": "You can send indicators by calling our Upload Indicators API. For more information about the API, click [here]( https://learn.microsoft.com/azure/sentinel/upload-indicators-api). \n\n>HTTP method: POST \n\n>Endpoint: https://sentinelus.azure-api.net/workspaces/[WorkspaceID]/threatintelligenceindicators:upload?api-version=2022-07-01  \n\n>WorkspaceID: the workspace that the indicators are uploaded to.  \n\n\n>Header Value 1: \"Authorization\" = \"Bearer [AAD Access Token from step 1]\" \n\n\n> Header Value 2: \"Content-Type\" = \"application/json\"  \n \n>Body: The body is a JSON object containing an array of indicators in STIX format.",
+                      "title": "2. Send indicators to Sentinel"
                     }
                   ]
                 }
@@ -794,7 +837,7 @@
       "apiVersion": "2021-03-01-preview",
       "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
       "location": "[parameters('workspace-location')]",
-      "kind": "StaticUI",
+      "kind": "GenericUI",
       "properties": {
         "connectorUiConfig": {
           "title": "Threat Intelligence Upload Indicators API (Preview)",
@@ -819,6 +862,48 @@
               "value": [
                 "ThreatIntelligenceIndicator| where SourceSystem !in ('SecurityGraph', 'Azure Sentinel', 'Microsoft Sentinel') | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(30d)"
               ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Threat Intelligence APIs Indicators",
+              "query": "ThreatIntelligenceIndicator | where SourceSystem !in ('SecurityGraph', 'Azure Sentinel', 'Microsoft Sentinel')| sort by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.SecurityInsights/threatintelligence/write",
+                "permissionsDisplayText": "write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "\n>Using an integrated Threat Intelligence Platform (TIP), such as Threat Connect, Palo Alto Networks MineMeld, MISP, and others. \n\n>Calling the Microsoft Sentinel data plane API directly from another application. ",
+              "title": "You can connect your threat intelligence data sources to Microsoft Sentinel by either: "
+            },
+            {
+              "title": "Follow These Steps to Connect to your Threat Intelligence: "
+            },
+            {
+              "description": "[concat('To send request to the APIs, you need to acquire Azure Active Directory access token. You can follow instruction in this page: https://docs.microsoft.com/azure/databricks/dev-tools/api/latest/aad/app-aad-token#get-an-azure-ad-access-token \n  - Notice: Please request AAD access token with scope value: ', variables('management'), '.default')]",
+              "title": "1. Get AAD Access Token"
+            },
+            {
+              "description": "You can send indicators by calling our Upload Indicators API. For more information about the API, click [here]( https://learn.microsoft.com/azure/sentinel/upload-indicators-api). \n\n>HTTP method: POST \n\n>Endpoint: https://sentinelus.azure-api.net/workspaces/[WorkspaceID]/threatintelligenceindicators:upload?api-version=2022-07-01  \n\n>WorkspaceID: the workspace that the indicators are uploaded to.  \n\n\n>Header Value 1: \"Authorization\" = \"Bearer [AAD Access Token from step 1]\" \n\n\n> Header Value 2: \"Content-Type\" = \"application/json\"  \n \n>Body: The body is a JSON object containing an array of indicators in STIX format.",
+              "title": "2. Send indicators to Sentinel"
             }
           ],
           "id": "[variables('_uiConfigId3')]"
@@ -1548,8 +1633,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "DeviceName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "DeviceName"
                       }
                     ]
                   },
@@ -1557,8 +1642,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SourceIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SourceIP"
                       }
                     ]
                   },
@@ -1566,8 +1651,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "PA_Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "PA_Url"
                       }
                     ]
                   }
@@ -1685,12 +1770,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -1698,8 +1783,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "ClientIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "ClientIP"
                       }
                     ]
                   },
@@ -1707,8 +1792,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -1826,8 +1911,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   },
@@ -1835,20 +1920,20 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
                 ],
                 "customDetails": {
-                  "ThreatType": "ThreatType",
-                  "EventTime": "Event_TimeGenerated",
-                  "IoCConfidenceScore": "ConfidenceScore",
-                  "ActivityGroupNames": "ActivityGroupNames",
                   "IoCExpirationTime": "ExpirationDateTime",
+                  "IndicatorId": "IndicatorId",
+                  "IoCConfidenceScore": "ConfidenceScore",
                   "IoCDescription": "Description",
-                  "IndicatorId": "IndicatorId"
+                  "EventTime": "Event_TimeGenerated",
+                  "ThreatType": "ThreatType",
+                  "ActivityGroupNames": "ActivityGroupNames"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "A web request from {{SrcIpAddr}} to hostname  {{domain}} matched an IoC",
@@ -1967,8 +2052,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "DeviceName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "DeviceName"
                       }
                     ]
                   },
@@ -1976,8 +2061,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SourceIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SourceIP"
                       }
                     ]
                   },
@@ -1985,8 +2070,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "PA_Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "PA_Url"
                       }
                     ]
                   }
@@ -2110,8 +2195,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       }
                     ]
                   },
@@ -2119,8 +2204,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IP_addr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IP_addr"
                       }
                     ]
                   },
@@ -2128,8 +2213,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -2247,12 +2332,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -2260,8 +2345,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "HostIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "HostIP"
                       }
                     ]
                   },
@@ -2269,8 +2354,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -2388,12 +2473,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -2401,8 +2486,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "CallerIpAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "CallerIpAddress"
                       }
                     ]
                   },
@@ -2410,8 +2495,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -2529,12 +2614,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -2542,8 +2627,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "ClientIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "ClientIP"
                       }
                     ]
                   },
@@ -2551,8 +2636,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -2670,8 +2755,8 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "DestinationUserID",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "DestinationUserID"
                       }
                     ]
                   },
@@ -2679,8 +2764,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SourceIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SourceIP"
                       }
                     ]
                   },
@@ -2688,8 +2773,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -2807,12 +2892,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -2820,8 +2905,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -2951,8 +3036,8 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "TargetUserName",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "TargetUserName"
                       }
                     ]
                   },
@@ -2960,12 +3045,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -2973,8 +3058,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IpAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IpAddress"
                       }
                     ]
                   },
@@ -2982,8 +3067,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -3107,12 +3192,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -3120,8 +3205,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPAddress"
                       }
                     ]
                   },
@@ -3129,8 +3214,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -3248,12 +3333,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -3261,12 +3346,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -3274,8 +3359,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SourceIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SourceIP"
                       }
                     ]
                   },
@@ -3283,8 +3368,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   },
@@ -3292,12 +3377,12 @@
                     "entityType": "FileHash",
                     "fieldMappings": [
                       {
-                        "columnName": "FileHashValue",
-                        "identifier": "Value"
+                        "identifier": "Value",
+                        "columnName": "FileHashValue"
                       },
                       {
-                        "columnName": "FileHashType",
-                        "identifier": "Algorithm"
+                        "identifier": "Algorithm",
+                        "columnName": "FileHashType"
                       }
                     ]
                   }
@@ -3427,12 +3512,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "NTDomain",
-                        "identifier": "NTDomain"
+                        "identifier": "NTDomain",
+                        "columnName": "NTDomain"
                       }
                     ]
                   },
@@ -3440,12 +3525,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -3453,8 +3538,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   },
@@ -3462,12 +3547,12 @@
                     "entityType": "FileHash",
                     "fieldMappings": [
                       {
-                        "columnName": "FileHashValue",
-                        "identifier": "Value"
+                        "identifier": "Value",
+                        "columnName": "FileHashValue"
                       },
                       {
-                        "columnName": "FileHashType",
-                        "identifier": "Algorithm"
+                        "identifier": "Algorithm",
+                        "columnName": "FileHashType"
                       }
                     ]
                   }
@@ -3579,12 +3664,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -3592,8 +3677,8 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "CsUsername",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "CsUsername"
                       }
                     ]
                   },
@@ -3601,8 +3686,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "CIp",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "CIp"
                       }
                     ]
                   },
@@ -3610,8 +3695,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   },
@@ -3619,8 +3704,8 @@
                     "entityType": "AzureResource",
                     "fieldMappings": [
                       {
-                        "columnName": "_ResourceId",
-                        "identifier": "ResourceId"
+                        "identifier": "ResourceId",
+                        "columnName": "_ResourceId"
                       }
                     ]
                   }
@@ -3738,8 +3823,8 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "UserIdentityUserName",
-                        "identifier": "ObjectGuid"
+                        "identifier": "ObjectGuid",
+                        "columnName": "UserIdentityUserName"
                       }
                     ]
                   },
@@ -3747,8 +3832,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SourceIpAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SourceIpAddress"
                       }
                     ]
                   },
@@ -3756,8 +3841,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -3875,16 +3960,16 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       },
                       {
-                        "columnName": "AadUserId",
-                        "identifier": "AadUserId"
+                        "identifier": "AadUserId",
+                        "columnName": "AadUserId"
                       }
                     ]
                   },
@@ -3892,8 +3977,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "CallerIpAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "CallerIpAddress"
                       }
                     ]
                   },
@@ -3901,8 +3986,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   },
@@ -3910,8 +3995,8 @@
                     "entityType": "AzureResource",
                     "fieldMappings": [
                       {
-                        "columnName": "ResourceId",
-                        "identifier": "ResourceId"
+                        "identifier": "ResourceId",
+                        "columnName": "ResourceId"
                       }
                     ]
                   }
@@ -4029,8 +4114,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "TI_ipEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "TI_ipEntity"
                       }
                     ]
                   },
@@ -4038,8 +4123,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -4157,8 +4242,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "ClientIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "ClientIP"
                       }
                     ]
                   },
@@ -4166,8 +4251,8 @@
                     "entityType": "AzureResource",
                     "fieldMappings": [
                       {
-                        "columnName": "ResourceId",
-                        "identifier": "ResourceId"
+                        "identifier": "ResourceId",
+                        "columnName": "ResourceId"
                       }
                     ]
                   }
@@ -4279,12 +4364,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -4292,8 +4377,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "TI_ipEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "TI_ipEntity"
                       }
                     ]
                   },
@@ -4301,8 +4386,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -4420,8 +4505,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "ClientIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "ClientIP"
                       }
                     ]
                   }
@@ -4539,8 +4624,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "CS_ipEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "CS_ipEntity"
                       }
                     ]
                   }
@@ -4658,12 +4743,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -4671,8 +4756,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "ClientIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "ClientIP"
                       }
                     ]
                   },
@@ -4680,8 +4765,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -4805,20 +4890,20 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "DstIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "DstIpAddr"
                       }
                     ]
                   }
                 ],
                 "customDetails": {
-                  "ThreatType": "ThreatType",
-                  "EventTime": "imNWS_TimeGenerated",
-                  "IoCConfidenceScore": "ConfidenceScore",
-                  "ActivityGroupNames": "ActivityGroupNames",
                   "IoCExpirationTime": "ExpirationDateTime",
+                  "IndicatorId": "IndicatorId",
+                  "IoCConfidenceScore": "ConfidenceScore",
                   "IoCDescription": "Description",
-                  "IndicatorId": "IndicatorId"
+                  "EventTime": "imNWS_TimeGenerated",
+                  "ThreatType": "ThreatType",
+                  "ActivityGroupNames": "ActivityGroupNames"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "The IP {{SrcIpAddr}} of the web request matches an IP IoC",
@@ -4937,12 +5022,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -4950,8 +5035,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "TI_ipEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "TI_ipEntity"
                       }
                     ]
                   },
@@ -4959,8 +5044,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -5084,12 +5169,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -5097,8 +5182,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPAddress"
                       }
                     ]
                   },
@@ -5106,8 +5191,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -5225,12 +5310,12 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "HostName"
                       },
                       {
-                        "columnName": "DnsDomain",
-                        "identifier": "DnsDomain"
+                        "identifier": "DnsDomain",
+                        "columnName": "DnsDomain"
                       }
                     ]
                   },
@@ -5238,8 +5323,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "RemoteIp",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "RemoteIp"
                       }
                     ]
                   },
@@ -5247,8 +5332,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -5366,8 +5451,8 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "csUserName",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "csUserName"
                       }
                     ]
                   },
@@ -5375,8 +5460,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "Computer",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "Computer"
                       }
                     ]
                   },
@@ -5384,8 +5469,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "cIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "cIP"
                       }
                     ]
                   },
@@ -5393,8 +5478,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -5512,8 +5597,8 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AccountCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AccountCustomEntity"
                       }
                     ]
                   },
@@ -5521,8 +5606,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "HostCustomEntity"
                       }
                     ]
                   },
@@ -5530,8 +5615,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "URLCustomEntity",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "URLCustomEntity"
                       }
                     ]
                   }
@@ -5643,12 +5728,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -5656,8 +5741,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -5775,8 +5860,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "DeviceName",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "DeviceName"
                       }
                     ]
                   },
@@ -5784,8 +5869,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SourceIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SourceIP"
                       }
                     ]
                   },
@@ -5793,8 +5878,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "PA_Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "PA_Url"
                       }
                     ]
                   }
@@ -5918,8 +6003,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "Compromised_Host",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "Compromised_Host"
                       }
                     ]
                   },
@@ -5927,8 +6012,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -6046,8 +6131,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "Computer",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "Computer"
                       }
                     ]
                   },
@@ -6055,8 +6140,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "HostIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "HostIP"
                       }
                     ]
                   },
@@ -6064,8 +6149,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
                     ]
                   }
@@ -6183,12 +6268,12 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "Name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "Name"
                       },
                       {
-                        "columnName": "UPNSuffix",
-                        "identifier": "UPNSuffix"
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
                       }
                     ]
                   },
@@ -6196,8 +6281,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "access_device_ip_s",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "access_device_ip_s"
                       }
                     ]
                   }
@@ -6357,8 +6442,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "HostCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "HostCustomEntity"
                       }
                     ]
                   },
@@ -6366,8 +6451,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPCustomEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPCustomEntity"
                       }
                     ]
                   },
@@ -6375,24 +6460,24 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "URLCustomEntity",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "URLCustomEntity"
                       }
                     ]
                   }
                 ],
                 "customDetails": {
-                  "ThreatType": "ThreatType",
-                  "SourceIPAddress": "SrcIpAddr",
-                  "ExpirationDateTime": "ExpirationDateTime",
-                  "QueryType": "DnsQueryType",
-                  "DNSRequestTime": "DNS_TimeGenerated",
-                  "LatestIndicatorTime": "LatestIndicatorTime",
-                  "ActivityGroupNames": "ActivityGroupNames",
-                  "ConfidenceScore": "ConfidenceScore",
-                  "Description": "Description",
                   "DnsQuery": "DnsQuery",
-                  "IndicatorId": "IndicatorId"
+                  "IndicatorId": "IndicatorId",
+                  "Description": "Description",
+                  "ThreatType": "ThreatType",
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "DNSRequestTime": "DNS_TimeGenerated",
+                  "QueryType": "DnsQueryType",
+                  "SourceIPAddress": "SrcIpAddr",
+                  "ConfidenceScore": "ConfidenceScore",
+                  "LatestIndicatorTime": "LatestIndicatorTime",
+                  "ExpirationDateTime": "ExpirationDateTime"
                 }
               }
             },
@@ -6549,8 +6634,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "Dvc",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "Dvc"
                       }
                     ]
                   },
@@ -6558,8 +6643,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IoC",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IoC"
                       }
                     ]
                   },
@@ -6567,23 +6652,23 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
                     ]
                   }
                 ],
                 "customDetails": {
-                  "ThreatType": "ThreatType",
-                  "SourceIPAddress": "SrcIpAddr",
-                  "ExpirationDateTime": "ExpirationDateTime",
-                  "DNSRequestTime": "imDns_mintime",
-                  "LatestIndicatorTime": "LatestIndicatorTime",
-                  "ActivityGroupNames": "ActivityGroupNames",
-                  "ConfidenceScore": "ConfidenceScore",
-                  "Description": "Description",
                   "DnsQuery": "DnsQuery",
-                  "IndicatorId": "IndicatorId"
+                  "IndicatorId": "IndicatorId",
+                  "Description": "Description",
+                  "ThreatType": "ThreatType",
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "DNSRequestTime": "imDns_mintime",
+                  "SourceIPAddress": "SrcIpAddr",
+                  "ConfidenceScore": "ConfidenceScore",
+                  "LatestIndicatorTime": "LatestIndicatorTime",
+                  "ExpirationDateTime": "ExpirationDateTime"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "The response {{IoC}} to DNS query matched an IoC",
@@ -6781,22 +6866,22 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IoCIP",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IoCIP"
                       }
                     ]
                   }
                 ],
                 "customDetails": {
-                  "ThreatType": "ThreatType",
-                  "ActivityGroupNames": "ActivityGroupNames",
-                  "IoCIPDirection": "IoCDirection",
-                  "EventStartTime": "imNWS_mintime",
+                  "IndicatorId": "IndicatorId",
                   "IoCConfidenceScore": "ConfidenceScore",
-                  "EventEndTime": "imNWS_maxtime",
-                  "IoCExpirationTime": "ExpirationDateTime",
                   "IoCDescription": "Description",
-                  "IndicatorId": "IndicatorId"
+                  "IoCExpirationTime": "ExpirationDateTime",
+                  "EventEndTime": "imNWS_maxtime",
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "ThreatType": "ThreatType",
+                  "IoCIPDirection": "IoCDirection",
+                  "EventStartTime": "imNWS_mintime"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "A network session {{IoCDirection}} address {{IoCIP}} matched an IoC.",
@@ -6909,8 +6994,8 @@
                     "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AccountCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AccountCustomEntity"
                       }
                     ]
                   },
@@ -6918,8 +7003,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPCustomEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPCustomEntity"
                       }
                     ]
                   }
