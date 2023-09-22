@@ -120,11 +120,12 @@ let Target = 'On-Premises';
 ### Parser Definition
 
 - Title:           Exchange Admin Audit Logs Parser
-- Version:         1.0
-- Last Updated:    15/11/2022
+- Version:         1.1.0
+- Last Updated:    21/09/2023
 
 |**Version**  |**Details**  |
 |---------|-----------------------------------------------------------------------------------------------------------------------|
+|v1.1     | <ul><li>Watchlist ExchangeVIP is not mandatory anymore</li></ul>  |
 |v1.0     | <ul><li>Function initilisation for Sentinel Solution</li></ul> |
 
 ### Parser Description

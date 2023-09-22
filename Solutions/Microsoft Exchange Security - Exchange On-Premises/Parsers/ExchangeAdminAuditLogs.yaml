@@ -1,14 +1,17 @@
 id: f79a3a19-bb9f-4f06-a109-3e3ac2001be9
 Function:
   Title: Parser for ExchangeAdminAuditLogs
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '1.1.0'
+  LastUpdated: '2023-09-21'
 Category: Microsoft Sentinel Parser
 FunctionName: ExchangeAdminAuditLogs
 FunctionAlias: ExchangeAdminAuditLogs
 FunctionQuery: |
-    let cVIPs = _GetWatchlist('ExchangeVIP') | project tostring(canonicalName) ;
-    let sVIPs = _GetWatchlist('ExchangeVIP') | project tostring(sAMAccountName) ;
+    let fuzzyWatchlist = datatable(userPrincipalName:string, sAMAccountName:string, objectSID:string, objectGUID:guid, canonicalName:string, comment:string) [
+    "NONE","NONE","NONE","00000000-0000-0000-0000-000000000000","NONE","NONE"];
+    let Watchlist = union isfuzzy=true withsource=TableName _GetWatchlist('ExchangeVIP'), fuzzyWatchlist | where canonicalName != "NONE" | project-away TableName;
+    let cVIPs = Watchlist | project tostring(canonicalName) ;
+    let sVIPs = Watchlist | project tostring(sAMAccountName) ;
     let CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv"]with(format="csv",ignoreFirstRecord=true);
     let SensitiveCmdlets = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv"]with(format="csv",ignoreFirstRecord=true) | project tostring(Cmdlet) ;
     let Env = ExchangeConfiguration(SpecificSectionList="ESIEnvironment")
