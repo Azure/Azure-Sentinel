@@ -17,7 +17,7 @@ param($Timer)
 
 #Requires -Modules @{ModuleName='AWS.Tools.Common';ModuleVersion='4.1.14'}
 #Requires -Modules @{ModuleName='AWS.Tools.S3';ModuleVersion='4.1.14'}
-Wait-Debugger
+
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
 $logAnalyticsUri = $env:logAnalyticsUri
@@ -255,7 +255,7 @@ General notes
 #>
 function  Convert-ToJSON($s3BucketName,$prefixFolder,$tableName,$logtype)
 {
-Wait-Debugger
+
     $bucketObject = [PSCustomObject]@{
         s3BucketName = $s3BucketName
         prefixFolder = $prefixFolder
