@@ -1,0 +1,29 @@
+id: ae269e0c-3c8c-4b80-bc54-03442ce97a99
+Function:
+  Title: Parser for Infoblox_dhcpoption
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: Infoblox_dhcpoption
+FunctionAlias: Infoblox_dhcpoption
+FunctionQuery: |
+    let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
+    let RawData = Syslog
+        | where Computer in (datasource)
+        | where SyslogMessage has "Option"
+        | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
+        | extend responseTime = todatetime(Parser[0]),
+                 RawData_subString = tostring(Parser[3])
+        | project-away Parser;
+    RawData
+        | extend dhcpoption = extract_all(@'(\d+)\:\s\w+\s\w+\s([A-Z\s]+)\s\w+\sfrom\s\S+\s(\S+)\s[\w\s\-]+\"([a-z0-9:]+)\"\,\s[\w\s\-]+\"([a-z0-9:]+)\"\sfor\s(\S+)\s\((\S+)\)\s([\w\s]+)\.\s\((\S+)\)', dynamic([1,2,3,4,5,6,7,8,9]), RawData_subString)[0]
+        | extend Log_Type = strcat(Type," ",tostring(dhcpoption[0])),
+            Relay = tostring(dhcpoption[2]),  
+            PacketType = tostring(dhcpoption[1]),  
+            CircuitID = tostring(dhcpoption[3]),  
+            RemoteID = tostring(dhcpoption[4]),  
+            DvcIpAddr = tostring(dhcpoption[5]),  
+            DvcMacAddr = tostring(dhcpoption[6]),  
+            EventMessage = tostring(dhcpoption[7]),
+            State = tostring(dhcpoption[8])
+        | project-away SyslogMessage, dhcpoption,RawData_subString;
