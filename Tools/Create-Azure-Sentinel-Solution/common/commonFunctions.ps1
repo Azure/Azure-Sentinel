@@ -502,7 +502,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
 
-                        $workbookFinalPath = $baseFolderPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';  
+                        $workbookFinalPath = $baseFolderPath + 'Workbooks/WorkbooksMetadata.json';  
                         
                         # BELOW IS THE NEW CODE ADDED FROM AZURE SENTINEL REPO
                         if($contentToImport.TemplateSpec) {
@@ -3074,7 +3074,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
             apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$global:parserCounter'),'/'))))]";
             dependsOn  =  @(
-                "[variables('_parserName$global:parserCounter')]"
+                "[variables('_parserId$global:parserCounter')]"
             );
             properties = [PSCustomObject]@{
                 parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$global:parserCounter'))]"
