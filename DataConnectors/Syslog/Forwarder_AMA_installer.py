@@ -336,7 +336,7 @@ def main():
             "a running Syslog daemon and rerun this script.")
         exit()
     print_full_disk_warning()
-    print_ok("Installation completed")
+    print_ok("Installation completed successfully")
 
 
 
