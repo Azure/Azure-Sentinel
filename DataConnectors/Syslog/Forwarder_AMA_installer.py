@@ -321,14 +321,14 @@ def main():
         set_rsyslog_configuration()
         restart_rsyslog()
         print_warning("Please note that the installation script opens port 514 to listen to incoming messages in both"
-                      " UDP and TCP protocols. To change this setting, refer to Rsyslog configuration file located at "
+                      " UDP and TCP protocols. To change this setting, refer to the Rsyslog configuration file located at "
                       "'/etc/rsyslog.conf'.")
     elif is_syslog_ng():
         print("Located syslog-ng daemon running on the machine")
         set_syslog_ng_configuration()
         restart_syslog_ng()
         print_warning("Please note that the installation script opens port 514 to listen to incoming messages in both"
-                      " UDP and TCP protocols. To change this setting, refer to Syslog-ng configuration file located at"
+                      " UDP and TCP protocols. To change this setting, refer to the Syslog-ng configuration file located at"
                       " '/etc/syslog-ng/syslog-ng.conf'.")
     else:
         print_error(
