@@ -61,6 +61,10 @@ while [[ $# -gt 0 ]]; do
 		APPID="$2"
 		shift 2
 		;;
+  	--hostnetwork)
+		HOSTNETWORK=1
+		shift 1
+		;;
 	--appsecret)
 		APPSECRET="$2"
 		shift 2
@@ -132,6 +136,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--keymode [kvmi|kvsi]"
 		echo "--configpath <path>"
 		echo "--sdk <filename>"
+		echo "--hostnetwork"
 		echo "--network <network>"
 		echo "--appid <guid>"
 		echo "--appsecret <secret>"
@@ -424,7 +429,9 @@ elif [ "$MODE" == "kvsi" ]; then
 	log "Creating agent and configuring to use Azure Key vault and application authentication"
 	cmdparams+=" -e AZURE_CLIENT_ID=$APPID -e AZURE_CLIENT_SECRET=$APPSECRET -e AZURE_TENANT_ID=$TENANT"
 fi
-
+if [ $HOSTNETWORK ]; then
+	cmdparams+=" --network host"
+fi
 sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams --name "$containername" $dockerimage$tagver >/dev/null
 
 log 'Created Microsoft Sentinel SAP agent '"$AGENTNAME"
