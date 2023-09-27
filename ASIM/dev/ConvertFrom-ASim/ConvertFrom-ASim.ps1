@@ -117,6 +117,9 @@ try {
                     }
                 }
 
+                #Clearing the variable for the next iteration
+                $stringParams = ''
+
                 $metadata = [PSCustomObject]@{
                     "title"       = $yamlObject.Parser.Title
                     "version"     = $yamlObject.Parser.Version
