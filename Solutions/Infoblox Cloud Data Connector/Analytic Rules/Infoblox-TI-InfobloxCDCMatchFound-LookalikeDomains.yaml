@@ -1,0 +1,79 @@
+id: 568730be-b39d-45e3-a392-941e00837d52
+name: Infoblox - TI - InfobloxCDC Match Found - Lookalike Domains
+description: |
+  'InfobloxCDC Lookalike Domain match found in your Infoblox TIDE Threat Intelligence. Customize query count, scheduling, responses and more. Modify data sources, types and threat properties as desired. This rule depends on a parser based on a Kusto Function to work as expected called [**InfobloxCDC**](https://aka.ms/sentinel-InfobloxCloudDataConnector-parser).'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: InfobloxCloudDataConnector
+    dataTypes: 
+      - CommonSecurityLog (InfobloxCDC)
+  - connectorId: ThreatIntelligence
+    dataTypes: 
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1565
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let TI = ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()  
+  | where Description == "Infoblox - HOST - Policy"
+  | where Tags has_cs "Property: Policy_LookalikeDomains" 
+  | where isnotempty(DomainName)
+  ;
+  let Data = InfobloxCDC
+  | extend HitTime = TimeGenerated
+  | where TimeGenerated >= ago(dt_lookBack)
+  | where isnotempty(DestinationDnsDomain)
+  //Remove trailing period at end of domain
+  | extend DestinationDnsDomain = trim_end(@"\.$", DestinationDnsDomain)
+  ;
+  TI | join kind=innerunique Data on $left.DomainName == $right.DestinationDnsDomain
+  | where HitTime >= TimeGenerated and HitTime < ExpirationDateTime
+  | project LatestIndicatorTime, HitTime, DeviceEventClassID, ThreatLevel, ThreatLevel_Score, ThreatConfidence, DestinationDnsDomain, InfobloxB1FeedName, ThreatClass, ThreatProperty, InfobloxB1PolicyAction, DeviceAction, InfobloxB1PolicyName, SourceIP, DeviceName, SourceMACAddress, SourceUserName, InfobloxB1SrcOSVersion, InfobloxB1ConnectionType, InfobloxB1Network, AdditionalExtensionsParsedNested, 
+  AdditionalInformation, Description, ThreatType, TrafficLightProtocolLevel, Type, ConfidenceScore, ExpirationDateTime, SourceSystem, Action, IndicatorId, ExternalIndicatorId, Tags
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+      - identifier: OSVersion
+        columnName: InfobloxB1SrcOSVersion
+      - identifier: FullName
+        columnName: SourceUserName
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DestinationDnsDomain
+  - entityType: Malware
+    fieldMappings:
+      - identifier: Name
+        columnName: ThreatProperty
+      - identifier: Category
+        columnName: ThreatClass
+customDetails:
+  SourceMACAddress: SourceMACAddress
+  InfobloxB1FeedName: InfobloxB1FeedName
+  InfobloxB1Network: InfobloxB1Network
+  InfobloxB1Action: InfobloxB1PolicyAction
+  InfobloxB1PolicyName: InfobloxB1PolicyName
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+incidentConfiguration:
+  createIncident: true
+version: 1.0.1
+kind: Scheduled
