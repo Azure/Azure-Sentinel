@@ -6,13 +6,15 @@ import sys
 import time
 from collections import namedtuple
 
+import azure.functions as func
 import msal
 import requests
-from requests_ratelimiter import LimiterSession
-import azure.functions as func
 from greynoise import GreyNoise
-from .stixGen import GreyNoiseStixGenerator
+from requests.adapters import HTTPAdapter
+from requests_ratelimiter import LimiterSession
+from urllib3.util import Retry
 
+from .stixGen import GreyNoiseStixGenerator
 
 REQUIRED_ENVIRONMENT_VARIABLES = [
     "GREYNOISE_KEY",
@@ -39,8 +41,21 @@ class GreuNoiseSentinelUpdater(object):
         self.msal_client_id = msal_setup.client_id
         self.msal_client_secret = msal_setup.client_secret
         self.msal_workspace_id = msal_setup.workspace_id
-        self.limiter_session = LimiterSession(per_minute=90, limit_statuses=[429, 503])
 
+        # Setup RateLimiter and Retry Adapter
+        self.limiter_session = LimiterSession(
+            per_minute=90,
+            limit_statuses=[429, 503],
+            )
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 503],
+            allowed_methods={'POST'},
+            )
+        self.limiter_session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
+
+        # Setup GreyNoise Session
         self.session = GreyNoise(
             api_key=greynoise_setup.api_key,
             integration_name="azuresentinel-consumer-v1.0",
@@ -132,7 +147,8 @@ class GreuNoiseSentinelUpdater(object):
                                         headers=headers,
                                         params=params,
                                         json=payload,
-                                        timeout=5)
+                                        timeout=5,
+                                        )
             response.raise_for_status()
         except requests.HTTPError as e:
             status_retry += 1
@@ -274,8 +290,8 @@ class GreuNoiseSentinelUpdater(object):
                     time.sleep(10)
                 else:
                     logging.error(
-                        "Exiting program. Max tries met. With time %s and last scroll: %s"
-                        % (time, scroll)
+                        "Exiting program. Max tries met. With time str%s and last scroll: %s"
+                        % (str(time), scroll)
                     )
                     sys.exit(3)
 
