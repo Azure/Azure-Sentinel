@@ -1,0 +1,99 @@
+# Render header based on loop index and length
+{% macro header(loop) %}
+╔═══════════════════════════╗
+║ <header>{{ "{:^25}".format("{} {} of {}".format(caller(), loop.index, loop.length)) }}</header> ║
+╚═══════════════════════════╝
+{% endmacro %}
+
+# Render result header based on loop index and length
+{% macro result_header(loop) %}
+┌───────────────────────────┐
+│ {{ "{:^25}".format("Result {} of {}".format(loop.index, loop.length)) }} │
+└───────────────────────────┘
+{% endmacro %}
+
+# Render all elements of a list when verbose=True
+# Otherwise, render first 20 elements and a message to remind user about verbose flag
+{% macro verbose_list(elements) %}
+{%- set max_elements = 20 %}
+{%- set elements_slice = elements[:max_elements if verbose < 1 else None] %}
+{% for element in elements_slice -%}
+{{ caller(element) }}
+{%- endfor -%}
+{% if elements | length > max_elements and verbose < 1  -%}
+Showing results 1 - {{ max_elements }}. Run again with -v for full output.
+{% endif -%}
+{% endmacro %}
+
+# Render tuples of element names and counts properly aligned
+# Width is based on the longest element in the list for each column
+# Also render follow same rules as "verbose_list" to render long lists
+{% macro column_verbose_list(elements, field_name) %}
+{%- set max_elements = 20 %}
+{%- set elements_slice = elements[:max_elements if verbose < 1 else None] %}
+{%- set right_width = elements_slice | map(attribute='count') | map('string') | map('length') | max %}
+{%- set left_width_verbose = elements_slice | map(attribute=field_name) | map('length') | max %}
+{%- set left_width = left_width_verbose if verbose > 1 else [left_width_verbose, max_width - 3 - right_width] | min %}
+{%- for element in elements_slice %}
+- <key>{{ "%-*s" | format(left_width, element[field_name] | truncate(left_width, True, "...", 0)) }}</key> <value>{{ "%*s" | format(right_width, element.count) }}</value>
+{%- endfor %}
+{% if elements | length > max_elements and verbose < 1 -%}
+Showing results 1 - {{ max_elements }}. Run again with -v for full output.
+{% endif -%}
+{% endmacro %}
+
+# Render tuples of element names and counts properly aligned
+# Width is based on the longest element in the list for each column
+# Also render follow same rules as "verbose_list" to render long lists
+{% macro column_verbose_list_bool(elements, field_name) %}
+{%- set max_elements = 20 %}
+{%- set elements_slice = elements[:max_elements if verbose < 1 else None] %}
+{%- set right_width = [6] | max %}
+{%- set left_width_verbose = [1] | max %}
+{%- set left_width = left_width_verbose if verbose > 1 else [left_width_verbose, max_width - 3 - right_width] | min %}
+{%- for element in elements_slice %}
+- <key>{{ "%-*s" | format(left_width, element[field_name]) }}</key> <value>{{ "%*s" | format(right_width, element.count) }}</value>
+{%- endfor %}
+{% endmacro %}
+
+# Render classification with proper color
+{% macro classification(value) %}
+{%- if value == "benign" -%}
+<benign>{{ value }}</benign>
+{%- elif value == "unknown" -%}
+<unknown>{{ value }}</unknown>
+{%- elif value == "malicious" -%}
+<malicious>{{ value }}</malicious>
+{%- else -%}
+<value>{{ value }}</value>
+{%- endif -%}
+{% endmacro %}
+
+# Render tag name list from tag details
+{%- macro tag_list(value) %}
+{%- set tag_list = [] %}
+{%- for item in value %}
+{%- if item.name is not none %}
+{{- tag_list.append(item.name) or "" }}
+{%- endif %}
+{%- endfor %}
+{{- '%-100s' | format(tag_list | join(", ")) }}
+{%- endmacro %}
+
+# Render ports  list from port details
+{%- macro ports_list(value) %}
+{%- set ports_list = [] %}
+{%- for item in value %}
+{%- if item.app_protocol %}
+{%- if item.port|string+":"+item.app_protocol+":"+item.transport_protocol not in ports_list %}
+{{- ports_list.append(item.port|string+":"+item.app_protocol+":"+item.transport_protocol) or "" }}
+{%- endif %}
+{%- else %}
+{%- if item.port|string+":"+item.transport_protocol not in ports_list %}
+{{- ports_list.append(item.port|string+":"+item.transport_protocol) or "" }}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- set col_len = ports_list | string | length if ports_list | string | length > 25 else 25 %}
+{{- '%-*s' | format(col_len, ports_list | join(", ")) }}
+{%- endmacro %}
