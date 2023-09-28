@@ -24,6 +24,7 @@ AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
 LOGTYPE = os.environ.get('LogType',"alert, audit")
 
 # if ts of last event is not available -> script will get events from now - MAX_PERIOD_MINUTES
+MAX_SCRIPT_EXEC_TIME_MINUTES = 2
 MAX_PERIOD_MINUTES = 60 * 1
 FIELD_SIZE_LIMIT_BYTES = 1000 * 32
 
@@ -40,9 +41,10 @@ if not match:
 
 async def main(mytimer: func.TimerRequest):
     logging.info('Script started.')
+    start_ts = int(time.time())
     async with aiohttp.ClientSession() as session:
         async with aiohttp.ClientSession() as session_sentinel:
-            prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, session=session, session_sentinel=session_sentinel)
+            prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, start_ts, session=session, session_sentinel=session_sentinel)
 
             tasks = [
                 prisma.process_alerts()
@@ -58,7 +60,7 @@ async def main(mytimer: func.TimerRequest):
 
 
 class PrismaCloudConnector:
-    def __init__(self, api_url, username, password, session: aiohttp.ClientSession, session_sentinel: aiohttp.ClientSession):
+    def __init__(self, api_url, username, password, start_ts, session: aiohttp.ClientSession, session_sentinel: aiohttp.ClientSession):
         self.api_url = api_url
         self.__username = username
         self.__password = password
@@ -73,6 +75,7 @@ class PrismaCloudConnector:
         self.sent_audit_logs = 0
         self.last_alert_ts = None
         self.last_audit_ts = None
+        self.start_ts = start_ts
 
     async def process_alerts(self):
         last_alert_ts_ms = await self.alerts_state_manager.get()
@@ -98,6 +101,9 @@ class PrismaCloudConnector:
             alert = self.clear_alert(alert)
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
+            if self.check_if_script_runs_too_long(self.start_ts):
+                logging.info('Script is running too long. Saving progress and exit.')
+                break
 
         if alert_start_ts_ms > int(last_alert_ts_ms):
             last_alert_ts_ms = (int(alert_start_ts_ms) + MAX_PERIOD_MINUTES * 60 * 1000)
@@ -211,6 +217,13 @@ class PrismaCloudConnector:
         if 'policy' in alert and 'complianceMetadataPart2' in alert['policy']:
             del alert['policy']['complianceMetadata']
         return alert
+    
+    def check_if_script_runs_too_long(script_start_time: int) -> bool:
+        now = int(time.time())
+        duration = now - script_start_time
+        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
+        return duration > max_duration
+
 
     async def get_audit_logs(self, start_time):
         await self._authorize()
