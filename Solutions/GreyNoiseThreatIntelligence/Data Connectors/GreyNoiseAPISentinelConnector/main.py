@@ -178,7 +178,7 @@ class GreuNoiseSentinelUpdater(object):
                 logging.warning('Nonfatal error in submitting indicator. While a field failed, \n'  \
                                 'the rest of the indicator failed and we can continue.')
                 logging.warning('Error: ' + json.loads(response.json()).get('error'))
-        status_retry = 0   
+ 
         return response.json()
     
     def chunks(self, l: list, chunk_size: int):
