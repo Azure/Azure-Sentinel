@@ -22,7 +22,8 @@ FunctionQuery: |
     // Agent Behavior Log Header
     | extend AgentBehaviorLogsParser = iif(SyslogMessage has ("Begin:"), extract_all(@"^([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,Rule:\s([^,]+)?\,(\d+)?\,([^,]+)?\,([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11]),SyslogMessage)[0], dynamic(""))
     | extend AgentBehaviorLogsSubstring = tostring(AgentBehaviorLogsParser[10])
-    | extend AgentBehaviorLogsParser2 = iif(SyslogMessage has_all ("User Name:","Domain Name:", "Action Type:"),extract_all(@"([^,]+)?\,([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Action Type:\s([^,]+)?\,File size \(bytes\):\s(\d+)?\,Device ID:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8]),AgentBehaviorLogsSubstring)[0], dynamic(""))
+    //| extend AgentBehaviorLogsParser2 = iif(SyslogMessage has_all ("User Name:","Domain Name:", "Action Type:"),extract_all(@"([^,]+)?\,([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Action Type:\s([^,]+)?\,File size \(bytes\):\s(\d+)?\,Device ID:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8]),AgentBehaviorLogsSubstring)[0], dynamic(""))
+    | extend AgentBehaviorLogsParser2 = split(AgentBehaviorLogsSubstring, ',')
     | extend LogType = iif(isempty(LogType) and isnotempty(AgentBehaviorLogsParser) and isnotempty(AgentBehaviorLogsParser2),"Agent Behavior Logs",LogType)
     // Agent Traffic Log Header
     | extend AgentTrafficLogsParser = iif(SyslogMessage has ("Local Host IP:"),extract_all(@"^([^,]+)\,Local Host IP:\s([^,]+)?\,Local Port:\s([^,]+)?\,Local Host MAC:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Port:\s([^,]+)?\,Remote Host MAC:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),SyslogMessage)[0], dynamic(""))
@@ -51,7 +52,7 @@ FunctionQuery: |
                 LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser2[4]), ""),
              DomainName = case(LogType has "Administrative Logs", tostring(AdministrativeLogsParser[2]),
                 LogType has "Agent Activity Logs", tostring(AgentActivityLogsParser[6]), 
-                LogType has "Agent Behavior Logs", tostring(AgentBehaviorLogsParser2[4]), 
+                LogType has "Agent Behavior Logs", tostring(split(AgentBehaviorLogsParser2[4],':')[1]), 
                 LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[5]), 
                 LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser2[4]), 
                 LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser2[2]), ""),
@@ -70,7 +71,7 @@ FunctionQuery: |
              SEPMDomainName = tostring(AgentActivityLogsParser[2]),
              HostName = tostring(AgentActivityLogsParser[4]),
              UserName = case(LogType has "Agent Activity Logs", tostring(AgentActivityLogsParser[5]),
-                LogType has "Agent Behavior Logs", tostring(AgentBehaviorLogsParser2[3]), 
+                LogType has "Agent Behavior Logs", tostring(split(AgentBehaviorLogsParser2[3],':')[1]), 
                 LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser2[4]),
                 LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser2[3]), 
                 LogType has "Agent Risk Logs", tostring(AgentRiskLogsParser2[5]),""),
@@ -97,10 +98,10 @@ FunctionQuery: |
              CallerReturnAddr = tostring(AgentBehaviorLogsParser2[0]),
              CallerReturnModuleName = tostring(AgentBehaviorLogsParser2[1]),
              Parameters = tostring(AgentBehaviorLogsParser2[2]),
-             ActionType = tostring(AgentBehaviorLogsParser2[5]),
-             FileSize = case(LogType has "Agent Behavior Logs", toint(AgentBehaviorLogsParser2[6]),
+             ActionType = tostring(split(AgentBehaviorLogsParser2[5],':')[1]),
+             FileSize = case(LogType has "Agent Behavior Logs", toint(split(AgentBehaviorLogsParser2[6],':')[1]),
                 LogType has "Agent Risk Logs", toint(AgentRiskLogsParser3[9]), int(null)),
-             DeviceId = tostring(AgentBehaviorLogsParser2[7]),
+             DeviceId = tostring(split(AgentBehaviorLogsParser2[7],':')[1]),
              LocalHostIpAddr = case(LogType has "Agent Traffic Logs", tostring(AgentTrafficLogsParser[1]),
                 LogType has "Agent Security Logs", tostring(AgentSecurityLogsParser[4]), 
                 LogType has "Agent Packet Logs", tostring(AgentPacketLogsParser[0]), ""),
