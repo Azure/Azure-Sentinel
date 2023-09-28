@@ -1,0 +1,144 @@
+Parser:
+  Title: User Management ASIM parser for SentinelOne
+  Version: '0.1.0'
+  LastUpdated: Aug 24, 2023
+Product:
+  Name: SentinelOne
+Normalization:
+  Schema: UserManagement
+  Version: '0.1.1'
+References:
+- Title: ASIM UserManagement Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: SentinelOne Documentation
+- Link: https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview
+Description: |
+  This ASIM parser supports normalizing SentinelOne logs to the ASIM User Management normalized schema. SentinelOne events are captured through SentinelOne data connector which ingests SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API.
+ParserName: ASimUserManagementSentinelOne
+EquivalentBuiltInParser: _ASim_UserManagement_SentinelOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventTypeLookup = datatable (
+      activityType_d: real,
+      EventType: string,
+      EventOriginalType: string,
+      EventSubType: string
+  )[
+      23, "UserCreated", "User Added", "",
+      24, "UserModified", "User Modified", "MultipleProperties",
+      25, "UserDeleted", "User Deleted", "",
+      37, "UserModified", "User modified", "MultipleProperties",
+      102, "UserDeleted", "User Deleted", "",
+      110, "UserModified", "Enable API Token Generation", "NewPermissions",
+      111, "UserModified", "Disable API Token Generation", "PreviousPermissions",
+      140, "UserCreated", "Service User creation", "",
+      141, "UserModified", "Service User modification", "MultipleProperties",
+      142, "UserDeleted", "Service User deletion", "",
+      3522, "GroupCreated", "Ranger Deploy - Credential Group Created", "",
+      3523, "GroupModified", "Ranger Deploy -Credential Group Edited", "MultipleProperties",
+      3524, "GroupDeleted", "Ranger Deploy - Credential Group Deleted", "",
+      3710, "PasswordReset", "User Reset Password with Forgot Password from the Login", "",
+      3711, "PasswordChanged", "User Changed Their Password", "",
+      3715, "PasswordReset", "User Reset Password by Admin Request", "",
+      5006, "GroupDeleted", "Group Deleted", "",
+      5008, "GroupCreated", "User created a Manual or Pinned Group", "",
+      5011, "GroupModified", "Group Policy Reverted", "Newpolicy",
+  ];
+  let parser = (disabled: bool=false) {
+      SentinelOne_CL
+      | where not(disabled)
+          and event_name_s == "Activities."
+          and activityType_d in (23, 24, 25, 37, 102, 110, 111, 140, 141, 142, 3522, 3523, 3524, 3710, 3711, 3715, 5006, 5008, 5011)
+      | parse-kv DataFields_s as (byUser: string, username: string, email: string, ipAddress: string, group: string, groupName: string, name: string, oldDescription: string, oldRole: string, description: string, role: string, userScope: string, scopeLevelName: string, scopeName: string, roleName: string, modifiedFields: string, deactivationPeriodInDays: string, descriptionChanged: string, groupType: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
+      | parse modifiedFields with 'Modified fields: ' ModifiedFields:string
+      | parse description_s with * "with id=" id: string "," restOfMessage
+      | lookup EventTypeLookup on activityType_d
+      | extend 
+          ActorUsername = iff(activityType_d == 102, "SentinelOne", coalesce(byUser, username, email)),        
+          GroupName = coalesce(group, groupName, name),
+          TargetUsername = iff(isnotempty(byUser), username, ""),
+          PreviousPropertyValue = coalesce(oldDescription, oldRole),
+          NewPropertyValue = coalesce(description, role)
+      | extend GroupName = iff(GroupName == "null", "", GroupName)
+      | project-rename
+          EventStartTime = createdAt_t,
+          SrcIpAddr = ipAddress,
+          EventUid = _ItemId,
+          ActorUserId = id,
+          GroupId = groupId_s,
+          EventMessage = primaryDescription_s,
+          EventOriginalUid = activityUuid_g
+      | extend
+          EventCount = int(1),
+          EventResult = "Success",
+          DvcAction = "Allowed",
+          EventSeverity = "Informational",
+          EventSchema = "UserManagement",
+          EventSchemaVersion = "0.1.1",
+          EventProduct = "SentinelOne",
+          EventVendor = "SentinelOne",
+          EventResultDetails = "Other"
+      | extend
+          Dvc = EventProduct,
+          EventEndTime = EventStartTime,
+          IpAddr = SrcIpAddr,
+          User = ActorUsername,
+          UpdatedPropertyName = EventSubType,
+          ActorUserIdType = iff(isnotempty(ActorUserId),"Other",""),
+          ActorUserType = _ASIM_GetUserType(ActorUsername,ActorUserId),
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+          GroupIdType = iff(isnotempty(GroupId), "UID", ""),
+          GroupNameType = iff(isnotempty(GroupName), "Simple", ""),
+          GroupType = iff(isnotempty(groupType), "Other", ""),
+          GroupOriginalType = groupType,
+          TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+          AdditionalFields = bag_pack(
+                        "userScope", userScope,
+                        "scopeLevelName", scopeLevelName,
+                        "scopeName", scopeName,
+                        "modifiedFields", modifiedFields,
+                        "roleName", roleName,
+                        "deactivationPeriodInDays", deactivationPeriodInDays,
+                        "descriptionChanged", descriptionChanged
+                    )
+      | project-away 
+          *_b,
+          *_d,
+          *_g,
+          *_s,
+          *_t,
+          byUser,
+          username,
+          email,
+          group,
+          groupName,
+          groupType,
+          name,
+          oldDescription,
+          oldRole,
+          description,
+          role,
+          userScope,
+          scopeLevelName,
+          scopeName,
+          roleName,
+          modifiedFields,
+          ModifiedFields,
+          deactivationPeriodInDays,
+          descriptionChanged,
+          restOfMessage,
+          _ResourceId,
+          TenantId,
+          RawData,
+          Computer,
+          MG,
+          ManagementGroupName,
+          SourceSystem
+  };
+  parser(disabled=disabled)

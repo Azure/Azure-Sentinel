@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimWebSessionApacheHTTPServer",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM Filtering parser for Apache HTTP Server",
+            "category": "ASIM",
+            "FunctionAlias": "vimWebSessionApacheHTTPServer",
+            "query": "let Parser=(\n  starttime:datetime               = datetime(null), \n  endtime:datetime                 = datetime(null),\n  srcipaddr_has_any_prefix:dynamic = dynamic([]),\n  ipaddr_has_any_prefix:dynamic    = dynamic([]), \n  url_has_any:dynamic              = dynamic([]),\n  httpuseragent_has_any:dynamic    = dynamic([]),\n  eventresultdetails_in:dynamic    = dynamic([]),\n  eventresult:string               = '*',\n  disabled:bool                    = false\n){\n  let src_or_any                = set_union(\n    srcipaddr_has_any_prefix,\n    ipaddr_has_any_prefix\n  ); \n  let remove_protocol_from_list = (list:dynamic)\n  {\n      print list\n      | mv-apply l = print_0 to typeof(string) on\n        ( extend l = substring(l,indexof(l,@'//')+2))\n      | project l\n  };\n  ApacheHTTPServer_CL\n  | where not(disabled)\n  | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime)\n  | where (array_length(url_has_any) == 0 or RawData has_any (remove_protocol_from_list(url_has_any)))\n  | where (array_length(httpuseragent_has_any) == 0 or RawData has_any (httpuseragent_has_any))\n  | where (array_length(src_or_any) == 0 or RawData has_any (src_or_any))\n  | where (array_length(eventresultdetails_in) == 0 or RawData has_any (eventresultdetails_in))\n  | project RawData, TimeGenerated, Computer, _ResourceId, Type, _ItemId\n  | where not (RawData startswith \"[\") \n  | where RawData has_any (\"GET\", \"HEAD\", \"POST\", \"PUT\", \"DELETE\", \"CONNECT\", \"OPTIONS\", \"TRACE\", \"PATCH\")\n  | parse RawData with * '] ' Temp'\"' *\n  | where (array_length(url_has_any) == 0 or Temp has_any (remove_protocol_from_list(url_has_any)))\n  | extend DstHostname = tostring(split(trim_end(\" \",Temp),\":\",0)[0])\n  | parse RawData with SrcIpAddr \" \" ClientIdentity \" \" SrcUsername \" [\" Date ']' * '\"' HttpRequestMethod \" \" Url \" \" Protocol '\" ' EventResultDetails \" \" DstBytes:long ' \"' HttpReferrer '\" \"' HttpUserAgent '\"' *\n  | project-away RawData, Date, ClientIdentity, Temp\n  | where (array_length(url_has_any) == 0 or Url has_any (remove_protocol_from_list(url_has_any)))\n  | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any (httpuseragent_has_any))\n  | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) in (eventresultdetails_in))\n  | extend \n      temp_SrcMatch = has_any_ipv4_prefix(SrcIpAddr,src_or_any)\n  | extend ASimMatchingIpAddr = case(\n      array_length(src_or_any) == 0, \"-\",\n      temp_SrcMatch , \"SrcIpAddr\",\n      \"No match\") \n  | where ASimMatchingIpAddr != \"No match\" \n  | project-away temp_*\n  | extend EventResult    = iff (\n        toint(EventResultDetails) < 400, \"Success\", \n        \"Failure\"\n      )\n  | where (eventresult == '*' or EventResult =~ eventresult)\n  | extend SrcUsername    = case(SrcUsername == \"-\", \"\", SrcUsername),\n      HttpReferrer        = case(HttpReferrer == \"-\", \"\", HttpReferrer),\n      HttpUserAgent       = case(HttpUserAgent == \"-\", \"\", HttpUserAgent),\n      DstHostname         = case(DstHostname == \"-\", \"\", DstHostname)    \n  | extend SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)\n  | parse _ResourceId with * \"/subscriptions/\" DvcScopeId \"/\" *\n  | project-rename \n      Dst            = DstHostname,\n      DvcHostname    = Computer,\n      DvcId          = _ResourceId,\n      EventUid       = _ItemId\n  | extend \n      HttpVersion    = tostring(split(Protocol,\"/\")[1]),\n      EventStartTime = TimeGenerated,\n      EventEndTime   = TimeGenerated,\n      DvcIdType      = iff (DvcId == \"\", \"\", \"AzureResourceID\")\n  | extend \n      HttpStatusCode = EventResultDetails,\n      UserAgent      = HttpUserAgent,\n      IpAddr         = SrcIpAddr,\n      Dvc            = DvcHostname,\n      User           = SrcUsername\n  | project-away Protocol\n  | extend\n      EventType          = \"WebServerSession\", \n      EventSchema        = \"WebSession\",\n      EventSchemaVersion = \"0.2.6\",\n      EventCount         = int(1),\n      EventVendor        = \"Apache\",\n      EventProduct       = \"HTTP Server\",\n      EventSeverity      = \"Informational\"\n};\nParser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),ipaddr_has_any_prefix:dynamic=dynamic([]),url_has_any:dynamic=dynamic([]),httpuseragent_has_any:dynamic=dynamic([]),eventresultdetails_in:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
