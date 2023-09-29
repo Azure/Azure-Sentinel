@@ -127,7 +127,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                     if "request" in event["data"]:
                         if event["data"]["request"] is not None and "headers" in event["data"]["request"]:
                             event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
-                        if event["data"]["request"] is not None and "parameters" in event["data"]["request"]:
+                        if event["data"]["request"] is not None and event["type"] != "com.oraclecloud.loadbalancer.access" and "parameters" in event["data"]["request"]:
                             event["data"]["request"]["parameters"] = json.dumps(
                                 event["data"]["request"]["parameters"])
                     if "response" in event["data"]:
