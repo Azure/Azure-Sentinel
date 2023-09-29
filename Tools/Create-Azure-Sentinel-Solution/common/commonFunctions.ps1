@@ -83,7 +83,8 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
             if ($val.Count -eq 0) {
                 if ($isWorkbook)
                 {
-                    $resourceObj.$key = @()
+                    #$resourceObj.$key = @()
+                    $resourceObj.PsObject.Properties.Remove($key)
                 }
                 else
                 {
@@ -112,9 +113,42 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
                     }
                 }
             }
+            elseif ($key -eq 'query')
+            {
+                try {
+                    # this means its an json array
+                    $isValidJsonStr = $val | Test-Json -ErrorAction Ignore
+                    if ($isValidJsonStr)
+                    {
+                        $queryObj = ConvertFrom-Json $val -ErrorAction Stop;
+                        $resourceObj.$key = $(removePropertiesRecursively $queryObj $isWorkbook)
+                    }
+                } catch {
+                }
+            }
         }
     }
     $resourceObj
+}
+
+Function Remove-Null {
+    [cmdletbinding()]
+    param(
+        # Object to remove null values from
+        [parameter(ValueFromPipeline,Mandatory)]
+        [object[]]$InputObject,
+        #By default, remove empty strings (""), specify -LeaveEmptyStrings to leave them.
+        [switch]$LeaveEmptyStrings
+    )
+    process {
+        foreach ($obj in $InputObject) {
+            $AllProperties = $obj.psobject.properties.Name
+            $NonNulls = $AllProperties |
+                where-object {$null -ne $obj.$PSItem} |
+                where-object {$LeaveEmptyStrings.IsPresent -or -not [string]::IsNullOrEmpty($obj.$PSItem)}
+            $obj | Select-Object -Property $NonNulls
+        }
+    }
 }
 
 function queryResourceExists () {
@@ -532,6 +566,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $data = $rawData
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
+                            #$serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
                             # Remove empty braces
                             $serializedData = $(removePropertiesRecursively $serializedData $true) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
                         }
