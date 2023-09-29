@@ -21,7 +21,7 @@ SHARED_KEY = os.environ['SHARED_KEY']
 FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 LOG_TYPE = 'CiscoDuo'
 MAX_SYNC_WINDOW_PER_RUN_MINUTES = os.getenv('MAX_SYNC_WINDOW_PER_RUN_MINUTES', "60")
-
+MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -36,6 +36,7 @@ if not match:
 
 def main(mytimer: func.TimerRequest) -> None:
     logging.info('Starting script')
+    start_ts = int(time.time())
     admin_api = duo_client.Admin(
         ikey=CISCO_DUO_INTEGRATION_KEY,
         skey=CISCO_DUO_SECRET_KEY,
@@ -54,19 +55,31 @@ def main(mytimer: func.TimerRequest) -> None:
     if 'trust_monitor' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_trust_monitor_logs_last_ts.txt')
         process_trust_monitor_events(admin_api, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
 
     if 'authentication' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_auth_logs_last_ts.txt')
         process_auth_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
-
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+    
     if 'administrator' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_admin_logs_last_ts.txt')
         process_admin_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
-
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+    
     if 'telephony' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_tele_logs_last_ts.txt')
         process_tele_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
-
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+    
     if 'offline_enrollment' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_offline_enrollment_logs_last_ts.txt')
         process_offline_enrollment_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
@@ -393,3 +406,10 @@ def make_offline_enrollment_logs_request(admin_api: duo_client.Admin, mintime) -
         params,
     )
     return response
+
+def check_if_script_runs_too_long(start_ts):
+    now = int(time.time())
+    duration = now - start_ts
+    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
+    return duration > max_duration
+
