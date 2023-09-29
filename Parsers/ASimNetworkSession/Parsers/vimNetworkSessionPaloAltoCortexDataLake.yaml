@@ -1,0 +1,262 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Palo Alto Cortex Data Lake
+  Version: '0.1.0'
+  LastUpdated: Sep 29 2023
+Product:
+  Name: Palo Alto Cortex Data Lake
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Palo Alto Cortex Data Lake Documentation
+- Link: https://docs.paloaltonetworks.com/cortex/cortex-data-lake/log-forwarding-schema-reference/network-logs/network-traffic-log
+Description: |
+  This ASIM parser supports normalizing NetworkSession logs from Palo Alto Cortex Data Lake to the ASIM NetworkSession normalized schema. These events are captured through the Palo Alto Networks CDL data connector that ingests CDL logs into Microsoft Sentinel.
+ParserName: vimNetworkSessionPaloAltoCortexDataLake
+EquivalentBuiltInParser: _Im_NetworkSession_PaloAltoCortexDataLake
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+  [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Medium",
+      "5", "Medium",
+      "6", "Medium",
+      "7", "High",
+      "8", "High",
+      "9", "High",
+      "10", "High"
+  ];
+  let EventResultDvcActionLookup = datatable (DeviceAction: string, DvcAction: string, EventResult:string)
+    [
+      "allow", "Allow", "Success",
+      "deny", "Deny", "Failure",
+      "reset client","Reset Source", "Failure",
+      "reset server","Reset Destination", "Failure",
+      "reset both", "Reset", "Failure",
+      "drop", "Drop", "Failure",
+      "drop ICMP", "Drop ICMP", "Failure"
+  ];
+  let parser=(
+      disabled: bool=false, 
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      eventresult: string='*', 
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      dstipaddr_has_any_prefix: dynamic=dynamic([]),
+      ipaddr_has_any_prefix: dynamic=dynamic([]), 
+      hostname_has_any: dynamic=dynamic([]),
+      dstportnumber: int=int(null),
+      dvcaction: dynamic=dynamic([])
+      ) {
+      let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      CommonSecurityLog
+      | where not(disabled)
+          and (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and DeviceVendor == "Palo Alto Networks" and DeviceProduct == "LF"
+          and DeviceEventClassID == "TRAFFIC"
+          and (eventresult == "*" or eventresult == "Success")
+          and (array_length(hostname_has_any) == 0 or AdditionalExtensions has_any (hostname_has_any))
+          and (isnull(dstportnumber) or toint(DestinationPort) == dstportnumber)
+          and (array_length(dvcaction) == 0)
+      | extend
+          temp_SrcMatch = has_any_ipv4_prefix(coalesce(DeviceCustomIPv6Address2, SourceIP), src_or_any),
+          temp_DstMatch = has_any_ipv4_prefix(coalesce(DeviceCustomIPv6Address3, DestinationIP), dst_or_any)
+      | extend 
+          ASimMatchingIpAddr=case(
+                        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0,
+                        "-",
+                        temp_SrcMatch and temp_DstMatch,
+                        "Both",
+                        temp_SrcMatch,
+                        "SrcIpAddr",
+                        temp_DstMatch,
+                        "DstIpAddr",
+                        "No match"
+                    )
+      | where ASimMatchingIpAddr != "No match"
+      | parse-kv AdditionalExtensions as (PanOSSessionStartTime: string, PanOSDestinationDeviceHost: string, PanOSSourceDeviceHost: string, PanOSDestinationUUID: string, PanOSDestinationLocation: string, PanOSSourceUUID: string, PanOSDestinationDeviceMac: string, PanOsBytes: long, PanOSIsClienttoServer: string, PanOSSourceLocation: string, PanOSSourceDeviceMac: string, PanOSPacketsReceived: long, PanOSPacketsSent: long, PanOSRuleUUID: int) with (pair_delimiter=";", kv_delimiter="=")
+      | extend 
+          temp_is_MatchSrcHostname = PanOSSourceDeviceHost has_any (hostname_has_any),
+          temp_is_MatchDstHostname = PanOSDestinationDeviceHost has_any (hostname_has_any)
+      | extend ASimMatchingHostname = case(
+                                      array_length(hostname_has_any) == 0,
+                                      "-",
+                                      temp_is_MatchSrcHostname and temp_is_MatchDstHostname,
+                                      "Both",
+                                      temp_is_MatchSrcHostname,
+                                      "SrcHostname",
+                                      temp_is_MatchDstHostname,
+                                      "DstHostname",
+                                      "No match"
+                                  )
+      | where ASimMatchingHostname != "No match"
+      | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+      | invoke _ASIM_ResolveDstFQDN('PanOSDestinationDeviceHost')
+      | invoke _ASIM_ResolveSrcFQDN('PanOSSourceDeviceHost')
+      | lookup EventResultDvcActionLookup on DeviceAction
+      | lookup EventSeverityLookup on LogSeverity
+      | extend
+          EventStartTime = todatetime(PanOSSessionStartTime),
+          SrcIpAddr = coalesce(DeviceCustomIPv6Address2, SourceIP),
+          DstIpAddr = coalesce(DeviceCustomIPv6Address3, DestinationIP),
+          NetworkSessionId = tostring(FieldDeviceCustomNumber1),
+          NetworkDuration = toint(FieldDeviceCustomNumber3),
+          DstBytes = tolong(ReceivedBytes),
+          SrcBytes = tolong(SentBytes),
+          SrcDomain = coalesce(SourceNTDomain, SrcDomain),
+          DstDomain = coalesce(DestinationNTDomain, DstDomain)
+      | project-rename
+          EventProduct = DeviceProduct,
+          EventVendor = DeviceVendor,
+          DvcIpAddr = Computer,
+          EventUid = _ItemId,
+          DstDvcId = PanOSDestinationUUID,
+          DstGeoCountry = PanOSDestinationLocation,
+          DstMacAddr = PanOSDestinationDeviceMac,
+          DstNatIpAddr = DestinationTranslatedAddress,
+          DstNatPortNumber = DestinationTranslatedPort,
+          DstPackets = PanOSPacketsReceived,
+          DstPortNumber = DestinationPort,
+          DstUsername = DestinationUserName,
+          DvcId = DeviceExternalID,
+          DvcOriginalAction = DeviceAction,
+          EventOriginalSeverity = LogSeverity,
+          DstZone = DeviceCustomString5,
+          EventOriginalType = DeviceEventClassID,
+          EventOriginalUid = ExtID,
+          EventProductVersion = DeviceVersion,
+          NetworkPackets = FieldDeviceCustomNumber2,
+          NetworkRuleName = DeviceCustomString1,
+          NetworkRuleNumber = PanOSRuleUUID,
+          SrcDvcId = PanOSSourceUUID,
+          SrcGeoCountry = PanOSSourceLocation,
+          SrcMacAddr = PanOSSourceDeviceMac,
+          SrcNatIpAddr = SourceTranslatedAddress,
+          SrcNatPortNumber = SourceTranslatedPort,
+          SrcPackets = PanOSPacketsSent,
+          SrcPortNumber = SourcePort,
+          SrcUsername = SourceUserName,
+          SrcZone = DeviceCustomString4
+      | extend
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
+          EventEndTime = EventStartTime,
+          Dst = coalesce(DstDvcId, DstHostname, DstIpAddr),
+          Src = coalesce(SrcDvcId, SrcHostname, SrcIpAddr),
+          DstUserType = _ASIM_GetUserType(DstUsername, ""),
+          NetworkProtocol = toupper(Protocol),
+          NetworkBytes = SrcBytes+DstBytes,
+          NetworkProtocolVersion = case(
+                                    DstIpAddr contains ".",
+                                    "IPv4",       
+                                    DstIpAddr contains ":",
+                                    "IPv6", 
+                                    ""
+                                ),
+          NetworkDirection = iff(PanOSIsClienttoServer == "true", "Outbound", "Inbound"),
+          Rule = NetworkRuleName,
+          SrcUserType = _ASIM_GetUserType(SrcUsername, ""),
+          DstUsernameType = _ASIM_GetUsernameType(DstUsername),
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          Duration = NetworkDuration,
+          IpAddr = SrcIpAddr,
+          SessionId = NetworkSessionId,
+          User = DstUsername,
+          Hostname = DstHostname,
+          SrcDvcIdType = iff(isnotempty(SrcDvcId), "Other", ""),
+          DstDvcIdType = iff(isnotempty(DstDvcId), "Other", ""),
+          SrcDomainType = iff(isnotempty(SourceNTDomain), "Windows", SrcDomainType),
+          DstDomainType = iff(isnotempty(DestinationNTDomain), "Windows", DstDomainType)
+      | extend
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "NetworkSession"
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          EventOutcome,
+          PanOS*,
+          PanOs*,
+          Protocol,
+          SimplifiedDeviceAction,
+          temp*,
+          ExternalID,
+          Message,
+          EndTime,
+          Activity,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          StartTime,
+          TenantId,
+          Threat*,
+          ReportReferenceLink,
+          ReceiptTime,
+          Reason,
+          ApplicationProtocol,
+          Indicator*,
+          _ResourceId
+  };
+  parser(
+      disabled=disabled,
+      starttime=starttime, 
+      endtime=endtime,
+      eventresult=eventresult,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      dstipaddr_has_any_prefix=dstipaddr_has_any_prefix,
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      hostname_has_any=hostname_has_any,
+      dstportnumber=dstportnumber,
+      dvcaction=dvcaction
+  )
