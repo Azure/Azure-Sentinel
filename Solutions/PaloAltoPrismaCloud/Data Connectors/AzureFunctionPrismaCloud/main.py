@@ -101,7 +101,7 @@ class PrismaCloudConnector:
             alert = self.clear_alert(alert)
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
-            if self.check_if_script_runs_too_long(self.start_ts):
+            if check_if_script_runs_too_long(self.start_ts):
                 logging.info('Script is running too long. Saving progress and exit.')
                 break
 
@@ -218,11 +218,6 @@ class PrismaCloudConnector:
             del alert['policy']['complianceMetadata']
         return alert
     
-    def check_if_script_runs_too_long(script_start_time: int) -> bool:
-        now = int(time.time())
-        duration = now - script_start_time
-        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
-        return duration > max_duration
 
 
     async def get_audit_logs(self, start_time):
@@ -258,3 +253,9 @@ class PrismaCloudConnector:
         if self.last_audit_ts:
             await self.auditlogs_state_manager.post(str(self.last_audit_ts))
             logging.info('Last audit ts saved - {}'.format(self.last_audit_ts))
+
+def check_if_script_runs_too_long(script_start_time):
+    now = int(time.time())
+    duration = now - script_start_time
+    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
+    return duration > max_duration
