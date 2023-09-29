@@ -4,7 +4,7 @@
  1. Fetches the list of Malicious forwarding rule of compromised mailbox .
  2. Delete all forwarding rule from mailbox . 
 
-<img src="./images/o365-DeleteMaliciousInboxRule_entitymapping.jpg" width="50%"/><br>
+<img src="./images/o365-DeleteMaliciousInboxRule_light.jpg" width="50%"/><br>
 
 ### Prerequisites 
 1. Defender for office 365 function app custom connector needs to be deployed prior to the deployment of this playbook under the same subscription.
