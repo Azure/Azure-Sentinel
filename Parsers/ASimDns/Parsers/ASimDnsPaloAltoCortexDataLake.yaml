@@ -1,0 +1,124 @@
+Parser:
+  Title: DNS activity ASIM parser for Palo Alto Cortex Data Lake
+  Version: '0.1.0'
+  LastUpdated: Sep 29 2023
+Product:
+  Name: Palo Alto Cortex Data Lake
+Normalization:
+  Schema: Dns
+  Version: '0.1.7'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the Palo Alto Cortex Data Lake logs to the ASIM DNS activity normalized schema. These events are captured through the Palo Alto Networks CDL data connector that ingests CDL logs into Microsoft Sentinel.
+ParserName: ASimDnsPaloAltoCortexDataLake
+EquivalentBuiltInParser: _ASim_Dns_PaloAltoCortexDataLake
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+  [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Medium",
+      "5", "Medium",
+      "6", "Medium",
+      "7", "High",
+      "8", "High",
+      "9", "High",
+      "10", "High"
+  ];
+  let parser = (disabled: bool=false) {
+      CommonSecurityLog
+      | where not(disabled)
+          and DeviceVendor == "Palo Alto Networks" and DeviceProduct == "LF"
+          and DeviceEventClassID == "Dns"
+      | parse-kv AdditionalExtensions as (PanOSDNSResponseCode:int, PanOSLogSource:string, PanOSRecordType:string, PanOSDNSResponse: string, PanOSDNSResolverIP: string, PanOSThreatID:string, PanOSDNSCategory:string, start:string) with (pair_delimiter=";", kv_delimiter="=")
+      | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+      | lookup EventSeverityLookup on LogSeverity
+      | extend
+          EventStartTime = todatetime(start),
+          AdditionalFields = bag_pack("PanOSDNSCategory", PanOSDNSCategory, "PanOSLogSource",PanOSLogSource)
+      | project-rename
+          EventProduct = DeviceProduct,
+          EventVendor = DeviceVendor,
+          DnsQuery = RequestURL,
+          EventUid = _ItemId,
+          DvcIpAddr = Computer,
+          SrcIpAddr = SourceIP,
+          DnsQueryTypeName = PanOSRecordType,
+          DnsResponseCode = PanOSDNSResponseCode,
+          DnsResponseName = PanOSDNSResponse,
+          DstIpAddr = PanOSDNSResolverIP,
+          DvcId = DeviceExternalID,
+          EventOriginalSeverity = LogSeverity,
+          EventOriginalType = DeviceEventClassID,
+          EventOriginalSubType = Activity,
+          EventOriginalUid = ExtID,
+          EventProductVersion = DeviceVersion,
+          DvcOriginalAction = DeviceAction,
+          ThreatId = PanOSThreatID,
+          ThreatName = DeviceEventCategory
+      | extend
+          Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr),
+          EventEndTime = EventStartTime,
+          EventResult = iff(DnsResponseCode == '0',"Success","Failure"),
+          EventResultDetails = _ASIM_LookupDnsResponseCode(DnsResponseCode),
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          DnsQueryType = iff(DnsQueryTypeName == "A", toint(1), toint(28)),
+          EventSubType = iff(isnotempty(DnsResponseName), "Response", "Request"),
+          DvcIdType = iff(isnotempty(DvcId), "Other", "")
+      | extend
+          DnsResponseCodeName = EventResultDetails,
+          Domain = DnsQuery,
+          IpAddr = SrcIpAddr
+      | extend
+          EventSchema = "Dns",
+          EventSchemaVersion = "0.1.7",
+          EventType = "Query",
+          DnsQueryClassName = "IN",
+          DnsQueryClass = toint(1)
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          EventOutcome,
+          PanOS*,
+          ExternalID,
+          Protocol,
+          Message,
+          start,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          Threat*,
+          ReportReferenceLink,
+          ReceiptTime,
+          Reason,
+          ApplicationProtocol,
+          Indicator*,
+          _ResourceId
+  };
+  parser(disabled=disabled)
