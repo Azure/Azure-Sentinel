@@ -118,7 +118,7 @@ while [[ $# -gt 0 ]]; do
 		SID="$2"
 		shift 2
 		;;
-    	--hostnetwork)
+    --hostnetwork)
 		HOSTNETWORK=1
 		shift 1
 		;;
@@ -793,7 +793,7 @@ cmdparams=" --label Cloud=$CLOUD"
 cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
 
 if [ $HOSTNETWORK ]; then
-	cmdparams+=" --network host"
+	cmdparams+=" --network host "
 fi
 
 if [ "$MODE" == "kvmi" ]; then
