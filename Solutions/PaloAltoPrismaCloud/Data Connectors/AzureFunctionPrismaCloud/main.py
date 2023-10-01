@@ -86,24 +86,43 @@ class PrismaCloudConnector:
         else:
             alert_start_ts_ms = int(last_alert_ts_ms) + 1
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
-
-        async for alert in self.get_alerts(start_time=alert_start_ts_ms):
-            last_alert_ts_ms = alert['alertTime']
-            if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
-                policy_complianceMetadata = alert['policy']['complianceMetadata']
-                if(len(json.dumps(policy_complianceMetadata).encode()) > FIELD_SIZE_LIMIT_BYTES):
+        result_obj, next_page_token = self.get_alerts(start_time=alert_start_ts_ms)
+        if result_obj is not None:
+            async for alert in result_obj:
+                last_alert_ts_ms = alert['alertTime']
+                if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
+                    policy_complianceMetadata = alert['policy']['complianceMetadata']
+                    if(len(json.dumps(policy_complianceMetadata).encode()) > FIELD_SIZE_LIMIT_BYTES):
                         queue_list = self.sentinel._split_big_request(policy_complianceMetadata)
                         count = 1
                         for q in queue_list:
                             columnname = 'complianceMetadataPart' + str(count)
                             alert['policy'][columnname] = q
                             count+=1
-            alert = self.clear_alert(alert)
-            await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
-            self.sent_alerts += 1
+                alert = self.clear_alert(alert)
+                await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
+                self.sent_alerts += 1
+            
+        while next_page_token  is not None:
+            result_obj, next_page_token = self.get_next_page_alerts(next_page_token)
+            if result_obj is not None:
+                async for alert in result_obj:
+                    last_alert_ts_ms = alert['alertTime']
+                    if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
+                        policy_complianceMetadata = alert['policy']['complianceMetadata']
+                        if(len(json.dumps(policy_complianceMetadata).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                            queue_list = self.sentinel._split_big_request(policy_complianceMetadata)
+                            count = 1
+                            for q in queue_list:
+                                columnname = 'complianceMetadataPart' + str(count)
+                                alert['policy'][columnname] = q
+                                count+=1
+                    alert = self.clear_alert(alert)
+                    await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
+                    self.sent_alerts += 1
             if check_if_script_runs_too_long(self.start_ts):
-                logging.info('Script is running too long. Saving progress and exit.')
-                break
+                logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                return
 
         if alert_start_ts_ms > int(last_alert_ts_ms):
             last_alert_ts_ms = (int(alert_start_ts_ms) + MAX_PERIOD_MINUTES * 60 * 1000)
@@ -164,6 +183,7 @@ class PrismaCloudConnector:
                 logging.info('Auth token for Prisma Cloud was obtained.')
 
     async def get_alerts(self, start_time):
+        result_activities = []
         await self._authorize()
         uri = self.api_url + '/v2/alert'
         headers = {
@@ -193,22 +213,34 @@ class PrismaCloudConnector:
                 raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
             res = await response.text()
             res = json.loads(res)
+            next_page_token = res.get('nextPageToken', None)
+            result = res.get('items', [])
+            result_activities.extend(result)
+        return result_activities, next_page_token 
 
-        for item in res['items']:
-            yield item
+    async def get_next_page_alerts(self, next_page_token):
+        result_activities = []
+        await self._authorize()
+        uri = self.api_url + '/v2/alert'
+        headers = {
+            'x-redlock-auth': self._token,
+            "Accept": "application/json; charset=UTF-8",
+            "Content-Type": "application/json; charset=UTF-8"
+        }
 
-        while 'nextPageToken' in res:
-            data = {
-                'pageToken': res['nextPageToken']
+        data = {
+                'pageToken': next_page_token
             }
-            data = json.dumps(data)
-            async with self.session.post(uri, headers=headers, data=data) as response:
-                if response.status != 200:
-                    raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
-                res = await response.text()
-                res = json.loads(res)
-            for item in res['items']:
-                yield item
+        data = json.dumps(data)
+        async with self.session.post(uri, headers=headers, data=data) as response:
+            if response.status != 200:
+                raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
+            res = await response.text()
+            res = json.loads(res)
+            next_page_token = res.get('nextPageToken', None)
+            result = res.get('items', [])
+            result_activities.extend(result)
+        return result_activities, next_page_token
 
     @staticmethod
     def clear_alert(alert):
