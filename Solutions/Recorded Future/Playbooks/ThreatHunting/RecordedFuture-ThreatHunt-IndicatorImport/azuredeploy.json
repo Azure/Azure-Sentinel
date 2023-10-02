@@ -1,0 +1,202 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+      "metadata": {
+        "title": "RecordedFuture-ThreatIntelligenceImport",
+        "description": "This playbook will write threat hunting indicators in batch to ThreatIntelligenceIndicator log analytics table.",
+         "prerequisites": [
+            "First install the RecordedFuture-ThreatIntelligenceImport playbook.",
+            "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the documentation https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials"
+        ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "lastUpdateTime": "2023-07-06T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Threat Intelligence" ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "RecordedFuture-ThreatHunt-IndicatorImport",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-ThreatHunt-IndicatorImport",
+            "type": "string"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "RecordedFuture-ThreatIntelligenceImport": {
+                                    "runAfter": {},
+                                    "type": "SendToBatch",
+                                    "inputs": {
+                                        "batchName": "RFImportToSentinel",
+                                        "content": "@items('For_each')",
+                                        "host": {
+                                            "triggerName": "Batch_messages",
+                                            "workflow": {
+                                                "id": "/subscriptions/5129b3ff-c0c6-4e86-bd1c-70e5fcd579cf/resourceGroups/RF/providers/Microsoft.Logic/workflows/RecordedFuture-ThreatIntelligenceImport"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "actors": [],
+                                    "categories": [],
+                                    "threat_hunt_description": "",
+                                    "trigger_score_domain": 65,
+                                    "trigger_score_hash": 65,
+                                    "trigger_score_ip": 65,
+                                    "trigger_score_url": 65,
+                                    "valid_until_delta_hours": 24,
+                                    "watchlists": []
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "X-RFToken": "8077c62e3266491ca3d6897e48f6cc0f"
+                                },
+                                "method": "POST",
+                                "uri": "https://api.recordedfuture.com/gw/azure-qa/threat/indicators/actors"
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "confidence": {
+                                                "type": "integer"
+                                            },
+                                            "created": {
+                                                "type": "string"
+                                            },
+                                            "description": {
+                                                "type": "string"
+                                            },
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "indicator_types": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "modified": {
+                                                "type": "string"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "pattern": {
+                                                "type": "string"
+                                            },
+                                            "pattern_type": {
+                                                "type": "string"
+                                            },
+                                            "spec_version": {
+                                                "type": "string"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            },
+                                            "valid_from": {
+                                                "type": "string"
+                                            },
+                                            "valid_until": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "confidence",
+                                            "description",
+                                            "id",
+                                            "indicator_types",
+                                            "name",
+                                            "pattern",
+                                            "pattern_type",
+                                            "spec_version",
+                                            "type",
+                                            "created",
+                                            "modified",
+                                            "valid_from",
+                                            "valid_until"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RecordedFuture-ThreatHunt-IndicatorImport",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": []
+        }
+    ]
+}

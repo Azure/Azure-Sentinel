@@ -1,0 +1,47 @@
+id: 6db6a8e6-2959-440b-ba57-a505875fcb37
+name: Recorded Future - Threat Hunting - Hash- All Actors
+description: |
+  'Recorded Future Threat Hunting hash correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 15min
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+customDetails: 
+  - ActorInformation: RecordedFuturePortalLink
+alertDetailsOverride:
+  - alertDisplayNameFormat: " {{Description}} "
+    alertDescriptionFormat: "**{{Description}}**\n\nCorrelation found on {{Hash_s}} from the {{Type}} table.\n"
+    alertDynamicProperties:
+      - alertProperty: AlertLink
+        value: RecordedFuturePortalLink
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566.001
+query: |
+  Squid_Proxy_Domain_CL
+  | where isnotempty(Domain_s)
+  | join kind=inner (ThreatIntelligenceIndicator
+  | where Active == true
+  | where Description startswith "Recorded Future - Threat Hunt"
+  | where isnotempty(DomainName)
+  | distinct DomainName, Description, Tags
+  )
+  on $left.Domain_s == $right.DomainName
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
+  | project Domain_s, Description, Type, Src_IPv4_s, TimeGenerated, RecordedFuturePortalLink
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: Hash_s
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: FileHashType
+version: 1.0.0

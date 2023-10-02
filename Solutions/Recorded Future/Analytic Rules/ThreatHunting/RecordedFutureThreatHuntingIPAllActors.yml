@@ -1,0 +1,42 @@
+id: e31bc14e-2b4c-42a4-af34-5bfd7d768aea
+name: Recorded Future - Threat Hunting - IP- All Actors
+description: |
+  'Recorded Future Threat Hunting IP correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 15min
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+customDetails: 
+  - ActorInformation: RecordedFuturePortalLink
+alertDetailsOverride:
+  - alertDisplayNameFormat: "{{Description}}"
+    alertDescriptionFormat: "**{{Description}}**\n\nCorrelation found on {{NetworkIP}} from the {{Type}} table.\n"
+    alertDynamicProperties:
+      - alertProperty: AlertLink
+        value: RecordedFuturePortalLink
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T0869
+query: |
+ NetScreen_Firewall_CL
+  | where isnotempty(Dst_IPv4_s)
+  | join kind=innerunique  (ThreatIntelligenceIndicator
+  | where Active == true
+  | where Description startswith "Recorded Future - Threat Hunt"
+  | where isnotempty(NetworkIP)
+  | distinct NetworkIP, Description, Tags
+  ) on $left.Dst_IPv4_s == $right.NetworkIP
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']    
+  | project NetworkIP, Description, Type, TimeGenerated, RecordedFuturePortalLink
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkIP
+version: 1.0.0

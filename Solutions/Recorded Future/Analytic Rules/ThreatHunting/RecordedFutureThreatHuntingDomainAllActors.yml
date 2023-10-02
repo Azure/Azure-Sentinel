@@ -1,0 +1,47 @@
+id: acbf7ef6-f964-44c3-9031-7834ec68175f
+name: Recorded Future - Threat Hunting - Domain- All Actors
+description: |
+  'Recorded Future Threat Hunting domain correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 15min
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+customDetails: 
+  - ActorInformation: RecordedFuturePortalLink
+alertDetailsOverride:
+  - alertDisplayNameFormat: " {{Description}} "
+    alertDescriptionFormat: "**{{Description}}**\n\nCorrelation found on {{Domain_s}} from the {{Type}} table.\n"
+    alertDynamicProperties:
+      - alertProperty: AlertLink
+        value: RecordedFuturePortalLink
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071.004
+query: |
+  Squid_Proxy_Domain_CL
+  | where isnotempty(Domain_s)
+  | join kind=inner (ThreatIntelligenceIndicator
+  | where Active == true
+  | where Description startswith "Recorded Future - Threat Hunt"
+  | where isnotempty(DomainName)
+  | distinct DomainName, Description, Tags
+  )
+  on $left.Domain_s == $right.DomainName
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
+  | project Domain_s, Description, Type, Src_IPv4_s, TimeGenerated, RecordedFuturePortalLink
+entityMappings:
+  - entityType: DNSResolution
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain_s
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Src_IPv4_s
+version: 1.0.0
