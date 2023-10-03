@@ -216,6 +216,11 @@ class PrismaCloudConnector:
             next_page_token = res.get('nextPageToken', None)
             result = res.get('items', [])
             result_activities.extend(result)
+            if result_activities == None or len(result_activities) == 0:
+                logging.info("No Alertd found")
+                logging.info("Processing {} events)".format(len(result_activities)))
+            else:
+                logging.info("Processing {} events)".format(len(result_activities)))
         return result_activities, next_page_token 
 
     async def get_next_page_alerts(self, next_page_token):
@@ -240,6 +245,11 @@ class PrismaCloudConnector:
             next_page_token = res.get('nextPageToken', None)
             result = res.get('items', [])
             result_activities.extend(result)
+            if result_activities == None or len(result_activities) == 0:
+                logging.info("No Alertd found")
+                logging.info("Processing {} events)".format(len(result_activities)))
+            else:
+                logging.info("Processing {} events)".format(len(result_activities)))
         return result_activities, next_page_token
 
     @staticmethod
