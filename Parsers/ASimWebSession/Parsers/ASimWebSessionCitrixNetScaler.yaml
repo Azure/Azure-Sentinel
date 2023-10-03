@@ -1,5 +1,5 @@
 Parser:
-  Title: Web Session ASIM parser for Citrix Web App Firewall
+  Title: Web Session ASIM parser for Citrix NetScaler(Web App Firewall)
   Version: '0.1.0'
   LastUpdated: Aug 23 2023
 Product:
@@ -18,7 +18,7 @@ References:
     https://docs.netscaler.com/en-us/citrix-adc/current-release/application-firewall/logs
     https://docs.netscaler.com/en-us/citrix-adc/current-release/application-firewall/xml-protections/xml-cross-site-scripting-check
 Description: |
-  This ASIM parser supports normalizing Citrix NetScaler WAF(Web Application Firewall) logs to the ASIM Web Session normalized schema.
+  This ASIM parser supports normalizing Citrix NetScaler WAF(Web Application Firewall) logs to the ASIM Web Session normalized schema. Citrix NetScaler WAF(Web Application Firewall) events are captured through Citrix WAF (Web App Firewall) data connector which ingests web attack logs into Microsoft Sentinel in CEF format via Syslog.
 ParserName: ASimWebSessionCitrixNetScaler
 EquivalentBuiltInParser: _ASim_WebSession_CitrixNetScaler
 ParserParams:
@@ -52,7 +52,8 @@ ParserQuery: |
   ];
   let parser = (disabled: bool=false) {
       CommonSecurityLog
-      | where not(disabled) and DeviceVendor == "Citrix" and DeviceProduct == "NetScaler"
+      | where not(disabled)
+      | where DeviceVendor == "Citrix" and DeviceProduct == "NetScaler"
       | where DeviceEventClassID == "APPFW" and Activity has_any ("APPFW_STARTURL", "APPFW_XML_cross-site scripting", "APPFW_SAFECOMMERCE", "APPFW_SAFECOMMERCE_XFORM", "APPFW_SIGNATURE_MATCH", "APPFW_XML_ERR_NOT_WELLFORMED", "APPFW_FIELDCONSISTENCY", "APPFW_SQL", "APPFW_BUFFEROVERFLOW_URL", "APPFW_BUFFEROVERFLOW_COOKIE", "APPFW_cross-site scripting", "APPFW_FIELDFORMAT", "APPFW_REFERER_HEADER")
       | parse-kv AdditionalExtensions as (method: string, geolocation: string, script: string) with (pair_delimiter=";", kv_delimiter="=")
       | parse RequestURL with * "://" host: string "/" *
@@ -80,8 +81,7 @@ ParserQuery: |
           DstPortNumber = toint(split(Ip_host, ":")[1]),
           DvcIpAddr = tostring(split(Ip_computer, ":")[0])
       | extend 
-          DstHostname = coalesce(DstIpAddr, DstHostname),
-          DvcHostname = coalesce(DvcIpAddr, DvcHostname)
+          DstHostname = coalesce(DstIpAddr, DstHostname)
       | extend
           EventCount = int(1),
           EventStartTime = TimeGenerated,
@@ -107,7 +107,7 @@ ParserQuery: |
           SrcGeoCountry = geolocation
       | extend
           EventEndTime = EventStartTime,
-          Dvc = DvcHostname,
+          Dvc = coalesce(DvcHostname, DvcIpAddr),
           Src = SrcIpAddr,
           Dst = DstHostname,
           Hostname = DstHostname,
