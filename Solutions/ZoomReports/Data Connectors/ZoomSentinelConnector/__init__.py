@@ -82,7 +82,7 @@ class Zoom:
                 if oauth_token.status_code == 200:
                     jsonData = json.loads(oauth_token.text)
                     auth_token = jsonData['access_token']
-                    return oauth_token
+                    return auth_token
                 elif oauth_token.status_code == 400:
                     logging.error("The requested report cannot be generated for this account because"
                                   " this account has not subscribed to toll-free audio conference plan."
