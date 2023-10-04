@@ -553,7 +553,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $data = $rawData
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
-                            #$serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
                             # Remove empty braces
                             $serializedData = $(removePropertiesRecursively $serializedData $true) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
                         }
