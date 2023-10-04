@@ -20,6 +20,7 @@ logAnalyticsUri = os.environ.get('logAnalyticsUri')
 table_name = "Zoom"
 chunksize = 10000
 retry = 3 ## To do : need to move function app configuration
+error=False
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -62,6 +63,7 @@ class Zoom:
         Returns:
             _type_: the zoom oauth token
         """
+        error=False
         for _ in range(self.retry):
             try:
                 base64String = base64.b64encode(
@@ -77,7 +79,8 @@ class Zoom:
                 oauth_token = requests.post(url=self.token_url,
                                             params=query_params,
                                             headers=headersfortokens)
-                if oauth_token.status_code in self.error_statuses:
+                if (oauth_token.status_code in self.error_statuses) or (error==True):
+                    error=False
                     continue ## To Do: Need to add delay 
                 if oauth_token.status_code == 200:
                     jsonData = json.loads(oauth_token.text)
@@ -94,8 +97,9 @@ class Zoom:
                     logging.error("Only provide report in recent 6 months. Error code: {}".format(
                         oauth_token.status_code))
 
-            except requests.exceptions.ConnectionError:
-                pass
+            except requests.exceptions as err:
+                error=True
+                logging.error("Something wrong. Exception error text: {}".format(err))
 
     def generate_date(self):
         """This method is used to generate date and stores in file share state
@@ -133,14 +137,16 @@ class Zoom:
         }
         if next_page_token:
             query_params.update({"next_page_token": next_page_token}) 
-            
+
+        error=False    
         for _ in range(self.retry):
             try:
                 
                 r = requests.get(url=self.base_url + report_type_suffix,
                              params=query_params,
                              headers=self.headers)
-                if r.status_code in self.error_statuses:
+                if (r.status_code in self.error_statuses) or (error==True):
+                    error=False
                     continue ## To Do: Need to add delay 
                 if r.status_code == 200:
                     return r.json()
@@ -157,8 +163,9 @@ class Zoom:
                 else:
                     logging.error(
                     "Something wrong. Error code: {}".format(r.status_code))
-            except requests.exceptions.ConnectionError:
-                pass
+            except requests.exceptions as err:
+                error=True
+                logging.error("Something wrong. Exception error text: {}".format(err))
 
 
 class Sentinel:
