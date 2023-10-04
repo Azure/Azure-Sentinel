@@ -122,7 +122,13 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
                     if ($isValidJsonStr)
                     {
                         $queryObj = ConvertFrom-Json $val -ErrorAction Stop;
-                        $resourceObj.$key = $(removePropertiesRecursively $queryObj $isWorkbook)
+                        foreach ($propItem in $queryObj.PsObject.Properties) {
+                            if ($null -eq $propItem.Value -or $propItem.Value -eq '[]')
+                            {
+                                $queryObj.PsObject.Properties.Remove($propItem.Name)
+                            }
+                        }
+                        $resourceObj.$key = $queryObj | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
                     }
                 } catch {
                 }
