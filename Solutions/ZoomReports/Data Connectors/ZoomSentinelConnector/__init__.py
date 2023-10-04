@@ -31,7 +31,8 @@ if (not match):
 
 
 class Zoom:
-
+    """This class has methods of zoom api report generation and oauth token generation
+    """
     def __init__(self):
         """This is the method where declares all the self initiating varables
 
@@ -54,7 +55,6 @@ class Zoom:
             }
         else:
             raise Exception("Unable to generate access token")
-            logging.error("Unable to generate access token")
 
     def generate_oauth_token(self):
         """This method used to generate the oauth zoom token
