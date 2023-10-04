@@ -394,6 +394,7 @@ ParserQuery: |
         let AllActivityIdsForAudit = dynamic([39, 41, 44, 45, 46, 56, 57, 68, 69, 70, 82, 83, 105, 116, 150, 151, 200, 201, 4004, 4005, 4104, 4105, 5012, 5020, 5021, 5022, 5024, 5025, 5026, 5027, 6000, 6001, 6002, 6010, 6011, 6012, 73, 76, 77, 78, 79, 84, 87, 2100, 2101, 2111, 52, 53, 54, 55, 61, 62, 63, 93, 95, 117, 118, 4100, 4101, 130, 131, 5040, 5041, 5042, 5044, 7200, 7201, 7202, 7203, 67, 88, 114, 145, 146, 2, 40, 42, 58, 59, 60, 101, 106, 107, 108, 109, 112, 113, 129, 147, 1501, 1502, 1503, 1504, 2011, 2012, 2013, 2014, 2015, 2016, 2028, 2029, 2030, 2036, 2037, 3001, 3002, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3021, 3100, 3101, 3102, 3103, 3500, 3501, 3502, 3506, 3507, 3521, 3525, 3526, 3527, 3530, 3531, 3600, 3601, 3602, 3603, 3604, 3626, 3628, 3641, 3650, 3651, 3652, 3653, 3654, 3750, 3751, 3752, 3753, 3754, 3755, 3756, 3767, 3768, 3769, 3770, 3771, 3772, 3773, 3774, 4001, 4002, 4006, 4007, 4008, 4009, 4011, 4012, 5242, 5243, 5244, 5250, 5251, 5252, 5253, 5254, 5255, 5256, 5257, 5258, 5259, 7500, 7501, 7602, 7603, 7604, 5120, 5121, 5122, 5123, 5124, 5129, 5220, 5221, 5222, 5225, 5226, 5231, 5234, 5235, 5236, 5237, 5238, 5241, 6030, 6053, 6054, 6055]);
         let RawOtherActivityIds = dynamic([2, 40, 42, 58, 59, 60, 101, 106, 107, 108, 109, 112, 113, 129, 147, 1501, 1502, 1503, 1504, 2011, 2012, 2013, 2014, 2015, 2016, 2028, 2029, 2030, 2036, 2037, 3001, 3002, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3021, 3100, 3101, 3102, 3103, 3500, 3501, 3502, 3506, 3507, 3521, 3525, 3526, 3527, 3530, 3531, 3600, 3601, 3602, 3603, 3604, 3626, 3628, 3641, 3650, 3651, 3652, 3653, 3654, 3750, 3751, 3752, 3753, 3754, 3755, 3756, 3767, 3768, 3769, 3770, 3771, 3772, 3773, 3774, 4001, 4002, 4006, 4007, 4008, 4009, 4011, 4012, 5242, 5243, 5244, 5250, 5251, 5252, 5253, 5254, 5255, 5256, 5257, 5258, 5259, 7500, 7501, 7602, 7603, 7604, 5120, 5121, 5122, 5123, 5124, 5129, 5220, 5221, 5222, 5225, 5226, 5231, 5234, 5235, 5236, 5237, 5238, 5241, 6030, 6053, 6054, 6055]);
         let Threatsdata = SentinelOne_CL
+            | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
             | where event_name_s == "Threats."
             | project
                 TimeGenerated,
@@ -523,6 +524,12 @@ ParserQuery: |
             | extend Object = strcat(Object, ' ', value);
         let parsedotheractivitydata_severity = rawotheractivitydata
             | where activityType_d in (2036, 2037, 2030)
+            | where (eventresult == "*" or EventResult =~ eventresult)
+                and (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
+                and (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+                and (array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any))
+                and (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+                and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(ipAddress, srcipaddr_has_any_prefix))
             | extend EventSeverity_specific = case(
                                         primaryDescription_s has_any ("to malicious", "to True positive"),
                                         "High", 
@@ -539,27 +546,19 @@ ParserQuery: |
                 useractivitydata,
                 rawotheractivitydata,
                 parsedotheractivitydata_eventtype,
-                parsedotheractivitydata_objectvalue,
-                parsedotheractivitydata_severity
+                parsedotheractivitydata_objectvalue
+            | where activityType_d !in(2030, 2036, 2037)
+            | lookup EventSeverityLookup on EventResult
+            | lookup EventSeverityLookup_activity on activityType_d
             | where (eventresult == "*" or EventResult =~ eventresult)
                 and (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
                 and (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
                 and (array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any))
                 and (array_length(object_has_any) == 0 or Object has_any (object_has_any))
-                and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(ipAddress, srcipaddr_has_any_prefix))
-            | lookup EventSeverityLookup on EventResult
-            | lookup EventSeverityLookup_activity on activityType_d;
-        let UnParsedActivitydatawithThreat = ParsedActivitydata
+                and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(ipAddress, srcipaddr_has_any_prefix));
+        let UnParsedActivitydatawithThreat = union ParsedActivitydata, parsedotheractivitydata_severity
             | where isnotempty(threatId_s)
             | lookup Threatsdata on $left.threatId_s == $right.threatInfo_threatId_s
-            | project-reorder
-                threatId_s,
-                activityType_d,
-                primaryDescription_s,
-                TimeGenerated,
-                TimeGenerated1,
-                threatInfo_identifiedAt_t,
-                threatInfo_updatedAt_t
             | where TimeGenerated1 >= TimeGenerated
             | summarize arg_min(TimeGenerated1, *) by activityType_d, threatId_s, createdAt_t, TimeGenerated;
         let undefineddata = UnParsedActivitydatawithThreat
