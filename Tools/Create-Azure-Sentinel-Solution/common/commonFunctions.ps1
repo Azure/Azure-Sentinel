@@ -69,7 +69,8 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
         if ($null -eq $val) {
             if ($isWorkbook)
             {
-                $resourceObj.$key = ''
+                #$resourceObj.$key = ''
+                $resourceObj.PsObject.Properties.Remove($key)
             }
             else
             {
@@ -113,7 +114,7 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
                     }
                 }
             }
-            elseif ($key -eq 'query')
+            elseif ($key -eq 'query' -and $isWorkbook -eq $true)
             {
                 try {
                     # this means its an json array
