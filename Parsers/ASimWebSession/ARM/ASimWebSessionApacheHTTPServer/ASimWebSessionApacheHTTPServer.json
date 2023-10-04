@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimWebSessionApacheHTTPServer",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM parser for Apache HTTP Server",
+            "category": "ASIM",
+            "FunctionAlias": "ASimWebSessionApacheHTTPServer",
+            "query": "let Parser=(disabled:bool=false){\n  ApacheHTTPServer_CL\n  | where not(disabled)\n  | project  RawData, TimeGenerated, Computer, _ResourceId, Type, _ItemId\n  | where not (RawData startswith \"[\") \n  | where RawData has_any (\"GET\", \"HEAD\", \"POST\", \"PUT\", \"DELETE\", \"CONNECT\", \"OPTIONS\", \"TRACE\", \"PATCH\")\n  | parse RawData with * '] ' Temp'\"' *\n  | extend DstHostname = tostring(split(trim_end(\" \",Temp),\":\",0)[0])\n  | parse RawData with SrcIpAddr \" \" ClientIdentity \" \" SrcUsername \" [\" Date ']' * '\"' HttpRequestMethod \" \" Url \" \" Protocol '\" ' EventResultDetails \" \" DstBytes:long ' \"' HttpReferrer '\" \"' HttpUserAgent '\"' *\n  | project-away RawData, Date, ClientIdentity, Temp\n  | parse _ResourceId with * \"/subscriptions/\" DvcScopeId \"/\" *\n  | project-rename \n      DvcHostname    = Computer,\n      DvcId          = _ResourceId,\n      EventUid       = _ItemId\n  | extend \n      HttpVersion    = tostring(split(Protocol,\"/\")[1]),\n      EventStartTime = TimeGenerated,\n      EventEndTime   = TimeGenerated,\n      DvcIdType      = iff (DvcId == \"\", \"\", \"AzureResourceID\")\n  | extend \n      HttpStatusCode = EventResultDetails,\n      UserAgent      = HttpUserAgent,\n      EventResult    = iff (\n        toint(EventResultDetails) < 400, \"Success\", \n        \"Failure\"\n      ),\n      IpAddr         = SrcIpAddr,\n      Dvc            = DvcHostname,\n      User           = SrcUsername,\n      SrcUsername    = case(SrcUsername == \"-\", \"\", SrcUsername),\n      HttpReferrer   = case(HttpReferrer == \"-\", \"\", HttpReferrer),\n      HttpUserAgent  = case(HttpUserAgent == \"-\", \"\", HttpUserAgent),\n      DstHostname    = case(DstHostname == \"-\", \"\", DstHostname)\n  | extend SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)\n  | project-away Protocol\n  | extend\n      EventType          = \"WebServerSession\", \n      EventSchema        = \"WebSession\",\n      EventSchemaVersion = \"0.2.6\",\n      EventCount         = int(1),\n      EventVendor        = \"Apache\",\n      EventProduct       = \"HTTP Server\",\n      EventSeverity      = \"Informational\"\n};\nParser (disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
