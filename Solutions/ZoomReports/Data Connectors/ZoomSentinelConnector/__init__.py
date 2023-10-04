@@ -97,7 +97,7 @@ class Zoom:
                     logging.error("Only provide report in recent 6 months. Error code: {}".format(
                         oauth_token.status_code))
 
-            except requests.exceptions as err:
+            except Exception  as err:
                 error=True
                 logging.error("Something wrong. Exception error text: {}".format(err))
 
@@ -163,7 +163,7 @@ class Zoom:
                 else:
                     logging.error(
                     "Something wrong. Error code: {}".format(r.status_code))
-            except requests.exceptions as err:
+            except Exception  as err:
                 error=True
                 logging.error("Something wrong. Exception error text: {}".format(err))
 
