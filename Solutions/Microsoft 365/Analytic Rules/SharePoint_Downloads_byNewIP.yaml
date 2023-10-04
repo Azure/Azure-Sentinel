@@ -32,24 +32,22 @@ query: |
   | where RecordType =~ szSharePointFileOperation
   | where Operation in~ (szOperations)
   | where isnotempty(UserAgent)
-  | extend GeoLocation = geo_info_from_ip_address(ClientIP)
-  | summarize Count = count() by UserId, Operation, tostring(GeoLocation), Site_Url, ClientIP
-  | summarize AvgCount = avg(Count) by UserId, Operation, GeoLocation, Site_Url, ClientIP;
+  | summarize Count = count() by UserId, Operation, Site_Url, ClientIP
+  | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIP;
   // Get recent user activity
   let recentUserActivity = OfficeActivity
   | where TimeGenerated > ago(endtime)
   | where RecordType =~ szSharePointFileOperation
   | where Operation in~ (szOperations)
   | where isnotempty(UserAgent)
-  | extend GeoLocation = geo_info_from_ip_address(ClientIP)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, tostring(GeoLocation), Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;
   // Join the baseline and recent activity, and calculate the deviation
-  let UserBehaviorAnalysis = userBaseline | join kind=inner (recentUserActivity) on UserId, Operation, GeoLocation, Site_Url, ClientIP
+  let UserBehaviorAnalysis = userBaseline | join kind=inner (recentUserActivity) on UserId, Operation, Site_Url, ClientIP
   | extend Deviation = abs(RecentCount - AvgCount) / AvgCount;
   // Filter for significant deviations
   UserBehaviorAnalysis
   | where Deviation > threshold
-  | project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, tostring(GeoLocation), Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count=RecentCount
+  | project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count=RecentCount
   | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP, URLCustomEntity = Site_Url
   | order by Count desc, ClientIP asc, Operation asc, UserId asc
 entityMappings:
