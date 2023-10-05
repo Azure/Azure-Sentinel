@@ -1,7 +1,7 @@
 id: 69b7723c-2889-469f-8b55-a2d355ed9c87
 name: TI Map IP Entity to DnsEvents
 description: |
-  'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DnsEvents.'
+  This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DnsEvents.
 severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
@@ -23,49 +23,37 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-  let dt_lookBack = 1h;
-  let ioc_lookBack = 14d;
-  let IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True));
-  let IP_Indicators = (union isfuzzy=true
-  (ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  // Picking up only IOC's that contain the entities we want
-  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
-  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
-  // Taking the first non-empty value based on potential IOC match availability
-  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
-  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
-  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  //Exclude local addresses, using the ipv4_is_private operator
-  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
-  ),
-  (IoCList
-  | where IoC_Type =~ 'IP'
-  | where ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC
-  | where Active =~ 'True'
-  | extend TI_ipEntity = IoC
-  | project-away  IoC_Type
-  )
-  );
+  let dt_lookBack = 1h; // Look back 1 hour for DNS events
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  // Fetch threat intelligence indicators related to IP addresses
+  let IP_Indicators = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+    | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+  // Perform a join between IP indicators and DNS events
   IP_Indicators
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-      DnsEvents
-      | where TimeGenerated >= ago(dt_lookBack)
-      | where SubType =~ "LookupQuery" and isnotempty(IPAddresses)
-      | mv-expand SingleIP = split(IPAddresses, ", ") to typeof(string)
-      // renaming time column so it is clear the log this came from
-      | extend DNS_TimeGenerated = TimeGenerated
-  )
-  on $left.TI_ipEntity == $right.SingleIP
-  | where DNS_TimeGenerated < ExpirationDateTime
-  | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated , *) by IndicatorId, SingleIP, IoC
-  | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore,
-  TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
-  | extend timestamp = DNS_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+    // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
+    | join kind=innerunique (
+        DnsEvents
+        | where TimeGenerated >= ago(dt_lookBack)
+        | where SubType =~ "LookupQuery" and isnotempty(IPAddresses)
+        | mv-expand SingleIP = split(IPAddresses, ", ") to typeof(string)
+        | extend DNS_TimeGenerated = TimeGenerated
+    )
+    on $left.TI_ipEntity == $right.SingleIP
+    // Filter out DNS events that occurred after the expiration of the corresponding indicator
+    | where DNS_TimeGenerated < ExpirationDateTime
+    // Group the results by IndicatorId and SingleIP, and keep the DNS event with the latest timestamp
+    | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by IndicatorId, SingleIP
+    // Select the desired output fields
+    | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore,
+      TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+    | extend timestamp = DNS_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -81,5 +69,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.3.5
+version: 1.4.0
 kind: Scheduled

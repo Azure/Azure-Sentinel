@@ -26,67 +26,55 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-  let dt_lookBack = 1h;
-  let ioc_lookBack = 14d;
-  let IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True);
-  //Create a list of TLDs in our threat feed for later validation
+  let dt_lookBack = 1h; // Lookback time for recent data, set to 1 hour
+  let ioc_lookBack = 14d; // Lookback time for threat feed data, set to 14 days
+  // Create a list of TLDs in our threat feed for later validation
   let list_tlds = ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  | where isnotempty(DomainName)
-  | extend parts = split(DomainName, '.')
-  | extend tld = parts[(array_length(parts)-1)]
-  | summarize count() by tostring(tld)
-  | summarize make_list(tld);
-  let Domain_Indicators = (union isfuzzy=true
-  (ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  // Picking up only IOC's that contain the entities we want
-  | where isnotempty(DomainName)
-  | extend TI_DomainEntity = DomainName
-  ),
-  (IoCList
-  | where IoC_Type =~ 'domainname'
-  | where ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC
-  | where Active =~ 'True'
-  | extend TI_DomainEntity = IoC
-  | project-away  IoC_Type
-  )
-  );
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | where isnotempty(DomainName)
+    | extend parts = split(DomainName, '.')
+    | extend tld = parts[(array_length(parts)-1)]
+    | summarize count() by tostring(tld)
+    | summarize make_list(tld);
+  let Domain_Indicators = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    // Picking up only IOC's that contain the entities we want
+    | where isnotempty(DomainName)
+    | extend TI_DomainEntity = DomainName;
   Domain_Indicators
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-  SecurityAlert
-  | where TimeGenerated > ago(dt_lookBack)
-  | extend MSTI = case(AlertName has "TI map" and VendorName == "Microsoft" and ProductName == 'Azure Sentinel', true, false)
-  | where MSTI == false
-  //Extract domain patterns from message
-  | extend domain = todynamic(dynamic_to_json(extract_all(@"(((xn--)?[a-z0-9\-]+\.)+([a-z]+|(xn--[a-z0-9]+)))", dynamic([1]), tolower(Entities))))
-  | mv-expand domain
-  | extend domain = tostring(domain[0])
-  | extend parts = split(domain, '.')
-  //Split out the TLD
-  | extend tld = parts[(array_length(parts)-1)]
-  //Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
-  | where tld in~ (list_tlds)
-  // Converting Entities into dynamic data type and use mv-expand to unpack the array
-  | extend EntitiesDynamicArray = parse_json(Entities)
-  | mv-apply EntitiesDynamicArray on
-  (summarize
-  HostName = take_anyif(tostring(EntitiesDynamicArray.HostName), EntitiesDynamicArray.Type == "host"),
-  IP_addr = take_anyif(tostring(EntitiesDynamicArray.Address), EntitiesDynamicArray.Type == "ip")
-  )
-  | extend Alert_TimeGenerated = TimeGenerated
-  | extend Alert_Description = Description
-  ) on $left.TI_DomainEntity==$right.domain
-  | where Alert_TimeGenerated < ExpirationDateTime
-  | summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName, IoC
-  | project Alert_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type, IoC, TI_DomainEntity
-  | extend timestamp = Alert_TimeGenerated
+    // Using innerunique to keep performance fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+    | join kind=innerunique (
+      SecurityAlert
+      | where TimeGenerated > ago(dt_lookBack)
+      | extend MSTI = case(AlertName has "TI map" and VendorName == "Microsoft" and ProductName == 'Azure Sentinel', true, false)
+      | where MSTI == false
+      // Extract domain patterns from message
+      | extend domain = todynamic(dynamic_to_json(extract_all(@"(((xn--)?[a-z0-9\-]+\.)+([a-z]+|(xn--[a-z0-9]+)))", dynamic([1,1]), tolower(Entities))))
+      | mv-expand domain
+      | extend domain = tostring(domain[0])
+      | extend parts = split(domain, '.')
+      // Split out the TLD
+      | extend tld = parts[(array_length(parts)-1)]
+      // Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
+      | where tld in~ (list_tlds)
+      // Converting Entities into dynamic data type and use mv-expand to unpack the array
+      | extend EntitiesDynamicArray = parse_json(Entities)
+      | mv-apply EntitiesDynamicArray on
+        (summarize
+          HostName = take_anyif(tostring(EntitiesDynamicArray.HostName), EntitiesDynamicArray.Type == "host"),
+          IP_addr = take_anyif(tostring(EntitiesDynamicArray.Address), EntitiesDynamicArray.Type == "ip")
+        )
+      | extend Alert_TimeGenerated = TimeGenerated
+      | extend Alert_Description = Description
+    ) on $left.TI_DomainEntity == $right.domain
+    | where Alert_TimeGenerated < ExpirationDateTime
+    | summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName
+    | project Alert_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type, TI_DomainEntity
+    | extend timestamp = Alert_TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -100,5 +88,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.3.6
+version: 1.4.1
 kind: Scheduled
