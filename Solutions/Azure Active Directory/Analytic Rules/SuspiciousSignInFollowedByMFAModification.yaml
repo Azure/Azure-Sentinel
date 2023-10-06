@@ -1,0 +1,77 @@
+id: aec77100-25c5-4254-a20a-8027ed92c46c
+name: Suspicious Sign In Followed by MFA Modification
+description: |
+  'This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+status: Available
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1078.004
+  - T1556.006
+query: |
+  let PriorityScore = 9;
+  BehaviorAnalytics
+  | where ActionType == "Sign-in"
+  | where InvestigationPriority > PriorityScore
+  | extend UserPrincipalName = tolower(UserPrincipalName)
+  | extend LogOnTime = TimeGenerated
+  | join kind=inner (AuditLogs
+  | where Category =~ "UserManagement" 
+  | where OperationName in~ ("Admin registered security info", "Admin updated security info", "Admin deleted security info", "User registered security info", "User changed default security info", "User deleted security info","User registered all required security info","User started security info registration") 
+  | extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))
+  | extend InitiatorID = tostring(InitiatedBy.user.id)
+  | extend FromIP = tostring(InitiatedBy.user.ipAddress) 
+  | extend TargetUPN = tolower(tostring(TargetResources[0].userPrincipalName))
+  | extend TargetId = tostring(TargetResources[0].id)
+  | extend MFAModTime = TimeGenerated
+  | where isnotempty(InitiatorUPN)) on $left.UserPrincipalName == $right.InitiatorUPN
+  | where MFAModTime between((LogOnTime-30m)..(LogOnTime+1h))
+  | extend InitiatorName = tostring(split(InitiatorUPN, "@")[0]), InitiatorSuffix = tostring(split(InitiatorUPN, "@")[1]), TargetName = tostring(split(TargetUPN, "@")[0]), TargetSuffix = tostring(split(TargetUPN, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatorID
+      - identifier: Name
+        columnName: InitiatorName
+      - identifier: UPNSuffix
+        columnName: InitiatorSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetId
+      - identifier: Name
+        columnName: TargetName
+      - identifier: UPNSuffix
+        columnName: TargetSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: FromIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+alertDetailsOverride:
+  alertDisplayNameFormat: Suspicious Sign In by {{InitiatorUPN}} Followed by MFA Modification to {{TargetUPN}}
+  alertDescriptionFormat: |
+    This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.
+    In this case {{InitiatorUPN}} logged in followed by a modification to MFA settings for {{TargetUPN}}.
+    The sign in was from {{SourceIPAddress}}.
+version: 1.0.0
+kind: Scheduled
