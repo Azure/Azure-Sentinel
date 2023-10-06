@@ -117,6 +117,10 @@ class Zoom:
                 "There is no last time point, trying to get events for last week.")
             past_time = (current_time_day -
                          datetime.timedelta(days=7)).strftime("%Y-%m-%d")
+        past_time_datetime = datetime.datetime.strptime(past_time, '%Y-%m-%d')
+        no_days=(current_time_day-past_time_datetime)
+        if(no_days.days>7):
+           current_time_day= (past_time_datetime +datetime.timedelta(days=7))     
         state.post(current_time_day.strftime("%Y-%m-%d"))
         return (past_time, current_time_day.strftime("%Y-%m-%d"))
 
