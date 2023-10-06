@@ -8,6 +8,7 @@ import requests
 import re
 import os
 import logging
+import time
 from .state_manager import StateManager
 
 zoom_account_id = os.environ['AccountID']
@@ -21,6 +22,10 @@ table_name = "Zoom"
 chunksize = 10000
 retry = 3 ## To do : need to move function app configuration
 error=False
+#Max script execution
+SCRIPT_EXECUTION_INTERVAL_MINUTES = 30
+#Azure function max execution
+AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = 29
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -284,8 +289,23 @@ def results_array_join(result_element, api_req_id, api_req_name):
         element['event_name'] = api_req_name
         results_array.append(element)
 
-
-def get_main_info():
+def check_if_functiontime_is_over(start_time, interval_minutes, max_script_exec_time_minutes):
+    """Returns True if function's execution time is less than interval between function executions and
+    less than max azure func lifetime. In other case returns False."""
+    
+    logging.info("started Max function time check")
+    max_minutes = min(interval_minutes, max_script_exec_time_minutes)
+    if max_minutes > 1:
+        max_time = max_minutes * 60 - 30
+    else:
+        max_time = 50
+    script_execution_time = time.time() - start_time
+    if script_execution_time > max_time:
+        return True
+    else:
+        return False
+    
+def get_main_info(start_time):
     """This is the main method to get response from zoom reports api
     """    
     for api_req_id, api_req_info in reports_api_requests_dict.items():
@@ -306,6 +326,9 @@ def get_main_info():
                 results_array_join(result, api_req_id, api_req_name)
             else:
                 next_page_token = None
+        if check_if_functiontime_is_over(start_time, SCRIPT_EXECUTION_INTERVAL_MINUTES, AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES):
+            logging.info('Stopping script because time for execution is over')
+            break    
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -314,6 +337,7 @@ def main(mytimer: func.TimerRequest) -> None:
     Args:
         mytimer (func.TimerRequest): Timer based function app
     """    
+    start_time = time.time()
     utc_timestamp = datetime.datetime.utcnow().replace(
         tzinfo=datetime.timezone.utc).isoformat()
     if mytimer.past_due:
@@ -338,7 +362,7 @@ def main(mytimer: func.TimerRequest) -> None:
     from_day, to_day = zoom_class_vars['from_day'], zoom_class_vars['to_day']
     logging.info(
         'Trying to get events for period: {} - {}'.format(from_day, to_day))
-    get_main_info()
+    get_main_info(start_time)
     sentinel.gen_chunks(results_array)
     sentinel_class_vars = vars(sentinel)
     success_processed, fail_processed = sentinel_class_vars["success_processed"],\
