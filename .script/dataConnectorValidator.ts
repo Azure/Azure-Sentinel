@@ -112,6 +112,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.AWS;
   }
+  else if (dataTypes[0].name.includes("Corelight"))
+  {
+    return ConnectorCategory.Corelight;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];
