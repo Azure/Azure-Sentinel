@@ -152,7 +152,7 @@ def get_result(activity,start_time, end_time):
         result = results.get('items', [])
         result_activities.extend(result)
         logging.info("Name of Activity: {}, Number of events: {})".format(activity, len(result_activities)))
-        if result_activities == None or len(result_activities) == 0:
+        if result_activities is None or len(result_activities) == 0:
             logging.info("Logs not founded for {} activity".format(activity))
             logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
         else:
@@ -171,7 +171,7 @@ def get_nextpage_results(activity,start_time, end_time, next_page_token):
         result = results.get('items', [])
         result_activities.extend(result)
         logging.info("Number of events {}".format(len(result_activities)))
-        if result_activities == None or len(result_activities) == 0:
+        if result_activities is None or len(result_activities) == 0:
             logging.info("Logs not founded for {} activity".format(activity))
             logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
         else:
@@ -267,6 +267,10 @@ def gen_chunks_with_latesttime(data,log_type):
             logging.error("Something wrong. Exception error text: {}".format(err))
     return latest_timestamp
 
+"""This method is used to process and post the results to Log Analytics Workspace
+        Returns:
+            latest_timestamp : last processed result timestamp
+"""
 def process_result(result_obj, start_time, postactivity_list, line):
     if result_obj is not None:
         result_obj = expand_data(result_obj)
