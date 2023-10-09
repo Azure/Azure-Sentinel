@@ -1,9 +1,9 @@
 id: 99d589fa-7337-40d7-91a0-c96d0c4fa437
 name: Account created from non-approved sources
 description: |
-  'This query looks for account being created from a domain that is not regularly seen in a tenant.
+  'This query looks for an account being created from a domain that is not regularly seen in a tenant.
     Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.
-    Created accounts should be investigated to ensure they were legitimated created.
+    Created accounts should be investigated to confirm expected creation.
     Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'
 severity: Medium
 requiredDataConnectors:
@@ -40,26 +40,50 @@ query: |
     | extend AddingSPN = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)
     | extend AddedBy = iif(isnotempty(AddingUser), AddingUser, AddingSPN)
     | extend UserAdded = tostring(TargetResources[0].userPrincipalName)
-    | extend Domain = tolower(split(UserAdded, "@")[1])
-    | where Domain !in (core_domains) and Domain !in (alternative_domains)
+    | extend AddedByUserId = tostring(parse_json(tostring(InitiatedBy.user)).id)
+    | extend AddedBySPNId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)
+    | extend AddedByAzureId = iif(isnotempty(AddedByUserId), AddedByUserId, AddedBySPNId)
+    | extend UserAddedDomain = case(
+    UserAdded has "#EXT#", tostring(split(tostring(split(UserAdded, "#EXT#")[0]), "_")[1]),
+    UserAdded !has "#EXT#" and AddedBy has "@", tostring(split(UserAdded, "@")[1]),
+    UserAdded)
+    | where UserAddedDomain !in (core_domains) and UserAddedDomain !in (alternative_domains)
     | project-away AddingUser
-    | project-reorder TimeGenerated, UserAdded, Domain, AddedBy
+    | extend AddedByName = case(
+    AddedBy has "#EXT#", tostring(split(tostring(split(AddedBy, "#EXT#")[0]), "_")[0]),
+    AddedBy !has "#EXT#" and AddedBy has "@", tostring(split(AddedBy, "@")[0]),
+    AddedBy)
+    | extend AddedByUPNSuffix = case(
+    AddedBy has "#EXT#", tostring(split(tostring(split(AddedBy, "#EXT#")[0]), "_")[1]),
+    AddedBy !has "#EXT#" and AddedBy has "@", tostring(split(AddedBy, "@")[1]),
+    AddedBy)
+    | extend UserAddedName = case(
+    UserAdded has "#EXT#", tostring(split(tostring(split(UserAdded, "#EXT#")[0]), "_")[0]),
+    UserAdded !has "#EXT#" and AddedBy has "@", tostring(split(UserAdded, "@")[0]),
+    UserAdded)
+    | project-reorder TimeGenerated, UserAdded, UserAddedDomain, AddedBy
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AddedBy
+      - identifier: Name
+        columnName: AddedByName
+      - identifier: UPNSuffix
+        columnName: AddedByUPNSuffix
+      - identifier: AadUserId
+        columnName: AddedByAzureId
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: UserAdded
-version: 1.0.1
+      - identifier: Name
+        columnName: UserAddedName
+      - identifier: UPNSuffix
+        columnName: UserAddedDomain
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
