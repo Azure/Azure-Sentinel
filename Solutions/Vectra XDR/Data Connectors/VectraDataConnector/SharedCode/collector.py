@@ -1,4 +1,5 @@
 """This file contains methods for validations, checkpoint, pulling and pushing data."""
+import sys
 import datetime
 import json
 import inspect
@@ -320,6 +321,41 @@ class BaseCollector:
                 "Error Occurred while posting data into Microsoft Sentinel Log Analytics Workspace."
             )
 
+    def _get_size_of_chunk_in_mb(self, chunk):
+        """Get the size of chunk in MB."""
+        return sys.getsizeof(chunk) / (1024 * 1024)
+
+    def _create_chunks_and_post_to_sentinel(self, data, table_name, fields):
+        """Create chunks and post to chunk to sentinel."""
+        __method_name = inspect.currentframe().f_code.co_name
+        chunk = []
+        if self._get_size_of_chunk_in_mb(data) < 30:
+            self.post_data_to_sentinel(data, table_name, fields)
+            return
+        for event in data:
+            chunk.append(event)
+            if self._get_size_of_chunk_in_mb(chunk) >= 30:
+                if chunk[:-1]:
+                    self.post_data_to_sentinel(chunk[:-1], table_name, fields)
+                    next_checkpoint = chunk[-2].get("id")
+                    self.save_checkpoint(next_checkpoint)
+                    chunk = [event]
+                    continue
+                else:
+                    id = chunk[0].get("id")
+                    self.applogger.error(
+                        '{}(method={}) : {} : event with id {} is too large to post into the sentinel hence skipping it.'.format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            self.function_name,
+                            id,
+                        )
+                    )
+                    chunk = []
+                    continue
+        if chunk:
+            self.post_data_to_sentinel(chunk, table_name, fields)
+    
     def pull_and_push_the_data(
         self,
         endpoint,
@@ -333,10 +369,7 @@ class BaseCollector:
         __method_name = inspect.currentframe().f_code.co_name
         posted_event_count = 0
         iter_next = True
-        if endpoint == consts.DETECTIONS_ENDPOINT:
-            params.update({"limit": 250, checkpoint_field: checkpoint_value})
-        else:
-            params.update({"limit": 1000, checkpoint_field: checkpoint_value})
+        params.update({"limit": consts.PAGE_SIZE, checkpoint_field: checkpoint_value})
         while iter_next:
             res = self.pull(url=self.base_url + endpoint, params=params)
             next_checkpoint = res.get("next_checkpoint", None)
@@ -409,13 +442,10 @@ class BaseCollector:
                     )
 
             if res and len(res.get("events")):
-                self.post_data_to_sentinel(res.get("events"), table_name, fields)
+                self._create_chunks_and_post_to_sentinel(res.get("events"), table_name, fields)
                 posted_event_count += len(res.get("events"))
                 iter_next = True if int(res.get("remaining_count")) > 0 else False
-                if endpoint == consts.DETECTIONS_ENDPOINT:
-                    params.update({"limit": 250, "from": next_checkpoint})
-                else:
-                    params.update({"limit": 1000, "from": next_checkpoint})
+                params.update({"limit": consts.PAGE_SIZE, "from": next_checkpoint})
             else:
                 iter_next = False
             if endpoint == consts.ENTITY_SCORING_ENDPOINT and (
