@@ -116,6 +116,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Corelight;
   }
+  else if (dataTypes[0].name.includes("CorelightExporter"))
+  {
+    return ConnectorCategory.CorelightExporter;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];

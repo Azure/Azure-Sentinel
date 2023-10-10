@@ -203,5 +203,6 @@ export enum ConnectorCategory {
   BloodHoundEnterprise="BloodHoundEnterprise",
   Corelight="Corelight",
   AwsS3="AwsS3",
-  AWS="AWS"
+  AWS="AWS",
+  CorelightExporter="CorelightExporter"
 }
