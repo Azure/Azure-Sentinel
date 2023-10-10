@@ -40,6 +40,7 @@ param (
 Add-Type -AssemblyName System.Collections
 
 $outputObject = New-Object system.Data.DataTable
+[void]$outputObject.Columns.Add('Index', [string]::empty.GetType() )
 [void]$outputObject.Columns.Add('SolutionName', [string]::empty.GetType() )
 [void]$outputObject.Columns.Add('SolutionType', [string]::empty.GetType() )
 [void]$outputObject.Columns.Add('SolutionDescription', [string]::empty.GetType() )
@@ -71,6 +72,8 @@ Function Export-AzSentinelSolutionDataToCSV ($WorkspaceName, $ResourceGroupName,
   $count = 1
   $total = $solutions.count
 
+  $index = 1
+
 
   foreach ($solution in $solutions) {
     Write-Host $count " of " $total ": " $solution.properties.displayName
@@ -82,25 +85,26 @@ Function Export-AzSentinelSolutionDataToCSV ($WorkspaceName, $ResourceGroupName,
     $solutionUrl = "https://management.azure.com/subscriptions/$($SubscriptionId)/resourceGroups/$($ResourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($WorkspaceName)/providers/Microsoft.SecurityInsights/contentProductPackages/" + $solution.name + "?api-version=2023-04-01-preview"
     $solutionData = (Invoke-RestMethod -Method "Get" -Uri $solutionUrl -Headers $authHeader )
     $requiredDataConnectors = ""
-    $requiredDataTypes="";
+    $requiredDataTypes = "";
     #Solution
     if ($solution.properties.contentKind -eq "Solution") {
       foreach ($resource in $solutionData.properties.packagedContent.resources) {
         if (($null -ne $resource.properties.contentKind) -and ("Solution" -ne $resource.properties.contentKind)) {
           $newRow = $outputObject.NewRow()
+          $newRow.Index = $index
           $newRow.SolutionName = $solution.properties.displayName
           $newRow.SolutionType = $solution.properties.contentKind
           $newRow.SolutionDescription = $solution.properties.descriptionHtml
           $newRow.ResourceType = $resource.properties.contentKind
           $newRow.ResourceName = $resource.properties.displayName
-          if ($null -ne $resource.properties.mainTemplate.resources.properties.requiredDataConnectors.connectorId)
-          { 
+          if ($null -ne $resource.properties.mainTemplate.resources.properties.requiredDataConnectors.connectorId) { 
             $requiredDataConnectors = [String]::Join('|', $resource.properties.mainTemplate.resources.properties.requiredDataConnectors.connectorId) 
             $requiredDataTypes = [String]::Join('|', $resource.properties.mainTemplate.resources.properties.requiredDataConnectors.dataTypes) 
           }
           $newRow.RequiredDataConnectors = $requiredDataConnectors
           $newRow.RequiredDataTypes = $requiredDataConnectors
           [void]$outputObject.Rows.Add( $newRow )
+          $index++
         }
       }
     }
@@ -109,6 +113,7 @@ Function Export-AzSentinelSolutionDataToCSV ($WorkspaceName, $ResourceGroupName,
       $resourceType = $solutionData.properties.packagedContent.resources[0].properties.contentKind
       $resourceName = $solutionData.properties.packagedContent.resources[1].properties.displayName
       $newRow = $outputObject.NewRow()
+      $newRow.Index = $index
       $newRow.SolutionName = $solution.properties.displayName
       $newRow.SolutionType = $solution.properties.contentKind
       $newRow.SolutionDescription = $solution.properties.description
@@ -117,7 +122,9 @@ Function Export-AzSentinelSolutionDataToCSV ($WorkspaceName, $ResourceGroupName,
       $newRow.RequiredDataConnectors = $requiredDataConnectors
       $newRow.RequiredDataTypes = $requiredDataConnectors
       [void]$outputObject.Rows.Add( $newRow )
+      $index++
     }
+   
   }
 
   $outputObject |  Export-Csv -QuoteFields "SolutionName", "SolutionDescription", "ResourceName" -Path $FileName -Append

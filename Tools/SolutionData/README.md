@@ -16,3 +16,5 @@ There is an included "solutionexport.csv" file that serves as an example of the 
 > Note:  Due to the size of the CSV file, it must first be uploaded into an Azure Blog storage account and then used to create the watchlist. [Create Large Watchlists using SAS Key](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/large-watchlist-using-sas-key-is-in-public-preview)
 
 There can be an issue where the CSV file failed to work correctly when creating the watchlist.  In that case, open it in Excel and save it again.
+
+When creating the Watchlist, set both the name to whatever you like, the alias to "SolutionData", and the SearchKey to the "Index" column.
