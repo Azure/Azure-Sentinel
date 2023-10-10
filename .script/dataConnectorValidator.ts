@@ -116,9 +116,9 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Corelight;
   }
-  else if (dataTypes[0].name.includes("CorelightConnector_Exporter"))
+  else if (dataTypes[0].name.includes("CorelightConnectorExporter"))
   {
-    return ConnectorCategory.CorelightConnector_Exporter;
+    return ConnectorCategory.CorelightConnectorExporter;
   }
   return "";
 } 
