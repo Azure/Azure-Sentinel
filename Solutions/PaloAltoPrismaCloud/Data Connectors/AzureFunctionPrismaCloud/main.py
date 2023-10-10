@@ -88,7 +88,7 @@ class PrismaCloudConnector:
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
         result_obj, next_page_token = await self.get_alerts(start_time=alert_start_ts_ms)
         if result_obj is not None:
-            async for alert in result_obj:
+            for alert in result_obj:
                 last_alert_ts_ms = alert['alertTime']
                 if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
                     policy_complianceMetadata = alert['policy']['complianceMetadata']
@@ -106,7 +106,7 @@ class PrismaCloudConnector:
         while next_page_token  is not None:
             result_obj, next_page_token = await self.get_next_page_alerts(next_page_token)
             if result_obj is not None:
-                async for alert in result_obj:
+                for alert in result_obj:
                     last_alert_ts_ms = alert['alertTime']
                     if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
                         policy_complianceMetadata = alert['policy']['complianceMetadata']
