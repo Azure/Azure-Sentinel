@@ -204,5 +204,5 @@ export enum ConnectorCategory {
   Corelight="Corelight",
   AwsS3="AwsS3",
   AWS="AWS",
-  CorelightExporter="CorelightExporter"
+  CorelightConnector_Exporter="CorelightConnector_Exporter"
 }
