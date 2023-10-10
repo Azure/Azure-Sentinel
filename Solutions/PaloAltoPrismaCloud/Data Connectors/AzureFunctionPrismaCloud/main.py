@@ -205,7 +205,8 @@ class PrismaCloudConnector:
                 }
             },
             "sortBy": ["alertTime:asc"],
-            "detailed": True
+            "detailed": True,
+            "limit": 100
         }
         data = json.dumps(data)
         async with self.session.post(uri, headers=headers, data=data) as response:
