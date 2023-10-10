@@ -101,9 +101,9 @@ class PrismaCloudConnector:
                             count+=1
                 alert = self.clear_alert(alert)
                 await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
-                self.sent_alerts += 1
+                self.sent_alerts += 1   
             
-        while next_page_token  is not None:
+        while next_page_token is not None:
             result_obj, next_page_token = await self.get_next_page_alerts(next_page_token)
             if result_obj is not None:
                 for alert in result_obj:
@@ -218,10 +218,10 @@ class PrismaCloudConnector:
             result = res.get('items', [])
             result_activities.extend(result)
             if result_activities == None or len(result_activities) == 0:
-                logging.info("No Alertd found")
-                logging.info("Processing {} events)".format(len(result_activities)))
-            else:
-                logging.info("Processing {} events)".format(len(result_activities)))
+                logging.info("No Alerts found")
+                #logging.info("Processing {} events)".format(len(result_activities)))
+            #else:
+                #logging.info("Processing {} events)".format(len(result_activities)))
         return result_activities, next_page_token 
 
     async def get_next_page_alerts(self, next_page_token):
@@ -248,9 +248,9 @@ class PrismaCloudConnector:
             result_activities.extend(result)
             if result_activities == None or len(result_activities) == 0:
                 logging.info("No Alertd found")
-                logging.info("Processing {} events)".format(len(result_activities)))
-            else:
-                logging.info("Processing {} events)".format(len(result_activities)))
+                #logging.info("Processing {} events)".format(len(result_activities)))
+            #else:
+                #logging.info("Processing {} events)".format(len(result_activities)))
         return result_activities, next_page_token
 
     @staticmethod
