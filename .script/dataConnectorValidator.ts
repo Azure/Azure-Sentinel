@@ -116,7 +116,7 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Corelight;
   }
-  else if (dataTypes[0].name.includes("CorelightConnectorExporter"))
+  else if (dataTypes[0].name.includes("corelight_bacnet"))
   {
     return ConnectorCategory.CorelightConnectorExporter;
   }
