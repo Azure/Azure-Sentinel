@@ -144,15 +144,40 @@ If ($env:ZoomVerification -eq "None") {Write-Host "Not Verifying"}
 
 # If authorization key is not valid
 If ($headers["authorization"] -eq $env:ZoomVerification -Or $env:ZoomVerification -eq "None") {
-# Get request body
-$event = $Request.Body
+    # Get request body
+    $event = $Request.Body
 
-# Write logs to OMS Workspace
-$writeResult = Write-OMSLogfile $currentUTCtime $env:customLogName $event $env:workspaceId $env:workspaceKey
+    # Handles Zoom webhook validation. See: https://developers.zoom.us/docs/api/rest/webhook-reference/#validate-your-webhook-endpoint
+    $secretToken = $env:secretToken
+    $validationPayload = $event
 
-# Return Write-OMSLogfile response to output binding
-Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-    StatusCode = $writeResult
-    Body = ""
-})
+    if ( $validationPayload.event -eq "endpoint.url_validation" ) {
+        Write-Host "Processing Zoom validation request"
+        $key = [Text.Encoding]::UTF8.GetBytes($secretToken)
+        $hasher = New-Object System.Security.Cryptography.HMACSHA256
+        $hasher.key = $key
+        $hash = $hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($validationPayload.payload.plainToken))
+        $hexString = [System.BitConverter]::ToString($hash).Replace("-", "")
+
+        $validationResponse = @{
+            "plainToken" = $validationPayload.payload.plainToken
+            "encryptedToken" = $hexString.ToLower()
+        } | ConvertTo-Json
+
+        Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+            StatusCode = 200
+            Body = $validationResponse
+        })
+
+    } else {
+
+        # Write logs to OMS Workspace
+        $writeResult = Write-OMSLogfile $currentUTCtime $env:customLogName $event $env:workspaceId $env:workspaceKey
+
+        # Return Write-OMSLogfile response to output binding
+        Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+            StatusCode = $writeResult
+            Body = ""
+        })
+    }
 }{Write-Host "Invalid Source"}
