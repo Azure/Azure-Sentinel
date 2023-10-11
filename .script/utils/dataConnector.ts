@@ -202,7 +202,6 @@ export enum ConnectorCategory {
   CrowdstrikeReplicatorV2="CrowdstrikeReplicatorV2",
   BloodHoundEnterprise="BloodHoundEnterprise",
   Corelight="Corelight",
-  CorelightConnectorExporter="CorelightConnectorExporter",
   AwsS3="AwsS3",
   AWS="AWS"
 }
