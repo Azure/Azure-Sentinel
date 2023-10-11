@@ -145,7 +145,7 @@ def GetDates(logType):
 def get_result(activity,start_time, end_time):
     try:
         result_activities = []
-        service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False)
+        service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False, num_retries=3, static_discovery=True)
         results = service.activities().list(userKey='all', applicationName=activity,
                                                 maxResults=1000, startTime=start_time, endTime=end_time).execute()
         next_page_token = results.get('nextPageToken', None)
@@ -164,7 +164,7 @@ def get_result(activity,start_time, end_time):
 def get_nextpage_results(activity,start_time, end_time, next_page_token):
     try:
         result_activities = []
-        service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False)
+        service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False, num_retries=3, static_discovery=True)
         results = service.activities().list(userKey='all', applicationName=activity,
                                                 maxResults=1000, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
         next_page_token = results.get('nextPageToken', None)
