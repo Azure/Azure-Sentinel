@@ -320,15 +320,24 @@ def main():
         print("Located rsyslog daemon running on the machine")
         set_rsyslog_configuration()
         restart_rsyslog()
+        print_warning("Please note that the installation script opens port 514 to listen to incoming messages in both"
+                      " UDP and TCP protocols. To change this setting, refer to the Rsyslog configuration file located at "
+                      "'/etc/rsyslog.conf'.")
     elif is_syslog_ng():
         print("Located syslog-ng daemon running on the machine")
         set_syslog_ng_configuration()
         restart_syslog_ng()
+        print_warning("Please note that the installation script opens port 514 to listen to incoming messages in both"
+                      " UDP and TCP protocols. To change this setting, refer to the Syslog-ng configuration file located at"
+                      " '/etc/syslog-ng/syslog-ng.conf'.")
     else:
         print_error(
-            "Could not detect a running Syslog daemon on the machine, aborting installation. Please make sure you have a running Syslog daemon and rerun this script.")
+            "Could not detect a running Syslog daemon on the machine, aborting installation. Please make sure you have "
+            "a running Syslog daemon and rerun this script.")
+        exit()
     print_full_disk_warning()
-    print_ok("Installation completed")
+    print_ok("Installation completed successfully")
+
 
 
 main()
