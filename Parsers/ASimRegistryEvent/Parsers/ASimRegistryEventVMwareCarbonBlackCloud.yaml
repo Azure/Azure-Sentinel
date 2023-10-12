@@ -17,33 +17,9 @@ References:
         https://developer.carbonblack.com/reference/cb-threathunter/latest/event-search-fields/
 Description: |
   This ASIM parser supports normalizing VMware Carbon Black Cloud logs to the ASIM Registry Event normalized schema. VMware Carbon Black Cloud events are captured through VMware Carbon Black Cloud data connector which ingests Carbon Black Audit, Notification and Event data into Microsoft Sentinel through the REST API.
-ParserName: vimRegistryEventVMwareCarbonBlackCloud
-EquivalentBuiltInParser: _Im_RegistryEvent_VMwareCarbonBlackCloud
+ParserName: ASimRegistryEventVMwareCarbonBlackCloud
+EquivalentBuiltInParser: _ASim_RegistryEvent_VMwareCarbonBlackCloud
 ParserParams:
-  - Name: starttime
-    Type: datetime
-    Default: datetime(null)
-  - Name: endtime
-    Type: datetime
-    Default: datetime(null)
-  - Name: eventtype_in
-    Type: dynamic
-    Default: dynamic([])
-  - Name: actorusername_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: registrykey_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: registryvalue_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: registryvaluedata_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: dvchostname_has_any
-    Type: dynamic
-    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
@@ -67,32 +43,25 @@ ParserQuery: |
       "HKCC", "HKEY_CURRENT_CONFIG"
   ];
   let actionvalues = dynamic(["ACTION_WRITE_VALUE", "ACTION_CREATE_KEY", "ACTION_DELETE_KEY", "ACTION_DELETE_VALUE", "ACTION_RENAME_KEY"]);
-  let parser=(starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventtype_in: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), registrykey_has_any: dynamic=dynamic([]), registryvalue_has_any: dynamic=dynamic([]), registryvaluedata_has_any: dynamic=dynamic([]), dvchostname_has_any: dynamic=dynamic([]), disabled: bool=false) {
+  let parser=(disabled: bool=false) {
       CarbonBlackEvents_CL
       | where not(disabled)
-      | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime))
-          and eventType_s == "endpoint.event.regmod"
+      | where eventType_s == "endpoint.event.regmod"
           and isnotempty(regmod_name_s)
-      | where array_length(registryvalue_has_any) == 0
-          and array_length(registryvaluedata_has_any) == 0
-          and (array_length(actorusername_has_any) == 0 or process_username_s has_any (actorusername_has_any))
-          and (array_length(dvchostname_has_any) == 0 or device_name_s has_any (dvchostname_has_any))
       | extend
           temp_action = case(
-                    action_s has "|" and action_s has "delete",
-                    "ACTION_DELETE_KEY",
-                    action_s has "|" and action_s !has "delete",
-                    "ACTION_CREATE_KEY",
-                    action_s
-                ),
+                            action_s has "|" and action_s has "delete",
+                            "ACTION_DELETE_KEY",
+                            action_s has "|" and action_s !has "delete",
+                            "ACTION_CREATE_KEY",
+                            action_s
+                        ),
           RegistryKeyPrefix = tostring(split(regmod_name_s, @'\')[0])
       | where temp_action in (actionvalues)
       | lookup EventTypeLookup on temp_action
       | lookup RegistryKeyPrefixLookup on RegistryKeyPrefix
-      | extend RegistryKey = replace_string(regmod_name_s, RegistryKeyPrefix, RegistryKeyNormalizedPrefix)
-      | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
-          and (array_length(registrykey_has_any) == 0 or RegistryKey has_any (registrykey_has_any))
       | extend
+          RegistryKey = replace_string(regmod_name_s, RegistryKeyPrefix, RegistryKeyNormalizedPrefix),
           ActingProcessId = tostring(toint(process_pid_d)),
           EventStartTime = todatetime(split(createTime_s, '+')[0]),
           ParentProcessId = tostring(toint(parent_pid_d)),
@@ -147,4 +116,4 @@ ParserQuery: |
           RegistryKeyPrefix,
           RegistryKeyNormalizedPrefix
   };
-  parser(starttime=starttime, endtime=endtime, eventtype_in=eventtype_in, actorusername_has_any=actorusername_has_any, registrykey_has_any=registrykey_has_any, registryvalue_has_any=registryvalue_has_any, registryvaluedata_has_any=registryvaluedata_has_any, dvchostname_has_any=dvchostname_has_any, disabled = disabled)
+  parser(disabled = disabled)
