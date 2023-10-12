@@ -40,7 +40,7 @@ query: |
   | extend Scope_s = split(Scope, "/")
   | extend Subscription = tostring(Scope_s[2])
   | extend VirtualMachineName = tostring(Scope_s[-1])
-  | project StartTime, EndTime, Subscription, VirtualMachineName, CorrelationId, Caller, CallerIpAddress=max_CallerIpAddress
+  | project StartTime, EndTime, Subscription, VirtualMachineName, CorrelationId, Caller, CallerIpAddress=max_CallerIpAddress, Scope
   | join kind=leftouter (
       DeviceFileEvents
       | where InitiatingProcessFileName == "RunCommandExtension.exe"
@@ -49,7 +49,7 @@ query: |
   ) on VirtualMachineName
   // We need to filter by time sadly, this is the only way to link events
   | where PowershellFileCreatedTimestamp between (StartTime .. EndTime)
-  | project StartTime, EndTime, PowershellFileCreatedTimestamp, VirtualMachineName, Caller, CallerIpAddress, FileName, FileSize, InitiatingProcessId, InitiatingProcessAccountDomain, InitiatingProcessFolderPath
+  | project StartTime, EndTime, PowershellFileCreatedTimestamp, VirtualMachineName, Caller, CallerIpAddress, FileName, FileSize, InitiatingProcessId, InitiatingProcessAccountDomain, InitiatingProcessFolderPath, Scope
   | join kind=inner(
       DeviceEvents
       | extend VirtualMachineName = tostring(split(DeviceName, ".")[0])
@@ -66,7 +66,7 @@ query: |
       | order by PSCommand asc
       | summarize PowershellExecStartTime=min(TimeGenerated), PowershellExecEnd=max(TimeGenerated), make_list(PSCommand) by PowershellFileName, InitiatingProcessCommandLine
   ) on $left.FileName == $right.PowershellFileName
-  | project StartTime, EndTime, PowershellFileCreatedTimestamp, PowershellExecStartTime, PowershellExecEnd, PowershellFileName, PowershellScriptCommands=list_PSCommand, Caller, CallerIpAddress, InitiatingProcessCommandLine, PowershellFileSize=FileSize, VirtualMachineName
+  | project StartTime, EndTime, PowershellFileCreatedTimestamp, PowershellExecStartTime, PowershellExecEnd, PowershellFileName, PowershellScriptCommands=list_PSCommand, Caller, CallerIpAddress, InitiatingProcessCommandLine, PowershellFileSize=FileSize, VirtualMachineName, Scope
   | order by StartTime asc 
   // We generate the hash based on the cmdlets called and the size of the powershell script
   | extend TempFingerprintString = strcat(PowershellScriptCommands, PowershellFileSize)
@@ -83,28 +83,33 @@ query: |
   | extend Prevalence = toreal(HashCount) / toreal(totals) * 100
   // Where the hash was only ever seen once.
   | where HashCount == 1
-  | extend timestamp = StartTime, IPCustomEntity=CallerIpAddress, AccountCustomEntity=Caller, HostCustomEntity=VirtualMachineName
-  | project timestamp, StartTime, EndTime, PowershellFileName, VirtualMachineName, Caller, CallerIpAddress, PowershellScriptCommands, PowershellFileSize, ScriptFingerprintHash, Prevalence, IPCustomEntity, AccountCustomEntity, HostCustomEntity
+  | extend timestamp = StartTime
+  | extend CallerName = tostring(split(Caller, "@")[0]), CallerUPNSuffix = tostring(split(Caller, "@")[1])
+  | project timestamp, StartTime, EndTime, PowershellFileName, VirtualMachineName, Caller, CallerName, CallerUPNSuffix, CallerIpAddress, PowershellScriptCommands, PowershellFileSize, ScriptFingerprintHash, Prevalence, Scope
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: CallerName
+      - identifier: UPNSuffix
+        columnName: CallerUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: CallerIpAddress
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: HostCustomEntity
-version: 1.0.5
+        columnName: VirtualMachineName
+      - identifier: AzureID
+        columnName: Scope
+version: 1.0.6
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
