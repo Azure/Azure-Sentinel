@@ -1,9 +1,9 @@
 Parser:
-  Title: Web Session ASIM parser for F5 Networks
+  Title: Web Session ASIM parser for F5 BIG-IP Application Security Manager (ASM)
   Version: '0.1.0'
   LastUpdated: Aug 04 2023
 Product:
-  Name: F5 ASM
+  Name: F5 BIG-IP Application Security Manager (ASM)
 Normalization:
   Schema: WebSession
   Version: '0.2.6'
@@ -49,12 +49,15 @@ ParserQuery: |
       "10", "High"
   ];
   let parser=(disabled: bool=false) {
+      let DeviceEventClassIDList = dynamic(["Brute Force Attack", "IP Enforcer Attack", "Web Scraping Attack", "DoS Attack"]);
       let AllData = CommonSecurityLog
+          | where not(disabled)
           | where DeviceVendor == "F5" and DeviceProduct == "ASM"
           | invoke _ASIM_ResolveDvcFQDN('DeviceName')
           | project-rename DvcIpAddr = DeviceAddress;
       let GeneralEnforcementData = AllData
-          | where ((substring(DeviceEventClassID, 0, 1) == "2" and strlen(DeviceEventClassID) == 9) or DeviceEventClassID == Activity) and DeviceEventClassID !in ("Brute Force Attack", "IP Enforcer Attack", "Web Scraping Attack", "DoS Attack")
+          | where ((substring(DeviceEventClassID, 0, 1) == "2" and strlen(DeviceEventClassID) == 9) or DeviceEventClassID == Activity) 
+                and DeviceEventClassID !in (DeviceEventClassIDList)
           | parse-kv DeviceCustomString3 as (Host: string, ["User-Agent"]: string, Cookie: string, Referer: string) with (pair_delimiter="\\r\\n", kv_delimiter=":")
           | parse DeviceCustomString3 with * "HTTP/" HttpVersion: string "\\r\\n" rest: string
           | extend
@@ -80,7 +83,7 @@ ParserQuery: |
                         "Policy Apply Date", DeviceCustomDate1
                     );
       let AnomalyDetectionData = AllData
-          | where DeviceEventClassID in ("Brute Force Attack", "IP Enforcer Attack", "Web Scraping Attack", "DoS Attack")
+          | where DeviceEventClassID in (DeviceEventClassIDList)
           | extend
               EventResult = iff(DeviceAction =~ "passed", "Success", "Failure"),
               DstIpAddr = DvcIpAddr,
