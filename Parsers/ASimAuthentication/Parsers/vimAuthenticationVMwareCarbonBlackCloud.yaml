@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Authentication parser for VMware Carbon Black Cloud
   Version: '0.1.0'
-  LastUpdated: Aug 16 2023
+  LastUpdated: Oct 09 2023
 Product:
   Name: VMware Carbon Black Cloud
 Normalization:
@@ -21,39 +21,79 @@ Description: |
 ParserName: vimAuthenticationVMwareCarbonBlackCloud
 EquivalentBuiltInParser: _Im_Authentication_VMwareCarbonBlackCloud
 ParserParams:
-  - Name: disabled
-    Type: bool
-    Default: false
   - Name: starttime
     Type: datetime
     Default: datetime(null)
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
     Type: string
     Default: '*'
+  - Name: targetusername_has_any
+    Type: string
+    Default: '*'
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: string
+    Default: '*'
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  let parser = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), targetusername_has: string='*') {
+  let parser = (starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventtype_in: dynamic=dynamic([]), eventresultdetails_in: dynamic=dynamic([]), eventresult: string='*', targetusername_has_any: string='*', targetappname_has_any: dynamic=dynamic([]), actorusername_has_any: string='*', srcipaddr_has_any_prefix: dynamic=dynamic([]), srchostname_has_any: dynamic=dynamic([]), targetipaddr_has_any_prefix: dynamic=dynamic([]), dvcipaddr_has_any_prefix: dynamic=dynamic([]), dvchostname_has_any: dynamic=dynamic([]), disabled: bool = false) {
       CarbonBlackAuditLogs_CL
       | where not(disabled)
-          and (isnull(starttime) or TimeGenerated >= starttime)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
           and (isnull(endtime) or TimeGenerated <= endtime)
           and (description_s has_any ("logged in", "login") and description_s !has "connector")
-          and targetusername_has == "*" or loginName_s has targetusername_has
+          and array_length(targetappname_has_any) == 0
+          and actorusername_has_any == '*'
+          and array_length(srchostname_has_any) == 0
+          and array_length(targetipaddr_has_any_prefix) == 0
+          and array_length(dvcipaddr_has_any_prefix) == 0
+          and array_length(dvchostname_has_any) == 0
+          and (targetusername_has_any == "*" or loginName_s has targetusername_has_any)
+          and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(clientIp_s, srcipaddr_has_any_prefix))
+      | extend
+          EventResult = iff(description_s has "successfully", "Success", "Failure"),
+          EventType = "Logon"
+      | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
+          and (eventresult == '*' or EventResult has eventresult)
+      | extend EventResultDetails = iff(EventResult == "Failure", "Incorrect password", "")
+      | where (array_length(eventresultdetails_in) == 0 or EventResultDetails has_any (eventresultdetails_in))
       | extend
           EventStartTime = unixtime_milliseconds_todatetime(eventTime_d),
-          EventResult = iff(description_s has "successfully", "Success", "Failure"),
-          AdditionalFields = bag_pack("orgName", orgName_s, "flagged", flagged_b),
-          EventSeverity = iff(flagged_b == true, "Low", "Informational")
-      | extend
+          AdditionalFields = bag_pack("flagged", flagged_b),
+          EventSeverity = iff(flagged_b == true, "Low", "Informational"),
           EventCount = int(1),
           EventProduct = "Carbon Black Cloud",
           EventSchema = "Authentication",
           EventSchemaVersion = "0.1.3",
           EventVendor = "VMware",
-          EventType = "Logon",
-          EventResultDetails = iff(EventResult == "Failure", "Incorrect password", ""),
           EventOriginalResultDetails = iff(EventResult == "Failure", tostring(split(description_s, ';')[1]), "")
       | project-rename
           EventMessage = description_s,
@@ -62,15 +102,14 @@ ParserQuery: |
           SrcIpAddr = clientIp_s,
           EventUid=_ItemId,
           EventOwner = orgName_s
-      | extend DvcIpAddr = SrcIpAddr,
-          IpAddr = SrcIpAddr
       | extend
-          Dvc = coalesce(DvcIpAddr, EventProduct),
+          IpAddr = SrcIpAddr,
+          TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+          Dvc = EventProduct,
           EventEndTime = EventStartTime,
           User = TargetUsername,
-          Src = SrcIpAddr,
-          TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
-          TargetUserType = _ASIM_GetUserType(TargetUsername, "")
+          Src = SrcIpAddr
       | project-away
           *_s,
           *_d,
@@ -83,4 +122,4 @@ ParserQuery: |
           SourceSystem,
           TenantId 
   };
-  parser(disabled=disabled, starttime=starttime, endtime=endtime, targetusername_has=targetusername_has)
+  parser(starttime=starttime, endtime=endtime, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, targetusername_has_any=targetusername_has_any, targetappname_has_any=targetappname_has_any, actorusername_has_any=actorusername_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, targetipaddr_has_any_prefix=targetipaddr_has_any_prefix, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, dvchostname_has_any=dvchostname_has_any, disabled=disabled)
