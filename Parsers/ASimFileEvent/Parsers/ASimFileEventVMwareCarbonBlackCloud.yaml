@@ -18,36 +18,9 @@ References:
     https://developer.carbonblack.com/reference/cb-threathunter/latest/event-search-fields/
 Description: |
   This ASIM parser supports normalizing VMware Carbon Black Cloud logs to the ASIM File Event normalized schema. VMware Carbon Black Cloud events are captured through VMware Carbon Black Cloud data connector which ingests Carbon Black Audit, Notification and Event data into Microsoft Sentinel through the REST API.
-ParserName: vimFileEventVMwareCarbonBlackCloud
-EquivalentBuiltInParser: _Im_FileEvent_VMwareCarbonBlackCloud
+ParserName: ASimFileEventVMwareCarbonBlackCloud
+EquivalentBuiltInParser: _ASim_FileEvent_VMwareCarbonBlackCloud
 ParserParams:
-  - Name: starttime
-    Type: datetime
-    Default: datetime(null)
-  - Name: endtime
-    Type: datetime
-    Default: datetime(null)
-  - Name: eventtype_in
-    Type: dynamic
-    Default: dynamic([])
-  - Name: srcipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])
-  - Name: actorusername_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: targetfilepath_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: srcfilepath_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: hashes_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: dvchostname_has_any
-    Type: dynamic
-    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
@@ -82,18 +55,11 @@ ParserQuery: |
       "ACTION_FILE_MOD_OPEN", "FileAccessed",
       "ACTION_FILE_OPEN_READ", "FileAccessed"
   ];
-  let parser = (starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventtype_in: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), targetfilepath_has_any: dynamic=dynamic([]), srcfilepath_has_any: dynamic=dynamic([]), hashes_has_any: dynamic=dynamic([]), dvchostname_has_any: dynamic=dynamic([]), disabled: bool=false) {
+  let parser = (disabled: bool=false) {
       CarbonBlackEvents_CL
       | where not(disabled)
-      | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)) 
       | where eventType_s == "endpoint.event.filemod" and isnotempty(filemod_name_s)
-          and action_s !in ("ACTION_INVALID", "ACTION_FILE_UNDELETE")
-      | where array_length(srcfilepath_has_any) == 0
-          and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(device_external_ip_s, srcipaddr_has_any_prefix))
-          and (array_length(actorusername_has_any) == 0 or process_username_s has_any (actorusername_has_any))
-          and (array_length(targetfilepath_has_any) == 0 or filemod_name_s has_any (targetfilepath_has_any))
-          and (array_length(hashes_has_any) == 0 or filemod_hash_s has_any (hashes_has_any))
-          and (array_length(dvchostname_has_any) == 0 or device_name_s has_any (dvchostname_has_any))
+      | where action_s !in ("ACTION_INVALID", "ACTION_FILE_UNDELETE")
       | parse filemod_hash_s with * '["' TargetFileMD5: string '","' TargetFileSHA256: string '"]'
       | lookup EventFieldsLookup on sensor_action_s
       | extend temp_action = iff(action_s has "|", action_s, "")
@@ -111,7 +77,6 @@ ParserQuery: |
                           temp_action has "create", "FileCreated",
                           ""
                       )
-      | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
       | extend
           EventStartTime = todatetime(split(createTime_s, '+')[0]),
           TargetFilePathType = case(
@@ -154,8 +119,8 @@ ParserQuery: |
       | extend
           EventEndTime = EventStartTime,
           IpAddr = SrcIpAddr,
-          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
           Src = SrcIpAddr,
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
           FileName = TargetFileName,
           FilePath = TargetFilePath,
           Process = ActingProcessName,
@@ -186,4 +151,4 @@ ParserQuery: |
           TenantId,
           temp_action
   };
-  parser(starttime=starttime, endtime=endtime, eventtype_in=eventtype_in, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, actorusername_has_any=actorusername_has_any, targetfilepath_has_any=targetfilepath_has_any, srcfilepath_has_any=srcfilepath_has_any, hashes_has_any=hashes_has_any, dvchostname_has_any=dvchostname_has_any, disabled=disabled)
+  parser(disabled=disabled)
