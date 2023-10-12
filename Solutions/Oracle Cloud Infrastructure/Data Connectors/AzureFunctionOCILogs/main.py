@@ -124,14 +124,14 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                 logging.info('event details {}'.format(event))
                 event = json.loads(event)
                 if "data" in event:
-                    if "request" in event["data"]:
-                        if "headers" in event["data"]["request"]:
+                    if "request" in event["data"] and event["type"] != "com.oraclecloud.loadbalancer.access":
+                        if event["data"]["request"] is not None and "headers" in event["data"]["request"]:
                             event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
-                        if "parameters" in event["data"]["request"]:
+                        if event["data"]["request"] is not None and "parameters" in event["data"]["request"]:
                             event["data"]["request"]["parameters"] = json.dumps(
                                 event["data"]["request"]["parameters"])
                     if "response" in event["data"]:
-                        if "headers" in event["data"]["response"]:
+                        if event["data"]["response"] is not None and "headers" in event["data"]["response"]:
                             event["data"]["response"]["headers"] = json.dumps(event["data"]["response"]["headers"])
                     if "additionalDetails" in event["data"]:
                         event["data"]["additionalDetails"] = json.dumps(event["data"]["additionalDetails"])

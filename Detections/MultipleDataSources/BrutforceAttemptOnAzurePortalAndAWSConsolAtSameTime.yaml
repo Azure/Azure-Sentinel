@@ -1,0 +1,102 @@
+id: 1f40ed57-f54b-462f-906a-ac3a89cc90d4
+name: Cross-Cloud Password Spray detection
+description: |
+  'This detection focuses on identifying potential cross-cloud brute force / Password Spray attempts involving Azure and AWS platforms. It monitors sign-in activities within the Azure Portal and AWS ConsoleLogins where brute force attempts are successful on both platforms in a synchronized manner.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  // Materialize a table named "Azure_Bruforce" containing Azure Portal sign-in logs within the last 1 day
+  let Azure_Bruforce =  materialize (
+      SigninLogs
+  // Filter sign-in logs related to the Azure Portal
+        | where AppDisplayName == "Azure Portal"
+  // Exclude entries with empty OriginalRequestId
+      | where isnotempty(OriginalRequestId)
+  // Summarize various counts and sets based on brute force criteria
+      | summarize 
+        AzureSuccessfulEvent = countif(ResultType == 0), 
+        AzureFailedEvent = countif(ResultType != 0), 
+        totalAzureLoginEventId = dcount(OriginalRequestId), 
+        AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), 
+        AzureSuccessfuleventsCount = dcountif(OriginalRequestId, ResultType == 0),
+        AzureSetOfFailedevents = makeset(iff(ResultType != 0, OriginalRequestId, ""), 5), 
+        AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, ""), 5) 
+        by 
+        IPAddress, 
+        UserPrincipalName, 
+        bin(TimeGenerated, 1min), 
+        UserAgent,
+        ConditionalAccessStatus,
+        OperationName,
+        RiskDetail,
+        AuthenticationRequirement,
+        ClientAppUsed
+  // Extracting the name and UPN suffix from UserPrincipalName
+      | extend
+          Name = tostring(split(UserPrincipalName, '@')[0]),
+          UPNSuffix = tostring(split(UserPrincipalName, '@')[1]));
+  // Materialize a table named "AWS_Bruforce" containing AWS CloudTrail events related to ConsoleLogins within the last 1 day
+  let AWS_Bruforce = materialize (
+      AWSCloudTrail 
+  // Filter CloudTrail events related to ConsoleLogin
+      | where EventName == "ConsoleLogin" 
+  // Extract ActionType from ResponseElements JSON
+      | extend ActionType = tostring(parse_json(ResponseElements).ConsoleLogin)  
+  // Summarize various counts and sets based on  brute force criteria 
+      | summarize 
+          AWSSuccessful=countif(ActionType == "Success"), 
+          AWSFailed = countif(ActionType == "Failure"), 
+          totalAwsEventId= dcount(AwsEventId), 
+          AWSFailedEventsCount = dcountif(AwsEventId, ActionType == "Failure"), 
+          AWSSuccessfuleventsCount = dcountif(AwsEventId, ActionType == "Success"), 
+          AWSFailedevents = makeset(iff(ActionType == "Failure", AwsEventId, ""), 5), 
+          AWSSuccessfulEvents = makeset(iff(ActionType == "Success", AwsEventId, ""), 5)  
+  // Grouping by various attributes
+          by 
+          SourceIpAddress, 
+          UserIdentityUserName,
+          bin(TimeGenerated, 1min), 
+          UserAgent );
+  // Joining the Azure_Bruforce and AWS_Bruforce tables on matching IP addresses and UserAgents
+  Azure_Bruforce
+  | join kind=inner AWS_Bruforce on $left.IPAddress == $right.SourceIpAddress and $left.UserAgent == $right.UserAgent
+  // Filtering based on conditions for failed and successful events
+  | where (AWSFailedEventsCount >= 4 and AzureFailedEventsCount >= 5) and ((AzureSuccessfuleventsCount >= 1 and AzureFailedEvent > AzureSuccessfulEvent) or (AWSSuccessfuleventsCount >= 1 and AWSFailedEventsCount > AWSSuccessfuleventsCount))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIpAddress
+customDetails:
+   AwsUser: UserIdentityUserName
+   UserAgent: UserAgent
+   AzureUser: UserPrincipalName
+   AzureClientAppUsed: ClientAppUsed
+kind: Scheduled
+version: 1.0.0

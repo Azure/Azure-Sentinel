@@ -23,8 +23,8 @@ Microsoft Sentinel provides Logstash output plugin to Log analytics workspace us
 Install the microsoft-sentinel-log-analytics-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
-- Logstash 7 Between 7.0 and 7.17.10
-- Logstash 8 Between 8.0 and 8.8.1
+- Logstash 7 Between 7.0 and 7.17.13
+- Logstash 8 Between 8.0 and 8.9.2
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
