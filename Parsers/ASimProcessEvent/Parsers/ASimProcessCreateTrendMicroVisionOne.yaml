@@ -1,7 +1,7 @@
 Parser:
   Title: Process Create ASIM parser
   Version: '0.1.0'
-  LastUpdated: Jul 17, 2023
+  LastUpdated: Oct 10, 2023
 Product:
   Name: Trend Micro Vision One
 Normalization:
@@ -46,7 +46,7 @@ ParserQuery: |
   let parser = (disabled: bool=false) {
       TrendMicro_XDR_OAT_CL
       | where not(disabled)
-          and detail_eventId_s == "TELEMETRY_PROCESS"
+      | where detail_eventId_s == "TELEMETRY_PROCESS"
           and detail_eventSubId_s == "TELEMETRY_PROCESS_CREATE"
       | parse filters_s with * "[" filters: string "]"
       | parse-kv filters as (description: string, name: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
@@ -66,13 +66,11 @@ ParserQuery: |
           TargetProcessMD5 = replace_string(detail_objectFileHashMd5_g, "-", ""),
           ActingProcessMD5 = replace_string(detail_processFileHashMd5_g, "-", ""),
           ParentProcessMD5 = replace_string(detail_parentFileHashMd5_g, "-", ""),
+          TargetProcessCommandLine = replace_string(detail_objectCmd_s, '"', ''),
+          ActingProcessCommandLine = replace_string(detail_processCmd_s, '"', ''),
           AdditionalFields = bag_pack(
-                        "description",
-                        description,
-                        "name",
-                        name,
-                        "tags",
-                        detail_tags_s
+                        "name", name,
+                        "tags", detail_tags_s
                     )
       | lookup EventSeverityLookup on detail_filterRiskLevel_s
       | invoke _ASIM_ResolveDvcFQDN('detail_endpointHostName_s')
@@ -94,10 +92,8 @@ ParserQuery: |
       | project-rename
           ActorUsername = detail_processUser_s,
           EventStartTime = detail_eventTimeDT_t,
-          TargetProcessCommandLine = detail_objectCmd_s,
           TargetProcessName = detail_objectName_s,
           TargetUsername = detail_objectUser_s,
-          ActingProcessCommandLine = detail_processCmd_s,
           ActingProcessName = detail_processName_s,
           ActingProcessSHA1 = detail_processFileHashSha1_s,
           ActingProcessSHA256 = detail_processFileHashSha256_s,
@@ -113,7 +109,8 @@ ParserQuery: |
           ParentProcessSHA256 = detail_parentFileHashSha256_s,
           TargetProcessSHA1 = detail_objectFileHashSha1_s,
           TargetProcessSHA256 = detail_objectFileHashSha256_s,
-          EventUid = _ItemId
+          EventUid = _ItemId,
+          EventMessage = description
       | extend 
           Dvc = DvcHostname,
           EventEndTime = EventStartTime,
@@ -150,7 +147,6 @@ ParserQuery: |
           SourceSystem,
           TenantId,
           filters,
-          description,
           name
   };
   parser(disabled=disabled)
