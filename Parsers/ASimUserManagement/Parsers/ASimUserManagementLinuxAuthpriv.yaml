@@ -14,6 +14,20 @@ References:
   Link: https:/aka.ms/AboutASIM
 - Title: Ubuntu remote logging
   Link: https://manpages.ubuntu.com/manpages/lunar/en/man5/rsyslog.conf.5.html 
+- Title: gpasswd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man1/gpasswd.1.html
+- Title: groupadd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupadd.8.html
+- Title: groupdel
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupdel.8.html
+- Title: groupmod
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupmod.8.html
+- Title: useradd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/useradd.8.html
+- Title: userdel
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/userdel.8.html
+- Title: usermod
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/usermod.8.html
 Description: |
   This ASIM parser supports normalizing Linux authpriv logs delivered using Syslog to the ASIM UserManagement normalized schema.
 ParserName: ASimUserManagementLinuxAuthpriv
@@ -38,27 +52,35 @@ ParserQuery: |
       "err",  "Medium",
       "crit", "High"
   ];    
-  let ItemParser = (T:(SyslogMessage:string,EventTime:datetime,Facility:string,MG:string)) {
+  let ItemParser = (T:(SyslogMessage:string,SeverityLevel:string,ProcessID:int)) {
       T
-      | project-away SyslogMessage,EventTime,Facility,MG
+      | lookup SeverityLookup on SeverityLevel
+      | extend ActingAppId = tostring(ProcessID)
+      | project-away SyslogMessage,SeverityLevel, ProcessID
   };
-  union (
+  let SyslogParsed = (
       Syslog
       | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+           and (isnull(endtime) or TimeGenerated <= endtime)
       | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
       | where Facility == "authpriv"
+          and ProcessName in ("useradd","usermod","userdel","groupadd","groupmod","groupdel","gpasswd")
+      | project-away EventTime,Facility,MG,CollectorHostName,SourceSystem,TenantId
+  );
+  union (
+      SyslogParsed
+      | where not(disabled)
       | where ProcessName == "useradd"
-          and  SyslogMessage startswith "new user: name="
+          and SyslogMessage startswith "new user: name="
       | parse SyslogMessage with "new user: name=" TargetUsername ", UID=" TargetUserId ", GID=" GroupId ", " *
       | extend 
           EventType   = "UserCreated", 
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "useradd"
           and SyslogMessage startswith "failed adding user '"
       | parse SyslogMessage with "failed adding user '" TargetUsername "', exit code: " EventOriginalResultDetails
@@ -68,10 +90,8 @@ ParserQuery: |
           EventResultDetails = "Other"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "useradd"
           and SyslogMessage startswith "new group: name="
       | parse SyslogMessage with "new user: name=" GroupName ", GID=" GroupId
@@ -80,10 +100,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "useradd"
           and SyslogMessage startswith "cannot open login definitions"
       | extend EventType     = "UserCreated", 
@@ -91,10 +109,8 @@ ParserQuery: |
           EventResultDetails = "NotAuthorized"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName =="useradd" 
           and SyslogMessage startswith "add '"
       | parse SyslogMessage with "add '" TargetUsername "'" * "group '" GroupName "'" 
@@ -103,10 +119,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "usermod"
           and SyslogMessage startswith "change user name '"
       | parse SyslogMessage with "change user name '" TargetUsername "'" *
@@ -115,10 +129,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName =="usermod" 
           and SyslogMessage startswith "add '"
       | parse SyslogMessage with "add '" TargetUsername "'" * "group '" GroupName "'" 
@@ -127,10 +139,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "usermod"
           and SyslogMessage startswith "change user '"
           and not (SyslogMessage endswith "' password")
@@ -144,10 +154,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "usermod"
           and SyslogMessage startswith "cannot open login definitions"
       | extend 
@@ -156,10 +164,8 @@ ParserQuery: |
           EventResultDetails = "NotAuthorized"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "usermod"
           and SyslogMessage startswith "change user '"
           and SyslogMessage endswith "password"
@@ -169,10 +175,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "usermod"
           and SyslogMessage startswith "lock user '"
           and SyslogMessage endswith "' password"
@@ -182,10 +186,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "userdel"
           and SyslogMessage startswith "delete '"
       | parse SyslogMessage with "delete '" TargetUsername "'" * "group '" GroupName "'" *
@@ -194,10 +196,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "userdel"
           and SyslogMessage startswith "delete user '"
       | parse SyslogMessage with "delete user '" TargetUsername "'" *
@@ -206,10 +206,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "userdel"
           and (SyslogMessage startswith "removed group '" 
           or SyslogMessage startswith "removed shadow group '")
@@ -219,10 +217,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "groupadd"
           and SyslogMessage startswith "group added to "
           and SyslogMessage has "GID="
@@ -232,10 +228,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "groupadd"
           and SyslogMessage startswith "group added to "
           and not(SyslogMessage has "GID=")
@@ -245,10 +239,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "groupadd"
           and SyslogMessage startswith "new group: name="
       | parse SyslogMessage with "new group: name=" GroupName ", GID=" GroupId
@@ -257,10 +249,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "groupadd"
           and SyslogMessage startswith "cannot open login definitions"
       | extend 
@@ -269,10 +259,8 @@ ParserQuery: |
           EventResultDetails = "NotAuthorized"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "groupmod"
           and SyslogMessage startswith "group changed in "
       | parse SyslogMessage with "group changed in " * " (group " Temp_GroupName ", new name: " *
@@ -287,10 +275,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "groupmod"
           and SyslogMessage startswith "failed to change "
       | parse SyslogMessage with "failed to change " * " (group " Temp_GroupName ", new name: " *
@@ -304,10 +290,8 @@ ParserQuery: |
           EventResult = "Failure"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "groupdel"
       | parse SyslogMessage with "group '" GroupName "' removed" *
       | extend 
@@ -315,10 +299,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where Facility == "authpriv"
       | where ProcessName == "gpasswd"
       | parse SyslogMessage with "user " TargetUsername " " Action " by " ActorUsername " " * " group " GroupName
       | lookup ActionLookup on Action
@@ -329,13 +311,11 @@ ParserQuery: |
   )
   | where not(disabled)
   | invoke _ASIM_ResolveDvcFQDN ("HostName")
-  | lookup SeverityLookup on SeverityLevel
   | project-rename 
       ActingAppName = ProcessName,
       DvcId         = _ResourceId,
       EventUid      = _ItemId
   | extend
-      ActingAppId         = tostring(ProcessID),
       ActingAppType       = "Process",
       ActorUsernameType   = iif(isnotempty(ActorUsername), "Simple", ""),
       DvcIdType           = iff (DvcId == "", "", "AzureResourceID"),
@@ -347,7 +327,6 @@ ParserQuery: |
       EventSchema         = "UserManagement",
       EventSchemaVersion  = "0.1.1",
       EventStartTime      = TimeGenerated,
-      EventUid            = _ItemId,
       EventVendor         = "Linux",
       GroupIdType         = iif(isnotempty(GroupId), "UID", ""),
       GroupNameType       = iif(isnotempty(GroupName), "Simple", ""),
@@ -356,7 +335,7 @@ ParserQuery: |
       TargetUsernameType  = iif(isnotempty(TargetUsername), "Simple", ""),
       UpdatedPropertyName = EventSubType,
       User                = ActorUsername
-  | project-away Computer,HostIP,SeverityLevel,ProcessID,CollectorHostName,HostName,SourceSystem,TenantId
+  | project-away Computer, HostIP, HostName
   };
   parser (
     disabled = disabled

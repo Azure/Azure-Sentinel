@@ -14,6 +14,20 @@ References:
   Link: https:/aka.ms/AboutASIM
 - Title: Ubuntu remote logging
   Link: https://manpages.ubuntu.com/manpages/lunar/en/man5/rsyslog.conf.5.html 
+- Title: gpasswd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man1/gpasswd.1.html
+- Title: groupadd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupadd.8.html
+- Title: groupdel
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupdel.8.html
+- Title: groupmod
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupmod.8.html
+- Title: useradd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/useradd.8.html
+- Title: userdel
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/userdel.8.html
+- Title: usermod
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/usermod.8.html
 Description: |
   This ASIM parser supports normalizing Linux authpriv logs delivered using Syslog to the ASIM UserManagement normalized schema.
 ParserName: vimUserManagementLinuxAuthpriv
@@ -62,17 +76,25 @@ ParserQuery: |
       "err",  "Medium",
       "crit", "High"
   ];    
-  let ItemParser = (T:(SyslogMessage:string,EventTime:datetime,Facility:string,MG:string)) {
+  let ItemParser = (T:(SyslogMessage:string,SeverityLevel:string,ProcessID:int)) {
       T
-      | project-away SyslogMessage,EventTime,Facility,MG
+      | lookup SeverityLookup on SeverityLevel
+      | extend ActingAppId = tostring(ProcessID)
+      | project-away SyslogMessage,SeverityLevel, ProcessID
   };
-  union (
+  let SyslogParsed = (
       Syslog
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
       | where (isnull(starttime) or TimeGenerated >= starttime)
            and (isnull(endtime) or TimeGenerated <= endtime)
+      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
       | where Facility == "authpriv"
+          and ProcessName in ("useradd","usermod","userdel","groupadd","groupmod","groupdel","gpasswd")
+      | project-away EventTime,Facility,MG,CollectorHostName,SourceSystem,TenantId
+  );
+  union (
+      SyslogParsed
+      | where not(disabled)      
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserCreated" in (eventtype_in))) and
@@ -87,12 +109,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserCreated" in (eventtype_in))) and
@@ -107,12 +125,8 @@ ParserQuery: |
           EventResultDetails = "Other"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserCreated" in (eventtype_in))) and
@@ -125,12 +139,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserCreated" in (eventtype_in))) and
@@ -142,12 +152,8 @@ ParserQuery: |
           EventResultDetails = "NotAuthorized"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserCreated" in (eventtype_in))) and
@@ -161,12 +167,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserModified" in (eventtype_in))) and
@@ -180,12 +182,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserAddedToGroup" in (eventtype_in))) and
@@ -199,12 +197,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserDisabled" in (eventtype_in)) or ("UserEnabled" in (eventtype_in))) and
@@ -224,12 +218,8 @@ ParserQuery: |
       | where (array_length(eventtype_in) == 0 or (EventType in (eventtype_in)))
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserCreated" in (eventtype_in))) and
@@ -242,12 +232,8 @@ ParserQuery: |
           EventResultDetails = "NotAuthorized"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("PasswordChanged" in (eventtype_in))) and
@@ -262,12 +248,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserLocked" in (eventtype_in))) and
@@ -282,12 +264,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserDeleted" in (eventtype_in))) and
@@ -301,12 +279,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserDeleted" in (eventtype_in))) and
@@ -320,12 +294,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("UserDeleted" in (eventtype_in))) and
@@ -340,12 +310,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("GroupCreated" in (eventtype_in))) and
@@ -359,12 +325,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("GroupCreated" in (eventtype_in))) and
@@ -378,12 +340,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("GroupCreated" in (eventtype_in))) and
@@ -396,12 +354,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("GroupCreated" in (eventtype_in))) and
@@ -414,12 +368,8 @@ ParserQuery: |
           EventResultDetails = "NotAuthorized"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("GroupModified" in (eventtype_in))) and
@@ -438,12 +388,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("GroupModified" in (eventtype_in))) and
@@ -461,12 +407,8 @@ ParserQuery: |
           EventResult = "Failure"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(actorusername_has_any) == 0 and 
           array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and
           (array_length(eventtype_in) == 0 or ("GroupDeleted" in (eventtype_in))) and
@@ -478,12 +420,8 @@ ParserQuery: |
           EventResult = "Success"
       | invoke ItemParser()
   ),(
-      Syslog
+      SyslogParsed
       | where not(disabled)
-      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
-      | where (isnull(starttime) or TimeGenerated >= starttime)
-           and (isnull(endtime) or TimeGenerated <= endtime)
-      | where Facility == "authpriv"
       | where (array_length(targetusername_has_any) == 0 or (SyslogMessage has_any(targetusername_has_any))) and 
           (array_length(actorusername_has_any) == 0 or (SyslogMessage has_any(actorusername_has_any))) and 
           (array_length(eventtype_in) == 0 or ("UserAddedToGroup" in (eventtype_in)) or ("UserRemovedFromGroup" in (eventtype_in))) and
@@ -501,13 +439,11 @@ ParserQuery: |
   )
   | where not(disabled)
   | invoke _ASIM_ResolveDvcFQDN ("HostName")
-  | lookup SeverityLookup on SeverityLevel
   | project-rename 
       ActingAppName = ProcessName,
       DvcId         = _ResourceId,
       EventUid      = _ItemId
   | extend
-      ActingAppId         = tostring(ProcessID),
       ActingAppType       = "Process",
       ActorUsernameType   = iif(isnotempty(ActorUsername), "Simple", ""),
       DvcIdType           = iff (DvcId == "", "", "AzureResourceID"),
@@ -519,7 +455,6 @@ ParserQuery: |
       EventSchema         = "UserManagement",
       EventSchemaVersion  = "0.1.1",
       EventStartTime      = TimeGenerated,
-      EventUid            = _ItemId,
       EventVendor         = "Linux",
       GroupIdType         = iif(isnotempty(GroupId), "UID", ""),
       GroupNameType       = iif(isnotempty(GroupName), "Simple", ""),
@@ -528,7 +463,7 @@ ParserQuery: |
       TargetUsernameType  = iif(isnotempty(TargetUsername), "Simple", ""),
       UpdatedPropertyName = EventSubType,
       User                = ActorUsername
-  | project-away Computer,HostIP,SeverityLevel,ProcessID,CollectorHostName,HostName,SourceSystem,TenantId
+  | project-away Computer, HostIP, HostName
   };
   parser (
     starttime                = starttime,
