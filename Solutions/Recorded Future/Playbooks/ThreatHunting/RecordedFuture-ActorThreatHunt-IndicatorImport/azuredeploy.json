@@ -1,0 +1,160 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+      "metadata": {
+        "title": "RecordedFuture-ActorThreatHunt-IndicatorImport",
+        "description": "This playbook will write threat hunting indicators in batch to ThreatIntelligenceIndicator log analytics table.",
+         "prerequisites": [
+            "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the [documentation](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials)",
+            "1. Prior to deployment of this playbook, RecordedFuture-ThreatHunt-IndicatorImport playbook need to be deployed.",
+            "2. Refer to [Recorded Future Logic App Custom Connector](../../Connectors/RecordedFuture-CustomConnector/readme.md) documentation for deployment instructions."
+        ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "prerequisitesDeployTemplateFile": "../../Connectors/RecordedFuture-CustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2023-10-11T00:02:00.000Z",
+        "entities": [],
+        "tags": [ "Threat Hunting" ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Recorded Future"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-ActorThreatHunt-IndicatorImport",
+            "type": "string"
+        },
+        "CustomConnectorName": {
+            "defaultValue": "RecordedFuture-CustomConnector",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the logic app connector which performs Recorded Future Communication."
+            }
+        }
+    },
+    "variables": {
+        "RecordedFutureCustomConnectorConnectionName": "[concat('Recordedfuturecustomconnector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Fetch_Threat_Indicators_for_Actors_in_STIX_format._3": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "trigger_score_domain": 65,
+                                    "trigger_score_hash": 65,
+                                    "trigger_score_ip": 65,
+                                    "trigger_score_url": 65,
+                                    "valid_until_delta_hours": 24
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['RecordedFutureCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/threat/indicators/actors"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Fetch_Threat_Indicators_for_Actors_in_STIX_format._3')",
+                            "actions": {
+                                "RecordedFuture-ThreatIntelligenceImport": {
+                                    "runAfter": {},
+                                    "type": "SendToBatch",
+                                    "inputs": {
+                                        "batchName": "RFImportToSentinel",
+                                        "content": "@items('For_each')",
+                                        "host": {
+                                            "triggerName": "Batch_messages",
+                                            "workflow": {
+                                                "id": "/subscriptions/5129b3ff-c0c6-4e86-bd1c-70e5fcd579cf/resourceGroups/RF/providers/Microsoft.Logic/workflows/RecordedFuture-ThreatIntelligenceImport"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Fetch_Threat_Indicators_for_Actors_in_STIX_format._3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "RecordedFutureCustomConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedFutureCustomConnectorConnectionName'))]",
+                                "connectionName": "[variables('RecordedFutureCustomConnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/customApis/', parameters('CustomConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RecordedFuture-ActorThreatHunt-IndicatorImport",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('RecordedFutureCustomConnectorConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('RecordedFutureCustomConnectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('RecordedFutureCustomConnectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        }
+    ]
+}
