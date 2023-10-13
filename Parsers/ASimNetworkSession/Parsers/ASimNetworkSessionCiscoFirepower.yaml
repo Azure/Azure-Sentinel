@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for Cisco Firepower
   Version: '0.1.0'
-  LastUpdated: Sep 05, 2023
+  LastUpdated: Oct 10, 2023
 Product:
   Name: Cisco Firepower
 Normalization:
@@ -73,24 +73,25 @@ ParserQuery: |
   let EventResultDetailsLookup = datatable(Reason: string, EventResultDetails: string)
       [
       "N/A", "NA",
-      "IP Block", "Failover",
+      "IP Block", "Terminated",
       "IP Monitor", "Unknown",
       "User Bypass", "Unknown",
       "File Monitor", "Unknown",
-      "File Block", "Failover",
+      "File Block", "Terminated",
       "Intrusion Monitor", "Unknown",
-      "Intrusion Block", "Unknown",
-      "File Resume Block", "Failover",
+      "Intrusion Block", "Terminated",
+      "File Resume Block", "Terminated",
       "File Resume Allow", "Unknown",
       "File Custom Detection", "Unknown"
   ];
   let parser = (disabled: bool=false) {
-      let alllogs = CommonSecurityLog
-          | where not(disabled) and DeviceVendor == "Cisco" and DeviceProduct == "Firepower"
-          | where DeviceEventClassID has_any("INTRUSION:400", "PV:112", "RNA:1003:1")
+      let AllLogs = CommonSecurityLog
+          | where not(disabled) 
+          | where DeviceVendor == "Cisco" and DeviceProduct == "Firepower"
+              and DeviceEventClassID has_any("INTRUSION:400", "PV:112", "RNA:1003:1")
           | invoke _ASIM_ResolveNetworkProtocol('Protocol')
           | extend NetworkProtocol = iff(NetworkProtocol == "Unassigned" and Protocol !in (63, 68, 99, 114, 253, 254), Protocol, NetworkProtocol);
-      let Connection_statistics_events = alllogs
+      let Connection_Statistics_Events = AllLogs
           | where DeviceEventClassID has "RNA:1003:1"
           | parse-kv AdditionalExtensions as (
               start: long,
@@ -105,12 +106,10 @@ ParserQuery: |
               DstBytes = bytesOut,
               EventOriginalResultDetails = Reason,
               AdditionalFields = bag_pack("policy", DeviceCustomString1,
-                                                  "ingressZone", DeviceCustomString3,
-                                                  "egressZone", DeviceCustomString4,
                                                   "instanceID", ProcessID,
                                                   "clientApplicationID", RequestClientApplication,
                                                   "clientUrl", RequestURL);
-      let Intrusion_events = alllogs
+      let Intrusion_Events = AllLogs
           | where DeviceEventClassID has "INTRUSION:400"
           | parse-kv AdditionalExtensions as (
               start: long
@@ -120,34 +119,32 @@ ParserQuery: |
               EventMessage = Activity,
               ThreatCategory = DeviceEventCategory,
               AdditionalFields = bag_pack("policy", DeviceCustomString1,
-                                                  "ingressZone", DeviceCustomString3,
-                                                  "egressZone", DeviceCustomString4,
                                                   "ipspolicy", DeviceCustomString5,
                                                   "clientApplicationID", RequestClientApplication,
                                                   "clientUrl", RequestURL);
-      let Policy_Violation_events = alllogs
+      let Policy_Violation_Events = AllLogs
           | where DeviceEventClassID has "PV:112"
           | extend
               EventMessage = Message,
-              AdditionalFields = bag_pack("policy", DeviceCustomString1,
-                                                  "ingressZone", DeviceCustomString3,
-                                                  "egressZone", DeviceCustomString4)
+              AdditionalFields = bag_pack("policy", DeviceCustomString1)
           | project-rename DstUsername = DestinationUserName
           | extend
               DstUsernameType = _ASIM_GetUsernameType(DstUsername),
               DstUserType = _ASIM_GetUserType(DstUsername, "");
-      let AllEvents = union isfuzzy=false Connection_statistics_events, Intrusion_events, Policy_Violation_events
+      let AllEvents = union Connection_Statistics_Events, Intrusion_Events, Policy_Violation_Events
           | extend
               SrcPortNumber = SourcePort,
-              DstPortNumber = DestinationPort;
-      let Intrusion_events_ICMP = Intrusion_events
+              DstPortNumber = DestinationPort,
+              SrcZone = DeviceCustomString3,
+              DstZone = DeviceCustomString4;
+      let Intrusion_Events_ICMP = Intrusion_Events
           | where NetworkProtocol == "ICMP"
           | extend
               NetworkIcmpCode = DestinationPort,
               NetworkIcmpType = tostring(SourcePort),
               SrcPortNumber = int(null),
               DstPortNumber = int(null);
-      union AllEvents, Intrusion_events_ICMP
+      union AllEvents, Intrusion_Events_ICMP
       | lookup ActionLookup on DeviceAction
       | lookup EventSeverityLookup on LogSeverity
       | extend 
@@ -166,12 +163,14 @@ ParserQuery: |
                               ""
                           )
       | extend Ip_device = iff(DeviceName matches regex "(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", DeviceName, "")
-      | extend DvcIpAddr = Ip_device,
-              DeviceName = iff(isempty(Ip_device), DeviceName, "")
+      | extend
+          DvcIpAddr = Ip_device,
+          DeviceName = iff(isempty(Ip_device), DeviceName, "")
       | extend host = coalesce(DeviceName, Computer)
       | invoke _ASIM_ResolveDvcFQDN('host')
       | invoke _ASIM_ResolveDstFQDN('DestinationDnsDomain')
-      | extend EventSchema = "NetworkSession",
+      | extend
+          EventSchema = "NetworkSession",
           EventSchemaVersion = "0.2.6",
           EventType = "NetworkSession",
           EventCount = int(1)
@@ -188,7 +187,6 @@ ParserQuery: |
           EventOriginalUid = ExtID,
           NetworkRuleName = DeviceCustomString2,
           EventUid = _ItemId,
-          ThreatOriginalConfidence = ThreatConfidence,
           DvcOriginalAction = DeviceAction
       | extend
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
@@ -234,6 +232,7 @@ ParserQuery: |
           Flex*,
           Remote*,
           Malicious*,
+          ThreatConfidence,
           ThreatSeverity,
           IndicatorThreatType,
           ThreatDescription,
@@ -243,6 +242,7 @@ ParserQuery: |
           Computer,
           TenantId,
           Ip_*,
-          host
+          host,
+          NetworkProtocolNumber
   };
   parser(disabled=disabled)

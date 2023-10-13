@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for Cisco Firepower
   Version: '0.1.0'
-  LastUpdated: Sep 05, 2023
+  LastUpdated: Oct 10, 2023
 Product:
   Name: Cisco Firepower
 Normalization:
@@ -100,38 +100,40 @@ ParserQuery: |
   let EventResultDetailsLookup = datatable(Reason: string, EventResultDetails: string)
       [
       "N/A", "NA",
-      "IP Block", "Failover",
+      "IP Block", "Terminated",
       "IP Monitor", "Unknown",
       "User Bypass", "Unknown",
       "File Monitor", "Unknown",
-      "File Block", "Failover",
+      "File Block", "Terminated",
       "Intrusion Monitor", "Unknown",
-      "Intrusion Block", "Unknown",
-      "File Resume Block", "Failover",
+      "Intrusion Block", "Terminated",
+      "File Resume Block", "Terminated",
       "File Resume Allow", "Unknown",
       "File Custom Detection", "Unknown"
   ];
-  let parser = (starttime:datetime=datetime(null), 
-              endtime:datetime=datetime(null),
-              srcipaddr_has_any_prefix:dynamic=dynamic([]), 
-              dstipaddr_has_any_prefix:dynamic=dynamic([]), 
-              ipaddr_has_any_prefix:dynamic=dynamic([]),
-              dstportnumber:int=int(null), 
-              hostname_has_any:dynamic=dynamic([]), 
-              dvcaction:dynamic=dynamic([]), 
-              eventresult:string='*', 
-              disabled:bool=false){
-  let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-  let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
-  let alllogs = CommonSecurityLog
-              | where not(disabled)
-              | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
-              | where DeviceVendor == "Cisco" and DeviceProduct == "Firepower"
-              | where DeviceEventClassID has_any("INTRUSION:400", "PV:112", "RNA:1003:1")
-              | where (array_length(hostname_has_any) == 0 or DestinationDnsDomain has_any (hostname_has_any)) and (isnull(dstportnumber) or (DestinationPort == dstportnumber))
-              | extend temp_isSrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any), 
-                  temp_isDstMatch = has_any_ipv4_prefix(DestinationIP, dst_or_any)
-              | extend ASimMatchingIpAddr = case(
+  let parser = (starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]), 
+      dstipaddr_has_any_prefix: dynamic=dynamic([]), 
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      dstportnumber: int=int(null), 
+      hostname_has_any: dynamic=dynamic([]), 
+      dvcaction: dynamic=dynamic([]), 
+      eventresult: string='*', 
+      disabled: bool=false) {
+      let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+      let AllLogs = CommonSecurityLog
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
+              and DeviceVendor == "Cisco" and DeviceProduct == "Firepower"
+              and DeviceEventClassID has_any("INTRUSION:400", "PV:112", "RNA:1003:1")
+              and (array_length(hostname_has_any) == 0 or DestinationDnsDomain has_any (hostname_has_any)) 
+              and (isnull(dstportnumber) or (DestinationPort == dstportnumber))
+          | extend
+              temp_isSrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any), 
+              temp_isDstMatch = has_any_ipv4_prefix(DestinationIP, dst_or_any)
+          | extend ASimMatchingIpAddr = case(
                                                   array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", 
                                                   (temp_isSrcMatch and temp_isDstMatch), "Both", 
                                                   temp_isSrcMatch, "SrcIpAddr",
@@ -139,11 +141,19 @@ ParserQuery: |
                                                   "No match" 
                                                   )        
               | where ASimMatchingIpAddr != "No match"
-              | invoke _ASIM_ResolveDstFQDN('DestinationDnsDomain')
-              | where (array_length(hostname_has_any) == 0 or DestinationDnsDomain has_any (hostname_has_any))
-              | invoke _ASIM_ResolveNetworkProtocol('Protocol')
-              | extend NetworkProtocol = iff(NetworkProtocol == "Unassigned" and Protocol !in (63, 68, 99, 114, 253, 254), Protocol, NetworkProtocol);
-  let Connection_statistics_events = alllogs
+          | invoke _ASIM_ResolveDstFQDN('DestinationDnsDomain')
+          | extend temp_is_MatchDstHostname = DstHostname has_any (hostname_has_any)
+          | extend ASimMatchingHostname = case(
+                                      array_length(hostname_has_any) == 0,
+                                      "-",
+                                      temp_is_MatchDstHostname,
+                                      "DstHostname",
+                                      "No match"
+                                  )
+          | where ASimMatchingHostname != "No match"
+          | invoke _ASIM_ResolveNetworkProtocol('Protocol')
+          | extend NetworkProtocol = iff(NetworkProtocol == "Unassigned" and Protocol !in (63, 68, 99, 114, 253, 254), Protocol, NetworkProtocol);
+      let Connection_Statistics_Events = AllLogs
           | where DeviceEventClassID has "RNA:1003:1"
           | parse-kv AdditionalExtensions as (
               start: long,
@@ -158,12 +168,10 @@ ParserQuery: |
               DstBytes = bytesOut,
               EventOriginalResultDetails = Reason,
               AdditionalFields = bag_pack("policy", DeviceCustomString1,
-                                                  "ingressZone", DeviceCustomString3,
-                                                  "egressZone", DeviceCustomString4,
                                                   "instanceID", ProcessID,
                                                   "clientApplicationID", RequestClientApplication,
                                                   "clientUrl", RequestURL);
-      let Intrusion_events = alllogs
+      let Intrusion_Events = AllLogs
           | where DeviceEventClassID has "INTRUSION:400"
           | parse-kv AdditionalExtensions as (
               start: long
@@ -173,40 +181,38 @@ ParserQuery: |
               EventMessage = Activity,
               ThreatCategory = DeviceEventCategory,
               AdditionalFields = bag_pack("policy", DeviceCustomString1,
-                                                  "ingressZone", DeviceCustomString3,
-                                                  "egressZone", DeviceCustomString4,
                                                   "ipspolicy", DeviceCustomString5,
                                                   "clientApplicationID", RequestClientApplication,
                                                   "clientUrl", RequestURL);
-      let Policy_Violation_events = alllogs
+      let Policy_Violation_Events = AllLogs
           | where DeviceEventClassID has "PV:112"
           | extend
               EventMessage = Message,
-              AdditionalFields = bag_pack("policy", DeviceCustomString1,
-                                                  "ingressZone", DeviceCustomString3,
-                                                  "egressZone", DeviceCustomString4)
+              AdditionalFields = bag_pack("policy", DeviceCustomString1)
           | project-rename DstUsername = DestinationUserName
           | extend
               DstUsernameType = _ASIM_GetUsernameType(DstUsername),
               DstUserType = _ASIM_GetUserType(DstUsername, "");
-      let AllEvents = union isfuzzy=false Connection_statistics_events, Intrusion_events, Policy_Violation_events
+      let AllEvents = union Connection_Statistics_Events, Intrusion_Events, Policy_Violation_Events
           | extend
               SrcPortNumber = SourcePort,
-              DstPortNumber = DestinationPort;
-      let Intrusion_events_ICMP = Intrusion_events
+              DstPortNumber = DestinationPort,
+              SrcZone = DeviceCustomString3,
+              DstZone = DeviceCustomString4;
+      let Intrusion_Events_ICMP = Intrusion_Events
           | where NetworkProtocol == "ICMP"
           | extend
               NetworkIcmpCode = DestinationPort,
               NetworkIcmpType = tostring(SourcePort),
               SrcPortNumber = int(null),
               DstPortNumber = int(null);
-  union isfuzzy=false AllEvents, Intrusion_events_ICMP
-  | lookup ActionLookup on DeviceAction
-  | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
-  | where ((eventresult == "*") or EventResult == eventresult)
-  | where (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
-  | lookup EventSeverityLookup on LogSeverity
-  | extend 
+      union AllEvents, Intrusion_Events_ICMP
+      | lookup ActionLookup on DeviceAction
+      | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+      | where ((eventresult == "*") or EventResult == eventresult)
+      | where (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
+      | lookup EventSeverityLookup on LogSeverity
+      | extend 
           EventStartTime = coalesce(unixtime_milliseconds_todatetime(start), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
           SrcIpAddr = coalesce(SourceIP, DeviceCustomIPv6Address2),
           DstIpAddr = coalesce(DestinationIP, DeviceCustomIPv6Address3),
@@ -222,11 +228,13 @@ ParserQuery: |
                               ""
                           )
       | extend Ip_device = iff(DeviceName matches regex "(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", DeviceName, "")
-      | extend DvcIpAddr = Ip_device,
-              DeviceName = iff(isempty(Ip_device), DeviceName, "")
+      | extend
+          DvcIpAddr = Ip_device,
+          DeviceName = iff(isempty(Ip_device), DeviceName, "")
       | extend host = coalesce(DeviceName, Computer)
       | invoke _ASIM_ResolveDvcFQDN('host')
-      | extend EventSchema = "NetworkSession",
+      | extend
+          EventSchema = "NetworkSession",
           EventSchemaVersion = "0.2.6",
           EventType = "NetworkSession",
           EventCount = int(1)
@@ -243,7 +251,6 @@ ParserQuery: |
           EventOriginalUid = ExtID,
           NetworkRuleName = DeviceCustomString2,
           EventUid = _ItemId,
-          ThreatOriginalConfidence = ThreatConfidence,
           DvcOriginalAction = DeviceAction
       | extend
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
@@ -258,7 +265,7 @@ ParserQuery: |
           Rule = NetworkRuleName,
           User = SrcUsername,
           Hostname = DstHostname
-  | project-away
+      | project-away
           bytesIn,
           bytesOut,
           start,
@@ -289,6 +296,7 @@ ParserQuery: |
           Flex*,
           Remote*,
           Malicious*,
+          ThreatConfidence,
           ThreatSeverity,
           IndicatorThreatType,
           ThreatDescription,
@@ -299,15 +307,18 @@ ParserQuery: |
           TenantId,
           Ip_*,
           host,
+          NetworkProtocolNumber,
           temp*
   };
-  parser(starttime=starttime, 
-          endtime=endtime,
-          srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
-          dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, 
-          ipaddr_has_any_prefix=ipaddr_has_any_prefix,
-          dstportnumber=dstportnumber, 
-          hostname_has_any=hostname_has_any, 
-          dvcaction=dvcaction, 
-          eventresult=eventresult, 
-          disabled=disabled)
+  parser(
+      starttime=starttime, 
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+      dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, 
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      dstportnumber=dstportnumber, 
+      hostname_has_any=hostname_has_any, 
+      dvcaction=dvcaction, 
+      eventresult=eventresult, 
+      disabled=disabled
+  )
