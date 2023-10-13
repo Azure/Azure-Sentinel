@@ -104,6 +104,14 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.BloodHoundEnterprise;
   }
+  else if (dataTypes[0].name.includes("AwsS3"))
+  {
+    return ConnectorCategory.AwsS3;
+  }
+  else if (dataTypes[0].name.includes("AWS"))
+  {
+    return ConnectorCategory.AWS;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];
