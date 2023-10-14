@@ -250,6 +250,9 @@ try {
 
         GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $contentToImport.Version;
         RunArmTtkOnPackage -solutionName $solutionName -isPipelineRun $false;
+
+        # check if mainTemplate and createUiDefinition json files are valid or not
+        CheckJsonIsValid($solutionFolderBasePath)
     }
 }
 catch {
