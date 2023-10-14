@@ -67,8 +67,11 @@ Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName"
 
 $isPipelineRun = $false
 
-. "$repositoryBasePath/Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1" # load common functions
-. "$repositoryBasePath.script/package-automation/catelogAPI.ps1"
+$commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
+$catelogAPIFilePath = $repositoryBasePath + ".script/package-automation/catelogAPI.ps1"
+
+. $commonFunctionsFilePath # load common functions
+. $catelogAPIFilePath
 
 try {
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
