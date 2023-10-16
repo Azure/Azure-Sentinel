@@ -119,7 +119,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
             return
 
         for message in get_response.data:
-            if message:
+            if message and message != 'Test':
                 event = b64decode(message.value.encode()).decode()
                 logging.info('event details {}'.format(event))
                 event = json.loads(event)
