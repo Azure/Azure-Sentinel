@@ -38,6 +38,8 @@ API_PATH = '/api/v2/logs'
 CLIENT_ID = os.environ['CLIENT_ID']
 CLIENT_SECRET = os.environ['CLIENT_SECRET']
 AUDIENCE = DOMAIN + '/api/v2/'
+retry = 3
+error=False 
 
 
 def main(mytimer: func.TimerRequest):
@@ -57,7 +59,7 @@ def main(mytimer: func.TimerRequest):
     try:
         config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
     except IndexError:
-        pass
+        logging.info('Known Indexing Scenario. Proceed with execution')
     logging.info("new config" + str(config))
     state_manager.post(json.dumps(config))
     logging.info(f'Finish script.')
@@ -74,7 +76,13 @@ class Auth0Connector:
         self.uri = self.domain + self.api_path
         self.token = None
         self.header = None
+        self.retry = retry  
 
+    """This method is used to process and post the results to Log Analytics Workspace
+        Returns:
+            last_log_id : last processed eventId
+            events: last processed Events
+    """
     def get_log_events(self, script_start_time, config: dict) -> Tuple[str, List]:
         self.token = self._get_token()
         logging.info(f'Token provided.')
@@ -86,7 +94,19 @@ class Auth0Connector:
             return '', []
         # first request
         params = {'from': last_log_id, 'take': '100'}
-        resp = requests.get(self.uri, headers=self.header, params=params)
+        count = 0
+        error=True
+        while error:
+            try:
+                error=False
+                resp = requests.get(self.uri, headers=self.header, params=params)
+            except Exception as err:
+                error = True
+                count+=1
+                logging.error("Something wrong. Exception error text: {}".format(err))
+                if count > self.retry:
+                    logging.error("Exceeded maximum Retries")
+                    break
         logging.info('\tFirst request executed.')
         if not resp.json():
             return last_log_id, []
@@ -98,7 +118,7 @@ class Auth0Connector:
         try:
             config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
         except IndexError:
-            pass
+            logging.info('Known Indexing Scenario. Proceed with execution')
         logging.info("new config" + str(config))
         self.state_manager.post(json.dumps(config))
         for el in events:
@@ -110,7 +130,19 @@ class Auth0Connector:
             next_uri = next_link[next_link.index('<') + 1:next_link.index('>')]
             page_num = 1
             while resp.json() and len(events)!=0:
-                resp = requests.get(next_uri, headers=self.header)
+                count = 0
+                error=True
+                while error:
+                    try:
+                        error=False
+                        resp = requests.get(next_uri, headers=self.header)
+                    except Exception as err:
+                        error = True
+                        count+=1
+                        logging.error("Something wrong. Exception error text: {}".format(err))
+                        if count > self.retry:
+                            logging.error("Exceeded maximum Retries")
+                            break
                 #logging.info(f'\t Response message {resp.headers}')
                 try:
                     next_link = resp.headers['Link']
@@ -127,7 +159,7 @@ class Auth0Connector:
                         try:
                             config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
                         except IndexError:
-                            pass
+                            logging.info('Known Indexing Scenario. Proceed with execution')
                         logging.info("new config" + str(config))
                         self.state_manager.post(json.dumps(config))
                         for el in events:
@@ -165,11 +197,21 @@ class Auth0Connector:
                 'audience': self.audience
             }
         header = {'content-type': "application/x-www-form-urlencoded"}
-        resp = requests.post(self.domain + '/oauth/token', headers=header, data=params)
-        try:
-            token = resp.json()['access_token']
-        except KeyError:
-            raise Exception('Token not provided.')
+        count = 0
+        error=True
+        while error:
+            try:
+                error=False
+                resp = requests.post(self.domain + '/oauth/token', headers=header, data=params)
+                try:
+                    token = resp.json()['access_token']
+                except KeyError:
+                    raise Exception('Token not provided.')
+            except Exception as err:
+                error = True
+                count+=1
+                if count > self.retry:
+                    break
         return token
 
     def _get_header(self):
