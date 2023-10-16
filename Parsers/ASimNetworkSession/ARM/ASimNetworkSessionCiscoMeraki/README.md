@@ -2,7 +2,7 @@
 
 ARM template for ASIM NetworkSession schema parser for Cisco Meraki.
 
-This ASIM parser supports normalizing Cisco Meraki IDS Events produced by the Microsoft Sentinel Cisco Meraki Security Events connector to the ASIM Network Session normalized schema.
+This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Network Session normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

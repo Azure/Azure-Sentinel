@@ -69,7 +69,8 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
         if ($null -eq $val) {
             if ($isWorkbook)
             {
-                $resourceObj.$key = ''
+                #$resourceObj.$key = ''
+                $resourceObj.PsObject.Properties.Remove($key)
             }
             else
             {
@@ -83,7 +84,8 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
             if ($val.Count -eq 0) {
                 if ($isWorkbook)
                 {
-                    $resourceObj.$key = @()
+                    #$resourceObj.$key = @()
+                    $resourceObj.PsObject.Properties.Remove($key)
                 }
                 else
                 {
@@ -110,6 +112,25 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
                     if ($($resourceObj.$key.PsObject.Properties).Count -eq 0) {
                         $resourceObj.PsObject.Properties.Remove($key)
                     }
+                }
+            }
+            elseif ($key -eq 'query' -and $isWorkbook -eq $true)
+            {
+                try {
+                    # this means its an json array
+                    $isValidJsonStr = $val | Test-Json -ErrorAction Ignore
+                    if ($isValidJsonStr)
+                    {
+                        $queryObj = ConvertFrom-Json $val -ErrorAction Stop;
+                        foreach ($propItem in $queryObj.PsObject.Properties) {
+                            if ($null -eq $propItem.Value -or $propItem.Value -eq '[]')
+                            {
+                                $queryObj.PsObject.Properties.Remove($propItem.Name)
+                            }
+                        }
+                        $resourceObj.$key = $queryObj | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
+                    }
+                } catch {
                 }
             }
         }
@@ -502,7 +523,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
 
-                        $workbookFinalPath = $baseFolderPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';  
+                        $workbookFinalPath = $baseFolderPath + 'Workbooks/WorkbooksMetadata.json';  
                         
                         # BELOW IS THE NEW CODE ADDED FROM AZURE SENTINEL REPO
                         if($contentToImport.TemplateSpec) {
@@ -3074,7 +3095,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
             apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$global:parserCounter'),'/'))))]";
             dependsOn  =  @(
-                "[variables('_parserName$global:parserCounter')]"
+                "[variables('_parserId$global:parserCounter')]"
             );
             properties = [PSCustomObject]@{
                 parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$global:parserCounter'))]"
