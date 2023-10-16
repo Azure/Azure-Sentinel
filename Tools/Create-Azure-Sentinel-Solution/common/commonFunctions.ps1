@@ -69,7 +69,8 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
         if ($null -eq $val) {
             if ($isWorkbook)
             {
-                $resourceObj.$key = ''
+                #$resourceObj.$key = ''
+                $resourceObj.PsObject.Properties.Remove($key)
             }
             else
             {
@@ -83,7 +84,8 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
             if ($val.Count -eq 0) {
                 if ($isWorkbook)
                 {
-                    $resourceObj.$key = @()
+                    #$resourceObj.$key = @()
+                    $resourceObj.PsObject.Properties.Remove($key)
                 }
                 else
                 {
@@ -110,6 +112,25 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
                     if ($($resourceObj.$key.PsObject.Properties).Count -eq 0) {
                         $resourceObj.PsObject.Properties.Remove($key)
                     }
+                }
+            }
+            elseif ($key -eq 'query' -and $isWorkbook -eq $true)
+            {
+                try {
+                    # this means its an json array
+                    $isValidJsonStr = $val | Test-Json -ErrorAction Ignore
+                    if ($isValidJsonStr)
+                    {
+                        $queryObj = ConvertFrom-Json $val -ErrorAction Stop;
+                        foreach ($propItem in $queryObj.PsObject.Properties) {
+                            if ($null -eq $propItem.Value -or $propItem.Value -eq '[]')
+                            {
+                                $queryObj.PsObject.Properties.Remove($propItem.Name)
+                            }
+                        }
+                        $resourceObj.$key = $queryObj | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
+                    }
+                } catch {
                 }
             }
         }
