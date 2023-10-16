@@ -1,7 +1,7 @@
 Parser:
-  Title: ASIM Authentication parser for CrowdStrikeFalconHost
+  Title: ASIM Authentication parser for CrowdStrike Falcon Endpoint Protection
   Version: '0.1.0'
-  LastUpdated: Sep 13 2023
+  LastUpdated: Oct 13 2023
 Product:
   Name: CrowdStrike Falcon Endpoint Protection
 Normalization:
@@ -18,24 +18,15 @@ References:
     https://falcon.us-2.crowdstrike.com/documentation/page/eb1587d1/siem-connector#mc98af8f
 Description: |
   This ASIM parser supports normalizing CrowdStrike Falcon Endpoint Protection logs to the ASIM Authentication normalized schema. These events are captured through CrowdStrike Falcon Endpoint Protection data connector which allows you to easily connect your CrowdStrike Falcon Event Stream with Microsoft Sentinel.
-ParserName: vimAuthenticationCrowdStrikeFalconHost
-EquivalentBuiltInParser: _Im_Authentication_CrowdStrikeFalconHost
+ParserName: ASimAuthenticationCrowdStrikeFalcon
+EquivalentBuiltInParser: _ASim_Authentication_CrowdStrikeFalcon
 ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-  - Name: starttime
-    Type: datetime
-    Default: datetime(null)
-  - Name: endtime
-    Type: datetime
-    Default: datetime(null)
-  - Name: targetusername_has
-    Type: string
-    Default: '*'
 ParserQuery: |
   let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
-  [
+    [
       "0", "Informational",
       "1", "Informational",
       "2", "Low",
@@ -43,30 +34,23 @@ ParserQuery: |
       "4", "High",
       "5", "High"
   ];
-  let parser = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), targetusername_has: string='*') {
+  let parser = (disabled: bool=false) {
       CommonSecurityLog
       | where not(disabled)
-          and (isnull(starttime) or TimeGenerated >= starttime)
-          and (isnull(endtime) or TimeGenerated <= endtime)
-          and (DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost")
-          and (DeviceEventCategory == "AuthActivityAuditEvent" and DeviceEventClassID in ("userAuthenticate", "twoFactorAuthenticate"))
-          and (targetusername_has == "*" or DestinationUserName has targetusername_has)
+      | where (DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost")
+      | where DeviceEventCategory == "AuthActivityAuditEvent" and DeviceEventClassID in ("userAuthenticate", "twoFactorAuthenticate")
       | lookup EventSeverityLookup on LogSeverity
       | extend
           EventResult = iff(EventOutcome == "true", "Success", "Failure"),
-          EventStartTime = todatetime(DeviceCustomDate1),
-          ThreatField = "SrcIpAddr",
-          ThreatOriginalConfidence= ThreatConfidence,
-          ThreatConfidence = toint(ThreatConfidence),
-          ThreatOriginalRiskLevel = tostring(ThreatSeverity)
+          EventStartTime = todatetime(DeviceCustomDate1)
       | extend
           EventCount = int(1),
           EventSchema = "Authentication",
           EventSchemaVersion = "0.1.3",
-          EventType = "Logon"
-      | project-rename 
-          EventProduct = DeviceProduct,
-          EventVendor = DeviceVendor,
+          EventType = "Logon",
+          EventProduct = "Falcon",
+          EventVendor = "CrowdStrike"
+      | project-rename
           SrcIpAddr = DestinationTranslatedAddress,
           EventUid = _ItemId,
           EventOriginalSeverity = LogSeverity,
@@ -75,18 +59,20 @@ ParserQuery: |
           EventProductVersion = DeviceVersion,
           EventOriginalResultDetails = EventOutcome,
           TargetUsername = DestinationUserName,
-          ThreatCategory = IndicatorThreatType,
-          ThreatIpAddr = MaliciousIP
+          TargetAppName = ProcessName
       | extend
           EventEndTime = EventStartTime,
           DvcIpAddr = SrcIpAddr,
           TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
-          TargetUserType = _ASIM_GetUserType(TargetUsername, "")
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+          TargetAppType = iff(isnotempty(TargetAppName), "Service", ""),
+          LogonMethod = iff(EventOriginalSubType =~ "userAuthenticate", "Username and Password", "Two Factor Authentication")
       | extend
           IpAddr = SrcIpAddr,
           User = TargetUsername,
           Src = SrcIpAddr,
-          Dvc = coalesce(DvcIpAddr, EventProduct)
+          Dvc = coalesce(DvcIpAddr, EventProduct),
+          Application = TargetAppName
       | project-away 
           Source*,
           Destination*,
@@ -111,7 +97,8 @@ ParserQuery: |
           SimplifiedDeviceAction,
           StartTime,
           TenantId,
-          ThreatDescription,
+          Threat*,
+          IndicatorThreatType,
           ExternalID,
           ReportReferenceLink,
           ReceiptTime,
@@ -119,7 +106,6 @@ ParserQuery: |
           ApplicationProtocol,
           _ResourceId,
           ExtID,
-          ThreatSeverity,
           Message
   };
-  parser(disabled=disabled, starttime=starttime, endtime=endtime, targetusername_has=targetusername_has)
+  parser(disabled=disabled)
