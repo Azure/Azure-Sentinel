@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM parser for Citrix NetScaler(Web App Firewall)
   Version: '0.1.0'
-  LastUpdated: Aug 23 2023
+  LastUpdated: Oct 16 2023
 Product:
   Name: Citrix NetScaler
 Normalization:
@@ -27,7 +27,7 @@ ParserParams:
     Default: false
 ParserQuery: |
   let EventSeverityLookup = datatable (DeviceCustomString4: string, EventSeverity: string)
-    [
+  [
       "EMERGENCY", "High",
       "ALERT", "High",
       "CRITICAL", "High",
@@ -45,7 +45,7 @@ ParserQuery: |
       DvcAction: string,
       EventResult: string
   )
-      [
+  [
       "blocked", "Deny", "Failure",
       "not blocked", "Allow", "Success",
       "transformed", "Allow", "Success"
@@ -54,13 +54,14 @@ ParserQuery: |
       CommonSecurityLog
       | where not(disabled)
       | where DeviceVendor == "Citrix" and DeviceProduct == "NetScaler"
-      | where DeviceEventClassID == "APPFW" and Activity has_any ("APPFW_STARTURL", "APPFW_XML_cross-site scripting", "APPFW_SAFECOMMERCE", "APPFW_SAFECOMMERCE_XFORM", "APPFW_SIGNATURE_MATCH", "APPFW_XML_ERR_NOT_WELLFORMED", "APPFW_FIELDCONSISTENCY", "APPFW_SQL", "APPFW_BUFFEROVERFLOW_URL", "APPFW_BUFFEROVERFLOW_COOKIE", "APPFW_cross-site scripting", "APPFW_FIELDFORMAT", "APPFW_REFERER_HEADER")
+      | where DeviceEventClassID == "APPFW" and Activity has_any ("APPFW_STARTURL", "APPFW_XML_cross-site scripting", "APPFW_SAFECOMMERCE", "APPFW_SAFECOMMERCE_XFORM", "APPFW_SIGNATURE_MATCH", "APPFW_XML_ERR_NOT_WELLFORMED", "APPFW_FIELDCONSISTENCY", "APPFW_SQL", "APPFW_BUFFEROVERFLOW_URL", "APPFW_BUFFEROVERFLOW_COOKIE", "APPFW_cross-site scripting", "APPFW_FIELDFORMAT", "APPFW_REFERER_HEADER", "APPFW_XSS")
       | parse-kv AdditionalExtensions as (method: string, geolocation: string, script: string) with (pair_delimiter=";", kv_delimiter="=")
       | parse RequestURL with * "://" host: string "/" *
       | extend
           DeviceAction = trim("[*]+", DeviceAction),
           Ip_host = iff(host matches regex "(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", host, ""),
-          Ip_computer = iff(Computer matches regex "(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", Computer, "")
+          Ip_computer = iff(Computer matches regex "(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", Computer, ""),
+          HttpHost = host
       | lookup EventFieldsLookup on DeviceAction
       | lookup EventSeverityLookup on DeviceCustomString4
       | extend
@@ -83,14 +84,14 @@ ParserQuery: |
       | extend 
           DstHostname = coalesce(DstIpAddr, DstHostname)
       | extend
+          EventProduct = "NetScaler",
+          EventVendor = "Citrix",
           EventCount = int(1),
           EventStartTime = TimeGenerated,
           EventSchema = "WebSession",
           EventSchemaVersion = "0.2.6",
-          EventType = "WebServerSession"
+          EventType = "HTTPsession"
       | project-rename
-          EventProduct = DeviceProduct,
-          EventVendor = DeviceVendor,
           EventUid = _ItemId,
           SrcIpAddr = SourceIP,
           DvcOriginalAction = DeviceAction,
@@ -103,11 +104,10 @@ ParserQuery: |
           Url = RequestURL,
           EventOriginalType = DeviceEventClassID,
           EventOriginalSubType = Activity,
-          EventOriginalUid = ExtID,
           SrcGeoCountry = geolocation
       | extend
           EventEndTime = EventStartTime,
-          Dvc = coalesce(DvcHostname, DvcIpAddr),
+          Dvc = coalesce(DvcFQDN, DvcHostname, DvcIpAddr),
           Src = SrcIpAddr,
           Dst = DstHostname,
           Hostname = DstHostname,
@@ -148,6 +148,7 @@ ParserQuery: |
           LogSeverity,
           _ResourceId,
           host,
-          script
+          script,
+          ExtID
   };
   parser(disabled=disabled)
