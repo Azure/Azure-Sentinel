@@ -1,0 +1,81 @@
+id: 5c69cb42-4362-4270-82a3-107fd2a89399
+Function:
+  Title: Parser for KasperskySCEvent
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: KasperskySCEvent
+FunctionAlias: KasperskySCEvent
+FunctionQuery: |
+    CommonSecurityLog
+    | where DeviceVendor =~ 'KasperskyLab'
+    | extend EventVendor = 'KasperskyLab'
+    | extend EventProduct = 'SecurityCenter'
+    | extend EventSchemaVersion = 0.2
+    | extend EventCount = 1
+    | extend DeviceCustomNumber1 = coalesce(column_ifexists("FieldDeviceCustomNumber1", long(null)),DeviceCustomNumber1),
+             DeviceCustomNumber2 = coalesce(column_ifexists("FieldDeviceCustomNumber2", long(null)),DeviceCustomNumber2),
+             DeviceCustomNumber3 = coalesce(column_ifexists("FieldDeviceCustomNumber3", long(null)),DeviceCustomNumber3)
+    | extend ExtraAttributes = extract(@'cs7=(.*?);cs7Label', 1, AdditionalExtensions)
+    | extend GroupName = extract(@'cs9=(.*?);cs9Label', 1, AdditionalExtensions)
+    | extend Service = extract(@'cs10=(.*?);cs10Label', 1, AdditionalExtensions)
+    | extend EventEndTime = todatetime(ReceiptTime)
+    | extend ExternalID = coalesce(column_ifexists("ExtID", ""),tostring(ExternalID))
+    | project-rename EventProductVersion=DeviceVersion
+                    , EventId=DeviceEventClassID
+                    , EventSeverity=LogSeverity
+                    , DstPortNumber=DestinationPort
+                    , DstIpAddr=DestinationIP
+                    , DstDvcHostname=DestinationHostName
+                    , DstUserName=DestinationUserName
+                    , DvcIpAddr=DeviceAddress
+                    , DvcHostname=DeviceName
+                    , NetworkApplicationProtocol=Protocol
+                    , SrcPortNumber=SourcePort
+                    , SrcIpAddr=SourceIP
+                    , Id=ExternalID
+                    , SrcDvcHostname=SourceHostName
+                    , ProductName=DeviceCustomString2
+                    , ProductVersion=DeviceCustomString3
+    | extend ThreatName=case(EventId in~ ('GNRL_EV_VIRUS_FOUND_AND_BLOCKED', 'GNRL_EV_SUSPICIOUS_OBJECT_FOUND'), DeviceCustomString1, '')
+    | extend ObjectName=case(EventId in~ ('GNRL_EV_VIRUS_FOUND_AND_BLOCKED', 'GNRL_EV_SUSPICIOUS_OBJECT_FOUND'), DeviceCustomString5, '')
+    | extend DetectionType=case(EventId in~ ('GNRL_EV_VIRUS_FOUND_AND_BLOCKED', 'GNRL_EV_SUSPICIOUS_OBJECT_FOUND'), DeviceCustomString6, '')
+    | extend TaskOldState=case(EventId =~ 'KLPRCI_TaskState', DeviceCustomNumber1, todynamic(''))
+    | extend TaskNewState=case(EventId =~ 'KLPRCI_TaskState', DeviceCustomNumber2, todynamic(''))
+    | extend TaskName=case(EventId =~ 'KLPRCI_TaskState', DeviceCustomString5, '')
+    | extend TaskId=case(EventId =~ 'KLPRCI_TaskState', DeviceCustomString4, '')
+    | extend EventOriginalResultDetails=Activity
+    | extend ActingProcessFileProduct = extract(@'Application: (.*?)\\[rn]', 1, Message)
+    | extend ActingProcessName = extract(@'Application\\Name: (.*?)\\[rn]', 1, Message)
+    | extend ActingProcessId = extract(@'Process ID: (\d+)\\[rn]', 1, Message)
+    | extend EventResult = extract(@'Result\\\\Description: (\w+)\\[rn]', 1, Message)
+    | extend PossibleImpact = extract(@'Result\\\\Type: (.*?)\\[rn]', 1, Message)
+    | extend ThreatLevel = extract(@'Threat level: (.*?)\\[rn]', 1, Message)
+    | extend ResultPrecision = extract(@'Result\\\\Precision: (\w+)\\[rn]', 1, Message)
+    | extend Object = extract(@'Object: (.*?)\\[rn]', 1, Message)
+    | extend ObjectType = extract(@'Object\\\\Type: (.*?)\\[rn]', 1, Message)
+    | extend ObjectPath = extract(@'Object\\\\Path: (.*?)\\[rn]', 1, Message)
+    | extend ObjectName = extract(@'Object\\\\Name: (.*?)\\[rn]', 1, Message)
+    | extend EventReason = extract(@'Reason: (.*?)\\[rn]', 1, Message)
+    | extend EventReason = coalesce(column_ifexists("Reason",""),EventReason)
+    | extend DatabaseReleaseTime = todatetime(extract(@'Database release date: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', 1, replace_regex(Message, @'Database release date: (\d{2})/(\d{2})/(\d{4}) (\d{2}:\d{2}:\d{2})', @'Database release date: \3-\2-\1 \4')))
+    | project-away Message
+                , Activity
+                , ReceiptTime
+                , DeviceVendor
+                , DeviceProduct
+                , DeviceCustomNumber1
+                , DeviceCustomNumber1Label
+                , DeviceCustomNumber2
+                , DeviceCustomNumber2Label
+                , DeviceCustomString1
+                , DeviceCustomString1Label
+                , DeviceCustomString2Label
+                , DeviceCustomString3Label
+                , DeviceCustomString4
+                , DeviceCustomString4Label
+                , DeviceCustomString5
+                , DeviceCustomString5Label
+                , DeviceCustomString6
+                , DeviceCustomString6Label
+                , AdditionalExtensions

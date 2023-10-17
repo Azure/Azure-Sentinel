@@ -3,5 +3,5 @@
 #
 @{
     # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. 
-    'Az' = '4.*'
+    'Az' = '9.*'
 }
