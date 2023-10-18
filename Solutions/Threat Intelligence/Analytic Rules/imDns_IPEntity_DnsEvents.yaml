@@ -56,6 +56,12 @@ query: |
   let IP_TI = 
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  // Filtering out rows where the Confidence Score is less than 50 as they would not have an Alert Priority label. 
+  | where ConfidenceScore > 50
+  // Determine AlertPriority based on ConfidenceScore
+  | extend AlertPriority = case(ConfidenceScore > 82, "High",
+                                ConfidenceScore > 74, "Medium",
+                                "Low") 
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   | extend IoC = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,"NO_IP")
@@ -101,8 +107,9 @@ customDetails:
   DnsQuery: DnsQuery
 
 alertDetailsOverride:
+  alertSeverityColumnName: AlertPriority
   alertDisplayNameFormat: The response {{IoC}} to DNS query matched an IoC 
   alertDescriptionFormat: The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.
 
-version: 1.2.2
+version: 1.3.0
 kind: Scheduled
