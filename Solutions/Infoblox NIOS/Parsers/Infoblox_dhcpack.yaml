@@ -1,0 +1,24 @@
+id: 47b5ec12-dada-4091-ae3f-ffee22e9a47a
+Function:
+  Title: Parser for Infoblox_dhcpack
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: Infoblox_dhcpack
+FunctionAlias: Infoblox_dhcpack
+FunctionQuery: |
+    let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
+    Syslog
+        | where Computer in (datasource) 
+        | where SyslogMessage startswith_cs "DHCPACK"
+        | extend Parser = extract_all(@"^([^\s]+)\s(?:on\s([\d\.]+)\s)?(?:to\s([^\s]+)(?:\s\(([^\)]+)\))?)(?:\svia\s([^\s]+))?(?:\srelay\s([^\s]+))?(?:\slease-duration\s([\d]+))?(?:\s\(([^\)]+)\))?(?:\suid\s([^\s]+))?", dynamic([1,2,3,4,5,6,7,8,9]), SyslogMessage)[0]
+        | extend responseTime = EventTime,
+                Log_Type = tostring(Parser[0]),
+                IPAddress = tostring(Parser[1]), 
+                SrcMacAddr = tostring(Parser[2]),
+                SrcHostname = tostring(Parser[3]),
+                Interface = tostring(Parser[4]),
+                Relay = tostring(Parser[5]), 
+                LeaseDuration = tostring(Parser[6]),
+                State = tostring(Parser[8])
+        | project-away Parser

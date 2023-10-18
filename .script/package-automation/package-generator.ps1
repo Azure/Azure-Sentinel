@@ -102,7 +102,7 @@ try {
         $playbookFiles = $playbookFiles -match ([regex]::Escape(".json"))
     
         if ($playbookFiles.Count -gt 0) {
-            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' } | Where-Object { $_ -notlike '*function.json*' }
+            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' -and $_ -notlike '*function.json' -and $_ -notlike '*host.json' }
         }
     
         return $playbookFiles;
@@ -521,11 +521,22 @@ try {
                 $playbooksFolderHasFunctionAppsInSolutionsFolder = @()
                 $playbooksFolderHasFunctionAppsInSolutionsFolder += $filteredPlaybookFunctionApps
     
-                $playbooksFunctionAppFiles += GetPlaybooksJsonFileNames($playbooksFolderHasFunctionAppsInSolutionsFolder)
+                $playbooksFunctionAppFilesInSolutionsFolder = GetPlaybooksJsonFileNames($playbooksFolderHasFunctionAppsInSolutionsFolder)
     
-                if ($playbooksFunctionAppFiles -gt 0)
+                if ($playbooksFunctionAppFilesInSolutionsFolder.Count -gt 0)
                 {
-                    $playbooksFunctionAppFiles = $playbooksFunctionAppFiles | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
+                    $filteredPlaybooksFunctionAppFiles = $playbooksFunctionAppFilesInSolutionsFolder | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
+
+                    if ($filteredPlaybooksFunctionAppFiles.Count -gt 0)
+                    {
+                        foreach($item in $filteredPlaybooksFunctionAppFiles)
+                        {
+                            if ($playbooksFunctionAppFiles -notcontains $item)
+                            {
+                                $playbooksFunctionAppFiles += $item
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -738,14 +749,20 @@ try {
             # ADD REMAINING PLAYBOOKS
             foreach ($fl in $formulatePlaybooksList)
             {
-                $playbooksFinalList += $fl.Replace("$solutionFolderPath", '')
+                if ($playbooksFinalList -notcontains $fl)
+                {
+                    $playbooksFinalList += $fl.Replace("$solutionFolderPath", '')
+                }
             }
         }
         else 
         {
             foreach ($fl in $formulatePlaybooksList)
             {
-                $playbooksFinalList += $fl.Replace("$solutionFolderPath", '')
+                if ($playbooksFinalList -notcontains $fl)
+                {
+                    $playbooksFinalList += $fl.Replace("$solutionFolderPath", '')
+                }
             }
         }
     

@@ -1,0 +1,57 @@
+id: 8c2dc344-9352-4ca1-8863-b1b7a5e09e59
+name: Suspicious AWS CLI Command Execution
+description: |
+  'This detection focuses on identifying potentially suspicious activities involving the execution of AWS Command Line Interface (CLI) commands, particularly focusing on reconnaissance operations.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+  - T1592.004
+  - T1589.002
+  - T1589.003
+  - T1590
+  - T1591
+  - T1596
+query: |
+  let SuspiciousCommands= pack_array('iam.list-users', 'iam.list-groups', 'ec2.describe-vpcs', 'ec2.describe-subnets', 'route53.list-hosted-zones', 'kms.list-keys', 'kms.list-aliases', 'ecs.list-clusters', 'ecs.list-services', 'iam.list-roles', 'iam.get-user''iam.list-access-keys', 'ec2.describe-security-groups', 'ec2.describe-network-acls', 'ec2.describe-network-interfaces', 'ec2.describe-route-tables', 'ec2.describe-internet-gateways', 'ec2.describe-vpc-peering-connections', 'ec2.describe-network-interfaces', 'ec2.describe-network-interfaces', 'ec2.describe-transit-gateway-vpc-attachment', 'ec2.describe-vpc');
+  // Retrieve AWS CloudTrail events
+  AWSCloudTrail 
+  // Filter events with UserAgent starting with "aws-cli"
+  | where UserAgent startswith "aws-cli" 
+  // Extract the command from the UserAgent using string splitting
+  | extend command = tostring(split(UserAgent, "off command/", 1)[0])  
+  // Filter events based on predefined suspicious command list
+  | where command has_any (SuspiciousCommands)  
+  // Summarize relevant information for further analysis
+  | summarize 
+      CommadCount = dcount(command), 
+      EventCount = dcount(EventName), 
+      commands = make_list(command), 
+      Events = make_list(EventName) 
+      by 
+      bin(TimeGenerated, 1min), 
+      UserIdentityUserName, 
+      SourceIpAddress, 
+      SessionMfaAuthenticated 
+  // Filter out results with a sufficient count of unique suspicious commands in 1 min time window
+  | where CommadCount >= 8
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIpAddress
+customDetails:
+   SuspiciousCommand: commands
+   AWSUser: UserIdentityUserName
+   AWSUserIp: SourceIpAddress
+kind: Scheduled
+version: 1.0.0

@@ -1,0 +1,466 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the function app that you wish to create."
+      }
+    },
+    "objectId": {
+      "type": "string",
+      "metadata": {
+        "description": "Unique object ID in the Azure Active Directory."
+      }
+    },
+    "storageAccountType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_RAGRS"
+      ],
+      "metadata": {
+        "description": "Storage Account type"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "appInsightsLocation": {
+      "type": "string",
+      "metadata": {
+        "description": "Location for Application Insights."
+      }
+    },
+    "mimecastEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Mimecast API email address."
+      }
+    },
+    "mimecastPassword": {
+      "type": "string",
+      "metadata": {
+        "description": "Mimecast API password."
+      }
+    },
+    "mimecastAppId": {
+      "type": "string",
+      "metadata": {
+        "description": "Mimecast API Application ID."
+      }
+    },
+    "mimecastAppKey": {
+      "type": "string",
+      "metadata": {
+        "description": "Mimecast API Application Key."
+      }
+    },
+    "mimecastAccessKey": {
+      "type": "string",
+      "metadata": {
+        "description": "Mimecast API Access Key."
+      }
+    },
+    "mimecastSecretKey": {
+      "type": "string",
+      "metadata": {
+        "description": "Mimecast API Secret Key."
+      }
+    },
+    "mimecastBaseURL": {
+      "type": "string",
+      "metadata": {
+        "description": "Mimecast API Base URL in format https://region-api.mimecast.com."
+      }
+    },
+    "activeDirectoryAppId": {
+      "type": "string",
+      "metadata": {
+        "description": "Application (client) ID of the registered application."
+      }
+    },
+    "activeDirectoryAppSecret": {
+      "type": "string",
+      "metadata": {
+        "description": "Application secret of the registered application."
+      }
+    }
+  },
+  "variables": {
+    "functionAppName": "[parameters('appName')]",
+    "hostingPlanName": "[parameters('appName')]",
+    "applicationInsightsName": "[parameters('appName')]",
+    "storageAccountName": "[parameters('appName')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_RAGRS",
+        "tier": "Standard"
+      },
+      "kind": "StorageV2",
+      "resources": [
+        {
+          "type": "blobServices/containers",
+          "apiVersion": "2019-06-01",
+          "name": "[concat('default/', 'tir-checkpoints')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+          ],
+          "properties": {
+            "publicAccess": "None"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2020-09-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic",
+        "size": "Y1",
+        "family": "Y",
+        "capacity": 0
+      },
+      "properties": {
+        "name": "[variables('hostingPlanName')]",
+        "computeMode": "Dynamic",
+        "kind": "functionapp",
+        "reserved": true,
+        "isXenon": false,
+        "hyperV": false,
+        "azBalancing": false
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2018-11-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "siteConfig": {
+          "linuxFxVersion": "Python|3.8"
+        },
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "clientAffinityEnabled": false
+      },
+      "resources": [
+        {
+          "apiVersion": "2015-08-01",
+          "type": "config",
+          "name": "appsettings",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+            "[resourceId('Microsoft.KeyVault/vaults/', variables('functionAppName'))]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'mimecast-email')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'mimecast-password')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'mimecast-app-id')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'mimecast-app-key')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'mimecast-access-key')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'mimecast-secret-key')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'mimecast-base-url')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'active-directory-app-id')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'active-directory-app-secret')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'active-directory-tenant-id')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'log-analytics-workspace-id')]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('functionAppName'), 'log-analytics-workspace-key')]"
+          ],
+          "properties": {
+            "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]",
+            "FUNCTIONS_EXTENSION_VERSION": "~3",
+            "FUNCTIONS_WORKER_RUNTIME": "python",
+            "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]",
+            "mimecast_email": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'mimecast-email', '/)')]",
+            "mimecast_password": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'mimecast-password', '/)')]",
+            "mimecast_app_id": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'mimecast-app-id', '/)')]",
+            "mimecast_app_key": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'mimecast-app-key', '/)')]",
+            "mimecast_access_key": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'mimecast-access-key', '/)')]",
+            "mimecast_secret_key": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'mimecast-secret-key', '/)')]",
+            "mimecast_base_url": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'mimecast-base-url', '/)')]",
+            "active_directory_app_id": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'active-directory-app-id', '/)')]",
+            "active_directory_app_secret": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'active-directory-app-secret', '/)')]",
+            "active_directory_tenant_id": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'active-directory-tenant-id', '/)')]",
+            "log_analytics_workspace_id": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'log-analytics-workspace-id', '/)')]",
+            "log_analytics_workspace_key": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('functionAppName'), '.vault.azure.net/secrets/', 'log-analytics-workspace-key', '/)')]",
+            "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-MimecastTIRegional-functionapp"
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2015-03-20",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "properties": {
+        "sku": {
+          "name": "pergb2018"
+        },
+        "retentionInDays": 30,
+        "features": {
+          "legacy": 0,
+          "searchVersion": 1,
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        },
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.OperationsManagement/solutions",
+      "apiVersion": "2015-11-01-preview",
+      "name": "[concat('SecurityInsights','(', variables('functionAppName'),')')]",
+      "location": "[parameters('location')]",
+      "plan": {
+        "name": "[concat('SecurityInsights','(', variables('functionAppName'),')')]",
+        "promotionCode": "",
+        "product": "OMSGallery/SecurityInsights",
+        "publisher": "Microsoft"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/', variables('functionAppName'))]"
+      ],
+      "properties": {
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', variables('functionAppName'))]"
+      }
+    },
+    {
+      "type": "microsoft.insights/components",
+      "apiVersion": "2020-02-02-preview",
+      "name": "[variables('applicationInsightsName')]",
+      "location": "[parameters('appInsightsLocation')]",
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+      },
+      "properties": {
+        "ApplicationId": "[variables('applicationInsightsName')]",
+        "Request_Source": "IbizaWebAppExtensionCreate"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "apiVersion": "2019-09-01",
+      "tags": {
+        "displayName": "KeyVault"
+      },
+      "properties": {
+        "enabledForDeployment": false,
+        "enabledForTemplateDeployment": false,
+        "enabledForDiskEncryption": false,
+        "tenantId": "[subscription().tenantId]",
+        "accessPolicies": [
+          {
+            "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')),'2019-08-01', 'full').identity.principalId]",
+            "tenantId": "[subscription().tenantId]",
+            "permissions": {
+              "secrets": [
+                "Get",
+                "List",
+                "Set",
+                "Delete",
+                "Recover",
+                "Backup",
+                "Restore"
+              ]
+            }
+          },
+          {
+            "objectId": "[parameters('objectId')]",
+            "tenantId": "[subscription().tenantId]",
+            "permissions": {
+              "secrets": [
+                "Get",
+                "List",
+                "Set",
+                "Delete",
+                "Recover",
+                "Backup",
+                "Restore"
+              ]
+            }
+          }
+        ],
+        "sku": {
+          "family": "A",
+          "name": "Standard"
+        },
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'mimecast-email')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('mimecastEmail')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'mimecast-password')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('mimecastPassword')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'mimecast-app-id')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('mimecastAppId')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'mimecast-app-key')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('mimecastAppKey')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'mimecast-access-key')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('mimecastAccessKey')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'mimecast-secret-key')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('mimecastSecretKey')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'mimecast-base-url')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('mimecastBaseURL')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'active-directory-app-id')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('activeDirectoryAppId')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'active-directory-app-secret')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('activeDirectoryAppSecret')]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'active-directory-tenant-id')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[subscription().tenantId]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'log-analytics-workspace-id')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('appName')), '2015-03-20').customerId]"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(variables('functionAppName'), '/', 'log-analytics-workspace-key')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('appName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('appName'))]"
+      ],
+      "properties": {
+        "value": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('appName')), '2015-03-20').primarySharedKey]"
+      }
+    }
+  ]
+}

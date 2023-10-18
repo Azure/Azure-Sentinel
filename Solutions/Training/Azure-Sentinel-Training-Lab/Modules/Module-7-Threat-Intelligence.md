@@ -9,33 +9,24 @@ In this module we will also discover how to visualize and use this data as part 
 
 
 #### Prerequisites
-This module assumes that you completed [Module 1](Module-1-Setting-up-the-environment.md), and [Module 2](Module-2-Data-Connectors.md) which enables the Threat Intelligence TAXII connector.
+This module assumes that you completed [Module 1](Module-1-Setting-up-the-environment.md), and [Module 2](Module-2-Data-Connectors.md) exercise 3 which enables the Microsoft Defender Threat Intelligence (Preview) connector.
 
 
 ### Exercise 1: Threat Intelligence data connectors
 
-For detailed prerequisites and instructions for this connector, you can visit our official doc on this matter [Connect your threat intelligence platform to Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/connect-threat-intelligence-tip).
+#### Task 1 : Microsoft Defender Threat Intelligence (Preview)
 
-#### Task 1 : Threat Intelligence Platforms (TIP) connector 
+This connector is currently in public preview and ingests Microsoft Threat Intelligence indicators automatically into the ThreatIntelligenceIndicator table. MDTI provides a set of indicators and access to the https://ti.defender.microsoft.com portal at no additional cost, with the premium features of the MDTI portal and API requiring licensing.
 
-This connector is currently in public preview and is based on Third-party Threat Intelligence platform (TIP) solutions like PaloAlto MineMeld, ThreatConnect or others.
-
-1. On the left navigation open the connector page and search **Threat Intelligence Platforms (Preview)**
+1. On the left navigation open the connector page and search **Microsoft Defender Threat Intelligence (Preview)**
 
 2. On the bottom right pane press **Open connector page**
 
 ![ti](../Images/TI1.png)
 
-3. Review the connector Prerequisites and notice that to enable this connector, the user needs to be **Global Admin** or **Security Administrator** in the current Azure AD tenant
+3. Review the data received and confirm that the connector is already ingesting indicators.
 
-4. Read the configuration section and notice that as part of this connector onboarding, the user needs to create an Azure AD app registration and grant one of the permissions above
-	
-#### Task 2 : Threat intelligence TAXII connector
-
-For detailed prerequisites and instructions for this connector, you can visit our official doc on this matter [Connect Microsoft Sentinel to STIX/TAXII threat intelligence feeds](https://docs.microsoft.com/azure/sentinel/connect-threat-intelligence-taxii)
-
-In [Module 2](Module-2-Data-Connectors.md) we already enabled the TAXII connector in our lab environment, please refer to this module for more information.
-
+ ![ti](../Images/TI9.png)
 
 ### Exercise 2: Explore the Threat Intelligence menu
 
@@ -145,9 +136,9 @@ One of the main values of the TI data is on Analytics rules. In this exercise we
 
 1. From the Microsoft Sentinel portal, click on **Analytics** and then switch to **Rule Templates** tab.
 
-2. Click on the **Data Sources** filter and select **Threat Intelligence Platforms (Preview)** and **Threat Intelligence - TAXII (Preview)**. Click **OK** to apply the filter.
+2. Click on the **Add Filter** and choose **Data Sources** from the dropdown, then select **Microsoft Defender Threat Intelligence (Preview)**. Click **Apply** to apply the filter.
 
-![TImapping](../Images/TI4.png)
+![TImapping](../Images/TI10.png)
 
 3. As you can see, there is a long list of resulting alert templates. These all will correlate your different data sources with the IOCs present in your TI table (ThreatIntelligenceIndicator), to detect any trace of malicious indicators of compromise in your organization's logs. You can see more information about these rules [here](https://docs.microsoft.com/azure/sentinel/work-with-threat-indicators#detect-threats-with-threat-indicator-based-analytics).
 
@@ -201,4 +192,4 @@ ThreatIntelligenceIndicator
 
 9. Select the Done editing button. You’ve created a new chart for your workbook 😀.
 
-**Congratulations, you have completed Module 7!**. You can now continue to **[Module 8 - Microsoft Sentinel Solutions](./Module-8-Azure-Sentinel-Solutions.md)**
+**Congratulations, you have completed Module 7!**. You can now continue to **[Module 8 - Microsoft Sentinel Solutions](./Module-8-Sentinel-Solutions.md)**

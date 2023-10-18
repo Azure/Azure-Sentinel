@@ -1,0 +1,44 @@
+id: feb0a2fb-ae75-4343-8cbc-ed545f1da289
+name: Authentication Method Changed for Privileged Account
+description: |
+  'Identifies authentication methods being changed for a privileged account. This could be an indicated of an attacker adding an auth method to the account so they can have continued access.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+tags:
+  - AADSecOpsGuide
+query: |
+  let VIPUsers = (IdentityInfo
+  | where AssignedRoles contains "Admin"
+  | summarize by tolower(AccountUPN));
+  AuditLogs
+  | where Category =~ "UserManagement"
+  | where ActivityDisplayName =~ "User registered security info"
+  | where LoggedByService =~ "Authentication Methods"
+  | extend AccountCustomEntity = tostring(TargetResources[0].userPrincipalName), IPCustomEntity = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | where AccountCustomEntity in (VIPUsers)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

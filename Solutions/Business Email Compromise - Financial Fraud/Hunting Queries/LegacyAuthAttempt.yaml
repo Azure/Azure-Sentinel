@@ -1,0 +1,93 @@
+id: b7918a0a-c6fe-4b6d-9111-b0b0c477f1a8
+name: Login attempts using Legacy Auth
+description: |
+  'This query over Azure AD sign-in activity highlights use of legacy authentication protocol in the
+  environment. Because conditional access policies are not evaluated when legacy authentication is used,
+  legacy authentication can be used to circumvent all Azure Conditional Access policies.
+  This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+
+  let riskScoreCutoff = 20; //Adjust this based on volume of results
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
+  let legacy_auth_protocols = dynamic(["Authenticated SMTP", "AutoDiscover", "Exchange ActiveSync", "Exchange Online PowerShell", "Exchange Web Services", "IMAP4", "MAPI Over HTTP", "Outlook Anywhere (RPC over HTTP)", "Outlook Service", "POP3", "Reporting Web Services", "Other clients"]);
+  let legacyAuthentications =
+  SigninLogs
+  | where TimeGenerated >= ago(lookback)
+  // success logons only
+  | where ResultType == 0
+  | extend ClientAppUsed = iff(isempty(ClientAppUsed)==true,"Unknown" ,ClientAppUsed)
+  | extend isLegacyAuth = iff(ClientAppUsed in (legacy_auth_protocols), "Yes", "No")
+  | where isLegacyAuth=="Yes";
+  legacyAuthentications
+  | where TimeGenerated >= starttime
+  // Don't alert for accounts already seen using legacy auth in prior 7 days
+  | join kind=leftanti (
+     legacyAuthentications
+     | where TimeGenerated between(ago(lookback)..starttime)
+  ) on UserPrincipalName, ClientAppUsed, AppDisplayName, IPAddress
+  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+  | extend LocationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/",
+  tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]))
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), AttemptCount = count()
+  by UserPrincipalName, ClientAppUsed, AppDisplayName, IPAddress, isLegacyAuth, tostring(OS), tostring(Browser), LocationString
+  | sort by AttemptCount desc nulls last
+  | extend timestamp = StartTime, UserPrincipalName = tolower(UserPrincipalName), Account_0_Name = UserPrincipalName, IP_0_Address = IPAddress
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+  ) on UserPrincipalName
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename IPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPAddress
+  ) on IPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | where UEBARiskScore > riskScoreCutoff
+  | sort by UEBARiskScore desc
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 2.0.0

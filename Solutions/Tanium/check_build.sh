@@ -77,11 +77,11 @@ compare_contents() {
 }
 
 show_diff_commands() {
+  echo "$previous"
   _msg "\nTo diff mainTemplate.json:"
-  _msg "    diff -u <(unzip -p \"$previous\" mainTemplate.json | jq .) <(unzip -p \"$current\" mainTemplate.json | jq .)"
+  _msg "    check_build.sh diff mainTemplate.json"
   _msg "\nTo diff createUiDefinition.json:"
-  _msg "    diff -u <(unzip -p \"$previous\" createUiDefinition.json | jq .) <(unzip -p \"$current\" createUiDefinition.json | jq .)"
-  _msg "\nNOTE: you'll need to cd to the top level of the repo for the paths to work"
+  _msg "    check_build.sh diff createUiDefinition.json"
 }
 
 show_manual_check_steps() {
@@ -91,29 +91,38 @@ show_manual_check_steps() {
   _msg '
   1. Validate createUiDefinition.json:
 
-  • Open CreateUISandbox https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade.
-  • Copy json content from createUiDefinition.json (in the recent version).
-  • Clear that content in the editor and replace with copied content in step #2.
-  • Click on preview
-  • You should see the User Interface preview of data connector, workbook, etc., and descriptions you provided in
-  input file.
-  • Check the description and User Interface of solution preview.
+    • Open CreateUISandbox https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade.
+    • Copy json content from createUiDefinition.json (in the recent version).
+    • Clear that content in the editor and replace with copied content in step #2.
+    • Click on preview
+    • You should see the User Interface preview of data connector, workbook, etc., and descriptions you provided in
+    input file.
+    • Check the description and User Interface of solution preview.
 
   2. Validate maintemplate.json:
 
-  Validate  mainTemplate.json  by deploying the template in portal. Follow these steps to deploy in portal:
+    Validate  mainTemplate.json  by deploying the template in portal. Follow these steps to deploy in portal:
 
-  • Open up https://aka.ms/AzureSentinelPrP which launches the Azure portal with the needed private preview flags.
-  • Go to "Deploy a Custom Template" on the portal
-  • Select "Build your own template in Editor".
-  • Copy json content from  mainTemplate.json  (in the recent version).
-  • Clear that content in the editor and replace with copied content in step #3.
-  • Click Save and then progress to selecting subscription, Sentinel-enabled resource group, and corresponding
-  workspace, etc., to complete the deployment.
-  • Click Review + Create to trigger deployment.
-  • Check if the deployment successfully completes.
-  • You should see the data connector, workbook, etc., deployed in the respective galleries and validate
+    • Open up https://aka.ms/AzureSentinelPrP which launches the Azure portal with the needed private preview flags.
+    • Go to "Deploy a Custom Template" on the portal
+    • Select "Build your own template in Editor".
+    • Copy json content from mainTemplate.json  (in the recent version).
+    • Clear that content in the editor and replace with copied content in step #3.
+    • Click Save and then progress to selecting subscription, Sentinel-enabled resource group, and corresponding
+    workspace, etc., to complete the deployment.
+    • Click Review + Create to trigger deployment.
+    • Check if the deployment successfully completes.
+    • You should see the data connector, workbook, etc., deployed in the respective galleries and validate
+
+    You can also validate individual playbooks by pasting their azuredeploy.json files into the "own template" editor.
   '
+}
+
+diff-within-zip() {
+  local previous=$1
+  local current=$2
+  local file=$3
+  diff -u <(unzip -p "$previous" "$file" | jq .) <(unzip -p "$current" "$file" | jq .)
 }
 
 main() {
@@ -121,20 +130,30 @@ main() {
 
   local previous
   local current
+  local command
+  command=${1:-summary}
 
   (cd "$(top_level_repo_directory)" || _die "Unable to cd to top level repo directory"
     previous=$(previous_build_zip_file)
     current=$(current_build_zip_file)
 
-    _msg ""
-    _msg "Previous package: $previous"
-    _msg "Current package: $current"
-    _msg ""
+    case "$command" in
+      summary)
+        _msg ""
+        _msg "Previous package: $previous"
+        _msg "Current package: $current"
+        _msg ""
 
-    check_expected_files "$current"
-    compare_contents "$previous" "$current"
-    show_diff_commands "$previous" "$current"
-    show_manual_check_steps
+        check_expected_files "$current"
+        compare_contents "$previous" "$current"
+        show_diff_commands "$previous" "$current"
+        show_manual_check_steps
+        ;;
+      diff)
+        file=$2
+        diff-within-zip "$previous" "$current" "$file"
+        ;;
+    esac
   )
 }
 

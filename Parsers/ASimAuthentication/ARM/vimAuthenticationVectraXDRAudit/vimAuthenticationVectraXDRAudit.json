@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationVectraXDRAudit",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Authentication ASIM filtering parser for Vectra XDR Audit Logs Event",
+            "category": "ASIM",
+            "FunctionAlias": "vimAuthenticationVectraXDRAudit",
+            "query": "let parser = (disabled:bool = false, starttime:datetime=datetime(null), endtime:datetime=datetime(null))\n{\n  Audits_Data_CL\n  | where not(disabled) and event_action_s in (\"login\",\"logout\") and (isnull(starttime) or event_timestamp_t >= starttime) and (isnull(endtime) or event_timestamp_t <= endtime)\n  | extend\n        EventCount = int(1),\n        EventEndTime = event_timestamp_t,\n        EventProduct = 'Vectra XDR',\n        EventResult = case(result_status_s==\"success\", \"Success\", result_status_s==\"failure\", \"Failure\",\"NA\"),\n        EventSchema = \"Authentication\",\n        EventSchemaVersion = \"0.1.3\",\n        EventStartTime = event_timestamp_t,\n        EventType = case(event_action_s==\"login\", \"Logon\", event_action_s==\"logout\", \"Logoff\",\"\"),\n        EventVendor = 'Vectra',\n        ActorUserId = tostring(toint(user_id_d)),\n        ActorUserIdType = \"VectraUserId\",\n        ActorUsernameType = \"UPN\",\n        EventUid = tostring(toint(id_d))\n  | project-rename\n        DvcIpAddr = source_ip_s,\n        ActorOriginalUserType = user_type_s,\n        ActorUsername = username_s,\n        EventMessage = Message,\n        EventProductVersion = version_s\n  | extend\n        User = ActorUsername,\n        Dvc = DvcIpAddr\n  | project-away\n        *_d, *_s, event_timestamp_t, api_client_id_g, TenantId, _ResourceId, RawData, SourceSystem, Computer, MG, ManagementGroupName\n};\nparser (disabled=disabled, starttime=starttime, endtime=endtime)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False,starttime:datetime=datetime(null),endtime:datetime=datetime(null)"
+          }
+        }
+      ]
+    }
+  ]
+}

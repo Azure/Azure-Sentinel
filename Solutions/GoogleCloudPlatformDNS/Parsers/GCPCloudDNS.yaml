@@ -1,0 +1,39 @@
+id: c1dc5d15-5600-477b-8750-48b5e2df7da8
+Function:
+  Title: Parser for GCPCloudDNS
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: GCPCloudDNS
+FunctionAlias: GCPCloudDNS
+FunctionQuery: |
+    let DNSQuery_GcpDns=()
+    {
+        GCP_DNS_CL
+        | project-rename
+            Query=payload_queryName_s, 
+            QueryTypeName=payload_queryType_s,
+            ResponseName=payload_rdata_s, 
+            EventResultDetails=payload_responseCode_s,
+            NetworkProtocol=payload_protocol_s, 
+            SrcIpAddr=payload_sourceIP_s,
+            EventOriginalUid=insert_id_s,
+            EventSeverity=severity_s   
+        | extend
+            EventCount=int(1),
+            EventProduct='Cloud DNS',
+            EventVendor='GCP',
+            EventSchemaVersion="0.1.0",
+            Dvc="GCPDNS",
+            EventType = iif (resource_type_s == "dns_query", "lookup", resource_type_s),
+            EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
+            EventSubType='response',
+            EventEndTime=todatetime(timestamp_t)       
+        // -- Aliases
+        | extend 
+            ResponseCodeName=EventResultDetails, 
+            Domain=Query,
+            IpAddr=SrcIpAddr,
+            EventStartTime = EventEndTime
+    };
+    DNSQuery_GcpDns

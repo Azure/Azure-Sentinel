@@ -1,0 +1,248 @@
+Parser:
+  Title: Audit Event ASIM parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing Barracuda WAF to the ASIM Audit Event schema.
+ParserName: ASimAuditEventBarracudaWAF
+EquivalentBuiltInParser: _ASim_AuditEvent_BarracudaWAF
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let barracudaSchema = datatable(
+      LogType_s: string,
+      UnitName_s: string,
+      EventName_s: string,
+      DeviceReceiptTime_s: string,
+      ChangeType_s: string,
+      CommandName_s: string,
+      Severity_s: string,
+      LoginIP_s: string,
+      NewValue_s: string,
+      HostIP_s: string,
+      host_s: string,
+      OldValue_s: string,
+      EventMessage_s: string,
+      AdminName_s: string,
+      ObjectType_s: string,
+      ObjectName_s: string,
+      TimeTaken_d: real,
+      _ResourceId: string,
+      RawData: string,
+      SourceIP: string,
+      Message: string,
+      Computer: string,
+      MG: string,
+      ManagementGroupName: string,
+      TenantId: string,
+      SourceSystem: string
+  )[];
+  let EventTypeLookup = datatable (
+      ChangeType_s: string,
+      EventType_lookup: string
+  )
+      [
+      "SET", "Set",
+      "ADD", "Create",
+      "DEL", "Delete",
+      "NONE", "Other",
+      "", "Other"
+  ];
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+      [
+      0, "High", 
+      1, "High", 
+      2, "High", 
+      3, "Medium",
+      4, "Low",
+      5, "Low", 
+      6, "Informational",
+      7, "Informational" 
+  ];
+  let ObjectTypeLookup = datatable (ObjectType_s: string, ObjectType: string)[
+      "global", "Other",
+      "Services", "Service",
+      "web_firewall_policy", "Policy Rule",
+      "service", "Service",
+      "json_url_profile", "Other",
+      "server", "Service",
+      "header_acl", "Directory Service Object",
+      "virtual_ip_config_address", "Configuration Atom",
+      "aps_req_rewrite_policy", "Policy Rule",
+      "aps_url_acl", "Directory Service Object",
+      "websocket_security_policy", "Policy Rule",
+      "aps_ftp_acl", "Directory Service Object",
+      "user_system_ip", "Configuration Atom",
+      "syslog_server", "Service",
+      "attack_action", "Configuration Atom",
+      "global_adr", "Configuration Atom",
+      "aps_content_protection", "Other"
+  ];
+  let parser = (disabled: bool=false) {
+      let BarracudaCustom = 
+          (union isfuzzy=true
+              barracudaSchema,
+              barracuda_CL
+          | where not(disabled) 
+              and LogType_s == "AUDIT" 
+              and EventName_s !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN")
+          | parse trim(@'[^\w(")]+', EventMessage_s) with * "Reason=" Reason: string
+          | extend Reason = trim('"', Reason)
+          | extend
+              EventResultDetails = Reason,
+              severity = toint(Severity_s)
+          | lookup SeverityLookup on severity
+          | lookup EventTypeLookup on ChangeType_s
+          | lookup ObjectTypeLookup on ObjectType_s
+          | extend
+              EventType = EventType_lookup,
+              EventResult = "Success", 
+              EventSchema = "AuditEvent",
+              EventSchemaVersion = "0.1.0",
+              EventVendor = "Barracuda",
+              EventProduct = "WAF",
+              EventCount = toint(1)
+          | extend
+              Dvc = UnitName_s, 
+              EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s) - tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))),
+              Operation = CommandName_s,
+              DvcIpAddr = HostIP_s,
+              NewValue = NewValue_s,
+              SrcIpAddr = LoginIP_s,
+              EventMessage = EventMessage_s,
+              OldValue = OldValue_s,
+              DvcHostname = host_s,
+              ActorUsername = AdminName_s,
+              Object = ObjectName_s        
+          | extend
+              Src = SrcIpAddr,
+              EventEndTime = EventStartTime,
+              ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+              ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""),
+              User = ActorUsername,
+              Value = NewValue          
+          | extend
+              IpAddr = SrcIpAddr,
+              ValueType = iff(isnotempty(Value), "Other", "")
+          | project-away
+              *_d,
+              *_s,
+              EventType_lookup,
+              _ResourceId,
+              Reason,
+              severity,
+              RawData,
+              SourceIP,
+              Message,
+              Computer,
+              MG,
+              ManagementGroupName,
+              TenantId,
+              SourceSystem
+          );
+      let BarracudaCEF = 
+          CommonSecurityLog
+          | where not(disabled)
+              and DeviceVendor startswith "Barracuda"
+              and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
+          | where DeviceEventCategory == "AUDIT" 
+              and (toupper(ProcessName) !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
+          | parse trim(@'[^\w(")]+', Message) with * "Reason=" Reason: string 
+          | extend Reason = trim('"', Reason)
+          | extend 
+              EventResultDetails = Reason,
+              severity = toint(LogSeverity)
+          | lookup SeverityLookup on severity
+          | lookup EventTypeLookup on $left.EventOutcome == $right.ChangeType_s
+          | lookup ObjectTypeLookup on $left.FileType == $right.ObjectType_s
+          | extend
+              EventResult = "Success", 
+              EventSchema = "AuditEvent",
+              EventSchemaVersion = "0.1.0",
+              EventVendor = "Barracuda",
+              EventProduct = "WAF",
+              EventCount = toint(1)
+          | extend
+              EventType = EventType_lookup,
+              Dvc = DeviceName, 
+              EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime) - tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
+              Operation = ProcessName,
+              DvcIpAddr = DeviceAddress,
+              NewValue = DeviceCustomString1,
+              SrcIpAddr = SourceIP,
+              EventMessage = Message,
+              OldValue = DeviceCustomString2,
+              DvcHostname = DeviceName,
+              ActorUsername = DestinationUserName,
+              Object = FileName,
+              ThreatConfidence = toint(ThreatConfidence)     
+          | extend
+              Src = SrcIpAddr,
+              EventEndTime = EventStartTime,
+              ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+              ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""),
+              User = ActorUsername,
+              Value = NewValue 
+          | extend
+              IpAddr = SrcIpAddr,
+              ValueType = iff(isnotempty(Value), "Other", "")
+          | project-away
+              EventType_lookup,
+              ThreatConfidence,
+              CommunicationDirection,
+              AdditionalExtensions,
+              Device*,
+              Source*,
+              Reason,
+              Destination*,
+              Activity,
+              LogSeverity,
+              ApplicationProtocol,
+              ProcessID,
+              ExtID,
+              Protocol,
+              ReceiptTime,
+              SimplifiedDeviceAction,
+              OriginalLogSeverity,
+              ProcessName,
+              EndTime,
+              ExternalID,
+              File*,
+              ReceivedBytes,
+              Message,
+              Old*,
+              EventOutcome,
+              Request*,
+              StartTime,
+              Field*,
+              Flex*,
+              Remote*,
+              Malicious*,
+              severity,
+              ThreatSeverity,
+              IndicatorThreatType,
+              ThreatDescription,
+              _ResourceId,
+              SentBytes,
+              ReportReferenceLink,
+              Computer,
+              TenantId;
+      union isfuzzy = true 
+          BarracudaCustom,
+          BarracudaCEF
+  };
+  parser(disabled=disabled)

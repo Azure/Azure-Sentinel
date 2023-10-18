@@ -296,7 +296,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 						if($contentToImport.TemplateSpec) {
                             #Getting Workbook Metadata dependencies from Github
                             $workbookData = $null
-                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
                             try {
                                 Write-Host "Downloading $workbookFinalPath"
                                 $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
@@ -359,7 +359,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         if($contentToImport.TemplateSpec) {
                             #Getting Workbook Metadata dependencies from Github
                             $workbookData = $null
-                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
                             try {
                                 Write-Host "Downloading $workbookFinalPath"
                                 $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
@@ -1299,6 +1299,35 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $existingFunctionApp = $false;
                                 $instructionArray = $templateSpecConnectorData.instructionSteps
                                 ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
+
+                                if ($existingFunctionApp -eq $false)
+                                {
+                                    # check if only instructions object is present without any description
+                                    foreach ($item in $instructionArray) 
+                                    {
+                                        if ($null -eq $item.description -and $item.instructions.Count -gt 0)
+                                        {
+                                            foreach ($instructionItem in $item.instructions)
+                                            {
+                                                $parameterCount = $instructionItem.parameters.Count -gt 0
+                                                $parameterInstructionStepsCount = $instructionItem.parameters.instructionSteps.Count -gt 0
+
+                                                if ($parameterCount -and $parameterInstructionStepsCount)
+                                                {
+                                                    foreach ($desc in $instructionItem.parameters.instructionSteps)
+                                                    {
+                                                        if ($desc.description && $desc.description.IndexOf('Deploy To Azure') -gt 0)
+                                                        {
+                                                            $existingFunctionApp = $true
+                                                            break
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
                                 if($existingFunctionApp)
                                 {
                                     $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
@@ -2310,7 +2339,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
                                 dependsOn  =  @(
-                                    "[variables('_parserName$parserCounter')]"
+                                    "[variables('_parserId$parserCounter')]"
                                 );
                                 properties = [PSCustomObject]@{
                                     parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
