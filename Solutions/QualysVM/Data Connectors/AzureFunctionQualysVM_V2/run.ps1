@@ -163,9 +163,10 @@ try
 	$detections = @()
 	$results = "NA"
 	#iterate over the HOST LIST AND DETECTION LIST to have gerenralised detections
-	Write-Output $qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST
+	#Write-Output $qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST
 	$qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST | ForEach-Object {
-		Write-Output "Host List Data = $qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST"
+		Write-Output "Host List Data = $($qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST.InnerXml)"
+		Write-Output $qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST.InnerXml
         $hostObject = New-Object -TypeName PSObject
         Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "HostId" -Value $_.ID
         Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "IpAddress" -Value $_.IP
