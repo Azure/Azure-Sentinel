@@ -83,6 +83,8 @@ class LookOut:
                 'Content-Type': 'application/json'
                 }
         response = requests.request("POST", url, headers=headers, data=payload)
+        logging.info("jwt token response {}".format(response))
+        logging.info("jwt token response {}".format(response.text))
         tokens = json.loads(response.text)         
         return tokens['id_token']        
 	    
