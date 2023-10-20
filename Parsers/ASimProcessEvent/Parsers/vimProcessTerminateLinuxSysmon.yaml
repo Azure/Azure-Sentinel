@@ -1,7 +1,7 @@
 Parser:
   Title: Process Terminate Event ASIM parser for Sysmon for Linux 
-  Version: '0.2.0'
-  LastUpdated: Feb 23, 2022
+  Version: '0.2.1'
+  LastUpdated: Oct 19, 2023
 Product:
   Name: Sysmon for Linux
 Normalization:
@@ -41,23 +41,45 @@ ParserParams:
   - Name: parentprocess_has_any
     Type: dynamic
     Default: dynamic([])
-  - Name: actorusername
+  - Name: actorusername_has
+    Type: string
+    Default: '*'
+  - Name: targetusername_has
     Type: string
     Default: '*'
   - Name: dvcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
-  - Name: dvcname_has_any
+  - Name: dvchostname_has_any
     Type: dynamic
     Default: dynamic([])
   - Name: eventtype
     Type: string
     Default: '*'
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: | 
-    let ParsedProcessEvent=(){
+    let ParsedProcessEvent=(
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      commandline_has_any:dynamic=dynamic([]),
+      commandline_has_all:dynamic=dynamic([]),
+      commandline_has_any_ip_prefix:dynamic=dynamic([]),
+      actingprocess_has_any:dynamic=dynamic([]),
+      targetprocess_has_any:dynamic=dynamic([]),
+      parentprocess_has_any:dynamic=dynamic([]),
+      actorusername_has:string='*',
+      targetusername_has:string='*',
+      dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dvchostname_has_any:dynamic=dynamic([]),
+      eventtype:string='*',
+      hashes_has_any:dynamic=dynamic([]),
+      disabled:bool=false
+    ){
     Syslog
     | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>5</EventID>')
     // --------------------------------------------------------------------------------------
@@ -73,13 +95,15 @@ ParserQuery: |
     and (array_length(commandline_has_any_ip_prefix)==0) 
     and (eventtype=='*' or eventtype=='ProcessTerminated')
     and (array_length(targetprocess_has_any)==0 or SyslogMessage has_any (targetprocess_has_any)) 
-    and (actorusername=='*' or SyslogMessage has actorusername)  
-    and (array_length(dvcname_has_any)==0 or Computer has_any (dvcname_has_any))   
+    and (actorusername_has=='*' or SyslogMessage has actorusername_has)
+    and (targetusername_has == '*')
+    and (array_length(hashes_has_any)==0)
+    and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))   
     // --------------------------------------------------------------------------------------
     | parse SyslogMessage with *'<Data Name="User">'ActorUsername '</Data>' *
     // --------------------------------------------------------------------------------------
     | where
-      (actorusername=='*' or ActorUsername has actorusername)  
+      (actorusername_has=='*' or ActorUsername has actorusername_has)  
     // --------------------------------------------------------------------------------------
     | parse SyslogMessage with * '<Data Name="RuleName">'RuleName'</Data>'
                                 '<Data Name="UtcTime">'UtcTime'</Data>'
@@ -114,5 +138,22 @@ ParserQuery: |
         User = ActorUsername,
         Process = TargetProcessName,
         Dvc = DvcHostname
-    }; ParsedProcessEvent
+    };
+    ParsedProcessEvent(
+      starttime=starttime, 
+      endtime=endtime, 
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      actorusername_has=actorusername_has,
+      targetusername_has=targetusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      hashes_has_any=hashes_has_any,
+      disabled=disabled
+    )
 

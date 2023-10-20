@@ -1,7 +1,7 @@
 Parser:
   Title: Process Terminate Event ASIM parser for Microsoft Defender for IoT
-  Version: '0.2.0'
-  LastUpdated: Apr 30, 2022
+  Version: '0.2.1'
+  LastUpdated: Oct 19, 2023
 Product:
   Name: Microsoft Defender for IoT
 Normalization:
@@ -41,23 +41,45 @@ ParserParams:
   - Name: parentprocess_has_any
     Type: dynamic
     Default: dynamic([])
-  - Name: actorusername
+  - Name: actorusername_has
+    Type: string
+    Default: '*'
+  - Name: targetusername_has
     Type: string
     Default: '*'
   - Name: dvcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
-  - Name: dvcname_has_any
+  - Name: dvchostname_has_any
     Type: dynamic
     Default: dynamic([])
   - Name: eventtype
     Type: string
     Default: '*'
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-    let ProcessEvents_MD4IoT=()
+    let ProcessEvents_MD4IoT=(
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      commandline_has_any:dynamic=dynamic([]),
+      commandline_has_all:dynamic=dynamic([]),
+      commandline_has_any_ip_prefix:dynamic=dynamic([]),
+      actingprocess_has_any:dynamic=dynamic([]),
+      targetprocess_has_any:dynamic=dynamic([]),
+      parentprocess_has_any:dynamic=dynamic([]),
+      actorusername_has:string='*',
+      targetusername_has:string='*',
+      dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dvchostname_has_any:dynamic=dynamic([]),
+      eventtype:string='*',
+      hashes_has_any:dynamic=dynamic([]),
+      disabled:bool=false
+    )
     {
       SecurityIoTRawEvent 
       | where RawEventName == "Process" and EventDetails has_cs 'EXIT'
@@ -74,8 +96,10 @@ ParserQuery: |
         and (array_length(commandline_has_all)==0 or EventDetails has_all (commandline_has_all)) 
         and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventDetails, commandline_has_any_ip_prefix) ) 
         and (array_length(targetprocess_has_any)==0 or EventDetails has_any (targetprocess_has_any)) 
-        and (actorusername=='*' or EventDetails has actorusername)  
-        and (array_length(dvcname_has_any)==0 or DeviceId has_any (dvcname_has_any))   
+        and (actorusername_has=='*' or EventDetails has actorusername_has)
+        and (targetusername_has == '*')
+        and (array_length(hashes_has_any)==0)
+        and (array_length(dvchostname_has_any)==0 or DeviceId has_any (dvchostname_has_any))   
       // --------------------------------------------------------------------------------------
       | extend
         EventDetails = todynamic(EventDetails)
@@ -120,4 +144,20 @@ ParserQuery: |
         Process = TargetProcessName, 
         Dvc = DvcHostname 
       };
-      ProcessEvents_MD4IoT
+      ProcessEvents_MD4IoT(
+      starttime=starttime, 
+      endtime=endtime, 
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      actorusername_has=actorusername_has,
+      targetusername_has=targetusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      hashes_has_any=hashes_has_any,
+      disabled=disabled
+    )
