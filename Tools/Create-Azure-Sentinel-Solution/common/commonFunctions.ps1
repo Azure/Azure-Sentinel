@@ -78,8 +78,88 @@ function addEmptyArrayVariables($resourceObj)
     }
 }
 
-# THIS FUNCTION IS USED ONLY TO ADD VARIABLES OF BLANKS OR TEMPLATEEMPTYARRAY
-function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAction = $false) {
+function addEmptyObjectVariables($resourceObj)
+{
+    $resourceObj.$key = "[variables('TemplateEmptyObject')]";
+    if (!$global:baseMainTemplate.variables.TemplateEmptyObject) {
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyObject" -NotePropertyValue "[json('{}')]"
+    }
+}
+
+function addNullVariables($resourceObj)
+{
+    $resourceObj.$key = "[variables('TemplateNullVariable')]";
+    if (!$global:baseMainTemplate.variables.TemplateNullVariable) {
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateNullVariable" -NotePropertyValue "null"
+    }
+}
+
+function IsSkipActionInputs($resourceObj, $key, $val, $isAction = $false)
+{
+    if ($isAction -and $key -eq "inputs" -and 
+        $val -is [System.Management.Automation.PSCustomObject] -and 
+        -not "$val")
+    {
+        # when action has "inputs": {}
+        addEmptyObjectVariables $resourceObj
+        return $true
+    }
+
+    if ($isAction -and $key -eq "inputs" -and 
+        $null -ne $val -and 
+        $val -is [System.Array] -and 
+        $val.count -eq 0)
+    {
+        # when action has "inputs": []
+        addEmptyArrayVariables $resourceObj
+        return $true
+    }
+
+    if ($isAction -and $key -eq "inputs" -and 
+        $null -eq $val)
+    {
+        # when action has "inputs": null
+        addNullVariables $resourceObj
+        return $true
+    }
+    
+    return $false
+}
+
+function IsSkipActionInputsValue($resourceObj, $key, $val, $isAction = $false, $isInputs = $false)
+{
+    if ($isAction -and $isInputs -and 
+        $key -eq "value" -and 
+        $val -is [System.Management.Automation.PSCustomObject] -and 
+        -not "$val")
+    {
+        # when action has inputs--> "value": {}
+        addEmptyObjectVariables $resourceObj
+        continue
+    }
+
+    if ($isAction -and $isInputs -and 
+        $key -eq "value" -and 
+        $null -ne $val -and 
+        $val -is [System.Array] -and 
+        $val.count -eq 0)
+    {
+        # when action has inputs--> "value": []
+        addEmptyArrayVariables $resourceObj
+        continue
+    }
+
+    if ($isAction -and $isInputs -and 
+        $key -eq "value" -and 
+        $null -eq $val)
+    {
+        # when action has inputs--> "value": null
+        addNullVariables $resourceObj
+        continue
+    }
+}
+
+function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAction = $false, $isInputs = $false) {
     foreach ($prop in $resourceObj.PsObject.Properties) {
         $key = $prop.Name
         $val = $prop.Value
@@ -92,24 +172,18 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAct
             $isInputs = $true
         }
 
-        if ($isAction -and $key -eq "inputs" -and (-not "$val" -or $null -eq $val))
+        # if actions --> inputs has either {} or [] or null then we skip later code
+        if (IsSkipActionInputs $resourceObj $key $val $isAction)
         {
-            # if actions-->inputs value is empty or null
-            addEmptyArrayVariables($resourceObj)
             continue
         }
 
-        if ($isAction -and $isInputs -and
-            $key -eq "value" -and 
-            $val -is [System.Management.Automation.PSCustomObject] -and
-            (-not "$val" -or $null -eq $val)
-        )
+        # if actions --> inputs --> value has either {} or [] or null then we skip later code
+        if (IsSkipActionInputsValue $resourceObj $key $val $isAction $isInputs)
         {
-            # when actions-->inputs -->value is null or {} or "" then skip it and in removeBlanksRecursive function we set it as variables of blanks
-            addEmptyArrayVariables($resourceObj)
             continue
         }
-        
+
         if ($null -eq $val) {
             if ($isWorkbook)
             {
@@ -118,7 +192,16 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAct
             }
             else
             {
-                addBlankVariables($resourceObj)
+                if ($isAction -and $isInputs)
+                {
+                    continue
+                }
+                else {
+                    $resourceObj.$key = "[variables('blanks')]";
+                    if (!$global:baseMainTemplate.variables.blanks) {
+                        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                    }
+                }
             }
         }
         elseif ($val -is [System.Object[]]) {
@@ -130,13 +213,16 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAct
                 }
                 else
                 {
-                    addEmptyArrayVariables($resourceObj)
+                    $resourceObj.$key = "[variables('TemplateEmptyArray')]";
+                    if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+                        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                    }
                 }
             }
             else {
                 foreach ($item in $val) {
                     $itemIndex = $val.IndexOf($item)
-                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex] $isWorkbook $isAction)
+                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex] $isWorkbook $isAction $isInputs)
                 }
             }
         }
@@ -146,7 +232,7 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAct
                     $resourceObj.PsObject.Properties.Remove($key)
                 }
                 else {
-                    $resourceObj.$key = $(removePropertiesRecursively $val $isWorkbook $isAction)
+                    $resourceObj.$key = $(removePropertiesRecursively $val $isWorkbook $isAction $isInputs)
                     if ($($resourceObj.$key.PsObject.Properties).Count -eq 0) {
                         $resourceObj.PsObject.Properties.Remove($key)
                     }
@@ -495,7 +581,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         ### Removing the Non-Sentinel Resources if there are any:
         $newobject = $global:baseMainTemplate.resources | ? {$_.type -in $contentResourceDetails.resources}
         $global:baseMainTemplate.resources = $newobject
-        
     }
 
     function GetWorkbookDataMetadata($file, $isPipelineRun, $contentResourceDetails, $baseFolderPath, $contentToImport)
@@ -1129,41 +1214,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         $outputStr
                     }
 
-                    # THIS FUNCTION IS USED ONLY TO REPLACE EMPTY/{}/[] BY VARIABLES OF BLANKS OR TEMPLATEEMPTYARRAY
-                    function removeBlanksRecursively($resourceObj, $isAction = $false, $isInputs = $false) {
+                    function removeBlanksRecursively($resourceObj) {
                         if ($resourceObj.GetType() -ne [System.DateTime]) {
                             foreach ($prop in $resourceObj.PsObject.Properties) {
                                 $key = $prop.Name
-                                $val = $prop.Value
-
-                                if ($key -eq 'actions')
-                                {
-                                    $isAction = $true
-                                }
-
-                                if ($key -eq 'inputs')
-                                {
-                                    $isInputs = $true
-                                }
-
-                                if ($isAction -and $isInputs -and $key -eq "inputs" -and
-                                    (-not "$val" -or $null -eq $val))
-                                {
-                                    # when actions-->inputs = null or [] or {}
-                                    $resourceObj.$key = "[variables('TemplateEmptyArray')]"
-                                    continue
-                                }
-
-                                if ($isAction -and $isInputs -and $key -eq "value" -and 
-                                    $val -is [System.Management.Automation.PSCustomObject] -and
-                                    (-not "$val" -or $null -eq $val))
-                                {
-                                    # when actions-->inputs--> value = null or [] or {}
-                                    $resourceObj.$key = "[variables('TemplateEmptyArray')]"
-                                    continue
-                                }
-
-                                if ($val -is [System.String]) {
+                                if ($prop.Value -is [System.String]) {
                                     if($resourceObj.$key -eq "")
                                     {
                                         $resourceObj.$key = "[variables('blanks')]";
@@ -1173,38 +1228,22 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                         }
                                     }
                                 }
-                                elseif ($val -is [System.Array]) {
-                                    foreach ($item in $val) {
-                                        $itemIndex = $val.IndexOf($item)
+                                elseif ($prop.Value -is [System.Array]) {
+                                    foreach ($item in $prop.Value) {
+                                        $itemIndex = $prop.Value.IndexOf($item)
                                         if ($null -ne $itemIndex) {
                                             if ($item -is [System.String]) {
                                                 $resourceObj.$key[$itemIndex] = $item
                                             }
                                             elseif ($item -is [System.Management.Automation.PSCustomObject]) {
-                                                $calculateIsAction = $isAction ?? $false
-                                                $calculateIsInputs = $isInputs ?? $false
-
-                                                $resourceObj.$key[$itemIndex] = $(removeBlanksRecursively $item $calculateIsAction $calculateIsInputs )
+                                                $resourceObj.$key[$itemIndex] = $(removeBlanksRecursively $item)
                                             }
                                         }
                                     }
                                 }
                                 else {
-                                    if ($null -ne $isAction -and
-                                        $null -ne $isInputs -and
-                                        $null -ne $val -and 
-                                        $isAction -and $isInputs -and
-                                        $val -ne $false -and
-                                        $val -is [System.Management.Automation.PSCustomObject] -and 
-                                        $prop.psobject.Properties.Name.Contains("Value")
-                                    )
-                                    {
-                                        $resourceObj.$key = $(removeBlanksRecursively $resourceObj.$key $true $true)
-                                    }
-                                    elseif (($val -isnot [System.Int32]) -and ($val -isnot [System.Int64])) {
-                                        $calculateIsAction = $isAction ?? $false
-                                        $calculateIsInputs = $isInputs ?? $false
-                                        $resourceObj.$key = $(removeBlanksRecursively $resourceObj.$key $calculateIsAction $calculateIsInputs )
+                                    if (($prop.Value -isnot [System.Int32]) -and ($prop.Value -isnot [System.Int64])) {
+                                        $resourceObj.$key = $(removeBlanksRecursively $resourceObj.$key)
                                     }
                                 }
                             }
@@ -1223,7 +1262,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                         $playbookData.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
                                         $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
                                     }
-                                    if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")) -and ($resourceObj.$key -ne "[variables('TemplateEmptyArray')]"))
+                                    if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")) -and ($resourceObj.$key -ne "[variables('TemplateEmptyArray')]") -and $prop.Value -ne "[variables('TemplateEmptyObject')]" -and $prop.Value -ne "[variables('TemplateNullVariable')]")
                                     {
                                         $resourceObj.$key = "[" + $resourceObj.$key;
                                     }
@@ -2829,11 +2868,11 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         foreach ($filePath in $packageFolderFiles)
         {
             $isValid = Get-Content $filePath -Raw | Test-Json -ErrorAction SilentlyContinue
-            if ($isValid) 
+            if ($isValid)
             {
                 Write-Host "File $filePath is a valid Json file!"
             }
-            else 
+            else
             {
                 Write-Host "File $filePath is Not a valid Json file!"
             }
