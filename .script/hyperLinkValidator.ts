@@ -12,7 +12,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         let dataFolderName = splitPath[2] === "Data" || splitPath[2] === "data" ? splitPath[2] : null
         let dataConnectorFolderName = splitPath[2] === "DataConnectors" || splitPath[2] === "Data Connectors" ? splitPath[2] : null
         let packageFolderName = splitPath[2] === "Package" ? splitPath[2] : null
-        console.log('dataFolderName ' + dataFolderName + ', dataConnectorFolderName ' + dataConnectorFolderName + ', packageFolderName ' + packageFolderName)
+
         if (dataFolderName == null && dataConnectorFolderName == null && packageFolderName == null) 
         {
             console.log(`Skipping Hyperlink validation for file path : '${filePath}' as change is not in 'Data', 'Data Connectors' and/or 'Package' folder`)
@@ -23,19 +23,11 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         let exclusionList = ["host.json", "proxies.json", "function.json", "azuredeploy", "system_generated_metadata.json", "parameters.json"]
         
         let fileName = splitPath[3].toString()
-        console.log('file name ' + fileName)
-        
         if (exclusionList.filter(x=>x.includes(fileName)).length > 0)
         {
             console.log(`Skipping Hyperlink validation for file path as file is from exclusion list : '${filePath}'`)
             return ExitCode.SUCCESS;
         }
-
-        // if (filePath.includes("azuredeploy") || filePath.includes("host.json") || filePath.includes("proxies.json") || filePath.includes("function.json") || filePath.includes("requirements.txt") || filePath.includes(".py") || filePath.includes(".ps1"))
-        // {
-        //     console.log(`Skipping Hyperlink validation for file path : '${filePath}'`)
-        //     return ExitCode.SUCCESS;
-        // }
 
         const content = fs.readFileSync(filePath, "utf8");
         const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
