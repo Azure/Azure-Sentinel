@@ -39,7 +39,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 link = link.replace(/["']/g, "")
                 //check if the link is valid
                 const isValid = await isValidLink(link);
-                console.log('file ' + filePath + ', Link ' + link + ', IsValid ' + isValid)
                 if (!isValid) 
                 {
                     // CHECK IF LINK IS A GITHUB LINK
@@ -80,7 +79,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                     }
                     else
                     {
-                        console.log(`Skipping Hyperlink validation for '${link}' in file path : '${filePath}'`);
+                        invalidLinks.push(link);
                     }
                 }
             }
