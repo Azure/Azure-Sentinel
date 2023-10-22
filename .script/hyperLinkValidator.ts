@@ -86,7 +86,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
             if (invalidLinks.length > 0)
             {
-                var errorMessage= `File '${filePath}' has a total of '${invalidLinks.length}' broken hyperlinks. Please review and rectify the following hyperlinks: \n ${invalidLinks}`
+                var distinctInvalidLinks = invalidLinks.filter((n, i) => invalidLinks.indexOf(n) === i);
+                var errorMessage= `File '${filePath}' has a total of '${distinctInvalidLinks.length}' broken hyperlinks. Please review and rectify the following hyperlinks: \n ${distinctInvalidLinks}`
                 throw new Error(errorMessage.replace(",", "\n"));
             }
         }
