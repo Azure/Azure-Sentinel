@@ -11,18 +11,28 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     {
         let dataFolderName = splitPath[2] === "Data" || splitPath[2] === "data" ? splitPath[2] : null
         let dataConnectorFolderName = splitPath[2] === "DataConnectors" || splitPath[2] === "Data Connectors" ? splitPath[2] : null
-        if (dataFolderName == null && dataConnectorFolderName == null) 
+        let packageFolderName = splitPath[2] === "Package" ? splitPath[2] : null
+        if (dataFolderName == null && dataConnectorFolderName == null && packageFolderName == null) 
         {
-            console.log(`Skipping Hyperlink validation for file path : '${filePath}' as change is not in 'Data' and/or 'Data Connectors' folder`)
+            console.log(`Skipping Hyperlink validation for file path : '${filePath}' as change is not in 'Data', 'Data Connectors' and/or 'Package' folder`)
             return ExitCode.SUCCESS;
         }
 
         //IGNORE BELOW FILES
-        if (filePath.includes("azuredeploy") || filePath.includes("host.json") || filePath.includes("proxies.json") || filePath.includes("function.json") || filePath.includes("requirements.txt") || filePath.includes(".py") || filePath.includes(".ps1"))
+
+        let exclusionList = ["host.json", "proxies.json", "/function.json", "azuredeploy", "system_generated_metadata.json"]
+
+        if (exclusionList.filter(x=>x.includes(filePath)))
         {
             console.log(`Skipping Hyperlink validation for file path : '${filePath}'`)
             return ExitCode.SUCCESS;
         }
+
+        // if (filePath.includes("azuredeploy") || filePath.includes("host.json") || filePath.includes("proxies.json") || filePath.includes("function.json") || filePath.includes("requirements.txt") || filePath.includes(".py") || filePath.includes(".ps1"))
+        // {
+        //     console.log(`Skipping Hyperlink validation for file path : '${filePath}'`)
+        //     return ExitCode.SUCCESS;
+        // }
 
         const content = fs.readFileSync(filePath, "utf8");
         const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
@@ -142,7 +152,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 }
 
 let fileTypeSuffixes = ["json"];
-let filePathFolderPrefixes = ["DataConnectors", "Data Connectors", "Solutions"];
+let filePathFolderPrefixes = ["DataConnectors", "Data Connectors", "Solutions", "Package"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
     onCheckFile: (filePath: string) => {
