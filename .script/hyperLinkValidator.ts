@@ -12,6 +12,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         let dataFolderName = splitPath[2] === "Data" || splitPath[2] === "data" ? splitPath[2] : null
         let dataConnectorFolderName = splitPath[2] === "DataConnectors" || splitPath[2] === "Data Connectors" ? splitPath[2] : null
         let packageFolderName = splitPath[2] === "Package" ? splitPath[2] : null
+        console.log('dataFolderName ' + dataFolderName + ', dataConnectorFolderName ' + dataConnectorFolderName + ', packageFolderName ' + packageFolderName)
         if (dataFolderName == null && dataConnectorFolderName == null && packageFolderName == null) 
         {
             console.log(`Skipping Hyperlink validation for file path : '${filePath}' as change is not in 'Data', 'Data Connectors' and/or 'Package' folder`)
@@ -19,12 +20,13 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         }
 
         //IGNORE BELOW FILES
-
-        let exclusionList = ["host.json", "proxies.json", "/function.json", "azuredeploy", "system_generated_metadata.json"]
-
-        if (exclusionList.filter(x=>x.includes(filePath)))
+        let exclusionList = ["host.json", "proxies.json", "function.json", "azuredeploy", "system_generated_metadata.json", "parameters.json"]
+        
+        let fileName = splitPath[3].toString()
+        console.log('file name ' + fileName)
+        if (exclusionList.filter(x=>x.includes(fileName)))
         {
-            console.log(`Skipping Hyperlink validation for file path : '${filePath}'`)
+            console.log(`Skipping Hyperlink validation for file path as file is from exclusion list : '${filePath}'`)
             return ExitCode.SUCCESS;
         }
 
