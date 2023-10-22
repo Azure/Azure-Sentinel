@@ -24,7 +24,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         
         let fileName = splitPath[3].toString()
         console.log('file name ' + fileName)
-        if (exclusionList.filter(x=>x.includes(fileName)))
+        
+        if (exclusionList.filter(x=>x.includes(fileName)).length > 0)
         {
             console.log(`Skipping Hyperlink validation for file path as file is from exclusion list : '${filePath}'`)
             return ExitCode.SUCCESS;
