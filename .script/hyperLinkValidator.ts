@@ -37,9 +37,9 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             for (var link of links) 
             {
                 link = link.replace(/["']/g, "")
-
                 //check if the link is valid
                 const isValid = await isValidLink(link);
+                console.log('file ' + filePath + ', Link ' + link + ', IsValid ' + isValid)
                 if (!isValid) 
                 {
                     // CHECK IF LINK IS A GITHUB LINK
