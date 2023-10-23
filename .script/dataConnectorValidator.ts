@@ -112,6 +112,14 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.AWS;
   }
+  else if (dataTypes[0].name.includes("Corelight"))
+  {
+    return ConnectorCategory.Corelight;
+  }
+  else if (dataTypes[0].name.includes("corelight_bacnet"))
+  {
+    return ConnectorCategory.CorelightConnectorExporter;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];
