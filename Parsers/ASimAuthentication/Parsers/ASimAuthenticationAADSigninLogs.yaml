@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for AAD interactive sign-in logs
-  Version: '0.3'
-  LastUpdated: Feb 23 2023 
+  Version: '0.3.1'
+  LastUpdated: 21 Jul 2023
 Product:
   Name: AAD
 Normalization:
@@ -15,6 +15,7 @@ References:
 Description: |
   This ASIM parser supports normalizing Azure Active Directory Interactive sign in logs, stored in the  SigninLogs table, to the ASIM Authentication schema.
 ParserName: ASimAuthenticationSigninLogs
+EquivalentBuiltInParser: _ASim_Authentication_SigninLogs
 ParserParams:
   - Name: disabled
     Type: bool
@@ -22,16 +23,19 @@ ParserParams:
 ParserQuery: |
   let FailedReason=datatable(ResultType:string, EventResultDetails:string)[
     '0', 'Success',
-    '53003', 'Logon violates policy',
+    '50005', 'Logon violates policy',
+    '50011', 'Logon violates policy', 
+    '50020', 'Logon violates policy',
     '50034', 'No such user or password',
-    '50059', 'No such user or password',
     '50053', 'User locked',
     '50055', 'Password expired',
     '50056', 'Incorrect password',
     '50057', 'User disabled',
     '50058', 'Logon violates policy',
-    '50011', 'Logon violates policy', 
+    '50059', 'No such user or password',
     '50064', 'No such user or password',
+    '50072', 'Logon violates policy',
+    '50074', 'Logon violates policy', 
     '50076', 'Logon violates policy',
     '50079', 'Logon violates policy',
     '50105', 'Logon violates policy',
@@ -40,67 +44,68 @@ ParserQuery: |
     '50133', 'Password expired',
     '50144', 'Password expired',
     '50173', 'Password expired',
-    '80012', 'Logon violates policy',
     '51004', 'No such user or password',
-    '50072', 'Logon violates policy',
-    '50005', 'Logon violates policy',
-    '50020', 'Logon violates policy',
-    '50074', 'Logon violates policy', 
+    '53003', 'Logon violates policy',
     '70008', 'Password expired',
+    '80012', 'Logon violates policy',
+    '500011', 'No such user or password',
     '700016',  'No such user or password', 
-    '500011', 'No such user or password' 
     ];
   let UserTypeLookup = datatable (UserType:string, TargetUserType:string) [
-    'Member', 'Regular',
     'Guest','Guest', 
+    'Member', 'Regular',
     '',''
   ];
-  let AADSigninLogs=(disabled:bool=false){
-  SigninLogs | where not(disabled)
+  let parser=(disabled:bool=false){
+  SigninLogs 
+  | where not(disabled)
   | extend
-    EventVendor = 'Microsoft'
-    , EventProduct = 'AAD'
-    , EventCount=int(1)
-    , EventSchemaVersion='0.1.0'
-    , EventResult = iff (ResultType ==0, 'Success', 'Failure')
-    , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)
-    , EventStartTime = TimeGenerated
-    , EventEndTime= TimeGenerated
-    , EventType= 'Logon'
-    , EventSubType = 'Interactive'
-    , SrcDvcId=tostring(DeviceDetail.deviceId)
-    , SrcDvcHostname =tostring(DeviceDetail.displayName)
-    , SrcDvcOs=tostring(DeviceDetail.operatingSystem)
-    // , SrcBrowser= tostring(DeviceDetail.browser)
-    , Location = todynamic(LocationDetails)
-    , TargetUsernameType='UPN'
-    , TargetUserIdType='AADID'
-    , SrcDvcIpAddr=IPAddress
+      EventCount                 = int(1),
+      EventEndTime               = TimeGenerated,
+      EventOriginalResultDetails = coalesce(ResultDescription, ResultType),
+      EventProduct               = 'AAD',
+      EventResult                = iff (ResultType ==0, 'Success', 'Failure'),
+      EventSchemaVersion         = '0.1.0',
+      EventStartTime             = TimeGenerated,
+      EventSubType               = 'Interactive',
+      EventType                  = 'Logon',
+      EventVendor                = 'Microsoft',
+      Location                   = todynamic(LocationDetails),
+      SrcDvcHostname             = tostring(DeviceDetail.displayName),
+      SrcDvcId                   = tostring(DeviceDetail.deviceId),
+      SrcDvcIpAddr               = IPAddress,
+      SrcDvcOs                   = tostring(DeviceDetail.operatingSystem),
+      TargetUserIdType           = 'AADID',
+      TargetUsernameType         = 'UPN'
   | extend
-        SrcGeoCity=tostring(Location.city)
-        , SrcGeoCountry=tostring(Location.countryOrRegion)
-        , SrcGeoLatitude=toreal(Location.geoCoordinates.latitude)
-        , SrcGeoLongitude=toreal(Location.geoCoordinates.longitude)
+      SrcGeoCity        = tostring(Location.city),
+      SrcGeoCountry     = tostring(Location.countryOrRegion),
+      SrcGeoLatitude    = toreal(Location.geoCoordinates.latitude),
+      SrcGeoLongitude   = toreal(Location.geoCoordinates.longitude)
    | lookup FailedReason on ResultType
    | project-rename
-       EventOriginalUid =Id
-       , LogonMethod  = AuthenticationRequirement
-       , HttpUserAgent=UserAgent
-       , TargetSessionId=CorrelationId
-       , TargetUserId = UserId
-       , TargetUsername=UserPrincipalName
-       , TargetAppId = ResourceIdentity
-       , TargetAppName=ResourceDisplayName
+       EventOriginalUid = Id,
+       EventUid         = _ItemId,
+       HttpUserAgent    = UserAgent,
+       LogonMethod      = AuthenticationRequirement,
+       TargetAppId      = ResourceIdentity,
+       TargetAppName    = ResourceDisplayName,
+       TargetSessionId  = CorrelationId,
+       TargetUserId     = UserId,
+       TargetUsername   = UserPrincipalName
     //
     | lookup UserTypeLookup on UserType
     | project-away UserType
     // ** Aliases
     | extend 
-          User=TargetUsername
-        , LogonTarget=TargetAppName
-        , Dvc=EventVendor
+        Dvc             = EventVendor,
+        LogonTarget     = TargetAppName,
+        User            = TargetUsername,
       // -- Entity identifier explicit aliases
-        , TargetUserUpn = TargetUsername
-        , TargetUserAadId = TargetUserId
+        TargetUserAadId = TargetUserId,
+        TargetUserUpn   = TargetUsername
     };
-    AADSigninLogs(disabled)
+    parser  
+    (
+        disabled = disabled
+    )

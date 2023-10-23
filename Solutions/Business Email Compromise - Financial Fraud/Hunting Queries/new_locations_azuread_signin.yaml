@@ -1,0 +1,66 @@
+id: 41fa6e2d-afe9-4398-9356-cec3a927e44e
+name: Azure Active Directory signins from new locations
+description: |
+  'New Azure Active Directory signin locations today versus historical Azure Active Directory signin data.
+  In the case of password spraying or brute force attacks one might see authentication attempts for many
+  accounts from a new location. This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics
+  for contextual information around the results.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let countThreshold = 1;
+  SigninLogs
+  | where TimeGenerated between(starttime..endtime)
+  | extend UserPrincipalName = tolower(UserPrincipalName)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), perIdentityAuthCount = count()
+  by UserPrincipalName, locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/",
+  tostring(LocationDetails["city"]), ";" , tostring(LocationDetails["geoCoordinates"]))
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), distinctAccountCount = count(), identityList=makeset(UserPrincipalName) by locationString
+  | extend identityList = iff(distinctAccountCount<10, identityList, "multiple (>10)")
+  | join kind= anti (
+  SigninLogs
+    | where TimeGenerated between(lookback..starttime)
+    | project locationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/",
+    tostring(LocationDetails["city"]), ";" , tostring(LocationDetails["geoCoordinates"]))
+    | summarize priorCount = count() by locationString
+  )
+  on locationString
+  // select threshold above which #new accounts from a new location is deemed suspicious
+  | where distinctAccountCount > countThreshold
+  | mv-expand todynamic(identityList)
+  | extend timestamp = StartTime, Account_0_Name = identityList
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+      | project-rename Account_0_Name = AccountUPN
+  ) on Account_0_Name
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: identityList
+version: 2.0.0

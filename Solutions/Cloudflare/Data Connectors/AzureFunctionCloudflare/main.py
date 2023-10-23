@@ -7,11 +7,13 @@ import azure.functions as func
 import re
 import time
 import aiohttp
+from json import JSONDecodeError
 
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 
 
-logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
+logging.getLogger(
+    'azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
 logging.getLogger('charset_normalizer').setLevel(logging.ERROR)
 
 
@@ -23,10 +25,12 @@ CONTAINER_NAME = os.environ['CONTAINER_NAME']
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
 LOG_TYPE = 'Cloudflare'
-LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
-    
+LINE_SEPARATOR = os.environ.get(
+    'lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
+
 # Defines how many files can be processed simultaneously
-MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 20))
+MAX_CONCURRENT_PROCESSING_FILES = int(
+    os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 20))
 
 # Defines page size while listing files from blob storage. New page is not processed while old page is processing.
 MAX_PAGE_SIZE = int(MAX_CONCURRENT_PROCESSING_FILES * 1.5)
@@ -50,8 +54,10 @@ if not match:
 
 async def main(mytimer: func.TimerRequest):
     logging.info('Starting script')
-    logging.info('Concurrency parameters: MAX_CONCURRENT_PROCESSING_FILES {}, MAX_PAGE_SIZE {}, MAX_BUCKET_SIZE {}.'.format(MAX_CONCURRENT_PROCESSING_FILES, MAX_PAGE_SIZE, MAX_BUCKET_SIZE))
-    conn = AzureBlobStorageConnector(AZURE_STORAGE_CONNECTION_STRING, CONTAINER_NAME, MAX_CONCURRENT_PROCESSING_FILES)
+    logging.info('Concurrency parameters: MAX_CONCURRENT_PROCESSING_FILES {}, MAX_PAGE_SIZE {}, MAX_BUCKET_SIZE {}.'.format(
+        MAX_CONCURRENT_PROCESSING_FILES, MAX_PAGE_SIZE, MAX_BUCKET_SIZE))
+    conn = AzureBlobStorageConnector(
+        AZURE_STORAGE_CONNECTION_STRING, CONTAINER_NAME, MAX_CONCURRENT_PROCESSING_FILES)
     container_client = conn._create_container_client()
     async with container_client:
         async with aiohttp.ClientSession() as session:
@@ -63,14 +69,17 @@ async def main(mytimer: func.TimerRequest):
                     await asyncio.gather(*cors)
                     cors = []
                 if conn.check_if_script_runs_too_long():
-                    logging.info('Script is running too long. Stop processing new blobs.')
+                    logging.info(
+                        'Script is running too long. Stop processing new blobs.')
                     break
 
             if cors:
                 await asyncio.gather(*cors)
-                logging.info('Processed {} files with {} events.'.format(conn.total_blobs, conn.total_events))
+                logging.info('Processed {} files with {} events.'.format(
+                    conn.total_blobs, conn.total_events))
 
-    logging.info('Script finished. Processed files: {}. Processed events: {}'.format(conn.total_blobs, conn.total_events))
+    logging.info('Script finished. Processed files: {}. Processed events: {}'.format(
+        conn.total_blobs, conn.total_events))
 
 
 class AzureBlobStorageConnector:
@@ -102,36 +111,75 @@ class AzureBlobStorageConnector:
         logging.info("Deleting blob {}".format(blob['name']))
         await container_client.delete_blob(blob['name'])
 
+    def merge_lines(self, data):
+        merged_objs = []
+
+        for i in range(len(data)):
+            if not data[i].endswith("}"):
+                for j in range(i, len(data)):
+                    if data[j].endswith("}"):
+                        merged_objs.append(",".join(data[i:j+1]))
+                        break
+
+        for item in merged_objs:
+            if (not item.endswith("}")) or (not item.startswith("{")):
+                merged_objs.remove(item)
+
+        var = 0
+        for i in range(len(data)):
+            if (not data[i-var].endswith("}")):
+                data.remove(data[i-var])
+                var += 1
+                continue
+            if not data[i-var].startswith("{"):
+                var += 1
+                data.remove(data[i-var])
+
+        data = data+merged_objs
+        return data
+
     async def process_blob(self, blob, container_client, session: aiohttp.ClientSession):
         async with self.semaphore:
             logging.info("Start processing {}".format(blob['name']))
-            sentinel = AzureSentinelConnectorAsync(session, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
+            sentinel = AzureSentinelConnectorAsync(
+                session, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
             blob_cor = await container_client.download_blob(blob['name'])
             s = ''
             async for chunk in blob_cor.chunks():
                 s += chunk.decode()
-                lines =  re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                lines = self.merge_lines(data=lines)
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
-                            try :
+                            try:
                                 event = json.loads(line)
+                            except JSONDecodeError as je:
+                                logging.error('JSONDecode error while loading json event at line value {}. blob name: {}. Error {}'.format(
+                                    line, blob['name'], str(je)))
                             except ValueError as e:
-                                logging.error('Error while loading json Event at line value {}. blob name: {}. Error: {}'.format(line, blob['name'],str(e)))
+                                logging.error('Error while loading json Event at line value {}. blob name: {}. Error: {}'.format(
+                                    line, blob['name'], str(e)))
                                 raise e
                             await sentinel.send(event)
-                s = line
+                    s = line
             if s:
-                try :
+                try:
                     event = json.loads(s)
+                except JSONDecodeError as je:
+                    logging.error('JSONDecode error while loading json event at line value {}. blob name: {}. Error {}'.format(
+                        line, blob['name'], str(je)))
                 except ValueError as e:
-                    logging.error('Error while loading json Event at s value {}. blob name: {}. Error: {}'.format(line, blob['name'],str(e)))
+                    logging.error('Error while loading json Event at s value {}. blob name: {}. Error: {}'.format(
+                        line, blob['name'], str(e)))
                     raise e
                 await sentinel.send(event)
             await sentinel.flush()
             await self.delete_blob(blob, container_client)
             self.total_blobs += 1
             self.total_events += sentinel.successfull_sent_events_number
-            logging.info("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
+            logging.info("Finish processing {}. Sent events: {}".format(
+                blob['name'], sentinel.successfull_sent_events_number))
             if self.total_blobs % 100 == 0:
-                logging.info('Processed {} files with {} events.'.format(self.total_blobs, self.total_events))
+                logging.info('Processed {} files with {} events.'.format(
+                    self.total_blobs, self.total_events))

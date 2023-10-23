@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM Filtering parser for Palo Alto Networks URL Filtering
-  Version: '0.2.1'
-  LastUpdated: Mar 12 2023
+  Version: '0.2.2'
+  LastUpdated: Jul 15 2023
 Product:
   Name: Palo Alto Networks
 Normalization:
@@ -61,8 +61,10 @@ ParserQuery: |
     disabled:bool=false
   )
   {
-      let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-      let ip_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let src_or_any                = set_union(
+        srcipaddr_has_any_prefix,
+        ipaddr_has_any_prefix
+      ); 
       let EventLookup=datatable(DeviceAction:string, DvcAction:string,EventResult:string,HttpStatusCode:string)
       [
         "alert", "Allow", "Success","200",
@@ -106,11 +108,13 @@ ParserQuery: |
       | where (array_length(url_has_any) == 0 or RequestURL has_any (remove_protocol_from_list(url_has_any)))
       | where (array_length(httpuseragent_has_any) == 0 or RequestClientApplication has_any (httpuseragent_has_any))
       | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any)
+      | extend temp_DstMatch = has_any_ipv4_prefix(DestinationIP,ipaddr_has_any_prefix)
       | extend ASimMatchingIpAddr = case(
-        array_length(src_or_any) == 0, "-",
-        temp_SrcMatch , "Both",
-        temp_SrcMatch, "SrcIpAddr",
-        "No match")
+          array_length(src_or_any) == 0, "-",
+          temp_DstMatch and temp_SrcMatch, "Both",
+          temp_SrcMatch , "SrcIpAddr",
+          temp_DstMatch, "DstIpAddr",
+          "No match") 
       | where ASimMatchingIpAddr != "No match" 
       | project-away temp_*
       | extend EventResultDetails     = "NA"
@@ -147,7 +151,7 @@ ParserQuery: |
       | extend 
         HttpRequestXff            = coalesce(PanOSXForwarderfor, PanXFFIP)
       | project-rename 
-        DvcHostname                = Computer,
+        DvcHostname               = Computer,
         HttpReferrer              = PanOSReferer,
         DstMacAddr                = PanDstMac,
         SrcMacAddr                = PanSrcMac,
@@ -182,8 +186,8 @@ ParserQuery: |
         EventType                 = "HTTPsession",
         EventSchema               = "WebSession",
         EventSchemaVersion        = "0.2.5",
-        EventProduct              = "Palo Alto",
-        EventVendor               = "PanOS",
+        EventVendor               = "Palo Alto",
+        EventProduct              = "PanOS",
         EventStartTime            = TimeGenerated,
         EventEndTime              = TimeGenerated,
         HttpRequestMethod         = toupper(RequestMethod),
@@ -209,7 +213,8 @@ ParserQuery: |
         NetworkSessionId          = tostring(DeviceCustomNumber1),
         DvcInterface              = DvcInboundInterface,
         Hostname                  = DstHostname,
-        Url                       = trim('"', RequestURL)
+        Url                       = trim('"', RequestURL),
+        UserAgent                 = HttpUserAgent
       | extend
         DstFQDN                   = iif(Url contains ":", split(Url, ":")[0], split(Url, "/")[0]),
         SessionId                 = NetworkSessionId,
@@ -223,6 +228,6 @@ ParserQuery: |
           ThreatField == "DstIpAddr", DstIpAddr,
           ""),
         Dst                       = DstFQDN
-      | project ASimMatchingIpAddr, DeviceVendor, Dst, DstDomainType, DstFQDN, DstHostname, DstIpAddr, DstMacAddr, DstNatIpAddr, DstNatPortNumber, DstPortNumber, DstUsername, DstUsernameType, DstZone, Dvc, DvcAction, DvcHostname, DvcId, DvcIdType, DvcInboundInterface, DvcInterface, DvcOriginalAction, DvcOutboundInterface, EventCount, EventEndTime, EventOriginalSeverity, EventProduct, EventProductVersion, EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventSeverity, EventStartTime, EventType, EventUid, EventVendor, Hostname, HttpContentFormat, HttpRequestMethod, HttpRequestXff, HttpStatusCode, IpAddr, NetworkDirection, NetworkProtocol, NetworkProtocolVersion, NetworkRuleName, NetworkSessionId, Protocol, RequestContext, Rule, SessionId, Src, SrcHostname, SrcIpAddr, SrcMacAddr, SrcNatIpAddr, SrcNatPortNumber, SrcPortNumber, SrcUsername, SrcUsernameType, SrcZone, ThreatField, ThreatIpAddr, ThreatOriginalConfidence, TimeGenerated, Type, Url, UrlCategory, User
+      | project ASimMatchingIpAddr, DeviceVendor, Dst, DstDomainType, DstFQDN, DstHostname, DstIpAddr, DstMacAddr, DstNatIpAddr, DstNatPortNumber, DstPortNumber, DstUsername, DstUsernameType, DstZone, Dvc, DvcAction, DvcHostname, DvcId, DvcIdType, DvcInboundInterface, DvcInterface, DvcOriginalAction, DvcOutboundInterface, EventCount, EventEndTime, EventOriginalSeverity, EventProduct, EventProductVersion, EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventSeverity, EventStartTime, EventType, EventUid, EventVendor, Hostname, HttpContentFormat, HttpRequestMethod, HttpRequestXff, HttpStatusCode, IpAddr, NetworkDirection, NetworkProtocol, NetworkProtocolVersion, NetworkRuleName, NetworkSessionId, Protocol, RequestContext, Rule, SessionId, Src, SrcHostname, SrcIpAddr, SrcMacAddr, SrcNatIpAddr, SrcNatPortNumber, SrcPortNumber, SrcUsername, SrcUsernameType, SrcZone, ThreatField, ThreatIpAddr, ThreatOriginalConfidence, TimeGenerated, Type, Url, UrlCategory, User, HttpUserAgent, UserAgent
   };
   parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)

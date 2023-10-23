@@ -1,0 +1,55 @@
+id: a0e55dd4-8454-4396-91e6-f28fec3d2cab
+name: Egress Defend - Dangerous Attachment Detected
+description: |
+  'Defend has detected a user has a suspicious file type from a suspicious sender in their mailbox.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: EgressDefend
+    dataTypes:
+      - EgressDefend_CL
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - InitialAccess
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1204
+  - T0853
+  - T0863
+  - T1566
+  - T1546
+  - T1546
+tags:
+  - Defend
+query: |
+  DefendAuditData
+  | where ThreatLevel == "suspicious" or ThreatLevel == "dangerous"
+  | mv-expand todynamic(Attachments)
+  | where Attachments.name matches regex @"(?i)^.*\.(doc|docx|docm|pdf|xls|xlsx|xlsm|html|zip)$(?-i)"
+  | summarize attachmentCount=count() by TimeGenerated, tostring(Attachments.name), Subject, From, Account_0_FullName = trim(@"[^@.\w]+",Recipients), timesClicked = LinksClicked, SenderIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account_0_FullName
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: Attachments_name
+  - entityType: Mailbox
+    fieldMappings:
+      - identifier: MailboxPrimaryAddress
+        columnName: Account_0_FullName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SenderIP
+alertDetailsOverride:
+  alertDisplayNameFormat: Alert - {{Account_0_FullName}} has suspicious attachment.
+version: 1.0.0
+kind: Scheduled

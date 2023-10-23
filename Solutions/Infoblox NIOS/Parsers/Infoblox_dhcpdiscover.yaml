@@ -1,0 +1,24 @@
+id: 890db700-1f1e-4ad1-9d67-2d8752d74f2f
+Function:
+  Title: Parser for Infoblox_dhcpdiscover
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: Infoblox_dhcpdiscover
+FunctionAlias: Infoblox_dhcpdiscover
+FunctionQuery: |
+    let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
+    Syslog
+        | where Computer in (datasource) 
+        | where SyslogMessage startswith_cs "DHCPDISCOVER"
+        | extend responseTime = EventTime
+        | extend Parser = extract_all(@"^(\w+)\sfrom\s([a-z0-9\:]+)(?:\s\(([^\)]+)\)|)(?:\svia\s([^\s\:]+[^\:\s]))(?:\sTransID\s([^\s\:]+)?)?(?:\suid\s([\S]+))?(?:\:?\snetwork\s([^\s\:]+)?)?(:?\:\s(.*))?", dynamic([1,2,3,4,5,6,7,8,9,10]), SyslogMessage)[0]
+        | extend Log_Type = tostring(Parser[0]),
+            SrcMacAddr = tostring(Parser[1]), 
+            SrcHostName = tostring(Parser[2]), 
+            SrcRouterAddress = tostring(Parser[3]), 
+            DhcpSessionId = tostring(Parser[4]),
+            SrcUserIdType = tostring(Parser[5]), 
+            Network = tostring(Parser[6]),
+            EventMessage = tostring(Parser[8])
+        | project-away SrcHostName,SrcRouterAddress,Parser;

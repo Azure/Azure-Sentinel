@@ -1,7 +1,7 @@
 id: 5e45930c-09b1-4430-b2d1-cc75ada0dc0f
 name: TI Map IP Entity to W3CIISLog
 description: |
-  'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in W3CIISLog.'
+  This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in W3CIISLog.
 severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
@@ -23,50 +23,37 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-  let dt_lookBack = 1h;
-  let ioc_lookBack = 14d;
-  let IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True));
-  let IP_Indicators = (union isfuzzy=true
-  (ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  // Picking up only IOC's that contain the entities we want
-  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
-  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
-  // Taking the first non-empty value based on potential IOC match availability
-  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
-  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
-  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  //Exclude local addresses, using the ipv4_is_private operator
-  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  ),
-  (IoCList
-  | where IoC_Type =~ 'IP'
-  | where ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC
-  | where Active =~ 'True'
-  | extend TI_ipEntity = IoC
-  | project-away  IoC_Type
-  )
-  );
+  let dt_lookBack = 1h; // Look back 1 hour for W3CIISLog events
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  // Fetch threat intelligence indicators related to IP addresses
+  let IP_Indicators = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+    | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+  // Perform a join between IP indicators and W3CIISLog events
   IP_Indicators
-  | join kind=innerunique (
-      W3CIISLog
-      | where TimeGenerated >= ago(dt_lookBack)
-      | where isnotempty(cIP)
-      //Exclude local addresses, using the ipv4_is_private operator
-      | where ipv4_is_private(cIP) == false and  cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127."
-      // renaming time column so it is clear the log this came from
-      | extend W3CIISLog_TimeGenerated = TimeGenerated
-  )
-  on $left.TI_ipEntity == $right.cIP
-  | where W3CIISLog_TimeGenerated < ExpirationDateTime
-  | summarize W3CIISLog_TimeGenerated = arg_max(W3CIISLog_TimeGenerated, *) by IndicatorId, cIP, IoC
-  | project timestamp = W3CIISLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
-  TI_ipEntity, Computer, sSiteName, cIP, sIP, sPort, csMethod, csUserName, scStatus, scSubStatus, scWin32Status,
-  NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+    // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
+    | join kind=innerunique (
+        W3CIISLog
+        | where TimeGenerated >= ago(dt_lookBack)
+        | where isnotempty(cIP)
+        | where ipv4_is_private(cIP) == false and cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127."
+        | extend W3CIISLog_TimeGenerated = TimeGenerated
+    )
+    on $left.TI_ipEntity == $right.cIP
+    // Filter out W3CIISLog events that occurred after the expiration of the corresponding indicator
+    | where W3CIISLog_TimeGenerated < ExpirationDateTime
+    // Group the results by IndicatorId and keep the W3CIISLog event with the latest timestamp
+    | summarize W3CIISLog_TimeGenerated = arg_max(W3CIISLog_TimeGenerated, *) by IndicatorId, cIP
+    // Select the desired output fields
+    | project timestamp = W3CIISLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+      TI_ipEntity, Computer, sSiteName, cIP, sIP, sPort, csMethod, csUserName, scStatus, scSubStatus, scWin32Status,
+      NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -84,5 +71,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.3.4
+version: 1.4.0
 kind: Scheduled
