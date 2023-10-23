@@ -1,7 +1,7 @@
 Parser:
   Title: Audit Event ASIM parser for VMware Carbon Black Cloud
   Version: '0.1.0'
-  LastUpdated: Aug 18 2023
+  LastUpdated: Oct 23 2023
 Product:
   Name: VMware Carbon Black Cloud
 Normalization:
@@ -159,8 +159,10 @@ ParserQuery: |
               Object = iff(isnotempty(temp_reptype1), strcat("Reputation Override of type ", temp_reptype1), "Reputation Override"),
               ObjectType = "Configuration Atom"
           | lookup EventTypeLookup on temp_type
-          | extend Operation = strcat(temp_type, " ", Object)
-          | extend AdditionalFields = bag_pack("reputation value", coalesce(temp_content1, temp_content2));
+          | extend
+              Operation = strcat(temp_type, " ", Object),
+              ActorScopeId = coalesce(temp_orgid1, temp_orgid2),
+              AdditionalFields = bag_pack("reputation value", coalesce(temp_content1, temp_content2));
       union
           Enabled,
           Set,
@@ -178,7 +180,7 @@ ParserQuery: |
       | extend
           EventStartTime = unixtime_milliseconds_todatetime(eventTime_d),
           EventSeverity = coalesce(EventSeverity1, "Informational"),
-          AdditionalFields = bag_merge(AdditionalFields, bag_pack("flagged", flagged_b))
+          AdditionalFields = bag_merge(AdditionalFields, bag_pack("flagged", flagged_b, "request url", requestUrl_s))
       | extend
           EventProduct = "Carbon Black Cloud",
           EventSchema = "AuditEvent",
@@ -192,7 +194,7 @@ ParserQuery: |
           SrcIpAddr = clientIp_s,
           EventMessage = description_s,
           EventOriginalUid = eventId_g,
-          EventOwner = orgName_s
+          ActorScope = orgName_s
       | extend
           ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
           ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
@@ -202,7 +204,8 @@ ParserQuery: |
           IpAddr = SrcIpAddr,
           Dvc = EventProduct,
           User = ActorUsername,
-          Value = NewValue
+          Value = NewValue,
+          ValueType = iff(isnotempty(NewValue), "Other", "")
       | project-away 
           *_s,
           *_d,
