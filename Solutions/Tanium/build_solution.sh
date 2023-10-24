@@ -23,7 +23,9 @@ _msg_success() {
 }
 
 _shout() {
+  _msg
   echo >&2 "$(tput bold)${*}$(tput sgr0)"
+  _msg
 }
 
 _die() {
@@ -34,8 +36,8 @@ _die() {
 }
 
 build_solution() {
-  _msg "🏗  Building Tanium Sentinel solution"
-  _msg "🤖  Sorry but the V3 script requires user interaction"
+  _msg "🤖 Sorry but the V3 build script requires user interaction"
+  _msg ""
   _msg "Run this command to perform the build:"
   _msg ""
   _msg "    (cd ../.. && pwsh ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1)"
@@ -43,6 +45,7 @@ build_solution() {
   _msg "At the prompt type in: ./Solutions/Tanium/Data"
   _msg ""
   _msg "e.g. Enter solution data file path : ./Solutions/Tanium/Data"
+  _msg ""
 }
 
 move_tanium_package_directory_to_temporary_location() {
@@ -70,6 +73,7 @@ post_build_cleanup() {
 }
 
 check-command() {
+  _msg "  🔧 checking $1"
   if ! command -v "$1" >/dev/null; then
     _die "$1 command not found: please brew install ${2-:$1}"
   fi
@@ -84,6 +88,7 @@ check-matching-playbook-declarations() {
   playbook_json_files=$(find Solutions/Tanium/Playbooks -name "azuredeploy.json" | sort | sed -e 's|Solutions/Tanium/||')
   declared_playbook_json_files=$(jq -r ".Playbooks[]" Solutions/Tanium/Data/Solution_Tanium.json | sort)
 
+  _msg "  🕵️  checking that playbook json files are all declared in the manifest"
   # comm -23 : omit lines in common and lines only in the second file
   undeclared_playbook_json_files=$(comm -23 <(echo "$playbook_json_files") <(echo "$declared_playbook_json_files"))
   if [[ -n "$undeclared_playbook_json_files" ]]; then
@@ -95,6 +100,7 @@ check-matching-playbook-declarations() {
     exit 1
   fi
 
+  _msg "  🕵️  checking that all playbooks declared in the manifest have playbook json files"
   # comm -13 : omit lines in common and lines only in the first file
   missing_playbook_json_files=$(comm -13 <(echo "$playbook_json_files") <(echo "$declared_playbook_json_files"))
   if [[ -n "$missing_playbook_json_files" ]]; then
@@ -108,9 +114,11 @@ check-matching-playbook-declarations() {
 }
 
 check-prerequisites() {
+  _msg "🧰 checking prerequisites"
   check-command "jq"
   check-command "git"
   check-command "pwsh" "powershell"
+  _msg "🧾 checking the package manifest"
   check-matching-playbook-declarations
 }
 
@@ -137,9 +145,10 @@ main() {
       shift
     done
 
+    _shout "Checking prerequisites"
     check-prerequisites
     _shout "Building Solution"
-    build_solution | tee /dev/tty > "$logfile"
+    build_solution
   )
 }
 
