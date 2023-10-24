@@ -79,6 +79,13 @@ check-command() {
   fi
 }
 
+check-arm-ttk() {
+  _msg "  🔧 checking arm-ttk module in powershell"
+  if ! pwsh -c Get-Module arm-ttk | grep -q arm-ttk; then
+    _die "arm-ttk module not found in your powershell"
+  fi
+}
+
 check-matching-playbook-declarations() {
   local playbook_json_files
   local declared_playbook_json_files
@@ -118,6 +125,7 @@ check-prerequisites() {
   check-command "jq"
   check-command "git"
   check-command "pwsh" "powershell"
+  check-arm-ttk
   _msg "🧾 checking the package manifest"
   check-matching-playbook-declarations
 }
