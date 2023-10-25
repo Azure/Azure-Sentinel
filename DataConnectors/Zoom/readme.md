@@ -15,7 +15,7 @@ The easiest way is via the provided ARM templates:
 
 Alternatively you can deploy the elements manually.
 #### 2: Deploy via VS Code
-Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-powershell#prerequisites
+Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-powershell#prerequisites
 1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Zoom/zoom_logs_template.zip?raw=true) file of the Azure Funciton app from Github.
 2. Extract to a location on your local host.
 3. Open VS Code.
@@ -98,4 +98,4 @@ Once you have done this you need to add your verification code to your previousl
 5. Restart your function app.
 
 If sucessfully deployed you should start to see events appear in your Azure Sentinel workpsace as soon as they are generated.
-If you run into issues there are a number of options for [monitoring](https://docs.microsoft.com/en-us/azure/azure-functions/functions-monitoring?tabs=cmd) and [deugging](https://docs.microsoft.com/en-us/azure/azure-functions/functions-debug-powershell-local) your Function App.
+If you run into issues there are a number of options for [monitoring](https://docs.microsoft.com/azure/azure-functions/functions-monitoring?tabs=cmd) and [deugging](https://docs.microsoft.com/azure/azure-functions/functions-debug-powershell-local) your Function App.
