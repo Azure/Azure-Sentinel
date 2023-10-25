@@ -1,5 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 3.0.0       | 22-09-2023                     |	Addition of new Trend Micro Apex One AMA **Data Connector**     | 	                                                            |  
-         
+| 3.0.0       | 22-09-2023                     |	Addition of new Trend Micro Apex One AMA **Data connector**     | 	                                                            |  
+| 3.0.1       | 25-10-2023                     |  **Hutning Query** column corrected                                |        
                                                                                                                  
