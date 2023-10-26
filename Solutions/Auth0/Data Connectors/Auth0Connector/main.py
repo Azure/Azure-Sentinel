@@ -113,14 +113,6 @@ class Auth0Connector:
         events = resp.json()
         logging.info('\t response object : {events}')
         events.sort(key=lambda item: item['date'], reverse=True)
-        last_log_id = events[0]['log_id']
-        config['last_log_id'] = last_log_id
-        try:
-            config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
-        except IndexError:
-            logging.info('Known Indexing Scenario. Proceed with execution')
-        logging.info("new config" + str(config))
-        self.state_manager.post(json.dumps(config))
         for el in events:
             self.sentinel.send(el)
         self.sentinel.flush()
@@ -154,14 +146,6 @@ class Auth0Connector:
                         time.sleep(1)
                     if len(events)!=0:
                         events.sort(key=lambda item: item['date'], reverse=True)
-                        last_log_id = events[0]['log_id']
-                        config['last_log_id'] = last_log_id
-                        try:
-                            config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
-                        except IndexError:
-                            logging.info('Known Indexing Scenario. Proceed with execution')
-                        logging.info("new config" + str(config))
-                        self.state_manager.post(json.dumps(config))
                         for el in events:
                             self.sentinel.send(el)
                         self.sentinel.flush()
