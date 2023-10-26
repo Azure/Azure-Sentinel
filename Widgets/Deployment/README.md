@@ -15,7 +15,7 @@ In essence, widgets are more than just visual aids. They are powerful analytical
 
 ## Enable enrichment widgets
 
-Widgets regularly access and maintain connections with their data sources. Generally widgets require credentials to do so. These credentials can be in the form of API keys, username/password, or other secrets, and they are stored in a dedicated Azure Key Vault that you create for this purpose.
+Widgets regularly access and maintain connections with their data sources. Generally, widgets require credentials to do so. These credentials can be in the form of API keys, username/password, or other secrets, and they are stored in a dedicated Azure Key Vault that you create for this purpose.
 
 You must have the **Contributor** role for the workspace's resource group to create this Key Vault in your environment.
 
@@ -60,35 +60,35 @@ To remove the widgets experience from Microsoft Sentinel, simply delete the Key 
 
 ## Configure individual widgets
 
-**Find your credentials for Virus Total:**
+### Find your credentials for Virus Total
 
-- Enter the **API key** defined in your Virus Total account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterVirusTotal) for a free Virus Total account to get an API key.
+1. Enter the **API key** defined in your Virus Total account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterVirusTotal) for a free Virus Total account to get an API key.
 
-- After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Virus Total" will be added to your key vault.
+1. After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Virus Total" will be added to your key vault.
 
-**Find your credentials for AbuseIPDB:**
+### Find your credentials for AbuseIPDB
 
-- Enter the **API key** defined in your AbuseIPDB account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterAbuseIPDB) for a free AbuseIPDB account to get an API key.
+1. Enter the **API key** defined in your AbuseIPDB account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterAbuseIPDB) for a free AbuseIPDB account to get an API key.
 
-- After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "AbuseIPDB" will be added to your key vault.
+1. After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "AbuseIPDB" will be added to your key vault.
 
-**Find your credentials for Anomali:**
+### Find your credentials for Anomali
 
-- Enter the **username** and **API key** defined in your Anomali account.
+1. Enter the **username** and **API key** defined in your Anomali account.
 
-- After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Anomali" will be added to your key vault.
+1. After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Anomali" will be added to your key vault.
 
-**Find your credentials for Recorded Future:**
+### Find your credentials for Recorded Future
 
-- Enter your Recorded Future **API key**. Contact your Recorded Future representative to get your API key. You can also [apply for a 30-day free trial especially for Sentinel users](https://aka.ms/SentinelWidgetsRegisterRecordedFuture).
+1. Enter your Recorded Future **API key**. Contact your Recorded Future representative to get your API key. You can also [apply for a 30-day free trial especially for Sentinel users](https://aka.ms/SentinelWidgetsRegisterRecordedFuture).
 
-- After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Recorded Future" will be added to your key vault.
+1. After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Recorded Future" will be added to your key vault.
 
-**Find your credentials for Microsoft Defender Threat Intelligence (MDTI):**
+### Find your credentials for Microsoft Defender Threat Intelligence (MDTI)
 
-- The MDTI widget should fetch the data automatically if you have the relevant MDTI license. There is no need for credentials.
+1. The MDTI widget should fetch the data automatically if you have the relevant MDTI license. There is no need for credentials.
 
-- You can check if you have the relevant license, and if necessary, purchase it, at the MDTI official [website](https://www.microsoft.com/en-us/security/business/siem-and-xdr/microsoft-defender-threat-intelligence).
+1. You can check if you have the relevant license, and if necessary, purchase it, at the MDTI official [website](https://www.microsoft.com/en-us/security/business/siem-and-xdr/microsoft-defender-threat-intelligence).
 
 ## FAQ
 
