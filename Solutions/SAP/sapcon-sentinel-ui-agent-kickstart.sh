@@ -212,79 +212,79 @@ ver_id=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="VERSION_ID" {print $2}' | a
 id_like=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="ID_LIKE" {print $2}')
 log "Running on $os version $ver_id id $id_like"
 
-#Installing prerequisites
-if [ "$os" == "ubuntu" ]; then
-	#Ubuntu
-	log 'Updating package lists'
-	sudo apt-get update >/dev/null
-	install_package "jq" "apt install -y -qq"
-	install_package "unzip" "apt install -y -qq"
-	install_package "docker.io" "apt install -y -qq"
-	if [ "$MODE" != "cfgf" ]; then
-		log "Installing Azure CLI"
-		curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash >/dev/null 2>&1
-	fi
+# #Installing prerequisites
+# if [ "$os" == "ubuntu" ]; then
+# 	#Ubuntu
+# 	log 'Updating package lists'
+# 	sudo apt-get update >/dev/null
+# 	install_package "jq" "apt install -y -qq"
+# 	install_package "unzip" "apt install -y -qq"
+# 	install_package "docker.io" "apt install -y -qq"
+# 	if [ "$MODE" != "cfgf" ]; then
+# 		log "Installing Azure CLI"
+# 		curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash >/dev/null 2>&1
+# 	fi
 
-elif [ "$os" == '"rhel"' ]; then
-	#RHEL
-	log 'Updating package lists'
-	sudo yum update -y --disablerepo='*' --enablerepo='*microsoft*' >/dev/null
-	install_package "nc" "yum install -y"
-	install_package "jq" "yum install -y"
+# elif [ "$os" == '"rhel"' ]; then
+# 	#RHEL
+# 	log 'Updating package lists'
+# 	sudo yum update -y --disablerepo='*' --enablerepo='*microsoft*' >/dev/null
+# 	install_package "nc" "yum install -y"
+# 	install_package "jq" "yum install -y"
 
-	if [ "$MODE" != "cfgf" ]; then
-		sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc >/dev/null
-		echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/azure-cli.repo >/dev/null
-		log "Installing Azure CLI"
-		sudo yum install azure-cli -y >/dev/null
-	fi
-	sudo yum install -y yum-utils >/dev/null
-	sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo >/dev/null
-	log "Installing Docker"
-	sudo yum install docker-ce docker-ce-cli containerd.io -y >/dev/null
-	sudo systemctl enable docker.service
-	sudo systemctl start docker.service
+# 	if [ "$MODE" != "cfgf" ]; then
+# 		sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc >/dev/null
+# 		echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/azure-cli.repo >/dev/null
+# 		log "Installing Azure CLI"
+# 		sudo yum install azure-cli -y >/dev/null
+# 	fi
+# 	sudo yum install -y yum-utils >/dev/null
+# 	sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo >/dev/null
+# 	log "Installing Docker"
+# 	sudo yum install docker-ce docker-ce-cli containerd.io -y >/dev/null
+# 	sudo systemctl enable docker.service
+# 	sudo systemctl start docker.service
 
-elif [ "$os" == '"sles"' ]; then
-	# SUSE
-	log "Updating package lists"
-	sudo zypper refresh >/dev/null
-	log "Updating installed packages"
-	sudo zypper update -y >/dev/null
-	install_package "curl" "zypper install -y"
-	install_package "jq" "zypper install -y"
-	install_package "docker" "zypper install -y"
-	sudo systemctl enable docker.service
-	sudo systemctl start docker.service
+# elif [ "$os" == '"sles"' ]; then
+# 	# SUSE
+# 	log "Updating package lists"
+# 	sudo zypper refresh >/dev/null
+# 	log "Updating installed packages"
+# 	sudo zypper update -y >/dev/null
+# 	install_package "curl" "zypper install -y"
+# 	install_package "jq" "zypper install -y"
+# 	install_package "docker" "zypper install -y"
+# 	sudo systemctl enable docker.service
+# 	sudo systemctl start docker.service
 
-	if [ "$MODE" != "cfgf" ]; then
-		if ! rpm -qa | grep gpg-pubkey-be1229cf-5631588c >/dev/null; then
-			sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc >/dev/null
-			log "Adding Microsoft GPG key"
-		fi
-		if ! sudo zypper lr | grep "Azure CLI" >/dev/null; then
-			sudo zypper addrepo --name 'Azure CLI' --check https://packages.microsoft.com/yumrepos/azure-cli azure-cli >/dev/null
-			log "Adding Microsoft Azure CLI repository"
-		fi
-		if which az >/dev/null 2>&1; then
-			#AZ is installed, check if it is out-of date version with compatibility issues
-			azver=$(az version | jq '."azure-cli"')
-			if verlte "2.33.1" "$azver"; then
-				log "Installed version $azver is out of date, removing older version"
-				sudo zypper rm -y --clean-deps azure-cli >/dev/null
-				log "Installing Azure CLI"
-				sudo zypper install -y --from azure-cli azure-cli >/dev/null
-			fi
-		else
-			log "Installing Azure CLI"
-			sudo zypper install -y --from azure-cli azure-cli >/dev/null
-		fi
-	fi
-else
-	log "OS version is not suppored. Supported OS: Ubuntu version 18.04 or higher, SLES version 15 or higher, or RHEL version 7.7 or higher"
-	log "Current OS: $os"
-	exit 1
-fi
+# 	if [ "$MODE" != "cfgf" ]; then
+# 		if ! rpm -qa | grep gpg-pubkey-be1229cf-5631588c >/dev/null; then
+# 			sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc >/dev/null
+# 			log "Adding Microsoft GPG key"
+# 		fi
+# 		if ! sudo zypper lr | grep "Azure CLI" >/dev/null; then
+# 			sudo zypper addrepo --name 'Azure CLI' --check https://packages.microsoft.com/yumrepos/azure-cli azure-cli >/dev/null
+# 			log "Adding Microsoft Azure CLI repository"
+# 		fi
+# 		if which az >/dev/null 2>&1; then
+# 			#AZ is installed, check if it is out-of date version with compatibility issues
+# 			azver=$(az version | jq '."azure-cli"')
+# 			if verlte "2.33.1" "$azver"; then
+# 				log "Installed version $azver is out of date, removing older version"
+# 				sudo zypper rm -y --clean-deps azure-cli >/dev/null
+# 				log "Installing Azure CLI"
+# 				sudo zypper install -y --from azure-cli azure-cli >/dev/null
+# 			fi
+# 		else
+# 			log "Installing Azure CLI"
+# 			sudo zypper install -y --from azure-cli azure-cli >/dev/null
+# 		fi
+# 	fi
+# else
+# 	log "OS version is not suppored. Supported OS: Ubuntu version 18.04 or higher, SLES version 15 or higher, or RHEL version 7.7 or higher"
+# 	log "Current OS: $os"
+# 	exit 1
+# fi
 
 if [ $DEVMODE ]; then
 	dockerimage=$(echo "$DEVURL" | awk -F: '{print $1}')
