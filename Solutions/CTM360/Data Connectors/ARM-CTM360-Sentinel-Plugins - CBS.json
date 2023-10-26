@@ -1,0 +1,126 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "string",
+            "defaultValue": ""
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid(subscription().subscriptionId))]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(subscription().subscriptionId))]",
+            "apiVersion": "2021-03-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "title": "CBS Intergration - (Polling CCP)",
+                    "id": "CBSPollingID",
+                    "publisher": "CTM360",
+                    "descriptionMarkdown": "CBS Data Connector",
+                    "graphQueriesTableName": "CBSLogPoller_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "CBS log events",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All logs",
+                            "query": "{{graphQueriesTableName}}\n | take 10"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": [ "APIPolling" ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "action": true,
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "CBS API Key",
+                                "description": "Through the API integration, you have the capability to retrieve all the issues related to your CBS organizations via a RESTful interface."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Establish a connection between the XYZ Log and Microsoft Sentinel.",
+                            "description": "Connecting the CBS Log to Microsoft Sentinel enables seamless and secure data integration, allowing you to efficiently manage and analyze log information within the powerful capabilities of Microsoft Sentinel. This integration enhances your organization's ability to detect and respond to security threats, collect valuable insights, and streamline your overall cybersecurity operations. It provides a bridge between your CBS Log and Microsoft Sentinel, ensuring that critical data is readily available for threat detection, incident response, and comprehensive security monitoring.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "false"
+
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "APIKeyName": "api-key",
+                        "IsAPIKeyInPostPayload": false
+                    },
+                    "request": {
+                        "apiEndpoint": "https://cbs.ctm360.com/api/v2/incidents",
+                        "rateLimitQPS": 2,
+                        "httpMethod": "Get",
+                        "queryTimeFormat": "dd-MM-yyyy HH:mm",
+                        "retryCount": 3,
+                        "queryWindowInMin": 10,
+                        "timeoutInSeconds": 120,
+                        "queryParameters": {
+                            "date_from": "{_QueryWindowStartTime}",
+                            "date_to": "{_QueryWindowEndTime}",
+                            "FROM_MIRCROSOFT_SENTINEL": true
+                        },
+                        "headers": {
+                            "Accept": "application/json"
+
+                        }
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$.incident_list[*]"
+                        ]
+
+                    }
+
+                }
+            }
+        }
+    ]
+}
