@@ -41,7 +41,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "MicrosoftPurviewInsiderRiskManagement",
-    "_solutionVersion": "3.0.3",
+    "_solutionVersion": "3.0.4",
     "solutionId": "azuresentinel.azure-sentinel-solution-insiderriskmanagement",
     "_solutionId": "[variables('solutionId')]",
     "workbookVersion1": "1.0.0",
@@ -140,7 +140,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderRiskManagementWorkbook Workbook with template version 3.0.3",
+        "description": "InsiderRiskManagementWorkbook Workbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -244,7 +244,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderRiskHighUserAlertsCorrelation_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "InsiderRiskHighUserAlertsCorrelation_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion1')]",
@@ -258,7 +258,7 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "This alert joins SecurityAlerts from Microsoft Products with SecurityIncidents from Microsoft Sentinel and Microsoft 365 Defender. This join allows for identifying patterns in user principal names associated with respective security alerts. A machine learning function (Basket) is leveraged with a .001 threshold. Baset finds all frequent patterns of discrete attributes (dimensions) in the data. It returns the frequent patterns passed the frequency threshold. This query evaluates UserPrincipalName for patterns in SecurityAlerts and Reporting Security Tools. This query can be further tuned/configured for higher confidence percentages, security products, or alert severities pending the needs of the organization. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information on the basket plugin, see [basket plugin](https://docs.microsoft.com/azure/data-explorer/kusto/query/basketplugin)",
+                "description": "This alert joins SecurityAlerts from Microsoft Products with SecurityIncidents from Microsoft Sentinel and Microsoft Defender XDR. This join allows for identifying patterns in user principal names associated with respective security alerts. A machine learning function (Basket) is leveraged with a .001 threshold. Baset finds all frequent patterns of discrete attributes (dimensions) in the data. It returns the frequent patterns passed the frequency threshold. This query evaluates UserPrincipalName for patterns in SecurityAlerts and Reporting Security Tools. This query can be further tuned/configured for higher confidence percentages, security products, or alert severities pending the needs of the organization. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information on the basket plugin, see [basket plugin](https://docs.microsoft.com/azure/data-explorer/kusto/query/basketplugin)",
                 "displayName": "Insider Risk_High User Security Alert Correlations",
                 "enabled": false,
                 "query": "let AlertLinks = SecurityAlert\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize AlertLinks=make_set(AlertLink) by UPN;\nlet LastTimeObserved = SecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| project UPN, AlertName, Severity, ProductName, TimeGenerated | summarize arg_max(AlertName, Severity, ProductName, TimeGenerated) by UPN;\nSecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| project UPN, AlertName, Severity, ProductName\n| evaluate basket(0.001)\n| where UPN <> \"\"\n// | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UPN == $right.SearchKey\n| project UPN, Percent, AlertName, Severity, ProductName\n| join (LastTimeObserved) on UPN\n| sort by Percent desc\n| extend LastObserved = TimeGenerated\n| join kind=inner (AlertLinks) on UPN\n| project UPN, AlertName, Severity, ProductName, Percent, LastObserved, AlertLinks\n| extend AccountCustomEntity = UPN\n",
@@ -272,46 +272,46 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "MicrosoftDefenderAdvancedThreatProtection",
                     "dataTypes": [
                       "SecurityAlert (MDATP)"
-                    ],
-                    "connectorId": "MicrosoftDefenderAdvancedThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectoryIdentityProtection",
                     "dataTypes": [
                       "SecurityAlert (IPC)"
-                    ],
-                    "connectorId": "AzureActiveDirectoryIdentityProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureSecurityCenter",
                     "dataTypes": [
                       "SecurityAlert (ASC)"
-                    ],
-                    "connectorId": "AzureSecurityCenter"
+                    ]
                   },
                   {
+                    "connectorId": "IoT",
                     "dataTypes": [
                       "SecurityAlert (ASC for IoT)"
-                    ],
-                    "connectorId": "IoT"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftCloudAppSecurity",
                     "dataTypes": [
                       "SecurityAlert (ASC for IoT)"
-                    ],
-                    "connectorId": "MicrosoftCloudAppSecurity"
+                    ]
                   },
                   {
+                    "connectorId": "IoT",
                     "dataTypes": [
                       "SecurityAlert (MCAS)"
-                    ],
-                    "connectorId": "IoT"
+                    ]
                   },
                   {
+                    "connectorId": "OfficeATP",
                     "dataTypes": [
                       "SecurityAlert (Office 365)"
-                    ],
-                    "connectorId": "OfficeATP"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -322,13 +322,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "AadUserId",
                         "columnName": "AccountCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -384,7 +384,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderRiskHighUserIncidentsCorrelation_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "InsiderRiskHighUserIncidentsCorrelation_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion2')]",
@@ -412,46 +412,46 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "MicrosoftDefenderAdvancedThreatProtection",
                     "dataTypes": [
                       "SecurityAlert (MDATP)"
-                    ],
-                    "connectorId": "MicrosoftDefenderAdvancedThreatProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectoryIdentityProtection",
                     "dataTypes": [
                       "SecurityAlert (IPC)"
-                    ],
-                    "connectorId": "AzureActiveDirectoryIdentityProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureSecurityCenter",
                     "dataTypes": [
                       "SecurityAlert (ASC)"
-                    ],
-                    "connectorId": "AzureSecurityCenter"
+                    ]
                   },
                   {
+                    "connectorId": "IoT",
                     "dataTypes": [
                       "SecurityAlert (ASC for IoT)"
-                    ],
-                    "connectorId": "IoT"
+                    ]
                   },
                   {
+                    "connectorId": "MicrosoftCloudAppSecurity",
                     "dataTypes": [
                       "SecurityAlert (ASC for IoT)"
-                    ],
-                    "connectorId": "MicrosoftCloudAppSecurity"
+                    ]
                   },
                   {
+                    "connectorId": "IoT",
                     "dataTypes": [
                       "SecurityAlert (MCAS)"
-                    ],
-                    "connectorId": "IoT"
+                    ]
                   },
                   {
+                    "connectorId": "OfficeATP",
                     "dataTypes": [
                       "SecurityAlert (Office 365)"
-                    ],
-                    "connectorId": "OfficeATP"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -462,29 +462,29 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "AadUserId",
                         "columnName": "AccountCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
+                    "enabled": true,
                     "reopenClosedIncident": true,
+                    "lookbackDuration": "3d",
+                    "matchingMethod": "Selected",
                     "groupByEntities": [
                       "Account"
-                    ],
-                    "matchingMethod": "Selected",
-                    "lookbackDuration": "3d",
-                    "enabled": true
-                  }
+                    ]
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -539,7 +539,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderRiskM365IRMAlertObserved_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "InsiderRiskM365IRMAlertObserved_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion3')]",
@@ -567,10 +567,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "OfficeATP",
                     "dataTypes": [
                       "SecurityAlert (Office 365)"
-                    ],
-                    "connectorId": "OfficeATP"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -581,29 +581,29 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "AccountCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
+                    "enabled": true,
                     "reopenClosedIncident": true,
+                    "lookbackDuration": "3d",
+                    "matchingMethod": "Selected",
                     "groupByEntities": [
                       "Account"
-                    ],
-                    "matchingMethod": "Selected",
-                    "lookbackDuration": "3d",
-                    "enabled": true
-                  }
+                    ]
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -658,7 +658,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderRiskSensitiveDataAccessOutsideOrgGeo_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "InsiderRiskSensitiveDataAccessOutsideOrgGeo_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion4')]",
@@ -686,16 +686,16 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AzureInformationProtection",
                     "dataTypes": [
                       "InformationProtectionLogs_CL"
-                    ],
-                    "connectorId": "AzureInformationProtection"
+                    ]
                   },
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "SigninLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -706,29 +706,29 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "AadUserId",
                         "columnName": "AccountCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
+                    "enabled": true,
                     "reopenClosedIncident": true,
+                    "lookbackDuration": "3d",
+                    "matchingMethod": "Selected",
                     "groupByEntities": [
                       "Account"
-                    ],
-                    "matchingMethod": "Selected",
-                    "lookbackDuration": "3d",
-                    "enabled": true
-                  }
+                    ]
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -783,7 +783,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderRiskyAccessByApplication_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "InsiderRiskyAccessByApplication_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion5')]",
@@ -811,10 +811,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "SigninLogs"
-                    ],
-                    "connectorId": "AzureActiveDirectory"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -825,29 +825,29 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "AccountCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
+                    "enabled": true,
                     "reopenClosedIncident": true,
+                    "lookbackDuration": "3d",
+                    "matchingMethod": "Selected",
                     "groupByEntities": [
                       "Account"
-                    ],
-                    "matchingMethod": "Selected",
-                    "lookbackDuration": "3d",
-                    "enabled": true
-                  }
+                    ]
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -902,7 +902,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Notify-InsiderRiskTeam Playbook with template version 3.0.3",
+        "description": "Notify-InsiderRiskTeam Playbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -1166,7 +1166,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderEntityAnomalyFollowedByIRMAlert_HuntingQueries Hunting Query with template version 3.0.3",
+        "description": "InsiderEntityAnomalyFollowedByIRMAlert_HuntingQueries Hunting Query with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion1')]",
@@ -1251,7 +1251,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderISPAnomalyCorrelatedToExfiltrationAlert_HuntingQueries Hunting Query with template version 3.0.3",
+        "description": "InsiderISPAnomalyCorrelatedToExfiltrationAlert_HuntingQueries Hunting Query with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion2')]",
@@ -1336,7 +1336,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderMultipleEntityAnomalies_HuntingQueries Hunting Query with template version 3.0.3",
+        "description": "InsiderMultipleEntityAnomalies_HuntingQueries Hunting Query with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion3')]",
@@ -1421,7 +1421,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderPossibleSabotage_HuntingQueries Hunting Query with template version 3.0.3",
+        "description": "InsiderPossibleSabotage_HuntingQueries Hunting Query with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion4')]",
@@ -1506,7 +1506,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "InsiderSignInRiskFollowedBySensitiveDataAccessyaml_HuntingQueries Hunting Query with template version 3.0.3",
+        "description": "InsiderSignInRiskFollowedBySensitiveDataAccessyaml_HuntingQueries Hunting Query with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion5')]",
@@ -1591,7 +1591,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "MicrosoftPurviewInsiderRiskManagement data connector with template version 3.0.3",
+        "description": "MicrosoftPurviewInsiderRiskManagement data connector with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -1746,7 +1746,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.3",
+        "version": "3.0.4",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "MicrosoftPurviewInsiderRiskManagement",
