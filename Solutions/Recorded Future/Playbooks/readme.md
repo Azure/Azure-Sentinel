@@ -45,6 +45,12 @@ Risk lists are curated lists that contain Indicators of Compromise (IOCs), such 
 * [Manage Risk Lists](https://www.recordedfuture.com/support/install-configure-manage-risk-lists)
 * [About Risk Lists](https://support.recordedfuture.com/hc/en-us/articles/115000897248-Recorded-Future-Risk-Lists) (requires login)
 * [Risk List Download Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (requires login)
+
+## Recorded Future Automated Threat Hunt 
+Threat hunting is the proactive and iterative process of searching for and detecting cyber threats that have evaded traditional security measures, such as firewalls, antivirus software, and intrusion detection systems. It involves using a combination of manual and automated techniques to identify and investigate potential security breaches and intrusions within an organization's network.
+
+[More about Threat Hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires login)
+
 # Before You Begin
 
 ## Roles and Permissions
@@ -201,6 +207,10 @@ The Recorded Future playbook is now configured to run when incidents are trigger
 # Playbooks
 This section lists all available Recorded Future Playbooks. 
 
+- [Sandbox playbooks](./Sandboxing/readme.md)
+- [Recorded Future Threat Hunt Playbooks](./ThreatHunting/readme.md)
+- [Recorded Future Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md)
+
 ## RecordedFuture-ThreatIntelligenceImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
@@ -278,69 +288,6 @@ Retrieves Playbook Alerts and stores them in a custom log in the Log Analytic Wo
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Playbook-Alert-Importer%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Playbook-Alert-Importer%2Fazuredeploy.json)
 
-__________________________________________________________
-
-## RecordedFuture-Sandbox_Enrichment-Url
-Type: Response\
-Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](#connector-authorization) section. 
-
-Enables URL submission to Recorded Future's Malware Analysis Sandbox, the playbook will also create a Sentinel incident with the following information from the analysis report:
-
-* Severity Score
-* signatures
-* A link to the complete analysis report 
-
-File submission requires a storage account.
-
-To set up automatic enrichment, map alerts to a [custom analytic rule](https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment).
-
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json)
-
-## RecordedFuture-Sandbox_Outlook_Attachment
-Type: Response\
-Included in Recorded Future Intelligence Solution: No\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](#connector-authorization) section. 
-
-Enables submission of file attachments, from Microsoft Outlook emails, to Recorded to Future's Malware Analysis Sandbox. The playbook also creates a Sentinel incident with a summary of the analysis report. 
-
-The email address that received the attachment will also receive an email with the summary.
-
-**Information in summary**
-* Severity Score
-* signatures
-* A link to the complete analysis report. 
-
-To set up automatic enrichment, map alerts to a [custom analytic rule](https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment).
-
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json)
-
-![](Images/2023-05-05-15-37-58.png)
-
-## RecordedFuture-Sandbox_StorageAccount
-Type: Response\
-Included in Recorded Future Intelligence Solution: No\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](#connector-authorization) section. 
-
-Enables security and IT teams to submit files to Recorded Future's Malware Analysis Sandbox. The playbook will generate an Sentinel incident, and add a comment with a the following data from the analysis report:
-
-* Severity Score
-* signatures
-* A link to the complete Sandbox report 
-
-This playbook is for file Submission with a storage account.
-
-To set up automatic enrichment, map alerts to a [custom analytic rule](https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment).
-
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json)
-
-![](Images/2023-05-05-15-29-37.png)
 ---
 
 ## RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash
@@ -383,7 +330,8 @@ The Recorded Future Collective Insights aggregates data related to Sigma Rules a
 
 
 # DEPRECATED Playbooks
--Deprecated playbooks can be found in GitHub under the [Deprecated folder](./Deprecated/)
+-Deprecated playbooks can be found in GitHub in the [Deprecated folder](./Deprecated/)
+
 # Known Issues 
 ## Version 3.0
 Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
