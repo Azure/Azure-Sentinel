@@ -1,8 +1,6 @@
-# Recorded Future Intelligence for Microsoft Sentinel
 [<img alt="Recorded Future" src="RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
+# Recorded Future Intelligence for Microsoft Sentinel
 
-
-# Overview
 This guide provides instructions on how to install, update and configure Recorded Future Intelligence for Microsoft Sentinel.
 
 Recorded Future is the world's largest provider of intelligence for enterprise security. By seamlessly combining automated data collection, pervasive analytics, and expert human analysis, Recorded Future delivers timely, accurate, and actionable intelligence.
@@ -385,7 +383,7 @@ The Recorded Future Collective Insights aggregates data related to Sigma Rules a
 
 
 # DEPRECATED Playbooks
--
+-Deprecated playbooks can be found in GitHub under the [Deprecated folder](./Deprecated/)
 # Known Issues 
 ## Version 3.0
 Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
