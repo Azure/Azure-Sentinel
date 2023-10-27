@@ -8,11 +8,7 @@
   "parameters": {
     "location": {
       "type": "string",
-      "minLength": 1,
-      "defaultValue": "[resourceGroup().location]",
-      "metadata": {
-        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
-      }
+      "defaultValue": "[resourceGroup().location]"
     },
     "workspace-location": {
       "type": "string",
@@ -34,6 +30,59 @@
       "minLength": 1,
       "metadata": {
         "description": "Name for the workbook"
+      }
+    },
+    "resourceNamePrefix": {
+      "type": "string",
+      "defaultValue": "tanium-kql-",
+      "minLength": 3,
+      "maxLength": 24,
+      "metadata": {
+        "description": "Prefix to use when naming Azure resources that support the Tanium/KQL integration e.g. tanium-kql-"
+      }
+    },
+    "taniumServerHostName": {
+      "type": "string",
+      "metadata": {
+        "description": "The Tanium Server hostname e.g. company-api.cloud.tanium.com"
+      }
+    },
+    "taniumApiToken": {
+      "type": "securestring",
+      "minLength": 64,
+      "maxLength": 64,
+      "metadata": {
+        "description": "The Tanium Service account API Token to use for read-only API Gateway queries"
+      }
+    },
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the existing Log Analytics workspace that will receive Tanium endpoint data"
+      }
+    },
+    "workspaceResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource Group name of the existing Log Analytics workspace that will receive Tanium endpoint data."
+      }
+    },
+    "workspaceLocation": {
+      "type": "string",
+      "metadata": {
+        "description": "Location of the existing Log Analytics workspace that will receive Tanium endpoint data."
+      }
+    },
+    "integrationAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the integration account to use to execute inline JavaScript in the ingest-sensor-data logic app. (Must be in the same region as the logic app.)"
+      }
+    },
+    "integrationAccountResourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource Group name of the integration account to use to execute inline JavaScript in the ingest-sensor-data logic app. (Must be in the same region as the logic app.)"
       }
     }
   },
@@ -17277,6 +17326,1052 @@
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}-query-endpoint-data', parameters('resourceNamePrefix'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceNamePrefix": {
+            "value": "[parameters('resourceNamePrefix')]"
+          },
+          "taniumServerHostName": {
+            "value": "[parameters('taniumServerHostName')]"
+          },
+          "taniumApiToken": {
+            "value": "[parameters('taniumApiToken')]"
+          },
+          "workspaceName": {
+            "value": "[parameters('workspaceName')]"
+          },
+          "workspaceResourceGroup": {
+            "value": "[parameters('workspaceResourceGroup')]"
+          },
+          "workspaceLocation": {
+            "value": "[parameters('workspaceLocation')]"
+          },
+          "integrationAccountName": {
+            "value": "[parameters('integrationAccountName')]"
+          },
+          "integrationAccountResourceGroupName": {
+            "value": "[parameters('integrationAccountResourceGroupName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.22.6.54827",
+              "templateHash": "10549246187304417687"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "resourceNamePrefix": {
+              "type": "string"
+            },
+            "taniumServerHostName": {
+              "type": "string"
+            },
+            "integrationAccountName": {
+              "type": "string"
+            },
+            "integrationAccountResourceGroupName": {
+              "type": "string"
+            },
+            "workspaceName": {
+              "type": "string"
+            },
+            "workspaceResourceGroup": {
+              "type": "string"
+            },
+            "workspaceLocation": {
+              "type": "string"
+            },
+            "taniumApiToken": {
+              "type": "securestring"
+            }
+          },
+          "variables": {
+            "logAnalyticsWorkspaceConnectionName": "[format('{0}-log-analytics-connection', parameters('resourceNamePrefix'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[variables('logAnalyticsWorkspaceConnectionName')]",
+              "location": "[parameters('workspaceLocation')]",
+              "properties": {
+                "displayName": "[format('{0}-ingest-sensor-data Log Analytics connection', parameters('resourceNamePrefix'))]",
+                "parameterValues": {
+                  "username": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('workspaceResourceGroup')), 'Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2022-10-01').customerId]",
+                  "password": "[listKeys(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('workspaceResourceGroup')), 'Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2022-10-01').primarySharedKey]"
+                },
+                "api": {
+                  "name": "loganalyticsconnection",
+                  "displayName": "[format('{0}-ingest-sensor-data connection api displayName', parameters('resourceNamePrefix'))]",
+                  "iconUri": "https://connectoricons-prod.azureedge.net/releases/v1.0.1549/1.0.1549.2680/azureloganalyticsdatacollector/icon.png",
+                  "brandColor": "#0072C6",
+                  "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspaceLocation'), 'azureloganalyticsdatacollector')]",
+                  "type": "Microsoft.Web/locations/managedApis"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[format('{0}-tanium-api-gateway-proxy--query-only', parameters('resourceNamePrefix'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/schemas/2016-06-01/Microsoft.Logic.json",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "TANIUM_SERVER_HOSTNAME": {
+                      "type": "String"
+                    },
+                    "TANIUM_API_TOKEN": {
+                      "type": "SecureString"
+                    }
+                  },
+                  "triggers": {
+                    "manual": {
+                      "type": "Request",
+                      "kind": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "schema": {
+                          "properties": {
+                            "query": {
+                              "type": "string"
+                            },
+                            "variables": {
+                              "type": "object"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Check_for_well_known_queries": {
+                      "runAfter": {
+                        "Check_query_origin": [
+                          "Succeeded"
+                        ]
+                      },
+                      "cases": {
+                        "endpoint_data": {
+                          "case": "query($limit: Int, $after: Cursor, $refresh: Cursor, $source: EndpointSource, $endpointsFilter: EndpointFieldFilter, $sensorReadings:[EndpointSensorRef!]!) { endpoints( after: $after first: $limit refresh: $refresh source: $source filter: $endpointsFilter ) { totalRecords pageInfo { hasNextPage endCursor } collectionInfo { startCursor success expectedTotal contributedTotal respondedTotal respondedPercentage } edges { node { id name ipAddress sensorReadings( sensors: $sensorReadings ) { columns { sensor { name params { name value } } name values } } } } } }",
+                          "actions": {
+                            "Reject_pagination_from_the_preview_app": {
+                              "actions": {
+                                "403_-_Pagination_from_preview_app_not_allowed": {
+                                  "runAfter": {},
+                                  "type": "Response",
+                                  "kind": "Http",
+                                  "inputs": {
+                                    "body": "Forbidden",
+                                    "statusCode": 403
+                                  }
+                                },
+                                "Terminate_-_pagination_from_preview_app_not_allowed": {
+                                  "runAfter": {
+                                    "403_-_Pagination_from_preview_app_not_allowed": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "Terminate",
+                                  "inputs": {
+                                    "runError": {
+                                      "message": "Pagination attempt from preview app"
+                                    },
+                                    "runStatus": "Failed"
+                                  }
+                                }
+                              },
+                              "runAfter": {},
+                              "expression": {
+                                "and": [
+                                  {
+                                    "or": [
+                                      {
+                                        "equals": [
+                                          "@triggerOutputs()['headers']?['sec-fetch-site']",
+                                          "same-site"
+                                        ]
+                                      },
+                                      {
+                                        "equals": [
+                                          "@triggerOutputs()['headers']?['sec-fetch-site']",
+                                          "same-origin"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "or": [
+                                      {
+                                        "not": {
+                                          "equals": [
+                                            "@triggerBody()?['variables']?['after']",
+                                            "@null"
+                                          ]
+                                        }
+                                      },
+                                      {
+                                        "not": {
+                                          "equals": [
+                                            "@triggerBody()?['variables']?['limit']",
+                                            "@null"
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              "type": "If"
+                            }
+                          }
+                        },
+                        "groups": {
+                          "case": "query($cursor:Cursor) { computerGroups(filter: {filterEnabled: true}, after: $cursor, first: 500) { pageInfo { hasNextPage endCursor } totalRecords edges { node { id name filterEnabled type expression } } } }",
+                          "actions": {}
+                        },
+                        "ping": {
+                          "case": "query { now }",
+                          "actions": {}
+                        },
+                        "sensor": {
+                          "case": "query($sensorName:String!) { sensors(filter:{path:\"name\", op:EQ, value:$sensorName}) { edges { node { name description virtual harvested parameters { name defaultValue } columns { name hidden } parameterizations { values { name value } harvested } category  } } } }",
+                          "actions": {}
+                        },
+                        "sensors": {
+                          "case": "query($cursor: Cursor) { sensors(after: $cursor) { pageInfo { endCursor hasNextPage } totalRecords edges { node { name } } } }",
+                          "actions": {}
+                        }
+                      },
+                      "default": {
+                        "actions": {
+                          "403_Forbidden_-_not_a_well_known_query": {
+                            "runAfter": {},
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                              "body": "Forbidden",
+                              "statusCode": 403
+                            }
+                          },
+                          "Terminate": {
+                            "runAfter": {
+                              "403_Forbidden_-_not_a_well_known_query": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                              "runError": {
+                                "message": "Unauthorized query"
+                              },
+                              "runStatus": "Failed"
+                            }
+                          }
+                        }
+                      },
+                      "expression": "@triggerBody()['query']",
+                      "type": "Switch"
+                    },
+                    "Check_query_origin": {
+                      "actions": {
+                        "Return_403_Forbidden": {
+                          "runAfter": {},
+                          "type": "Response",
+                          "kind": "Http",
+                          "inputs": {
+                            "body": "Forbidden",
+                            "statusCode": 403
+                          }
+                        },
+                        "Terminate_due_to_invalid_origin": {
+                          "runAfter": {
+                            "Return_403_Forbidden": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Terminate",
+                          "inputs": {
+                            "runStatus": "Failed"
+                          }
+                        }
+                      },
+                      "runAfter": {},
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@triggerOutputs()['headers']?['sec-fetch-site']",
+                                "same-site"
+                              ]
+                            }
+                          },
+                          {
+                            "not": {
+                              "equals": [
+                                "@triggerOutputs()['headers']?['sec-fetch-site']",
+                                "same-origin"
+                              ]
+                            }
+                          },
+                          {
+                            "not": {
+                              "equals": [
+                                "@triggerOutputs()['headers']?['x-ms-workflow-subscription-id']",
+                                "[subscription().subscriptionId]"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "HTTP_POST_TO_API_Gateway": {
+                      "runAfter": {
+                        "Check_for_well_known_queries": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "body": "@triggerBody()",
+                        "headers": {
+                          "Content-Type": "application/json",
+                          "session": "@{parameters('TANIUM_API_TOKEN')}"
+                        },
+                        "method": "POST",
+                        "uri": "https://@{parameters('TANIUM_SERVER_HOSTNAME')}/plugin/products/gateway/graphql"
+                      },
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "inputs"
+                          ]
+                        }
+                      }
+                    },
+                    "Response": {
+                      "runAfter": {
+                        "HTTP_POST_TO_API_Gateway": [
+                          "Succeeded",
+                          "Failed"
+                        ]
+                      },
+                      "type": "Response",
+                      "kind": "Http",
+                      "inputs": {
+                        "body": "@body('HTTP_POST_to_API_Gateway')",
+                        "headers": "@outputs('HTTP_POST_to_API_Gateway')['headers']",
+                        "statusCode": "@outputs('HTTP_POST_to_API_Gateway')['statusCode']"
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "TANIUM_API_TOKEN": {
+                    "value": "[parameters('taniumApiToken')]"
+                  },
+                  "TANIUM_SERVER_HOSTNAME": {
+                    "value": "[parameters('taniumServerHostName')]"
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[format('{0}-ingest-tanium-sensor-data', parameters('resourceNamePrefix'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "state": "Enabled",
+                "integrationAccount": {
+                  "id": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('integrationAccountResourceGroupName')), 'Microsoft.Logic/integrationAccounts', parameters('integrationAccountName'))]"
+                },
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "defaultValue": {},
+                      "type": "Object"
+                    },
+                    "API_GATEWAY_PROXY_URL": {
+                      "type": "string"
+                    }
+                  },
+                  "triggers": {
+                    "manual": {
+                      "type": "Request",
+                      "kind": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "schema": {
+                          "properties": {
+                            "query": {
+                              "type": "string"
+                            },
+                            "variables": {
+                              "type": "object"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Check_initial_API_Gateway_query": {
+                      "actions": {
+                        "Respond_with_job_details": {
+                          "runAfter": {},
+                          "type": "Response",
+                          "kind": "Http",
+                          "inputs": {
+                            "body": {
+                              "query": "@triggerBody()?['query']",
+                              "status": "ingest started",
+                              "variables": "@triggerBody()?['variables']"
+                            },
+                            "statusCode": 200
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "HTTP_POST_to_API_Gateway": [
+                          "Failed",
+                          "Skipped",
+                          "TimedOut",
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Failed_to_query_api_gateway": {
+                            "runAfter": {
+                              "Return_API_Gateway_error": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                              "runStatus": "Failed"
+                            }
+                          },
+                          "Return_API_Gateway_error": {
+                            "runAfter": {},
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                              "body": "@body('HTTP_POST_to_API_Gateway')",
+                              "statusCode": "@outputs('HTTP_POST_to_API_Gateway')['statusCode']"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@outputs('HTTP_POST_to_API_Gateway')['statusCode']",
+                              200
+                            ]
+                          },
+                          {
+                            "not": {
+                              "equals": [
+                                "@body('HTTP_POST_to_API_Gateway')?['data']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "Check_query_origin": {
+                      "actions": {
+                        "Return_403_Forbidden": {
+                          "runAfter": {},
+                          "type": "Response",
+                          "kind": "Http",
+                          "inputs": {
+                            "body": "Forbidden",
+                            "statusCode": 403
+                          }
+                        },
+                        "Terminate_due_to_invalid_origin": {
+                          "runAfter": {
+                            "Return_403_Forbidden": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Terminate",
+                          "inputs": {
+                            "runStatus": "Failed"
+                          }
+                        }
+                      },
+                      "runAfter": {},
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@triggerOutputs()['headers']?['sec-fetch-site']",
+                                "same-site"
+                              ]
+                            }
+                          },
+                          {
+                            "not": {
+                              "equals": [
+                                "@triggerOutputs()['headers']?['sec-fetch-site']",
+                                "same-origin"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "HTTP_POST_to_API_Gateway": {
+                      "runAfter": {
+                        "Check_query_origin": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "body": "@triggerBody()",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "method": "POST",
+                        "uri": "@{parameters('API_GATEWAY_PROXY_URL')}"
+                      }
+                    },
+                    "Ingest_endpoint_data": {
+                      "runAfter": {
+                        "Transpose_endpoint_data": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": "@{body('Transpose_endpoint_data')}",
+                        "headers": {
+                          "Log-Type": "TaniumEndpointData"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/api/logs"
+                      }
+                    },
+                    "Initialize_endpoints": {
+                      "runAfter": {
+                        "Initialize_has_next_page": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "endpoints",
+                            "type": "array",
+                            "value": "@body('HTTP_POST_to_API_Gateway')?['data']?['endpoints']?['edges']"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_has_next_page": {
+                      "runAfter": {
+                        "Initialize_pagination_cursor": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "has_next_page",
+                            "type": "boolean",
+                            "value": "@body('HTTP_POST_to_API_Gateway')?['data']?['endpoints']?['pageInfo']?['hasNextPage']"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_pagination_cursor": {
+                      "runAfter": {
+                        "Initialize_refresh_cursor": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "pagination_cursor",
+                            "type": "string",
+                            "value": "@{body('HTTP_POST_to_API_Gateway')?['data']?['endpoints']?['pageInfo']?['endCursor']}"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_refresh_cursor": {
+                      "runAfter": {
+                        "Check_initial_API_Gateway_query": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "refresh_cursor",
+                            "type": "string",
+                            "value": "@{body('HTTP_POST_to_API_Gateway')?['data']?['endpoints']?['collectionInfo']?['startCursor']}"
+                          }
+                        ]
+                      }
+                    },
+                    "Paginate_if_needed": {
+                      "actions": {
+                        "Until_there_are_no_more_pages": {
+                          "actions": {
+                            "Ingest_Paginated_Endpoint_Data": {
+                              "runAfter": {
+                                "Transpose_paginated_endpoint_data": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "ApiConnection",
+                              "inputs": {
+                                "body": "@{body('Transpose_paginated_endpoint_data')}",
+                                "headers": {
+                                  "Log-Type": "TaniumEndpointData"
+                                },
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                              }
+                            },
+                            "Request_next_page_of_endpoint_data": {
+                              "runAfter": {},
+                              "type": "Http",
+                              "inputs": {
+                                "body": {
+                                  "query": "@triggerBody()?['query']",
+                                  "variables": "@removeProperty(addProperty(triggerBody()?['variables'], 'after', variables('pagination_cursor')), 'refresh')"
+                                },
+                                "headers": {
+                                  "Content-Type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "@{parameters('API_GATEWAY_PROXY_URL')}"
+                              }
+                            },
+                            "Transpose_paginated_endpoint_data": {
+                              "runAfter": {
+                                "Update_pagination_cursor_during_pagination": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "JavaScriptCode",
+                              "inputs": {
+                                "code": "let body=workflowContext.actions.Request_next_page_of_endpoint_data.outputs.body,edges=body.data.endpoints.edges,qsd=edges[0].node.sensorReadings.columns.map(e=>e.sensor.name),qs=[...new Set(qsd)],endpoints=edges.map(e=>e.node),transposed=[];return endpoints.forEach(e=>{let t={ip:e.ipAddress,name:e.name,id:e.id};qs.map(n=>{let s=e.sensorReadings.columns.filter(e=>e.sensor.name===n),i=s[0].sensor.params.map(e=>{let t={};return t[e.name]=e.value,t}),o=s.map(function(e){let t=e.values.map(function(t){let n={};return n[e.name]=t,n});return t}),a=o.shift(),r=o.reduce((e,t)=>e.map((e,n)=>Object.assign(e,t[n])),a);r.forEach(e=>{transposed.push({name:t.name,ipAddress:t.ip,endpoint_id:t.id,sensor_name:n,sensor_params:i,sensor_values:[e]})})})}),transposed",
+                                "explicitDependencies": {
+                                  "actions": [
+                                    "Request_next_page_of_endpoint_data"
+                                  ]
+                                }
+                              }
+                            },
+                            "Update_has_next_page_during_pagination": {
+                              "runAfter": {
+                                "Request_next_page_of_endpoint_data": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "has_next_page",
+                                "value": "@body('Request_next_page_of_endpoint_data')?['data']?['endpoints']?['pageInfo']?['hasNextPage']"
+                              }
+                            },
+                            "Update_pagination_cursor_during_pagination": {
+                              "runAfter": {
+                                "Update_has_next_page_during_pagination": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "pagination_cursor",
+                                "value": "@{body('Request_next_page_of_endpoint_data')?['data']?['endpoints']?['pageInfo']?['endCursor']}"
+                              }
+                            }
+                          },
+                          "runAfter": {},
+                          "expression": "@equals(variables('has_next_page'), false)",
+                          "limit": {
+                            "count": 60,
+                            "timeout": "PT1H"
+                          },
+                          "type": "Until"
+                        }
+                      },
+                      "runAfter": {
+                        "Ingest_endpoint_data": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@variables('has_next_page')",
+                              "@true"
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "Refresh_if_needed": {
+                      "actions": {
+                        "Until_collection_is_refreshed": {
+                          "actions": {
+                            "Delay": {
+                              "runAfter": {},
+                              "type": "Wait",
+                              "inputs": {
+                                "interval": {
+                                  "count": 60,
+                                  "unit": "Second"
+                                }
+                              }
+                            },
+                            "HTTP_Refresh_Collection": {
+                              "runAfter": {
+                                "Delay": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Http",
+                              "inputs": {
+                                "body": {
+                                  "query": "@triggerBody()?['query']",
+                                  "variables": "@setProperty(triggerBody()?['variables'], 'refresh', variables('refresh_cursor'))"
+                                },
+                                "headers": {
+                                  "Content-Type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "@{parameters('API_GATEWAY_PROXY_URL')}"
+                              }
+                            },
+                            "Update_endpoints_during_refresh": {
+                              "runAfter": {
+                                "Update_has_next_page_during_refresh": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "endpoints",
+                                "value": "@body('HTTP_Refresh_Collection')?['data']?['endpoints']?['edges']"
+                              }
+                            },
+                            "Update_has_next_page_during_refresh": {
+                              "runAfter": {
+                                "Update_pagination_cursor_during_refresh": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "has_next_page",
+                                "value": "@body('HTTP_Refresh_Collection')?['data']?['endpoints']?['pageInfo']?['hasNextPage']"
+                              }
+                            },
+                            "Update_pagination_cursor_during_refresh": {
+                              "runAfter": {
+                                "Update_refresh_cursor": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "pagination_cursor",
+                                "value": "@{body('HTTP_Refresh_Collection')?['data']?['endpoints']?['pageInfo']?['endCursor']}"
+                              }
+                            },
+                            "Update_refresh_cursor": {
+                              "runAfter": {
+                                "HTTP_Refresh_Collection": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "refresh_cursor",
+                                "value": "@{body('HTTP_Refresh_Collection')?['data']?['endpoints']?['collectionInfo']?['startCursor']}"
+                              }
+                            }
+                          },
+                          "runAfter": {},
+                          "expression": "@greater(body('HTTP_Refresh_Collection')?['data']?['endpoints']?['collectionInfo']?['respondedPercentage'], 0.95)",
+                          "limit": {
+                            "count": 5,
+                            "timeout": "PT10M"
+                          },
+                          "type": "Until"
+                        }
+                      },
+                      "runAfter": {
+                        "Initialize_endpoints": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@triggerBody()?['variables']?['source']?['ts']",
+                                "@null"
+                              ]
+                            }
+                          },
+                          {
+                            "or": [
+                              {
+                                "less": [
+                                  "@body('HTTP_POST_to_API_Gateway')?['data']?['endpoints']?['collectionInfo']?['respondedPercentage']",
+                                  "[json('0.95')]"
+                                ]
+                              },
+                              {
+                                "equals": [
+                                  "@length(body('HTTP_POST_to_API_Gateway')?['data']?['endpoints']?['edges'])",
+                                  0
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "Transpose_endpoint_data": {
+                      "runAfter": {
+                        "Refresh_if_needed": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "JavaScriptCode",
+                      "inputs": {
+                        "code": "let hrc=workflowContext.actions.HTTP_Refresh_Collection.outputs,api=workflowContext.actions.HTTP_POST_to_API_Gateway.outputs,body=hrc?hrc.body:api.body,edges=body.data.endpoints.edges,qsd=edges[0].node.sensorReadings.columns.map(e=>e.sensor.name),qs=[...new Set(qsd)],endpoints=edges.map(e=>e.node),transposed=[];return endpoints.forEach(e=>{let t={ip:e.ipAddress,name:e.name,id:e.id};qs.map(n=>{let s=e.sensorReadings.columns.filter(e=>e.sensor.name===n),i=s[0].sensor.params.map(e=>{let t={};return t[e.name]=e.value,t}),o=s.map(function(e){let t=e.values.map(function(t){let n={};return n[e.name]=t,n});return t}),a=o.shift(),r=o.reduce((e,t)=>e.map((e,n)=>Object.assign(e,t[n])),a);r.forEach(e=>{transposed.push({name:t.name,ipAddress:t.ip,endpoint_id:t.id,sensor_name:n,sensor_params:i,sensor_values:[e]})})})}),transposed",
+                        "explicitDependencies": {
+                          "actions": [
+                            "HTTP_Refresh_Collection",
+                            "HTTP_POST_to_API_Gateway"
+                          ]
+                        }
+                      },
+                      "description": "minified to stay under 1024 character limit"
+                    }
+                  },
+                  "outputs": {}
+                },
+                "parameters": {
+                  "API_GATEWAY_PROXY_URL": {
+                    "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', format('{0}-tanium-api-gateway-proxy--query-only', parameters('resourceNamePrefix')), 'manual'), '2019-05-01').value]"
+                  },
+                  "$connections": {
+                    "value": {
+                      "azureloganalyticsdatacollector": {
+                        "connectionId": "[resourceId('Microsoft.Web/connections', variables('logAnalyticsWorkspaceConnectionName'))]",
+                        "connectionName": "[variables('logAnalyticsWorkspaceConnectionName')]",
+                        "id": "[reference(resourceId('Microsoft.Web/connections', variables('logAnalyticsWorkspaceConnectionName')), '2016-06-01').api.id]"
+                      }
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('logAnalyticsWorkspaceConnectionName'))]",
+                "[resourceId('Microsoft.Logic/workflows', format('{0}-tanium-api-gateway-proxy--query-only', parameters('resourceNamePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "[format('{0}-preview-sensor-data', parameters('resourceNamePrefix'))]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "resourceNamePrefix": {
+                    "value": "[parameters('resourceNamePrefix')]"
+                  },
+                  "taniumApiGatewayProxyUrl": {
+                    "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', format('{0}-tanium-api-gateway-proxy--query-only', parameters('resourceNamePrefix')), 'manual'), '2019-05-01').value]"
+                  },
+                  "ingestUrl": {
+                    "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', format('{0}-ingest-tanium-sensor-data', parameters('resourceNamePrefix')), 'manual'), '2019-05-01').value]"
+                  },
+                  "taniumServerHostName": {
+                    "value": "[parameters('taniumServerHostName')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.22.6.54827",
+                      "templateHash": "9679555107252956886"
+                    }
+                  },
+                  "parameters": {
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "resourceNamePrefix": {
+                      "type": "string"
+                    },
+                    "taniumApiGatewayProxyUrl": {
+                      "type": "string"
+                    },
+                    "ingestUrl": {
+                      "type": "string"
+                    },
+                    "taniumServerHostName": {
+                      "type": "string"
+                    },
+                    "cacheTimestamp": {
+                      "type": "string",
+                      "defaultValue": "[utcNow()]"
+                    }
+                  },
+                  "variables": {
+                    "appTemplate": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Sentinel Realtime: Powered by Tanium</title>\n    <link\n      rel=\"icon\"\n      href=\"data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22>\n      <text y=%22.9em%22 font-size=%2290%22>\n        📦\n      </text>\n    </svg>\"\n    />\n\n    <script>\n      let taniumApiGatewayProxyUrl = \"${apiGatewayProxyUrl}\";\n      let ingestUrl = \"${ingestUrl}\";\n      let taniumServerHostName = \"${taniumServerHostName}\";\n      let appVersion = \"0.9.52\";\n    </script>\n\n    <script\n      type=\"module\"\n      crossorigin\n      src=\"${jsURI}\"\n      crossorigin=\"anonymous\"\n    ></script>\n    <link\n      rel=\"stylesheet\"\n      href=\"${cssURI}\"\n    />\n  </head>\n\n  <body class=\"bg-gray-50 dark:bg-gray-900\">\n    <div id=\"app\"></div>\n  </body>\n</html>\n",
+                    "templateParams": {
+                      "apiGatewayProxyUrl": "[parameters('taniumApiGatewayProxyUrl')]",
+                      "ingestUrl": "[parameters('ingestUrl')]",
+                      "taniumServerHostName": "[parameters('taniumServerHostName')]",
+                      "cacheTimestamp": "[parameters('cacheTimestamp')]",
+                      "jsURI": "https://content.tanium.com/files/published/sentinel-realtime/index-a383dad4.js",
+                      "cssURI": "https://content.tanium.com/files/published/sentinel-realtime/index-00ef5d97.css"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Logic/workflows",
+                      "apiVersion": "2019-05-01",
+                      "name": "[format('{0}-preview-sensor-data', parameters('resourceNamePrefix'))]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "state": "Enabled",
+                        "definition": {
+                          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                          "contentVersion": "1.0.0.0",
+                          "parameters": {
+                            "API_GATEWAY_PROXY_URL": {
+                              "type": "String"
+                            },
+                            "INGEST_URL": {
+                              "type": "String"
+                            }
+                          },
+                          "triggers": {
+                            "manual": {
+                              "type": "Request",
+                              "kind": "Http",
+                              "inputs": {
+                                "method": "GET",
+                                "schema": {}
+                              }
+                            }
+                          },
+                          "actions": {
+                            "Response": {
+                              "runAfter": {},
+                              "type": "Response",
+                              "kind": "Http",
+                              "inputs": {
+                                "headers": {
+                                  "Content-Type": "text/html; charset=utf-8"
+                                },
+                                "statusCode": 200,
+                                "body": "[reduce(items(variables('templateParams')), createObject('value', variables('appTemplate')), lambda('curr', 'next', createObject('value', replace(lambdaVariables('curr').value, format('${{{0}}}', lambdaVariables('next').key), lambdaVariables('next').value)))).value]"
+                              }
+                            }
+                          },
+                          "outputs": {}
+                        },
+                        "parameters": {
+                          "API_GATEWAY_PROXY_URL": {
+                            "value": "[parameters('taniumApiGatewayProxyUrl')]"
+                          },
+                          "INGEST_URL": {
+                            "value": "[parameters('ingestUrl')]"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', format('{0}-ingest-tanium-sensor-data', parameters('resourceNamePrefix')))]",
+                "[resourceId('Microsoft.Logic/workflows', format('{0}-tanium-api-gateway-proxy--query-only', parameters('resourceNamePrefix')))]"
+              ]
+            }
+          ]
+        }
+      }
     }
   ],
   "outputs": {}
