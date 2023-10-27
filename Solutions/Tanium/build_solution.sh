@@ -46,10 +46,10 @@ build_solution() {
   _msg ""
   _msg "e.g. Enter solution data file path : ./Solutions/Tanium/Data"
   _msg ""
-  _msg "---"
   _msg "NOTE: Property: \"id\" must use one of the following expressions for an resourceId property is an IGNORABLE error"
   _msg "Citation: https://github.com/Azure/Azure-Sentinel/tree/e92286da7d185c99c6d30c2cb8c86bbeca1a99ba/Tools/Create-Azure-Sentinel-Solution/V3#arm-ttk-failue-for-contentproductid-id-issues"
   _msg ""
+  _msg "When the build is complete you must run the add_sentinel_realtime.sh script to add Sentinel Realtime to the package"
 }
 
 move_tanium_package_directory_to_temporary_location() {
