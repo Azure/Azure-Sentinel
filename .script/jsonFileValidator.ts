@@ -4,8 +4,30 @@ import fs from "fs";
 import * as logger from "./utils/logger";
 
 export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
-  JSON.parse(fs.readFileSync(filePath, "utf8"));
-  return ExitCode.SUCCESS;
+
+  if (filePath.includes("mainTemplate.json")) {
+    // FOR MAINTEMPLATE CONTAINING WORKBOOKS SERIALIZEDDATA
+    let fileContent = fs.readFileSync(filePath, "utf8");
+    
+    if (fileContent.includes('serializedData')) {
+      let mainTemplateJsonObj = JSON.parse(fileContent);
+
+      mainTemplateJsonObj.filter((obj: { type: string; name: string | string[]; properties: { mainTemplate: { resources: any[]; }; }; }) => {
+        if ((obj.type == "Microsoft.Resources/templateSpecs/versions" || obj.type == "Microsoft.OperationalInsights/workspaces/providers/contentTemplates") && obj.name.includes("workbook")) {
+          obj.properties.mainTemplate.resources.filter((workbookObj: { type: string; properties: { serializedData: any; }; }) => {
+            if (workbookObj.type == "Microsoft.Insights/workbooks") {
+              JSON.parse(workbookObj.properties.serializedData);
+            }
+          });
+        }
+      });
+    }
+
+    return ExitCode.SUCCESS;
+  } else {
+    JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return ExitCode.SUCCESS;
+  }
 }
 
 let fileTypeSuffixes = ["json"];
