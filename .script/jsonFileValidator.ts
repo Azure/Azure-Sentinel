@@ -17,13 +17,11 @@ export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
           obj.properties.mainTemplate.resources.filter((workbookObj: { type: string; properties: {
             displayName: string; serializedData: any; }; }) => {
             if (workbookObj.type == "Microsoft.Insights/workbooks") {
-              try
-              {
+              try {
                 JSON.parse(workbookObj.properties.serializedData);
               }
-              catch
-              {
-                console.log(`Invalid json content for Workbook, 'serializedData' attribute for 'displayName' ${workbookObj.properties.displayName}`);
+              catch {
+                throw Error(`In mainTemplate.json file, workbook with 'displayName'='${workbookObj.properties.displayName}' has invalid json string value for 'serializedData' attribute!`);
               }
             }
           });
