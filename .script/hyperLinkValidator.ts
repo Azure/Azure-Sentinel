@@ -19,6 +19,41 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             return ExitCode.SUCCESS;
         }
 
+        const content = fs.readFileSync(filePath, "utf8");
+        if (filePath.includes("azuredeploy"))
+        {
+            // DATA CONNECTORS FOLDER WILL CONTAIN "azuredeploy" WHICH CONTAINS "WEBSITE_RUN_FROM_PACKAGE" ATTRIBUTE AND ITS VALUE/LINK SHOULD BE VALIDATED
+            let jsonObj = JSON.parse(content);
+
+            jsonObj.resources.filter(async (resourcesProp: { type: string; resources: any[]; }) => {
+                if (resourcesProp.type == "Microsoft.Web/sites") {
+                    resourcesProp.resources.filter(async configProp => {
+                        if (configProp.type == "config") {
+                            if (configProp.properties.WEBSITE_RUN_FROM_PACKAGE == null)
+                            {
+                                let errorMessage = `Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE'`
+                                throw new Error(errorMessage);
+                            }
+                            else
+                            {
+                                let websiteRunFromPackageUrl = configProp.properties.WEBSITE_RUN_FROM_PACKAGE;
+                                console.log(websiteRunFromPackageUrl);
+                                const isShortLinkValid = await isValidLink(websiteRunFromPackageUrl);
+    
+                                if (!isShortLinkValid) {
+                                    let errorMessage = `File '${filePath}' has broken hyperlink for attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the following hyperlink: \n ${websiteRunFromPackageUrl}`
+                                    throw new Error(errorMessage);
+                                }
+                            }
+                        }
+                    })
+                }
+            });
+
+            console.log(`Skipping Hyperlink validation for file path : '${filePath}'`);
+            return ExitCode.SUCCESS;
+        }
+
         //IGNORE BELOW FILES
         let exclusionList = ["host.json", "proxies.json", "function.json", "azuredeploy", "system_generated_metadata.json", "parameters.json"]
         
@@ -29,7 +64,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             return ExitCode.SUCCESS;
         }
 
-        const content = fs.readFileSync(filePath, "utf8");
         const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
         if (links) 
         {
