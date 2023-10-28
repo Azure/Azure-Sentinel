@@ -28,12 +28,10 @@ export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
         }
       });
     }
-
-    return ExitCode.SUCCESS;
-  } else {
-    JSON.parse(fs.readFileSync(filePath, "utf8"));
-    return ExitCode.SUCCESS;
   }
+  
+  JSON.parse(fs.readFileSync(filePath, "utf8"));
+  return ExitCode.SUCCESS;
 }
 
 let fileTypeSuffixes = ["json"];
