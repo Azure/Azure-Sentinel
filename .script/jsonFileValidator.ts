@@ -12,7 +12,7 @@ export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
     if (fileContent.includes('serializedData')) {
       let mainTemplateJsonObj = JSON.parse(fileContent);
 
-      mainTemplateJsonObj.filter((obj: { type: string; name: string | string[]; properties: { mainTemplate: { resources: any[]; }; }; }) => {
+      mainTemplateJsonObj.resources.filter((obj: { type: string; name: string | string[]; properties: { mainTemplate: { resources: any[]; }; }; }) => {
         if ((obj.type == "Microsoft.Resources/templateSpecs/versions" || obj.type == "Microsoft.OperationalInsights/workspaces/providers/contentTemplates") && obj.name.includes("workbook")) {
           obj.properties.mainTemplate.resources.filter((workbookObj: { type: string; properties: { serializedData: any; }; }) => {
             if (workbookObj.type == "Microsoft.Insights/workbooks") {
