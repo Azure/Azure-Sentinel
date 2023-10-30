@@ -25,25 +25,23 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             // DATA CONNECTORS FOLDER WILL CONTAIN "azuredeploy" WHICH CONTAINS "WEBSITE_RUN_FROM_PACKAGE" ATTRIBUTE AND ITS VALUE/LINK SHOULD BE VALIDATED
             let jsonObj = JSON.parse(content);
 
-            jsonObj.resources.filter(async (resourcesProp: { type: string; resources: any[]; }) => {
+            jsonObj.resources.filter((resourcesProp: { type: string; resources: any[]; }) => {
                 if (resourcesProp.type == "Microsoft.Web/sites") {
-                    resourcesProp.resources.filter(async configProp => {
+                    resourcesProp.resources.filter(configProp => {
                         if (configProp.type == "config") {
                             console.log('inside of config');
                             if (configProp.properties.WEBSITE_RUN_FROM_PACKAGE == null)
                             {
-                                let errorMessage = `Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please add it with a valid hyperlink!`
-                                throw new Error(errorMessage);
+                                throw new Error(`Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please add it with a valid hyperlink!`);
                             }
                             else
                             {
                                 let websiteRunFromPackageUrl = configProp.properties.WEBSITE_RUN_FROM_PACKAGE;
-                                const isShortLinkValid = await isValidLink(websiteRunFromPackageUrl);
+                                const isShortLinkValid = isValidLink(websiteRunFromPackageUrl);
                                 console.log(`websiteRunFromPackageUrl ${websiteRunFromPackageUrl}, isShortLinkValid ${isShortLinkValid}`);
                                 if (!isShortLinkValid) {
                                     console.log('inside of false condition');
-                                    let errorMessage = `Data connector file '${filePath}' has broken hyperlink for attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: \n ${websiteRunFromPackageUrl}`
-                                    throw new Error(errorMessage);
+                                    throw new Error(`Data connector file '${filePath}' has broken hyperlink for attribute  'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: ${websiteRunFromPackageUrl}`);
                                 }
                             }
                         }
