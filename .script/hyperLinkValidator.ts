@@ -44,6 +44,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 throw new Error(`Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE' and/or its value is empty. Please add 'WEBSITE_RUN_FROM_PACKAGE' attribute with valid hyperlink!`);
             } else {
                 const isValidWebSiteRunFromPackage = await isValidLink(websiteRunFromPackageUrl[0]);
+                console.log('isValidWebSiteRunFromPackage ' + isValidWebSiteRunFromPackage);
                 if (!isValidWebSiteRunFromPackage) {
                     throw new Error(`Data connector file '${filePath}' has broken hyperlink for attribute  'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: ${websiteRunFromPackageUrl}`);
                 }
