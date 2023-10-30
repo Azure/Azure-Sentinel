@@ -116,7 +116,7 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Corelight;
   }
-  else if (dataTypes[0].name.includes("AzureActiveDirectory"))
+  else if (dataTypes[0].name.includes("SigninLogs"))
   {
     return ConnectorCategory.AzureActiveDirectory;
   }
