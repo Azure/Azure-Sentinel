@@ -39,7 +39,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 }
             });
 
-            let websiteRunFromPackageUrl = resourcesConfigObj.filter(x => x!= null);
+            let websiteRunFromPackageUrl = resourcesConfigObj.filter((x: null) => x!= null);
             if (websiteRunFromPackageUrl[0] == undefined) {
                 throw new Error(`Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE' and/or its value is empty. Please add 'WEBSITE_RUN_FROM_PACKAGE' attribute with valid hyperlink!`);
             } else {
@@ -100,7 +100,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         const changedFiles = await pr.diff();
                         const imageIndex = link.lastIndexOf('/');
                         const imageName = link.substring(imageIndex + 1);                        
-                        const searchedFiles = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
+                        const searchedFiles = changedFiles.map((change: { path: any; }) => change.path).filter((changedFilePath: string | any[]) => changedFilePath.indexOf(imageName) > 0);
                         var searchedFilesLength = searchedFiles.length;
                         if (searchedFilesLength <= 0)
                         {
