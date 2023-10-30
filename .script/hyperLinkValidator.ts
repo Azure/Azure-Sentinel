@@ -31,17 +31,16 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         if (configProp.type == "config") {
                             if (configProp.properties.WEBSITE_RUN_FROM_PACKAGE == null)
                             {
-                                let errorMessage = `Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE'`
+                                let errorMessage = `Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please add it with a valid hyperlink!`
                                 throw new Error(errorMessage);
                             }
                             else
                             {
                                 let websiteRunFromPackageUrl = configProp.properties.WEBSITE_RUN_FROM_PACKAGE;
-                                console.log(websiteRunFromPackageUrl);
                                 const isShortLinkValid = await isValidLink(websiteRunFromPackageUrl);
     
                                 if (!isShortLinkValid) {
-                                    let errorMessage = `File '${filePath}' has broken hyperlink for attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the following hyperlink: \n ${websiteRunFromPackageUrl}`
+                                    let errorMessage = `Data connector file '${filePath}' has broken hyperlink for attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: \n ${websiteRunFromPackageUrl}`
                                     throw new Error(errorMessage);
                                 }
                             }
