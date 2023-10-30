@@ -205,5 +205,5 @@ export enum ConnectorCategory {
   CorelightConnectorExporter="CorelightConnectorExporter",
   AwsS3="AwsS3",
   AWS="AWS",
-  AzureActiveDirectory="AzureActiveDirectory"
+  AzureActiveDirectory="AzureActiveDirectory",
 }
