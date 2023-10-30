@@ -44,13 +44,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 throw new Error(`Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE' and/or its value is empty. Please add 'WEBSITE_RUN_FROM_PACKAGE' attribute with valid hyperlink!`);
             } else {
                 const isValidWebSiteRunFromPackage = await isValidLink(websiteRunFromPackageUrl[0]);
-                console.log('isValidWebSiteRunFromPackage ' + isValidWebSiteRunFromPackage);
                 if (!isValidWebSiteRunFromPackage) {
                     throw new Error(`Data connector file '${filePath}' has broken hyperlink for attribute  'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: ${websiteRunFromPackageUrl}`);
                 }
             }
 
-            console.log(`Skipping hyperlink validation for data connector file ${filePath}`);
+            console.log(`Skipping hyperlink validation for data connector azuredeploy file ${filePath}`);
             return ExitCode.SUCCESS;
         }
 
@@ -148,10 +147,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             request.ontimeout = function () { return false; }
             request.send();
 
-            if (link == "https://aka.ms/sentinel-AliCloudAPI-functionapp1234") 
-            {
-                console.log(`Link: ${link}, Status ${request.status}`);
-            }
             if (request.status == 404)
             {
                 return false;
@@ -159,11 +154,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             else if(request.status == 302)
             {
                 var redirectResponse = request.getResponseHeader("Location")
-                if (link == "https://aka.ms/sentinel-AliCloudAPI-functionapp1234") 
-                {
-                    console.log(`Link: ${link}, redirectResponse ${redirectResponse}`);
-                }
-                
                 return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com") || redirectResponse.includes("404 - Page not found")) ? false : true;
             }
             else if (request.status == 0)
@@ -174,10 +164,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             else 
             {
                 var responseContent = request.responseText
-                if (link == "https://aka.ms/sentinel-AliCloudAPI-functionapp1234")
-                {
-                    console.log(`Link: ${link}, responseContent ${responseContent}`);
-                }
                 if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error") || responseContent.includes("404 - Page not found"))) {
                     return false;
                 }
