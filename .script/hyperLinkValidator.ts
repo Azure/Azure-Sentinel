@@ -24,48 +24,33 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         {
             // DATA CONNECTORS FOLDER WILL CONTAIN "azuredeploy" WHICH CONTAINS "WEBSITE_RUN_FROM_PACKAGE" ATTRIBUTE AND ITS VALUE/LINK SHOULD BE VALIDATED
             let jsonObj = JSON.parse(content);
-            let isValidWebsiteRunFromPackageUrl = true;
-            let isWebsiteRunFromPackagePropMissing = false;
-            jsonObj.resources.filter(async (resourcesProp: { type: string; resources: any[]; }) => {
+            let resourcesConfigObj = jsonObj.resources.map((resourcesProp: { type: string; resources: any[]; }) => {
                 if (resourcesProp.type == "Microsoft.Web/sites") {
-                    resourcesProp.resources.filter(async configProp => {
+                    let configProperties = resourcesProp.resources.reduce(configProp => {
                         if (configProp.type == "config") {
-                            console.log('inside of config');
-                            if (configProp.properties.WEBSITE_RUN_FROM_PACKAGE == null)
-                            {
-                                isWebsiteRunFromPackagePropMissing = true;
-                                //throw new Error(`Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please add it with a valid hyperlink!`);
-                            }
-                            else
-                            {
-                                let websiteRunFromPackageUrl = configProp.properties.WEBSITE_RUN_FROM_PACKAGE;
-                                const isShortLinkValid = await isValidLink(websiteRunFromPackageUrl);
-                                console.log(`websiteRunFromPackageUrl ${websiteRunFromPackageUrl}, isShortLinkValid ${isShortLinkValid}`);
-                                console.log(JSON.stringify(isShortLinkValid));
-                                if (!isShortLinkValid) {
-                                    console.log('inside of false condition');   
-                                    isValidWebsiteRunFromPackageUrl = false;
-                                    // throw new Error(`Data connector file '${filePath}' has broken hyperlink for attribute  'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: ${websiteRunFromPackageUrl}`);
-                                }
-                            }
+                            return (configProp.properties.WEBSITE_RUN_FROM_PACKAGE == null || 
+                                configProp.properties.WEBSITE_RUN_FROM_PACKAGE == "") ? 
+                                null : 
+                                configProp;
                         }
-                    })
+                    });
+
+                    return configProperties.properties.WEBSITE_RUN_FROM_PACKAGE;
                 }
             });
 
-            if (isValidWebsiteRunFromPackageUrl)
-            {
-                console.log(`Skipping Hyperlink validation for file path : '${filePath}'`);
-                return ExitCode.SUCCESS;
+            let websiteRunFromPackageUrl = resourcesConfigObj.filter(x => x!= null);
+            if (websiteRunFromPackageUrl[0] == undefined) {
+                throw new Error(`Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE' and/or its value is empty. Please add 'WEBSITE_RUN_FROM_PACKAGE' attribute with valid hyperlink!`);
+            } else {
+                const isValidWebSiteRunFromPackage = await isValidLink(websiteRunFromPackageUrl[0]);
+                if (!isValidWebSiteRunFromPackage) {
+                    throw new Error(`Data connector file '${filePath}' has broken hyperlink for attribute  'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: ${websiteRunFromPackageUrl}`);
+                }
             }
-            else if (isWebsiteRunFromPackagePropMissing)
-            {
-                throw new Error(`Data connector file '${filePath}' is missing attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please add it with a valid hyperlink!`);
-            }
-            else if (!isValidWebsiteRunFromPackageUrl)
-            {
-                throw new Error(`Data connector file '${filePath}' has broken hyperlink for attribute  'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink`);
-            }
+
+            console.log(`Skipping hyperlink validation for data connector file ${filePath}`);
+            return ExitCode.SUCCESS;
         }
 
         //IGNORE BELOW FILES
