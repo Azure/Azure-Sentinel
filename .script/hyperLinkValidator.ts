@@ -43,6 +43,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                                 console.log(`websiteRunFromPackageUrl ${websiteRunFromPackageUrl}, isShortLinkValid ${isShortLinkValid}`);
                                 if (!isShortLinkValid) {
                                     console.log('inside of false condition');
+                                    console.log(JSON.stringify(isShortLinkValid));
                                     isValidWebsiteRunFromPackageUrl = false;
                                     // throw new Error(`Data connector file '${filePath}' has broken hyperlink for attribute  'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: ${websiteRunFromPackageUrl}`);
                                 }
