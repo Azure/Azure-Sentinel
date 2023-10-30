@@ -445,14 +445,18 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         if ($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].Value.Length -gt 0) 
         {
             $categoriesDetails | Add-Member -Name 'domains' -Type NoteProperty -Value $categories.psobject.properties["domains"].Value;
-            $newMetadata.properties | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
         }
         
         if ($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].Value.Length -gt 0) 
         {
             $categoriesDetails | Add-Member -Name 'verticals' -Type NoteProperty -Value $categories.psobject.properties["verticals"].value;
+        }
+
+        if ($null -ne $categoriesDetails)
+        {
             $newMetadata.properties | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
         }
+
         $global:baseMainTemplate.resources += $newMetadata;
         ### Removing the Non-Sentinel Resources if there are any:
         $newobject = $global:baseMainTemplate.resources | ? {$_.type -in $contentResourceDetails.resources}

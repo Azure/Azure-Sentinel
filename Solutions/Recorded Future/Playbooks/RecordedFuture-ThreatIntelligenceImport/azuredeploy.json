@@ -1,7 +1,7 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-     "metadata": {
+    "metadata": {
         "title": "RecordedFuture-ThreatIntelligenceImport",
         "description": "This playbook will write indicators in batch to ThreatIntelligenceIndicator log analytics table.",
         "prerequisites": [
@@ -25,6 +25,11 @@
                 "version": "1.0",
                 "title": "RecordedFuture-ThreatIntelligenceImport",
                 "notes": [ "Initial version" ]
+            },
+             {
+                "version": "1.1",
+                "title": "RecordedFuture-ThreatIntelligenceImport",
+                "notes": [ "Fixed Api connection" ]
             }
         ]
     },
@@ -33,11 +38,11 @@
             "defaultValue": "RecordedFuture-ThreatIntelligenceImport",
             "type": "string"
         },
-        "workspace": {
+        "WorkspaceID": {
             "type": "string",
             "defaultValue": "",
             "metadata": {
-                "description" : "Microsoft Sentinel Workspace name"
+                "description": "Microsoft Sentinel WorkspaceID"
             }
         }
     },
@@ -78,18 +83,6 @@
                         }
                     },
                     "actions": {
-                        "Compose": {
-                            "runAfter": {
-                                "Select": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Compose",
-                            "inputs": {
-                                "sourcesystem": "Recorded Future",
-                                "value": "@body('Select')"
-                            }
-                        },
                         "Select": {
                             "runAfter": {},
                             "type": "Select",
@@ -98,22 +91,32 @@
                                 "select": "@item()['content']"
                             }
                         },
-                        "Threat_Intelligence_-_Upload_Indicators_of_Compromise_(Private_Preview)": {
+                        "Threat_Intelligence_-_Upload_Indicators_of_Compromise_(V2)_(Preview)": {
                             "runAfter": {
-                                "Compose": [
+                                "Select": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "@outputs('Compose')",
+                                "body": {
+                                    "indicators": "@body('Select')",
+                                    "sourcesystem": "Recorded Future"
+                                },
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
                                 "method": "post",
-                                "path": "[concat('/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))).customerId,'/UploadIndicators')]"
+                                "path": "[concat( '/V2/ThreatIntelligence/',parameters('WorkspaceID'),'/UploadIndicators/')]",
+                                "retryPolicy": {
+                                    "count": 10,
+                                    "interval": "PT20S",
+                                    "maximumInterval": "PT1H",
+                                    "minimumInterval": "PT10S",
+                                    "type": "exponential"
+                                }
                             }
                         }
                     }
