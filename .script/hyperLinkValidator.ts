@@ -39,7 +39,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                             else
                             {
                                 let websiteRunFromPackageUrl = configProp.properties.WEBSITE_RUN_FROM_PACKAGE;
-                                const isShortLinkValid = isValidLink(websiteRunFromPackageUrl);
+                                const isShortLinkValid = await isValidLink(websiteRunFromPackageUrl);
                                 console.log(`websiteRunFromPackageUrl ${websiteRunFromPackageUrl}, isShortLinkValid ${isShortLinkValid}`);
                                 console.log(JSON.stringify(isShortLinkValid));
                                 if (!isShortLinkValid) {
