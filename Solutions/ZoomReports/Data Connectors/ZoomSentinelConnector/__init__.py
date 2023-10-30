@@ -23,9 +23,9 @@ chunksize = 10000
 retry = 3 ## To do : need to move function app configuration
 error=False
 #Max script execution
-SCRIPT_EXECUTION_INTERVAL_MINUTES = 30
+SCRIPT_EXECUTION_INTERVAL_MINUTES = os.environ['EXECUTION_INTERVAL_MINUTES']
 #Azure function max execution
-AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = 29
+AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = os.environ['MAX_EXECUTION_TIME_MINUTES']
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -294,11 +294,11 @@ def check_if_functiontime_is_over(start_time, interval_minutes, max_script_exec_
     less than max azure func lifetime. In other case returns False."""
     
     logging.info("started Max function time check")
-    max_minutes = min(interval_minutes, max_script_exec_time_minutes)
-    if max_minutes > 1:
-        max_time = max_minutes * 60 - 30
+    min_minutes = min(interval_minutes, max_script_exec_time_minutes)
+    if min_minutes > 1:
+        max_time = min_minutes * 60 - 30
     else:
-        max_time = 50
+        raise Exception("Script execution mins is less than 1 min")
     script_execution_time = time.time() - start_time
     if script_execution_time > max_time:
         return True
