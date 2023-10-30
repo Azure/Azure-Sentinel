@@ -1,193 +1,127 @@
-# Enrichment widgets
+# Visualize data with enrichment widgets
 
-## Deploying
+In the fast-moving, high-pressure environment of your Security Operations Center, data visualization is one of your SIEM's key capabilities to help you quickly and effectively find usable information within the vast sea of data that constantly confronts you. Microsoft Sentinel uses widgets, the latest evolution of its data visualization capabilities, to present you with its most relevant findings.
 
-To deploy the enrichment widgets feature:
+Widgets are already available in Microsoft Sentinel today. They currently appear for IP entities, both on their full entity pages and on their entity info panels that appear in Incident pages. These widgets
+show you valuable information about the entities, from both internal and third-party sources.
 
-- First, [create a Key Vault to store the widgets configuration](#create-a-key-vault-to-store-widgets-credentials)
-- Next, [configure the widgets you would like to use](#configure-widgets)
+**What makes widgets essential in Microsoft Sentinel:**
 
-### Create a Key Vault to store widgets credentials
+- Real-time Updates: In the ever-evolving cybersecurity landscape, real-time data is of paramount importance. Widgets provide live updates, ensuring that your analysts are always looking at the most recent data.
 
-- Make sure you should have a Contributor Role over the Resource Group in which your Sentinel workspace is located.
-- Start Azure Cloud Shell:
-  - [Open cloud shell from the Azure Portal](https://learn.microsoft.com/azure/cloud-shell/quickstart?tabs=azurecli#start-cloud-shell)
-  - [Select PowerShell as your shell environment](https://learn.microsoft.com/en-us/azure/cloud-shell/quickstart?tabs=azurecli#select-your-shell-environment)
-- Use Azure Cloud Shell to copy the KeyVault provisioning script:
+- Integration: Widgets are seamlessly integrated into Microsoft Sentinel data sources, drawing from their vast reservoir of logs, alerts, and intelligence. This integration means that the visual insights presented by widgets are backed by the robust analytical power of Microsoft Sentinel.
 
-``` Command Line
-Invoke-WebRequest -Uri https://aka.ms/SentinelWidgetsDeployScript -OutFile WidgetsKvCreation.Ps1
-```
+In essence, widgets are more than just visual aids. They are powerful analytical tools that, when used effectively, can greatly enhance the speed and efficiency of threat detection, investigation, and response.
 
-- Use Azure Cloud Shell to run the KeyVault provisioning script (See [Locating the workspace information](#locating-the-workspace-information) for information on how to get the Subscription ID and Workspace ID):
+## Enable enrichment widgets
 
-``` Command Line
-./WidgetsKvCreation.Ps1 -SubscriptionId <subscription id> -WorkspaceId <workspace id>
-```
+Widgets regularly access and maintain connections with their data sources. Generally, widgets require credentials to do so. These credentials can be in the form of API keys, username/password, or other secrets, and they are stored in a dedicated Azure Key Vault that you create for this purpose.
 
-- Make sure you record the KeyVault name that the script prints, as you will need it to configure the widgets. 
+You must have the **Contributor** role for the workspace's resource group to create this Key Vault in your environment.
 
-### Configure widgets
+Microsoft Sentinel has automated the process of creating a Key Vault for enrichment widgets. To enable the new widgets experience, take the following two steps:
 
-For each widget, configure the secrets and other parameters it requires using the links below, which will help you to store them in the workspace Key Vault.
+1. **Create a dedicated Key Vault to store credentials.**
 
-#### Configure Virus Total
+   1. From the Microsoft Sentinel navigation menu, select **Entity behavior**.
 
-- [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsVirusTotalARM). You will get the form shown below.
-- Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
-- Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
-- Enter the API key defined in your Virus Total account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterVirusTotal) to a free Virus Total account to get an API key.
-- Press on the “Review + create” button and deploy the template – this should add a secret named “VirusTotal” to your key vault.
+   1. On the **Entity behavior** page, select **Enrichment widgets (preview)** from the toolbar.
 
-<img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future and Virus Total ARM deployment screenshot" width="75%"/>
+      <img src="Images/entity-behavior-page.png" alt="Screenshot of the entity behavior page.">
 
-#### Configure AbuseIPDB
+   1. On the **Widgets Onboarding Page**, select **Create Key Vault**.  
+      You will see an Azure portal notification when the Key Vault deployment is in progress, and again when it has completed.
 
-- [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsAbuseIPDBARM). You will get the form shown below.
-- Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
-- Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
-- Enter the API key defined in your AbuseIPDB account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterAbuseIPDB) to a free AbuseIPDB account to get an API key.
-- Press on the “Review + create” button and deploy the template – this should add a secret named “AbuseIPDB” to your key vault.
+2. **Add relevant credentials to your widgets' Key Vault.**
 
-#### Configure Anomali
+   The data sources accessed by all the available widgets are listed on the **Widgets Onboarding Page**. You need to add their credentials individually. To do so, take the following steps for each data source:
 
-- [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsAnomaliARM). You will get the form shown below.
-- Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
-- Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
-- Enter the username and API key defined in your Anomali account.
-- Press on the “Review + create” button and deploy the template – this should add a secret named “AnomaliApiKey” to your key vault.
+   <img src="Images/widgets-onboarding-page.png" alt="Screenshot of the widgets onboarding page.">
 
-<img src="Images/anomali-arm-deployment.png" alt="Anomali and Virus Total ARM deployment screenshot" width="75%"/>
+   1. Select the **Find your credentials** link for a given data source. This will redirect you to [specific instructions](#configure-individual-widgets) for finding or creating credentials for that data source. When you have the credentials, copy them aside and proceed to the next step.
 
-#### Configure Recorded future
+   1. Select **Add credentials** for that data source. The **Custom deployment** wizard will open in a side panel on the right side of the page.  
+   The **Subscription**, **Resource group**, **Region**, and **Key Vault name** fields are all pre-populated, and there should be no reason for you to edit them.
 
-- [Start the ARM template based configuration experience](https://aka.ms/SentinelWidgetsRecordedFutureARM). You will get the form shown below.
-- Fill the subscription and resource group your of your Sentinel workspace. See [Locating the workspace information](#locating-the-workspace-information) for information on how to get those values.
-- Enter the key vault name you recorded when [creating the the Key Vault](#create-a-key-vault-to-store-widgets-credentials). Refer to [Locating your Key Vault name](#locating-the-key-vault-name) if you did not record the name.
-- Enter your recorded future API key. Contact your Recorded Future represantiative to get your API key. You can also [apply for a 30 day free trial especially for Sentinel users](https://aka.ms/SentinelWidgetsRegisterRecordedFuture).
-- Press on the “Review + create” button and deploy the template – this should add a secret named “RecordedFuture” to your key vault.
+   1. Enter the credentials you saved into the relevant fields in the **Custom deployment** wizard (**API key**, **Username**, **Password**, and so on).
 
-<img src="Images/recorded-future-arm-deployment.png" alt="Recorded Future and Virus Total ARM deployment screenshot" width="75%"/>
+   1. Select **Review + create**.
 
+Note: Not all widgets require special credentials.
 
-## Using enrichment widgets
+## Add new widgets when they become available
 
-To start using widgets, join the Microsoft Security Private Preview program at [https://aka.ms/joinccp](https://aka.ms/joinccp). You will need to use the private preview feature flags to have the widgets available in your Sentinel environment.
+Microsoft Sentinel aspires to offer a broad collection of widgets, making them available as they are ready. As new widgets become available, their data sources will be added to the list on the Widgets
+Onboarding Page, if they aren't already there. When you see announcements of newly available widgets, check back on the Widgets Onboarding page for new data sources that don't yet have credentials configured. To configure them, follow step 2 above.
 
-### Viewing your widgets in the IP entity page
+## Remove the widgets experience
 
-To view your widgets:
+To remove the widgets experience from Microsoft Sentinel, simply delete the Key Vault that you created in step 1 above.
 
-- Select your Sentinel workspace
-- Press on the entity behavior menu option
-- Your widgets should be available in the insights pane on the right side:
+## Configure individual widgets
 
-<img src="Images/widget-results.png" alt="Widget with results screenshot" width="75%"/>
+### Find your credentials for Virus Total
 
-- If the source return no results, you will see a different display, for example:
+1. Enter the **API key** defined in your Virus Total account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterVirusTotal) for a free Virus Total account to get an API key.
 
-<img src="Images/widget-with-no-results.png" alt="Widget with no answers screenshot" width="75%"/>
+1. After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Virus Total" will be added to your key vault.
 
-### Viewing your widgets in the incident page
+### Find your credentials for AbuseIPDB
 
-Similarly, you can view your enrichment widgets as part of an incident investigation. For an incidents that has an IP Address entity, select the entity and switch to the insights tab on the entity pane.  
+1. Enter the **API key** defined in your AbuseIPDB account. You can [sign up](https://aka.ms/SentinelWidgetsRegisterAbuseIPDB) for a free AbuseIPDB account to get an API key.
+
+1. After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "AbuseIPDB" will be added to your key vault.
+
+### Find your credentials for Anomali
+
+1. Enter the **username** and **API key** defined in your Anomali account.
+
+1. After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Anomali" will be added to your key vault.
+
+### Find your credentials for Recorded Future
+
+1. Enter your Recorded Future **API key**. Contact your Recorded Future representative to get your API key. You can also [apply for a 30-day free trial especially for Sentinel users](https://aka.ms/SentinelWidgetsRegisterRecordedFuture).
+
+1. After you select **Review + create** and deploy the template (see step 2d [above](#enable-enrichment-widgets)), a secret named "Recorded Future" will be added to your key vault.
+
+### Find your credentials for Microsoft Defender Threat Intelligence (MDTI)
+
+1. The MDTI widget should fetch the data automatically if you have the relevant MDTI license. There is no need for credentials.
+
+1. You can check if you have the relevant license, and if necessary, purchase it, at the MDTI official [website](https://www.microsoft.com/en-us/security/business/siem-and-xdr/microsoft-defender-threat-intelligence).
 
 ## FAQ
 
-### The widget configuration store has not been initialized
+1. **The widget has not been configured:**
 
-If you received in all widgets the message "The widget configuration store has not been initialized" as shown below, make sure that you followed the instructions in the section [Create a Key Vault to store widgets credentials](#create-a-key-vault-to-store-widgets-credentials) above. If you have done so, but still get the message, try [creating the required Key Vault manually](#manually-creating-the-key-vault).
+    If you received in a widget the message "The widget has not been configured" (see the following screenshot), make sure that you followed the instructions in the [Enable enrichment widgets](#enable-enrichment-widgets) section above.
 
-<img src="Images/configuration-store-has-not-been-initialized.png" alt="The widget configuration store has not been initialized message screenshot" width="75%"/>
+    <img src="Images/widget-not-configured.png" alt="Screenshot of widget configuration error message.">
 
-### The widget has not been configured
+1. **Failure to create the Key Vault:**
 
-If you received in a widget the message "The widget has not been configured as shown below, make sure that you followed the instruction in the section [Configuring widgets](#configure-widgets) above.
+    If you get an error regarding the Key Vault deployment, it could be for several reasons:
 
-<img src="Images/widget-has-not-been-configured.png" alt="The widget has not been configured screenshot" width="75%"/>
+    - You don't have the **Contributor** role in your environment.
 
-### Locating the workspace information
+    - Your subscription is not registered to the Key Vault resource provider.
 
-To get your Sentinel's Workspace ID, Resource Group and Subscription ID:
+1. **Failure to deploy the widget's data source secrets:**
 
-Go to the settings section in Sentinel:
+    - You mistyped when entering the source credentials.
 
-<img src="Images/goto-settings-section.png" alt="Go to settings section screenshot" width="40%"/>
+    - The provided ARM template has changed.
 
-Press on the workspace settings menu item:
+## Next steps
 
-<img src="Images/select-settings-tab.png" alt="Select settings tab screenshot" width="40%"/>
+**View your widgets in the IP entity page**
 
-Hover on the right side of each parameter to view its copy tool and copy it:
+To view your widgets:
 
-![Copy workspace parameters screenshot](Images/copy-workspace-parameters.png)
+- Select your Microsoft Sentinel workspace.
 
-### Locating the Key Vault name
+- Select **Entity behavior** from the navigation menu.
 
-If you did not record the name, you can either [re-run the script](#create-a-key-vault-to-store-widgets-credentials), or search your Key Vaults in the  Azure Portal:
+- Your widgets should be visible in the insights pane on the right side (see the following screenshot).
 
-- Open the [Key Vaults list](https://ms.portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults). 
-- Search for Key Vaults whose name starts with "widgets-".
-- Verify that the "widgets-..." Key Vault matches your workspace, by entering the 'Tags' page of the KeyVault, and checking that the **WorkspaceId** tag matches the Workspace ID of your Sentinel workspace.
-
-### Manually creating the Key Vault
-
-If you receive a message in your widgets that the widget configuration store has not been initialized as decribed [above](#the-widget-configuration-store-has-not-been-initialized) you can try to create the Key Vault manually:
-
-1) Get the workspace ID, Resource Group and Subscription ID as described [here](#locating-the-workspace-information).
-
-2) Run the following Powershell script, and copy the key vault name to be used later:
-
-- Start Azure Cloud Shell:
-  - [Open cloud shell from the Azure Portal](https://learn.microsoft.com/azure/cloud-shell/quickstart?tabs=azurecli#start-cloud-shell)
-  - [Select PowerShell as your shell environment](https://learn.microsoft.com/en-us/azure/cloud-shell/quickstart?tabs=azurecli#select-your-shell-environment)
-- Use Azure Cloud Shell to copy the KeyVault provisioning script:
-
-``` Command Line
-Invoke-WebRequest -Uri https://aka.ms/SentinelWidgetsDeployScript -OutFile WidgetsKvCreation.Ps1
-```
-
-- Use Azure Cloud Shell to run the KeyVault provisioning script (See [Locating the workspace information](#locating-the-workspace-information) for information on how to get the Subscription ID and Workspace ID):
-
-``` Command Line
-./WidgetsKvCreation.Ps1 -SubscriptionId <subscription id> -WorkspaceId <workspace id> -OnlyPrintKeyVaultName
-```
-
-3) Search for "Key Vault" in Azure global search and choose “Key vaults”:
-
-
-<img src="Images/create-kv-search.png" alt="Search key vault screenshot" width="40%"/>
- 
-4) Press on the “Create” button in the upper left corner.
-
-<img src="Images/create-kv-create.png" alt="Create key vault screenshot" width="40%"/>
- 
-5) Enter the Subscription Name and Resource group name of your Sentinel workspace in the relevant input fields.
-
-6) Enter the Key Vault name you copied above in the "Key vault name" input field:
-
-<img src="Images/create-kv-name.png" alt="Enter key vault name screenshot" width="75%"/>
-
-7) Make sure that the region field is set to the Workspace region.
- 
-8) Press next to move to the "Access configuration" tab, choose the “Vault access policy” radio button to mark yourself.
-
-9) Press on the “Create” button to add Sentinel to the access policy.
-
-<img src="Images/create-kv-create-policy.png" alt="Add principal to key vault screenshot" width="40%"/>
- 
-10) In the right pane opened, select "Get" and "List" in the "Secret permissions" only:
-
-<img src="Images/create-kv-policy.png" alt="Select permissions for principal screenshot" width="75%"/>
-
-11)	Press next to move to the "Principal" tab, and search for "Azure Security Insights", and select it. "Azure Security Insights" the internal name for Microsoft Sentinel. Sentinel needs these permissions to access the credentials stored in the key vault to perform the interaction with the 3rd party service provider:
-
-<img src="Images/create-kv-principal.png" alt="Add principal screenshot" width="40%"/>
-
-12) Press "Next" twice and then "Create" to create the access policy. 
-
-13) Press "Next" twice to get to the “Tags” tab add the workspace name and ID that this Key Vault is related to:
-
-<img src="Images/create-kv-tags.png" alt="Add tag to key vault screenshot" width="75%"/>
-  
-14)	Press on the “Review + create” to create the Key Vault.
+  <img src="Images/view-widgets.png" alt="Screenshot of view of widgets in entity page.">
