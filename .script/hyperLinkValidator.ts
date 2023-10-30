@@ -38,8 +38,9 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                             {
                                 let websiteRunFromPackageUrl = configProp.properties.WEBSITE_RUN_FROM_PACKAGE;
                                 const isShortLinkValid = await isValidLink(websiteRunFromPackageUrl);
-    
+                                console.log(`websiteRunFromPackageUrl ${websiteRunFromPackageUrl}, isShortLinkValid ${isShortLinkValid}`);
                                 if (!isShortLinkValid) {
+                                    console.log('inside of false condition');
                                     let errorMessage = `Data connector file '${filePath}' has broken hyperlink for attribute 'WEBSITE_RUN_FROM_PACKAGE'. Please review and rectify the hyperlink: \n ${websiteRunFromPackageUrl}`
                                     throw new Error(errorMessage);
                                 }
