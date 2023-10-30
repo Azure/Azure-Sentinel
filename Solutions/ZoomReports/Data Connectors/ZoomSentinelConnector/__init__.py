@@ -23,9 +23,10 @@ chunksize = 10000
 retry = 3 ## To do : need to move function app configuration
 error=False
 #Max script execution
-SCRIPT_EXECUTION_INTERVAL_MINUTES = os.environ['EXECUTION_INTERVAL_MINUTES']
+SCRIPT_EXECUTION_INTERVAL_MINUTES = int(os.environ['EXECUTION_INTERVAL_MINUTES'])
 #Azure function max execution
-AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = os.environ['MAX_EXECUTION_TIME_MINUTES']
+AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = int(os.environ['MAX_EXECUTION_TIME_MINUTES'])
+
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
