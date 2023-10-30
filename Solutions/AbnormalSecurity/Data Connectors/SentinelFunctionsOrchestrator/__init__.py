@@ -30,17 +30,17 @@ if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
 def orchestrator_function(context: df.DurableOrchestrationContext):
-    logging.info(f"Executing orchestrator function version 1.1")
+    logging.info(f"Executing orchestrator function version 1.1 orchestration_id: {context.instance_id}")
     datetimeEntityId = df.EntityId("SoarDatetimeEntity", "latestDatetime")
-    stored_datetime = yield context.call_entity(datetimeEntityId, "get")
-    logging.info(f"retrieved stored datetime: {stored_datetime}")
+    stored_datetime = yield context.call_entity(datetimeEntityId, "get", ("", context.instance_id))
+    logging.info(f"Retrieved stored datetime: {stored_datetime} orchestration_id: {context.instance_id}")
 
     current_datetime = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    logging.info(f"The current datetime is {current_datetime} orchestration id; {context.instance_id}")
     asyncio.run(transfer_abnormal_data_to_sentinel(stored_datetime, current_datetime))
-
-    context.signal_entity(datetimeEntityId, "set", current_datetime)
-    logging.info(f"set last_datetime to {current_datetime}")
-
+    logging.info(f"Finished api calls for orchestration_id: {context.instance_id}")
+    context.signal_entity(datetimeEntityId, "set", (current_datetime, context.instance_id))
+    logging.info(f"Set last_datetime to {current_datetime} orchestration_id: {context.instance_id}")
 
 async def transfer_abnormal_data_to_sentinel(stored_datetime, current_datetime):
     context = {"gte_datetime": stored_datetime, "lte_datetime": current_datetime}
