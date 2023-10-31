@@ -28,7 +28,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 ## Post deployment
 
 1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity
-2. Authorize Azure AD, Microsoft Teams, and Office 365 Outlook Logic App connections
+2. Authorize Microsoft Entra ID, Microsoft Teams, and Office 365 Outlook Logic App connections
 
 ## Screenshots
 **Incident Trigger**<br>

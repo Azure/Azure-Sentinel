@@ -1,9 +1,9 @@
 # Block-AADUser
 author: Nicholas DiCola
 
-This playbook will disable the user in Azure Active Directory and add a comment to the incident. There is an option for incident and alert trigger below.<br>
+This playbook will disable the user in Microsoft Entra ID and add a comment to the incident. There is an option for incident and alert trigger below.<br>
 Note: This playbook will not be able to disable users if they are eligible or have active admin roles. To be able to disable admin users as well, please deploy playbook - Block-AADUserOrAdmin.<br>
-If user have manager, manager will be notified that the user have been disabled in Azure AD.
+If user have manager, manager will be notified that the user have been disabled in Microsoft Entra ID.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
@@ -27,7 +27,7 @@ None<br><br>
 
 ## Post-deployment
 1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity - https://docs.microsoft.com/azure/logic-apps/create-managed-service-identity?tabs=consumption#assign-managed-identity-role-based-access-in-the-azure-portal
-2. Assign API permissions to the managed identity so that we can search for user's manager. You can find the managed identity object ID on the Identity blade under Settings for the Logic App. If you don't have Azure AD PowerShell module, you will have to install it and connect to Azure AD PowerShell module. https://docs.microsoft.com/powershell/azure/active-directory/install-adv2?view=azureadps-2.0
+2. Assign API permissions to the managed identity so that we can search for user's manager. You can find the managed identity object ID on the Identity blade under Settings for the Logic App. If you don't have Microsoft Entra ID PowerShell module, you will have to install it and connect to Microsoft Entra ID PowerShell module. https://docs.microsoft.com/powershell/azure/active-directory/install-adv2?view=azureadps-2.0
 ```powershell
 $MIGuid = "<Enter your managed identity guid here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
@@ -56,7 +56,7 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 -ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole4.Id
 ```
 
-3. Open the playbook in the Logic App Designer and authorize Azure AD and Office 365 Outlook Logic App connections<br><br>
+3. Open the playbook in the Logic App Designer and authorize Microsoft Entra ID and Office 365 Outlook Logic App connections<br><br>
 
 ## Screenshots
 **Incident Trigger**<br>
