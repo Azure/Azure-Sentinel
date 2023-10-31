@@ -21,4 +21,3 @@ async def main(mytimer: func.TimerRequest, starter: str):
     else:
         logging.info(f"Skipped orchestration - runtime status is : {str(existing_instance.runtime_status)}") 
 
-        
