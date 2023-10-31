@@ -116,6 +116,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Corelight;
   }
+  else if (dataTypes[0].name.includes("SigninLogs"))
+  {
+    return ConnectorCategory.AzureActiveDirectory;
+  }
   else if (dataTypes[0].name.includes("corelight_bacnet"))
   {
     return ConnectorCategory.CorelightConnectorExporter;
