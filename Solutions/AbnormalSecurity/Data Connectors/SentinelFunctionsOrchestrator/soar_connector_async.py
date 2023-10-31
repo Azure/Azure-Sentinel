@@ -4,7 +4,9 @@ from enum import Enum
 import aiohttp
 import logging
 import asyncio
+import os
 
+API_HOST = os.environ['API_HOST']
 
 class Resources(Enum):
     threats = 0
@@ -19,7 +21,7 @@ class FilterParam(Enum):
 
 
 class AbnormalSoarConnectorAsync:
-    BASEURL = "https://api.abnormalplatform.com/v1"
+    BASEURL = API_HOST
     MAP_RESOURCE_TO_LOGTYPE = {
         Resources.threats: "ABNORMAL_THREAT_MESSAGES",
         Resources.cases: "ABNORMAL_CASES"
