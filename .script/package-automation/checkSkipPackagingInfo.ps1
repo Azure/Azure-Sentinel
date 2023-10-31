@@ -62,7 +62,7 @@ try
                 $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/$solutionName/Package/*" } | Where-Object {$_ -notlike "Solutions/Images/*"}  
 
                 $changesInSolutionFolder = $filteredFiles | Where-Object { $_ -notmatch ($exclusionList -join '|')  }
-                Write-Hose "List of files changed in Solution folder: $changesInSolutionFolder"
+                Write-Host "List of files changed in Solution folder: $changesInSolutionFolder"
                 # there are no changes in package folder but check if changes in pr are valid and not from exclusion list
                 if ($changesInSolutionFolder.Count -gt 0)
                 {
@@ -87,7 +87,7 @@ try
 catch
 {
     Write-Output "isPackagingRequired=$false" >> $env:GITHUB_OUTPUT
-    
+    Write-Host "Error in checkSkipPackagingInfo file. Error Details: $_"
     if ($instrumentationKey -ne '')
     {
         Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "CheckPackagingSkipStatus : Error occured in catch block: $_"; 'EventName' = "CheckPackagingSkipStatus"; }
