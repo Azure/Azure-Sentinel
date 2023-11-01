@@ -4,14 +4,13 @@ description: |
   'Identifies network connections whose ports are frequent targets of attacks and should not cross network boundaries or reach untrusted public networks.
   Consider updating the firewall policies to block the connections.'
 requiredDataConnectors:
-  - connectorId: PaloAltoNetworks
+  - connectorId: CloudNgfwByPAN
     dataTypes:
-      - CommonSecurityLog
+      - fluentbit_CL
 tactics:
   - InitialAccess
   - Discovery
 query: |
-
   let HighRiskPorts = datatable (Port:int, Protocol:string, RiskType:string, RiskDescription:string)[
   13,"udp","3rd Party Attacks","Daytime protocol used in reflection/amplification attacks",
   17,"udp","3rd Party Attacks","QOTD protocol, reflection/amplification attacks",
@@ -81,10 +80,11 @@ query: |
   ];
   HighRiskPorts
   | join kind=inner (
-    CommonSecurityLog
-    | where DeviceVendor == "Palo Alto Networks" and Activity == "TRAFFIC" and DeviceAction != "deny"
-    | where SentBytes > 0 and ReceivedBytes > 0
-    //Remove private IP communation from DestinationIP
+    fluentbit_CL
+    | where FirewallName_s == "palocloudfw" and ident_s == "TRAFFIC" and Message.action != "deny"
+    | extend DestinationIP = tostring(parse_json(Message).dst_ip), DestinationPort = toint(parse_json(Message).dport), Protocol = tostring(parse_json(Message).proto), SourceIP = tostring(parse_json(Message).src_ip)
+    | where isnotempty(DestinationIP) and isnotempty(SourceIP)
+    //Remove private IP communication from DestinationIP
     | extend result = ipv4_is_private(DestinationIP) 
     | where result == 0
     | summarize
@@ -92,14 +92,14 @@ query: |
         StartTime = min(TimeGenerated),
         EndTime = max(TimeGenerated)
         by 
-        DeviceName,
+        FirewallName_s,
         SourceIP,
         DestinationIP,
         DestinationPort,
         Protocol
   ) on $left.Port == $right.DestinationPort and $left.Protocol == $right.Protocol
   | project-away Protocol1, Port
-  | order by DeviceName asc, SourceIP asc, DestinationIP asc, DestinationPort asc
+  | order by FirewallName_s asc, SourceIP asc, DestinationIP asc, DestinationPort asc
   | extend timestamp = StartTime, IPCustomEntity = SourceIP
 entityMappings:
   - entityType: IP
