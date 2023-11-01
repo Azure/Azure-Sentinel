@@ -84,9 +84,23 @@ class DataMinrPulseThreatIntelligence:
             microsoft_sentinel_obj = MicrosoftSentinel()
             tasks = []
             conn = aiohttp.TCPConnector(limit_per_host=30)
+            failed_mapping_count = 0
             async with aiohttp.ClientSession(connector=conn) as session:
                 for data in dataminr_data:
-                    mapped_data = map_indicator_fields(data)
+                    try:
+                        mapped_data = map_indicator_fields(data)
+                    except DataminrPulseException as error:
+                        applogger.warning(
+                            "{}(method={}) : {} : Exception in mapping. Skipping this Indicator, Index-{}, Error:{}.".format(
+                                consts.LOGS_STARTS_WITH,
+                                __method_name,
+                                consts.DATAMINR_PULSE_THREAT_INTELLIGENCE,
+                                data.get("index_s", ""),
+                                error
+                            )
+                        )
+                        failed_mapping_count += 1
+                        continue
                     for indicator_data in mapped_data:
                         tasks.append(
                             asyncio.create_task(
@@ -104,18 +118,20 @@ class DataMinrPulseThreatIntelligence:
                     failed_indicators.append(i)
             applogger.info(
                 "{}(method={}) : {} : Total_Invocations: {}, Successful Indicators Posting: {},\
-                    Failed Indicators Posting: {}.".format(
+                    Failed Indicators Posting: {}, Failed Indicators due to mapping: {}.".format(
                     consts.LOGS_STARTS_WITH,
                     __method_name,
                     consts.DATAMINR_PULSE_THREAT_INTELLIGENCE,
-                    len(results),
+                    (len(results)+failed_mapping_count),
                     success_count,
                     failed_count,
+                    failed_mapping_count,
                 )
             )
             return {
                 "success_count": success_count,
                 "failure_count": failed_count,
+                "failed_mapping_count": failed_mapping_count,
                 "failed_indicators": failed_indicators,
             }
         except DataminrPulseException:
@@ -159,6 +175,7 @@ class DataMinrPulseThreatIntelligence:
             total_indicators = 0
             total_success_indicators = 0
             total_fail_indicators = 0
+            total_failed_mapping = 0
             checkpoint_time_generated = self.state_manager_obj.get(
                 consts.DATAMINR_PULSE_THREAT_INTELLIGENCE
             )
@@ -199,9 +216,10 @@ class DataMinrPulseThreatIntelligence:
             )
             for data in self.batch(logs_data, 100):
                 response = await self.post_data_to_threat_intelligence(data)
-                total_indicators = total_indicators + response["success_count"] + response["failure_count"]
+                total_indicators += response["success_count"] + response["failure_count"] + response["failed_mapping_count"]
                 total_success_indicators += response["success_count"]
                 total_fail_indicators += response["failure_count"]
+                total_failed_mapping += response["failed_mapping_count"]
                 self.state_manager_obj.post(data[-1]["TimeGenerated"])
                 applogger.info(
                     "{}(method={}) : {} :Posting TimeGenerated in Checkpoint, data : {}.".format(
@@ -226,13 +244,14 @@ class DataMinrPulseThreatIntelligence:
             applogger.info(
                 "{}(method={}) : {} : Total collected Data from DataminrPulse : {}, "
                 "successfully posted indicators into sentinel: {}, "
-                "failed indicators while posting : {}.".format(
+                "failed indicators while posting : {}., failed indicators due to mapping: {}".format(
                     consts.LOGS_STARTS_WITH,
                     __method_name,
                     consts.DATAMINR_PULSE_THREAT_INTELLIGENCE,
                     total_indicators,
                     total_success_indicators,
                     total_fail_indicators,
+                    total_failed_mapping,
                 )
             )
         except DataminrPulseException:
