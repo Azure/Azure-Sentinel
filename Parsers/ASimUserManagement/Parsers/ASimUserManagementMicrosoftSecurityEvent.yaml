@@ -59,8 +59,8 @@ ParserQuery: |
       ];
       let UserTypeLookup = datatable (ActorOriginalUserType:string, ActorUserType:string)
       [
-          'User', 'Regular',
-          'Machine', 'Machine'
+          'Machine', 'Machine',
+          'User', 'Regular'
       ]; 
       let UserEventID = toscalar(
           EventIDLookup
@@ -99,6 +99,7 @@ ParserQuery: |
           | extend
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
+          | project-away TargetDomain
       ),(
           SecurityEvent
           | where not(disabled)
@@ -126,6 +127,7 @@ ParserQuery: |
           | extend
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
+          | project-away TargetDomain
       ),(
           WindowsEvent
           | where not(disabled)
@@ -172,8 +174,8 @@ ParserQuery: |
               ) 
               with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
           | project-rename 
-              TargetUsername = MemberName,
-              TargetUserId = MemberSid
+              TargetUserId = MemberSid,
+              TargetUsername = MemberName
           | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, SourceComputerId, EventMessage
           | extend 
               GroupIdType = iif(isnotempty(GroupId), "SID","")
@@ -225,10 +227,9 @@ ParserQuery: |
   | project-rename 
       EventUid = _ItemId
   | extend 
-      ActorDomain = SubjectDomainName,
-      DvcIdType = iff (isnotempty(_ResourceId), "AzureResourceID", ""),
       ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
       Dvc = DvcHostname,
+      DvcIdType = iff (isnotempty(_ResourceId), "AzureResourceID", ""),
       DvcOs = "Windows",
       EventCount = int(1),
       EventEndTime = TimeGenerated,
@@ -249,4 +250,6 @@ ParserQuery: |
       TargetUserType = _ASIM_GetUserType(TargetUsername,TargetUserId),
       User = ActorUsername
   };
-  parser (disabled=disabled)
+    parser (
+        disabled                 = disabled
+    )
