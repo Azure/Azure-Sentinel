@@ -65,7 +65,7 @@ def main(mytimer: func.TimerRequest):
             logging.info('Known Indexing Scenario. Proceed with execution')
         logging.info("new config" + str(config))
         state_manager.post(json.dumps(config))
-    logging.info(f'Finish script.')
+        logging.info(f'Finish script.')
 
 class Auth0Connector:
     def __init__(self, domain, api_path, client_id, client_secret, audience):
