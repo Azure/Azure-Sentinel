@@ -141,6 +141,6 @@ This parser is linked to "ExchangeVIP" whatchlist
 
 >#### **Parameters:**
 >
->1 parameter to add during creation : UserToCheck, type string, No default value
+>1 parameter to add during creation : UserToCheck, type string, default value "All"
  
  1. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
