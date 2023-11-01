@@ -25,17 +25,17 @@ ParserParams:
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has
-    Type: string
-    Default: '*'
-  - Name: actorusername_has
-    Type: string
-    Default: '*'
-  - Name: targetdomain_has_any
+  - Name: srcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
-  - Name: anydomain_has_any
-    Type: dynamic    
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
     Default: dynamic([])
   - Name: disabled
     Type: bool
@@ -44,10 +44,10 @@ ParserQuery: |
   let parser = (
     starttime:datetime=datetime(null), 
     endtime:datetime=datetime(null),
-    targetusername_has:string="*", 
-    actorusername_has:string="",
-    targetdomain_has_any:dynamic=dynamic([]),
-    anydomain_has_any:dynamic=dynamic([]),
+    srcipaddr_has_any_prefix: dynamic=dynamic([]), 
+    targetusername_has_any: dynamic=dynamic([]),
+    actorusername_has_any: dynamic=dynamic([]),
+    eventtype_in: dynamic=dynamic([]),
     disabled:bool=false
     ) {
       let EventIDLookup = datatable(EventID:int, EventType:string, EventSubType:string, GroupType:string)
@@ -89,12 +89,14 @@ ParserQuery: |
       let UserEventID = toscalar(
           EventIDLookup
           | where not(disabled)
+          | where (array_length(eventtype_in) == 0 or (EventType in (eventtype_in)))
           | where EventSubType in("UserCreated","UserModified") 
           | summarize make_set(EventID)
       );
       let GroupEventID = toscalar(
           EventIDLookup
           | where not(disabled)
+          | where (array_length(eventtype_in) == 0 or (EventType in (eventtype_in)))
           | where EventSubType in("GroupCreated","GroupModified")  
           | summarize make_set(EventID)
       );
@@ -104,10 +106,9 @@ ParserQuery: |
           | where (isnull(starttime) or TimeGenerated >= starttime) 
                 and (isnull(endtime) or TimeGenerated <= endtime)
           | where EventID in(UserEventID)
-          | where (targetusername_has=='*' or (EventData has targetusername_has)) and 
-              (actorusername_has=='*' or (EventData has actorusername_has)) and 
-              (array_length(targetdomain_has_any) == 0 or (EventData has_any (targetdomain_has_any))) and
-              (array_length(anydomain_has_any) == 0 or (EventData has_any (anydomain_has_any)))
+          | where (array_length(targetusername_has_any) == 0 or (EventData has_any (targetusername_has_any))) and 
+              (array_length(actorusername_has_any) == 0 or (EventData has_any (actorusername_has_any))) and
+              (array_length(srcipaddr_has_any_prefix) == 0)
           | extend
               ActorOriginalUserType = tostring(EventData.AccountType),
               ActorSessionId = tostring(EventData.SubjectLogonId),
@@ -120,10 +121,8 @@ ParserQuery: |
               TargetUserId = tostring(EventData.TargetSid),
               TargetUsername = tostring(EventData.TargetUserName),
               EventMessage = tostring(EventData.Activity)
-          | where (targetusername_has=='*' or (TargetUsername has targetusername_has)) and
-              (actorusername_has=='*' or (SubjectUserName has actorusername_has)) and
-              (array_length(targetdomain_has_any) == 0 or (TargetDomain has_any (targetdomain_has_any))) and
-              (array_length(anydomain_has_any) == 0 or (TargetDomain has_any (anydomain_has_any)) or (SubjectDomainName has_any (anydomain_has_any)))
+          | where (array_length(targetusername_has_any) == 0 or (TargetUsername has_any (targetusername_has_any))) and
+              (array_length(actorusername_has_any) == 0 or (SubjectUserName has_any (actorusername_has_any)))
           | project-rename
               NewPropertyValue = NewTargetUserName,
               PreviousPropertyValue = OldTargetUserName
@@ -133,16 +132,16 @@ ParserQuery: |
           | extend
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
+          | project-away TargetDomain
       ),(
           SecurityEvent
           | where not(disabled)
           | where (isnull(starttime) or TimeGenerated >= starttime) 
             and (isnull(endtime) or TimeGenerated <= endtime)
           | where EventID in(UserEventID)
-          | where (targetusername_has=='*' or (TargetUserName has targetusername_has)) and
-              (actorusername_has=='*' or (SubjectUserName has actorusername_has)) and
-              (array_length(targetdomain_has_any) == 0 or (TargetDomainName has_any (targetdomain_has_any))) and
-              (array_length(anydomain_has_any) == 0 or (TargetDomainName has_any (anydomain_has_any)) or (SubjectDomainName has_any (anydomain_has_any)))
+          | where (array_length(targetusername_has_any) == 0 or (TargetUserName has_any (targetusername_has_any))) and
+              (array_length(actorusername_has_any) == 0 or (SubjectUserName has_any (actorusername_has_any))) and
+              (array_length(srcipaddr_has_any_prefix) == 0)
           | project-rename 
               ActorOriginalUserType = AccountType,
               ActorSessionId = SubjectLogonId,
@@ -166,16 +165,16 @@ ParserQuery: |
           | extend
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
+          | project-away TargetDomain
       ),(
           WindowsEvent
           | where not(disabled)
           | where (isnull(starttime) or TimeGenerated >= starttime) 
                 and (isnull(endtime) or TimeGenerated <= endtime)          
           | where EventID in(GroupEventID)
-          | where (targetusername_has=='*' or (EventData has targetusername_has)) and 
-              (actorusername_has=='*' or (EventData has actorusername_has)) and 
-              (array_length(targetdomain_has_any) == 0 or (EventData has_any (targetdomain_has_any))) and
-              (array_length(anydomain_has_any) == 0 or (EventData has_any (anydomain_has_any)))
+          | where (array_length(targetusername_has_any) == 0 or (EventData has_any (targetusername_has_any))) and 
+              (array_length(actorusername_has_any) == 0 or (EventData has_any (actorusername_has_any))) and
+              (array_length(srcipaddr_has_any_prefix) == 0)
           | extend 
               ActorOriginalUserType = tostring(EventData.AccountType),
               ActorSessionId = tostring(EventData.SubjectLogonId),
@@ -190,10 +189,8 @@ ParserQuery: |
               SubjectDomainName = tostring(EventData.SubjectDomainName),
               SubjectUserName = tostring(EventData.SubjectUserName),
               EventMessage = tostring(EventData.Activity)
-          | where (targetusername_has=='*' or (NewTargetUserName has targetusername_has) or (OldTargetUserName has targetusername_has) or (MemberName has targetusername_has)) and
-              (actorusername_has=='*' or (SubjectUserName has actorusername_has)) and
-              (array_length(targetdomain_has_any) == 0 or (GroupDomain has_any (targetdomain_has_any))) and
-              (array_length(anydomain_has_any) == 0 or (GroupDomain has_any (anydomain_has_any)) or (SubjectDomainName has_any (anydomain_has_any)))
+          | where (array_length(targetusername_has_any) == 0 or (NewTargetUserName has_any (targetusername_has_any)) or (OldTargetUserName has_any (targetusername_has_any))) and
+              (array_length(actorusername_has_any) == 0 or (SubjectUserName has_any (actorusername_has_any)))
           | extend 
               GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName)),
               TargetUserId = MemberSid,
@@ -208,10 +205,9 @@ ParserQuery: |
                 and (isnull(endtime) or TimeGenerated <= endtime)          
           | where not (EventID in (4744, 4748, 4749, 4753, 4759, 4763))
           | where EventID in(GroupEventID)
-          | where (targetusername_has=='*' or (EventData has targetusername_has)) and 
-              (actorusername_has=='*' or (SubjectUserName has actorusername_has)) and
-              (array_length(targetdomain_has_any) == 0 or (TargetDomainName  has_any (targetdomain_has_any))) and
-              (array_length(anydomain_has_any) == 0 or (TargetDomainName has_any (anydomain_has_any)) or (SubjectDomainName has_any (anydomain_has_any)))
+          | where (array_length(targetusername_has_any) == 0 or (EventData has_any (targetusername_has_any))) and 
+              (array_length(actorusername_has_any) == 0 or (SubjectUserName has_any (actorusername_has_any))) and
+              (array_length(srcipaddr_has_any_prefix) == 0)
           | project-rename 
               ActorOriginalUserType = AccountType,
               ActorSessionId = SubjectLogonId,
@@ -227,7 +223,7 @@ ParserQuery: |
                   MemberSid:string
               ) 
               with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-          | where (targetusername_has=='*' or (MemberName has targetusername_has))
+          | where (array_length(targetusername_has_any) == 0 or (MemberName has_any (targetusername_has_any)))
           | project-rename 
               TargetUserId = MemberSid,
               TargetUsername = MemberName
@@ -240,10 +236,9 @@ ParserQuery: |
           | where (isnull(starttime) or TimeGenerated >= starttime) 
                 and (isnull(endtime) or TimeGenerated <= endtime)          
           | where EventID in (4744, 4748, 4749, 4753, 4759, 4763)
-          | where (targetusername_has=='*' or (EventData has targetusername_has)) and 
-              (actorusername_has=='*' or (EventData has actorusername_has)) and
-              (array_length(targetdomain_has_any) == 0 or (EventData has_any (targetdomain_has_any))) and
-              (array_length(anydomain_has_any) == 0 or (EventData has_any (anydomain_has_any)))
+          | where (array_length(targetusername_has_any) == 0 or (EventData has_any (targetusername_has_any))) and 
+              (array_length(actorusername_has_any) == 0 or (EventData has_any (actorusername_has_any))) and
+              (array_length(srcipaddr_has_any_prefix) == 0)
           | parse-kv EventData as 
             (
                 TargetUserName:string,
@@ -256,9 +251,9 @@ ParserQuery: |
                 SubjectUserName:string
             ) 
             with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-          | where (actorusername_has=='*' or (SubjectUserName has actorusername_has)) and
-              (array_length(targetdomain_has_any) == 0 or (TargetDomainName has_any (targetdomain_has_any))) and
-              (array_length(anydomain_has_any) == 0 or (TargetDomainName has_any (anydomain_has_any)) or (SubjectDomainName has_any (anydomain_has_any)))
+          | where (array_length(targetusername_has_any) == 0 or (TargetUserName has_any (targetusername_has_any))) and
+              (array_length(actorusername_has_any) == 0 or (SubjectUserName has_any (actorusername_has_any))) and
+              (array_length(srcipaddr_has_any_prefix) == 0)
           | project-rename 
               ActorOriginalUserType = AccountType,
               ActorSessionId = SubjectLogonId,
@@ -274,7 +269,7 @@ ParserQuery: |
                   MemberSid:string
               ) 
               with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-          | where (targetusername_has=='*' or (MemberName has targetusername_has))
+          | where (array_length(targetusername_has_any) == 0 or (MemberName has_any (targetusername_has_any)))
           | project-rename 
               TargetUserId = MemberSid,
               TargetUsername = MemberName
@@ -292,8 +287,6 @@ ParserQuery: |
   | project-rename 
       EventUid = _ItemId
   | extend 
-      ActorDomain = SubjectDomainName,
-      ActorUserIdType = iif(isnotempty(ActorUserId), "SID",""),
       ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
       Dvc = DvcHostname,
       DvcIdType = iff (isnotempty(_ResourceId), "AzureResourceID", ""),
@@ -318,11 +311,11 @@ ParserQuery: |
       User = ActorUsername
   };
     parser (
-        starttime = starttime,
-        endtime = endtime,
-        targetusername_has = targetusername_has,
-        actorusername_has = actorusername_has,
-        targetdomain_has = targetdomain_has,
-        anydomain_has = anydomain_has,
-        disabled=disabled
+        starttime                = starttime,
+        endtime                  = endtime,
+        srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+        targetusername_has_any   = targetusername_has_any,
+        actorusername_has_any    = actorusername_has_any,
+        eventtype_in             = eventtype_in,
+        disabled                 = disabled
     )

@@ -296,7 +296,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 						if($contentToImport.TemplateSpec) {
                             #Getting Workbook Metadata dependencies from Github
                             $workbookData = $null
-                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
                             try {
                                 Write-Host "Downloading $workbookFinalPath"
                                 $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
@@ -359,7 +359,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         if($contentToImport.TemplateSpec) {
                             #Getting Workbook Metadata dependencies from Github
                             $workbookData = $null
-                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
                             try {
                                 Write-Host "Downloading $workbookFinalPath"
                                 $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
