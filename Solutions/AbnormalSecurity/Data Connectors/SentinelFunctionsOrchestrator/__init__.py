@@ -38,7 +38,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     current_datetime = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     logging.info(f"The current datetime is {current_datetime}")
     asyncio.run(transfer_abnormal_data_to_sentinel(stored_datetime, current_datetime))
-    context.signal_entity(datetimeEntityId, "set", (current_datetime, context.instance_id))
+    context.signal_entity(datetimeEntityId, "set", current_datetime)
     logging.info(f"Set last_datetime to {current_datetime}")
 
 async def transfer_abnormal_data_to_sentinel(stored_datetime, current_datetime):
