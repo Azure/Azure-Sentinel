@@ -55,13 +55,16 @@ def main(mytimer: func.TimerRequest):
     connector = Auth0Connector(DOMAIN, API_PATH, CLIENT_ID, CLIENT_SECRET, AUDIENCE)
     last_log_id, events = connector.get_log_events(script_start_time, config)
 
-    config['last_log_id'] = last_log_id
-    try:
-        config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
-    except IndexError:
-        logging.info('Known Indexing Scenario. Proceed with execution')
-    logging.info("new config" + str(config))
-    state_manager.post(json.dumps(config))
+    if last_log_id is not None and last_log_id is not '' and len(events) > 0:
+        logging.info(f'Finish script.')
+    else:
+        config['last_log_id'] = last_log_id
+        try:
+            config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
+        except IndexError:
+            logging.info('Known Indexing Scenario. Proceed with execution')
+        logging.info("new config" + str(config))
+        state_manager.post(json.dumps(config))
     logging.info(f'Finish script.')
 
 class Auth0Connector:
@@ -119,12 +122,15 @@ class Auth0Connector:
             config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
         except IndexError:
             logging.info('Known Indexing Scenario. Proceed with execution')
-        logging.info("new config" + str(config))
-        self.state_manager.post(json.dumps(config))
+        
         for el in events:
             self.sentinel.send(el)
         self.sentinel.flush()
         logging.info('Events sent to Sentinel.')
+
+        logging.info("new config" + str(config))
+        self.state_manager.post(json.dumps(config))
+
         if "Link" in resp.headers :
             next_link = resp.headers['Link']
             next_uri = next_link[next_link.index('<') + 1:next_link.index('>')]
@@ -160,11 +166,14 @@ class Auth0Connector:
                             config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
                         except IndexError:
                             logging.info('Known Indexing Scenario. Proceed with execution')
-                        logging.info("new config" + str(config))
-                        self.state_manager.post(json.dumps(config))
+                        
                         for el in events:
                             self.sentinel.send(el)
                         self.sentinel.flush()
+
+                        logging.info("new config" + str(config))
+                        self.state_manager.post(json.dumps(config))
+
                     if self.check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         break
