@@ -59,6 +59,10 @@ while [[ $# -gt 0 ]]; do
 		DEVURL="$2"
 		shift 2
 		;;
+    --hostnetwork)
+		HOSTNETWORK=1
+		shift 1
+		;;
 	--dev-acr-login)
 		DEVACRLOGIN="$2"
 		shift 2
@@ -203,6 +207,7 @@ while IFS= read -r contname; do
 		fi
 		read -r -a containervariables <<<$(docker inspect "$contname" --format '{{.Config.Env}}' | tr -d '[' | tr -d ']' | tr ' ' ' ')
 		envstring=""
+		cmdparams=""
 		for variable in "${containervariables[@]}"; do
 			if [[ ! $variable == PATH=* ]] &&
 				[[ ! $variable == LANG=* ]] &&
@@ -265,12 +270,14 @@ while IFS= read -r contname; do
 			docker cp "$contname":$sdkfileloc "/tmp/sapcon-update/$contname/inst/"
 		fi
 		sdkfilename=$(ls -1r /tmp/sapcon-update/$contname/inst/nwrfc*.zip | head -n 1)
-
+		if [ $HOSTNETWORK ]; then
+			cmdparams+=" --network host "
+		fi
 		if [ ! $NOTESTRUN ]; then
 			# If test run is required
 			testruncontainer="$contname-testrun"
 			log "Creating agent $contname in test mode"
-			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $envstring $ContainerNetworkSetting --name "$testruncontainer" $dockerimage$tagver --sapconinstanceupdate >/dev/null
+			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $cmdparams $envstring $ContainerNetworkSetting --name "$testruncontainer" $dockerimage$tagver --sapconinstanceupdate >/dev/null
 			docker cp "$sdkfilename" "$testruncontainer":$sdkfileloc
 			docker start "$testruncontainer" >/dev/null
 
@@ -344,7 +351,7 @@ while IFS= read -r contname; do
 		if [ $dryrunsuccess == 1 ]; then
 			log "Creating updated agent $contname"
 			labelstring="--label Cloud=$CLOUD "
-			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $envstring $labelstring $restartpolicystring $ContainerNetworkSetting --name "$contname" $dockerimage$tagver >/dev/null
+			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $cmdparams $envstring $labelstring $restartpolicystring $ContainerNetworkSetting --name "$contname" $dockerimage$tagver >/dev/null
 			docker cp "$sdkfilename" "$contname":"$sdkfileloc"
 		fi
 		#Cleaning sapcon-update folder

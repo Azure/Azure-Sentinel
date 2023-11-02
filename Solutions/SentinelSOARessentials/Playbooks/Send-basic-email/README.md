@@ -1,7 +1,7 @@
 # Send-basic-email
 author: Benjamin Kovacevic
 
-This playbook will be sending email with basic incidents details (Incident title, severity, tactics, link,…) when incident is created in Azure Sentinel.
+This playbook will be sending email with basic incidents details (Incident title, severity, tactics, link,…) when incident is created in Microsoft Sentinel.
 <br/><br/>
 ## Pre-requisites:
 An O365 account to be used to send email notification 
