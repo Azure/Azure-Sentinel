@@ -169,7 +169,7 @@
     "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
     "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1'))))]",
     "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('_analyticRulecontentId1'),'-', variables('analyticRuleVersion1'))))]",
-    "analyticRuleVersion2": "1.0.1",
+    "analyticRuleVersion2": "1.2.0",
     "analyticRulecontentId2": "7bce901b-9bc8-4948-8dfc-8f68878092d5",
     "_analyticRulecontentId2": "[variables('analyticRulecontentId2')]",
     "analyticRuleId2": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId2'))]",
@@ -3018,7 +3018,7 @@
                 "description": "Alert if a cmdlet that can be translated to data exfiltration or mailbox access is executed on a VIP Mailbox.",
                 "displayName": "VIP Mailbox manipulation",
                 "enabled": false,
-                "query": "let VIPRestriction = \"on\";ExchangeAdminAuditLogs\n| where IsVIP or VIPRestriction =~ \"off\"\n| where UserOriented =~ 'Yes' and IsSensitive and ((IsRestrictedCmdLet and IsSenstiveCmdletParameters) or IsRestrictedCmdLet == false)\n| extend Level = iif (Status == \"Failure\", \"Medium\", \"High\")\n",
+                "query": "let VIPRestriction = \"on\";\nExchangeAdminAuditLogs\n| where IsVIP or VIPRestriction =~ \"off\"\n| where UserOriented =~ 'Yes' and IsSensitive and ((IsRestrictedCmdLet and IsSenstiveCmdletParameters) or IsRestrictedCmdLet == false)\n| extend Level = iif (Status == \"Failure\", \"Medium\", \"High\")\n",
                 "queryFrequency": "PT30M",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -3047,24 +3047,25 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Mailbox",
                     "fieldMappings": [
                       {
                         "columnName": "TargetObject",
                         "identifier": "MailboxPrimaryAddress"
                       }
-                    ],
-                    "entityType": "Mailbox"
+                    ]
                   },
                   {
+                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "Computer",
                         "identifier": "FullName"
                       }
-                    ],
-                    "entityType": "Host"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "TargetObject",
@@ -3078,23 +3079,22 @@
                         "columnName": "TargetObject",
                         "identifier": "FullName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "Caller",
                         "identifier": "Name"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ],
                 "alertDetailsOverride": {
-                  "alertSeverityColumnName": "Level",
+                  "alertDescriptionFormat": "Alert from Microsoft Exchange Security as {{CmdletName}} with parameters {{CmdletParameters}} was executed on {{TargetObject}}",
                   "alertDisplayNameFormat": "{{CmdletName}} executed on {{TargetObject}}",
-                  "alertDescriptionFormat": "Alert from Microsoft Exchange Security as {{CmdletName}} with parameters {{CmdletParameters}} was executed on {{TargetObject}}"
+                  "alertSeverityColumnName": "Level"
                 }
               }
             },
@@ -3165,7 +3165,7 @@
                 "description": "Detect if a server oriented cmdlet and a user oriented cmdlet that are monitored are launched by the same user in the same server within a 10 minutes timeframe",
                 "displayName": "Server Oriented Cmdlet And User Oriented Cmdlet used",
                 "enabled": false,
-                "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\nExchangeAdminAuditLogs \n  | where TimeGenerated > ago(2 * timeframe)\n  | where isempty(UserOriented)\n  | project serverExecutedTime = TimeGenerated,\n    ServerCmdlet = CmdletName,\n    ServerCmdletParams = CmdletParameters,\n    Computer,\n    Caller,\n    ServerCmdletTargetObject = TargetObject\n  | join kind= inner (\n      ExchangeAdminAuditLogs\n      | where TimeGenerated > ago(timeframe)\n      | where UserOriented =~ 'Yes'\n      | lookup kind=leftouter _GetWatchlist('ExchangeVIP') on $left.TargetObject == $right.canonicalName\n      | project userExecutedTime = TimeGenerated,\n        UserCmdlet = CmdletName,\n        UserCmdletParams = CmdletParameters,\n        Computer,\n        Caller,\n        UserCmdletTargetObject = TargetObject,\n        userPrincipalName,\n        objectGUID,\n        sAMAccountName,\n        IsVIP)\n    on Computer, Caller\n  | where userExecutedTime - serverExecutedTime < spanoftime\n  | extend TimeDelta = userExecutedTime - serverExecutedTime\n  | extend TimeDeltaInverse = serverExecutedTime - userExecutedTime\n  | where tolong(TimeDelta) >= threshold or tolong(TimeDeltaInverse) >= threshold\n",
+                "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\nExchangeAdminAuditLogs \n  | where TimeGenerated > ago(2 * timeframe)\n  | where isempty(UserOriented)\n  | project serverExecutedTime = TimeGenerated,\n    ServerCmdlet = CmdletName,\n    ServerCmdletParams = CmdletParameters,\n    Computer,\n    Caller,\n    ServerCmdletTargetObject = TargetObject\n  | join kind= inner (\n      ExchangeAdminAuditLogs\n      | where TimeGenerated > ago(timeframe)\n      | where UserOriented =~ 'Yes'\n      | project userExecutedTime = TimeGenerated,\n        UserCmdlet = CmdletName,\n        UserCmdletParams = CmdletParameters,\n        Computer,\n        Caller,\n        UserCmdletTargetObject = TargetObject,\n        userPrincipalName,\n        objectGUID,\n        sAMAccountName,\n        IsVIP)\n    on Computer, Caller\n  | where userExecutedTime - serverExecutedTime < spanoftime\n  | extend TimeDelta = userExecutedTime - serverExecutedTime\n  | extend TimeDeltaInverse = serverExecutedTime - userExecutedTime\n  | where tolong(TimeDelta) >= threshold or tolong(TimeDeltaInverse) >= threshold\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P1D",
                 "severity": "High",
@@ -3194,6 +3194,7 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Mailbox",
                     "fieldMappings": [
                       {
                         "columnName": "userPrincipalName",
@@ -3203,28 +3204,28 @@
                         "columnName": "userPrincipalName",
                         "identifier": "Upn"
                       }
-                    ],
-                    "entityType": "Mailbox"
+                    ]
                   },
                   {
+                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "Computer",
                         "identifier": "FullName"
                       }
-                    ],
-                    "entityType": "Host"
+                    ]
                   },
                   {
+                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "columnName": "ServerCmdletTargetObject",
                         "identifier": "HostName"
                       }
-                    ],
-                    "entityType": "Host"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "Caller",
@@ -3234,8 +3235,7 @@
                         "columnName": "objectGUID",
                         "identifier": "ObjectGuid"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
