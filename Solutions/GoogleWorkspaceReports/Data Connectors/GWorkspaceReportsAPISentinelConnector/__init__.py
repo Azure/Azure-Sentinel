@@ -274,6 +274,7 @@ def gen_chunks_with_latesttime(data,log_type):
 def process_result(result_obj, start_time, postactivity_list, line):
     if result_obj is not None:
         result_obj = expand_data(result_obj)
+        logging.info("Activity - {}, Expanded Events {} )".format(line, len(result_obj)))
         sorted_data = sorted(result_obj, key=lambda x: x["id"]["time"],reverse=False)
         json_string = json.dumps(result_obj)
         byte_ = json_string.encode("utf-8")

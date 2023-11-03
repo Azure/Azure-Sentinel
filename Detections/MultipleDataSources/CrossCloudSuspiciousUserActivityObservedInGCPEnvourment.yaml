@@ -1,0 +1,151 @@
+id: 58e306fe-1c49-4b8f-9b0e-15f25e8f0cd7
+name: Cross-Cloud Suspicious user activity observed in GCP Envourment
+description: |
+  '
+  This detection query aims to correlate potentially suspicious user activities logged in Google Cloud Platform (GCP) Audit Logs with security alerts originating from Microsoft Security products. This correlation facilitates the identification of potential cross-cloud security incidents. By summarizing these findings, the query provides valuable insights into cross-cloud identity threats and their associated details, enabling organizations to respond promptly and mitigate potential risks effectively.
+  '
+severity: Medium
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert (IPC)
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+  - Persistence
+  - PrivilegeEscalation
+  - CredentialAccess
+  - Discovery
+relevantTechniques:
+  - T1566
+  - T1059
+  - T1078
+  - T1046
+  - T1547
+  - T1548
+  - T1069
+  - T1552
+query: |
+  // Filter GCP Audit Logs to exclude service accounts
+  GCPAuditLogs 
+  | where PrincipalEmail !endswith "gserviceaccount.com"
+  // Exclude system-related authentication information
+  | where AuthenticationInfo !has ("system:")
+  // Extract GCP request name and relevant attributes
+  | extend GCPRequestName= parse_json(Request).name
+  | extend
+      GCPAccoutType= tostring(split(GCPRequestName, "/")[2]),
+      GCPUserIdentity = iff(isempty(tostring(split(GCPRequestName, "/")[3])), tostring(parse_json(AuthenticationInfo).principalEmail), "na"), 
+      GCPUserIp = tostring(parse_json(RequestMetadata).callerIp),
+      GCPCallerUA = tostring(parse_json(RequestMetadata).callerSuppliedUserAgent)
+  // Filter out empty or service account identities
+  | where isnotempty(GCPUserIdentity) and GCPUserIdentity !endswith "gserviceaccount.com"
+  // Select relevant attributes for further analysis
+  | project
+      PrincipalEmail,
+      GCPUserIdentity,
+      GCPAccoutType,
+      GCPRequestName,
+      GCPCallerUA,
+      Request,
+      RequestMetadata,
+      GCPUserIp,
+      MethodName,
+      ServiceName,
+      GCPEventTime= TimeGenerated,
+      ProjectId
+  // Join GCP Audit Logs with SecurityAlert data based on user identity and IP
+  | join kind=inner (    
+      SecurityAlert 
+      // Exclude alerts from Azure Sentinel
+      | where ProductName !in ("Azure Sentinel")
+      // Extract IP entities from alert data
+      | extend AlertIPEntity=  tostring(extract(@"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", 0, Entities))
+      | extend
+          AlertUserUPN = tostring(extract(@'\b[\w\.\-]+@[\w\.\-]+\b', 0, Entities)),
+          AlertTime= TimeGenerated
+      // Filter out empty user identities and IP entities
+      | where isnotempty(AlertIPEntity) and isnotempty(AlertUserUPN)
+      )
+      on $left.GCPUserIdentity == $right.AlertUserUPN and $left.GCPUserIp == $right.AlertIPEntity
+  // Summarize the data, calculating time differences and aggregating attributes
+  | summarize
+      FirstAlert=min(AlertTime),
+      LastAlert=max(AlertTime),
+      TimeDiff=datetime_diff('minute', min(AlertTime), min(GCPEventTime)),
+      MethodName=make_set(MethodName),
+      ServiceName= make_set(ServiceName),
+      GCPProjctId=make_set(ProjectId),
+      Request=make_set(Request),
+      GCPCallerUA=make_set(GCPCallerUA)
+      by
+      AlertUserUPN,
+      AlertIPEntity,
+      GCPUserIp,
+      GCPUserIdentity,
+      AlertSeverity,
+      AlertName,
+      AlertLink,
+      Description,
+      Tactics,
+      ProductName,
+      SystemAlertId,
+      GCPAccoutType
+  // Extend the data with additional attributes
+  | extend
+      Name = tostring(split(GCPUserIdentity, "@")[0]),
+      UPNSuffix = tostring(split(GCPUserIdentity, "@")[1])
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: GCPUserIp
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+customDetails:
+  AlertName: AlertName
+  FirstAlert: FirstAlert
+  LastAlert: LastAlert
+  TimeDiff: TimeDiff
+  MethodName: MethodName
+  GCPProjctId: GCPProjctId
+  GCPCallerUA: GCPCallerUA
+  ServiceName: ServiceName
+  AlertUserUPN: AlertUserUPN
+  SystemAlertId: SystemAlertId
+  Tactics: Tactics
+  Request: Request
+  CorrelationWith: "GCPAuditLogs"
+alertDetailsOverride:
+  alertDisplayNameFormat: "A user {{GCPUserUPN}} has been linked to {{AlertName}}, and has potentially suspicious behavior within the GCP environment from, originating from the IP address {{GCPUserIp}}."
+  alertDescriptionFormat: " This detection compiles and correlates unauthorized user access alerts originating from {{ProductName}} With Alert Description '{{Description}}' observed activity in GCP environmeny. It focuses on Microsoft Security, specifically targeting user bhaviour and network IP associations tied to activities such as logins from malicious IP addresses or instance credential exfiltration attempts. The detection leverages these common network IP advisories to detect and pinpoint users suspicious activity to access both Azure and GCP resources.  \n\n Microsoft Security ALert Link : '{{AlertLink}}'"
+  alertSeverityColumnName: AlertSeverity
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: AlertLink
+    - alertProperty: ProviderName
+      value: "ProductName"
+    - alertProperty: ProductComponentName
+      value: "Microsoft Security"
+kind: Scheduled
+version: 1.0.0
