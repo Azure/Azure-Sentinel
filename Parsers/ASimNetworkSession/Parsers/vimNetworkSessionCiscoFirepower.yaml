@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for Cisco Firepower
   Version: '0.1.0'
-  LastUpdated: Oct 10, 2023
+  LastUpdated: Oct 30, 2023
 Product:
   Name: Cisco Firepower
 Normalization:
@@ -59,7 +59,7 @@ ParserQuery: |
       DvcAction: string,
       EventResult: string
   )
-      [
+  [
       "Blocked", "Deny", "Failure",
       "Alerted", "Allow", "Success",
       "Rewritten", "Allow", "Success",
@@ -84,7 +84,7 @@ ParserQuery: |
       "Monitor", "Allow", "Success"
   ];
   let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
-    [
+  [
         "0", "Low",
         "1", "Low",
         "2", "Low",
@@ -96,9 +96,9 @@ ParserQuery: |
         "8", "High",
         "9", "High",
         "10", "High"
-    ];
+  ];
   let EventResultDetailsLookup = datatable(Reason: string, EventResultDetails: string)
-      [
+  [
       "N/A", "NA",
       "IP Block", "Terminated",
       "IP Monitor", "Unknown",
@@ -193,20 +193,14 @@ ParserQuery: |
           | extend
               DstUsernameType = _ASIM_GetUsernameType(DstUsername),
               DstUserType = _ASIM_GetUserType(DstUsername, "");
-      let AllEvents = union Connection_Statistics_Events, Intrusion_Events, Policy_Violation_Events
-          | extend
-              SrcPortNumber = SourcePort,
-              DstPortNumber = DestinationPort,
-              SrcZone = DeviceCustomString3,
-              DstZone = DeviceCustomString4;
-      let Intrusion_Events_ICMP = Intrusion_Events
-          | where NetworkProtocol == "ICMP"
-          | extend
-              NetworkIcmpCode = DestinationPort,
-              NetworkIcmpType = tostring(SourcePort),
-              SrcPortNumber = int(null),
-              DstPortNumber = int(null);
-      union AllEvents, Intrusion_Events_ICMP
+      union Connection_Statistics_Events, Intrusion_Events, Policy_Violation_Events
+      | extend
+          SrcPortNumber = iff(NetworkProtocol == "ICMP", int(null), SourcePort),
+          DstPortNumber = iff(NetworkProtocol == "ICMP", int(null), DestinationPort),
+          NetworkIcmpCode = iff(NetworkProtocol == "ICMP", DestinationPort, int(null)),
+          NetworkIcmpType = iff(NetworkProtocol == "ICMP", tostring(SourcePort), ""),
+          SrcZone = DeviceCustomString3,
+          DstZone = DeviceCustomString4
       | lookup ActionLookup on DeviceAction
       | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
       | where ((eventresult == "*") or EventResult == eventresult)
