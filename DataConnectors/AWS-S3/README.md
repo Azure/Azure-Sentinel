@@ -4,7 +4,7 @@
 
 AWS S3 Sentinel connector ingests many AWS service logs into Azure Sentinel. Currently supported logs include: AWS VPC Flow Logs, GuardDuty, Cloud Watch, Cloud Trail (management and data events). 
 
-This connector requires that each AWS service publish its logs to an S3 bucket in your account. In addition you must configure SQS notifications and permissions for the connector to retreive the logs.
+This connector requires that each AWS service publish its logs to an S3 bucket in your account. In addition you must configure SQS notifications and permissions for the connector to retrieve the logs.
 
 More information on the connector and configuration instructions can be found on the Azure Sentinel data connector page in the Azure portal.
 
