@@ -1,7 +1,7 @@
 Parser:
   Title: Audit Event ASIM parser for CrowdStrike Falcon Endpoint Protection
   Version: '0.1.0'
-  LastUpdated: Oct 13 2023
+  LastUpdated: Oct 30 2023
 Product:
   Name: CrowdStrike Falcon Endpoint Protection
 Normalization:
@@ -71,26 +71,28 @@ ParserQuery: |
   let UserAuditActivities = dynamic(["delete_report_execution", "delete_scheduled_report", "update_scheduled_report", "create_scheduled_report", "update_class_action", "update_policy", "enable_policy", "create_policy", "remove_rule_group", "create_rule_group", "delete_rule_group", "add_rule_group", "delete_rule", "update_rule", "create_rule", "disable_policy", "delete_policy", "update_priority", "assign_policy", "remove_policy", "ip_rules_added", "ip_rules_removed"]);
   let AuthAuditActivities = dynamic(["CreateAPIClient", "UpdateAPIClient"]);
   let parser = (disabled: bool=false) {
-      let allData = CommonSecurityLog
-          | where not(disabled)
-          | where (DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost")
-          | where (DeviceEventClassID == "UserActivityAuditEvent" and Activity in (UserAuditActivities)) or (DeviceEventCategory == "AuthActivityAuditEvent" and Activity in (AuthAuditActivities))
-          | lookup EventFieldsLookup on Activity
-          | lookup EventSeverityLookup on LogSeverity
-          | extend EventType = EventType_lookup;
-      let useractivitydata = allData
-          | where (DeviceEventClassID == "UserActivityAuditEvent" and Activity in (UserAuditActivities)) 
-          | extend
-              EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime))
-          | project-rename EventOriginalType = DeviceEventClassID;
-      let authactivitydata = allData
-          | where (DeviceEventCategory == "AuthActivityAuditEvent" and Activity in (AuthAuditActivities))
-          | extend
-              EventStartTime = todatetime(DeviceCustomDate1)
-          | project-rename
-              EventOriginalType  = DeviceEventCategory;
-      union useractivitydata, authactivitydata
+      CommonSecurityLog
+      | where not(disabled)
+      | where (DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost")
+      | where (DeviceEventClassID == "UserActivityAuditEvent" and Activity in (UserAuditActivities)) or (DeviceEventCategory == "AuthActivityAuditEvent" and Activity in (AuthAuditActivities))
+      | lookup EventFieldsLookup on Activity
+      | lookup EventSeverityLookup on LogSeverity
       | extend
+          EventType = EventType_lookup,
+          EventStartTime = case(
+                      DeviceEventClassID == "UserActivityAuditEvent",
+                      unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
+                      DeviceEventCategory == "AuthActivityAuditEvent",
+                      todatetime(DeviceCustomDate1),
+                      datetime(null)
+                  ),
+          EventOriginalType = case(
+                          DeviceEventClassID == "UserActivityAuditEvent",
+                          DeviceEventClassID,
+                          DeviceEventCategory == "AuthActivityAuditEvent",
+                          DeviceEventCategory,
+                          ""
+                      ),
           EventResult = iff(EventOutcome == "false", "Failure", "Success"),
           EventSchema = "AuditEvent",
           EventSchemaVersion = "0.1",
@@ -105,19 +107,19 @@ ParserQuery: |
           EventOriginalSeverity = LogSeverity,
           EventProductVersion = DeviceVersion,
           TargetAppName = ProcessName,
-          EventOriginalResultDetails = EventOutcome
+          EventOriginalResultDetails = EventOutcome,
+          EventOriginalSubType = Activity
       | extend
           EventEndTime = EventStartTime,
           Application = TargetAppName,
-          SrcIpAddr = DvcIpAddr,
+          TargetIpAddr = DvcIpAddr,
           User = ActorUsername,
           ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
           ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
           TargetAppType = iff(isnotempty(TargetAppName), "Service", "")
       | extend
           Dvc = coalesce(DvcIpAddr, EventProduct),
-          Src = SrcIpAddr,
-          IpAddr = SrcIpAddr
+          Dst = TargetIpAddr
       | project-away 
           Source*,
           Destination*,
@@ -134,7 +136,6 @@ ParserQuery: |
           OriginalLogSeverity,
           Process*,
           Protocol,
-          Activity,
           ReceivedBytes,
           SentBytes,
           Remote*,
