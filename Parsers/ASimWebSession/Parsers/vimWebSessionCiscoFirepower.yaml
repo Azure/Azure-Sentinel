@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM filtering parser for Cisco Firepower
   Version: '0.1.0'
-  LastUpdated: Sep 05 2023
+  LastUpdated: Oct 30 2023
 Product:
   Name: Cisco Firepower
 Normalization:
@@ -82,18 +82,18 @@ ParserQuery: |
       eventresult: string='*',
       disabled: bool=false) {
       let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-      let AllLogs=CommonSecurityLog
-          | where not(disabled) 
-          | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
-              and DeviceVendor == "Cisco" and DeviceProduct == "Firepower"
-              and DeviceEventClassID in("File:500:1", "FileMalware:502:1", "FireAMP:125:1")
-              and array_length(eventresultdetails_in) == 0
-              and array_length(httpuseragent_has_any) == 0
-              and ((array_length(url_has_any) == 0) or RequestURL has_any (url_has_any))
-          | extend
-              temp_isSrcMatch=has_any_ipv4_prefix(SourceIP, src_or_any), 
-              temp_isDstMatch=has_any_ipv4_prefix(DestinationIP, ipaddr_has_any_prefix)
-          | extend ASimMatchingIpAddr = case(
+      CommonSecurityLog
+      | where not(disabled) 
+      | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
+          and DeviceVendor == "Cisco" and DeviceProduct == "Firepower"
+          and DeviceEventClassID in("File:500:1", "FileMalware:502:1", "FireAMP:125:1")
+          and array_length(eventresultdetails_in) == 0
+          and array_length(httpuseragent_has_any) == 0
+          and ((array_length(url_has_any) == 0) or RequestURL has_any (url_has_any))
+      | extend
+          temp_isSrcMatch=has_any_ipv4_prefix(SourceIP, src_or_any), 
+          temp_isDstMatch=has_any_ipv4_prefix(DestinationIP, ipaddr_has_any_prefix)
+      | extend ASimMatchingIpAddr = case(
                                     array_length(src_or_any) == 0,
                                     "-",
                                     (temp_isSrcMatch and temp_isDstMatch),
@@ -104,38 +104,39 @@ ParserQuery: |
                                     "DstIpAddr",
                                     "No match"
                                 )
-          | where ASimMatchingIpAddr != "No match"
-          | lookup EventFieldsLookup on DeviceAction
-          | where eventresult == '*' or EventResult =~ eventresult
-          | parse-kv AdditionalExtensions as (start: long) with (pair_delimiter=';', kv_delimiter='=')
-      ;
-      let FireAMPLogs = AllLogs
-          | where DeviceEventClassID == "FireAMP:125:1"
-          | extend
-              EventMessage = DeviceCustomString5,
-              ThreatName = DeviceCustomString2,
-              AdditionalFields = bag_pack(
-                        "policy", DeviceCustomString1,
-                        "process", SourceProcessName,
-                        "connectionInstance", ProcessID,
-                        "disposition", DeviceCustomString3,
-                        "event type id", EventOutcome
-                    )
-          | project-rename
-              DstUsername = DestinationUserName,
-              Disposition = DeviceCustomString3
-          | extend
-              DstUsernameType = _ASIM_GetUsernameType(DstUsername),
-              DstUserType = _ASIM_GetUserType(DstUsername, "");
-      let FileLogs = AllLogs
-          | where DeviceEventClassID in ("File:500:1", "FileMalware:502:1")
-          | extend AdditionalFields = bag_pack(
-                                  "connectionInstance", ProcessID,
-                                  "signaturedata", DeviceCustomString4,
-                                  "disposition", DeviceCustomString2
+      | where ASimMatchingIpAddr != "No match"
+      | lookup EventFieldsLookup on DeviceAction
+      | where eventresult == '*' or EventResult =~ eventresult
+      | parse-kv AdditionalExtensions as (start: long) with (pair_delimiter=';', kv_delimiter='=')
+      | extend
+          EventMessage = iff(DeviceEventClassID == "FireAMP:125:1", DeviceCustomString5, ""),
+          ThreatName = iff(DeviceEventClassID == "FireAMP:125:1", DeviceCustomString2, ""),
+          Disposition = case(
+                    DeviceEventClassID == "FireAMP:125:1",
+                    DeviceCustomString3,
+                    DeviceEventClassID in ("File:500:1", "FileMalware:502:1"),
+                    DeviceCustomString2,
+                    ""
+                ),
+          AdditionalFields = todynamic(
+                              case(
+                                  DeviceEventClassID == "FireAMP:125:1",
+                                  bag_pack(
+                                          "policy", DeviceCustomString1,
+                                          "process", SourceProcessName,
+                                          "connectionInstance", ProcessID,
+                                          "disposition", DeviceCustomString3,
+                                          "event type id", EventOutcome
+                                      ),
+                                  DeviceEventClassID in ("File:500:1", "FileMalware:502:1"),
+                                  bag_pack(
+                                          "connectionInstance", ProcessID,
+                                          "signaturedata", DeviceCustomString4,
+                                          "disposition", DeviceCustomString2
+                                      ),
+                                  ""
                               )
-          | project-rename Disposition = DeviceCustomString2;
-      union FireAMPLogs, FileLogs
+                          )
       | invoke _ASIM_ResolveNetworkProtocol('Protocol')
       | extend NetworkProtocol = iff(NetworkProtocol == "Unassigned" and Protocol !in (63, 68, 99, 114, 253, 254), Protocol, NetworkProtocol)
       | lookup DirectionLookup on CommunicationDirection
@@ -180,6 +181,7 @@ ParserQuery: |
           EventProductVersion = DeviceVersion,
           DstPortNumber = DestinationPort,
           SrcUsername = SourceUserName,
+          DstUsername = DestinationUserName,
           Url = RequestURL,
           FileSHA256 = FileHash,
           SrcPortNumber = SourcePort,
@@ -193,6 +195,8 @@ ParserQuery: |
       | extend
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
           SrcUserType = _ASIM_GetUserType(SrcUsername, ""),
+          DstUsernameType = _ASIM_GetUsernameType(DstUsername),
+          DstUserType = _ASIM_GetUserType(DstUsername, ""),
           HashType = "SHA256",
           DvcIdType = "Other",
           NetworkProtocolVersion=case(DstIpAddr has ".", "IPv4", DstIpAddr has ":", "IPv6", ""),
