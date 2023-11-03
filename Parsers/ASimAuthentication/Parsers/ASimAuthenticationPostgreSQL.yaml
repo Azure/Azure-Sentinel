@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for PostgreSQL
-  Version: '0.1.1'
-  LastUpdated: April 20, 2022
+  Version: '0.1.3'
+  LastUpdated: Sept 18, 2023
 Product:
   Name: PostgreSQL
 Normalization:
@@ -15,160 +15,173 @@ References:
 Description: |
   This ASIM parser supports normalizing PostgreSQL sign in logs to the ASIM Authentication schema.
 ParserName: ASimAuthenticationPostgreSQL
+EquivalentBuiltInParser: _ASim_Authentication_PostgreSQL
 ParserParams:
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
   let PostgreSQLSignInAuthorized=(disabled:bool=false){
-  PostgreSQL_CL | where not(disabled)
-    | where RawData has 'connection authorized'
-    | extend
-    EventVendor = 'PostgreSQL'
-    , EventProduct = 'PostgreSQL'
-    , EventCount = int(1)
-    , EventSchema = 'Authentication'
-    , EventSchemaVersion = '0.1.1'
-    , EventResult = 'Success'
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , EventType = 'Logon'
-    , DvcHostname = Computer
-    , DvcIpAddr = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer)
-    , TargetUsernameType = 'Simple'
-    , TargetUsername = extract(@'user=(.*?)\sdatabase', 1, RawData)
-    , EventOriginalRestultDetails = 'Connection authorized'
+  PostgreSQL_CL 
+  | where not(disabled)
+  | where RawData has 'connection authorized'
+  | project-rename 
+      EventUid = _ItemId
+  | extend
+      DvcHostname                 = Computer,
+      DvcIpAddr                   = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer),
+      EventCount                  = int(1),
+      EventEndTime                = TimeGenerated,
+      EventOriginalRestultDetails = 'Connection authorized',
+      EventProduct                = 'PostgreSQL',
+      EventResult                 = 'Success',
+      EventSchema                 = 'Authentication',
+      EventSchemaVersion          = '0.1.1',
+      EventStartTime              = TimeGenerated,
+      EventType                   = 'Logon',
+      EventVendor                 = 'PostgreSQL',
+      TargetUsername              = extract(@'user=(.*?)\sdatabase', 1, RawData),
+      TargetUsernameType          = 'Simple'
   // ************************ 
   //      <Aliases> 
   // ************************
   | extend
-          User=TargetUsername
-        , Dvc=Computer
+      Dvc=Computer,
+      User=TargetUsername
   // ************************ 
   //      </Aliases> 
   // ************************
     | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
     };
   let PostgreSQLAuthFailure1=(disabled:bool=false){
-  PostgreSQL_CL | where not(disabled)
-    | where RawData has 'authentication failed'
-    | extend 
-    EventVendor = 'PostgreSQL'
-    , EventProduct = 'PostgreSQL'
-    , EventCount = int(1)
-    , EventSchema = 'Authentication'
-    , EventSchemaVersion = '0.1.1'
-    , EventResult = 'Failure'
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , EventType = 'Logon'
-    , DvcHostname = Computer
-    , DvcIpAddr = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer)
-    , TargetUsernameType = 'Simple'
-    , TargetUsername = extract(@'for user\s"(.*?)"', 1, RawData)
-    , EventResultDetails = 'No such user or password'
-    , EventOriginalRestultDetails = 'User authentication failed'
+  PostgreSQL_CL 
+  | where not(disabled)
+  | where RawData has 'authentication failed'
+  | extend 
+      DvcHostname                 = Computer,
+      DvcIpAddr                   = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer),
+      EventCount                  = int(1),
+      EventEndTime                = TimeGenerated,
+      EventOriginalRestultDetails = 'User authentication failed',
+      EventProduct                = 'PostgreSQL',
+      EventResult                 = 'Failure',
+      EventResultDetails          = 'No such user or password',
+      EventSchema                 = 'Authentication',
+      EventSchemaVersion          = '0.1.1',
+      EventStartTime              = TimeGenerated,
+      EventType                   = 'Logon',
+      EventVendor                 = 'PostgreSQL',
+      TargetUsername              = extract(@'for user\s"(.*?)"', 1, RawData),
+      TargetUsernameType          = 'Simple'
   // ************************ 
   //      <Aliases> 
   // ************************
   | extend
-          User=TargetUsername
-        , Dvc=Computer
+      Dvc  = Computer,
+      User = TargetUsername
   // ************************ 
   //      </Aliases> 
   // ************************
-    | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
-    };
+  | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
+  };
   let PostgreSQLAuthFailure2=(disabled:bool=false){
-  PostgreSQL_CL | where not(disabled)
-    | where RawData has_all ('role', 'does', 'not', 'exist')
-    | extend 
-    EventVendor = 'PostgreSQL'
-    , EventProduct = 'PostgreSQL'
-    , EventCount = int(1)
-    , EventSchema = 'Authentication'
-    , EventSchemaVersion = '0.1.1'
-    , EventResult = 'Failure'
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , EventType = 'Logon'
-    , DvcHostname = Computer
-    , DvcIpAddr = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer)
-    , TargetUsernameType = 'Simple'
-    , TargetUsername = extract(@'role\s"(.*?)"\sdoes', 1, RawData)
-    , EventResultDetails = 'No such user or password'
-    , EventOriginalRestultDetails = 'Role does not exist'
+  PostgreSQL_CL 
+  | where not(disabled)
+  | where RawData has_all ('role', 'does', 'not', 'exist')
+  | extend 
+      DvcHostname                 = Computer,
+      DvcIpAddr                   = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer),
+      EventCount                  = int(1),
+      EventEndTime                = TimeGenerated,
+      EventOriginalRestultDetails = 'Role does not exist',
+      EventProduct                = 'PostgreSQL',
+      EventResult                 = 'Failure',
+      EventResultDetails          = 'No such user or password',
+      EventSchema                 = 'Authentication',
+      EventSchemaVersion          = '0.1.1',
+      EventStartTime              = TimeGenerated,
+      EventType                   = 'Logon',
+      EventVendor                 = 'PostgreSQL',
+      TargetUsername              = extract(@'role\s"(.*?)"\sdoes', 1, RawData),
+      TargetUsernameType          = 'Simple'
   // ************************ 
   //      <Aliases> 
   // ************************
   | extend
-          User=TargetUsername
-        , Dvc=Computer
+      Dvc  = Computer,
+      User = TargetUsername
   // ************************ 
   //      </Aliases> 
   // ************************
-    | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
-    };
+  | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
+  };
   let PostgreSQLAuthFailure3=(disabled:bool=false){
-  PostgreSQL_CL | where not(disabled)
-    | where RawData has_all ('no', 'entry', 'user')
-    | extend 
-    EventVendor = 'PostgreSQL'
-    , EventProduct = 'PostgreSQL'
-    , EventCount = int(1)
-    , EventSchema = 'Authentication'
-    , EventSchemaVersion = '0.1.1'
-    , EventResult = 'Failure'
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , EventType = 'Logon'
-    , DvcHostname = Computer
-    , DvcIpAddr = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer)
-    , TargetUsernameType = 'Simple'
-    , TargetUsername = extract(@'user\s"(.*?)",', 1, RawData)
-    , SrcIpAddr = extract(@'host\s"(.*?)",', 1, RawData)
-    , EventResultDetails = 'No such user or password'
-    , EventOriginalRestultDetails = 'No entry for user'
+  PostgreSQL_CL 
+  | where not(disabled)
+  | where RawData has_all ('no', 'entry', 'user')
+  | extend 
+      DvcHostname                 = Computer,
+      DvcIpAddr                   = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer),
+      EventCount                  = int(1),
+      EventEndTime                = TimeGenerated,
+      EventOriginalRestultDetails = 'No entry for user',
+      EventProduct                = 'PostgreSQL',
+      EventResult                 = 'Failure',
+      EventResultDetails          = 'No such user or password',
+      EventSchema                 = 'Authentication',
+      EventSchemaVersion          = '0.1.1',
+      EventStartTime              = TimeGenerated,
+      EventType                   = 'Logon',
+      EventVendor                 = 'PostgreSQL',
+      SrcIpAddr                   = extract(@'host\s"(.*?)",', 1, RawData),
+      TargetUsername              = extract(@'user\s"(.*?)",', 1, RawData),
+      TargetUsernameType          = 'Simple'
   // ************************ 
   //      <Aliases> 
   // ************************
   | extend
-          User=TargetUsername
-        , Dvc=Computer
+      Dvc  = Computer,
+      User = TargetUsername
   // ************************ 
   //      </Aliases> 
   // ************************
-    | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
-    };
+  | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
+  };
   let PostgreSQLDisconnect=(disabled:bool=false){
-  PostgreSQL_CL | where not(disabled)
-    | where RawData has 'disconnection'
-    | extend 
-    EventVendor = 'PostgreSQL'
-    , EventProduct = 'PostgreSQL'
-    , EventCount = int(1)
-    , EventSchema = 'Authentication'
-    , EventSchemaVersion = '0.1.1'
-    , EventResult = 'Success'
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , EventType = 'Logoff'
-    , DvcHostname = Computer
-    , DvcIpAddr = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer)
-    , TargetUsernameType = 'Simple'
-    , TargetUsername = extract(@'user=(.*?)\sdatabase', 1, RawData)
-    , SrcIpAddr = extract(@'host=\[?(.*?)\]?', 1, RawData)
-    , EventResultDetails = 'Session expired'
-    , EventOriginalRestultDetails = 'User session closed'
+  PostgreSQL_CL 
+  | where not(disabled)
+  | where RawData has 'disconnection'
+  | extend 
+      DvcHostname                 = Computer,
+      DvcIpAddr                   = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, Computer),
+      EventCount                  = int(1),
+      EventEndTime                = TimeGenerated,
+      EventOriginalRestultDetails = 'User session closed',
+      EventProduct                = 'PostgreSQL',
+      EventResult                 = 'Success',
+      EventResultDetails          = 'Session expired',
+      EventSchema                 = 'Authentication',
+      EventSchemaVersion          = '0.1.1',
+      EventStartTime              = TimeGenerated,
+      EventType                   = 'Logoff',
+      EventVendor                 = 'PostgreSQL',
+      SrcIpAddr                   = extract(@'host=\[?(.*?)\]?', 1, RawData),
+      TargetUsername              = extract(@'user=(.*?)\sdatabase', 1, RawData),
+      TargetUsernameType          = 'Simple'
   // ************************ 
   //      <Aliases> 
   // ************************
   | extend
-          User=TargetUsername
-        , Dvc=Computer
+      Dvc  = Computer,
+      User = TargetUsername
   // ************************ 
   //      </Aliases> 
   // ************************
-    | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
-    };
-  union isfuzzy=false PostgreSQLSignInAuthorized(disabled), PostgreSQLAuthFailure1(disabled), PostgreSQLAuthFailure2(disabled), PostgreSQLAuthFailure3(disabled), PostgreSQLDisconnect(disabled)
+  | project-away Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId
+  };
+  union isfuzzy=false 
+    PostgreSQLSignInAuthorized(disabled = disabled), 
+    PostgreSQLAuthFailure1(disabled = disabled), 
+    PostgreSQLAuthFailure2(disabled = disabled), 
+    PostgreSQLAuthFailure3(disabled = disabled), 
+    PostgreSQLDisconnect(disabled = disabled)

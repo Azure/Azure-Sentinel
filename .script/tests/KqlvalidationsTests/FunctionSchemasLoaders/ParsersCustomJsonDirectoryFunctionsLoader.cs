@@ -46,12 +46,7 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         private IEnumerable<FunctionSchema> GetFunctions(Dictionary<string, List<Column>> schemaToResultColumnsMapping)
         {
             var parsersYamlFilesLoader = new ParsersYamlFilesLoader();
-            var parsersYamlFiles = parsersYamlFilesLoader.GetFilesNames();
-
-            if (parsersYamlFiles.Count == 1 && parsersYamlFiles[0] == "NoFile.yaml")
-            {
-                return Enumerable.Empty<FunctionSchema>(); // Return an empty collection
-            }
+            var parsersYamlFiles = parsersYamlFilesLoader.GetFilesNames(true);
 
             return parsersYamlFiles.Select(fileName =>
             {

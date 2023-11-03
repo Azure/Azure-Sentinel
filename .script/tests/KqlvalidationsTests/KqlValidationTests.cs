@@ -9,6 +9,7 @@ using Microsoft.Azure.Sentinel.KustoServices.Implementation;
 using Kqlvalidations.Tests.FunctionSchemasLoaders;
 using System;
 using Newtonsoft.Json;
+using Octokit;
 
 namespace Kqlvalidations.Tests
 {
@@ -17,6 +18,7 @@ namespace Kqlvalidations.Tests
         private readonly IKqlQueryAnalyzer _queryValidator;
         private const int TestFolderDepth = 3;
         private const string UserMessageTemplate = "Template Id:{0} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.";
+        private const int TestFolderDepthForSolutionParsers = 6;
 
         public KqlValidationTests()
         {
@@ -273,6 +275,85 @@ namespace Kqlvalidations.Tests
             var parserName = (string)yaml["EquivalentBuiltInFunction"];
             ValidateKql(parserName, queryStr, false);
         }
+
+
+        [Theory]
+        [ClassData(typeof(SolutionParsersYamlFilesTestData))]
+        public void Validate_SolutionParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            if (fileName == "NoFile.yaml")
+            {
+                Assert.True(true);
+                return;
+            }
+            Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
+            var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml, "FunctionParams");
+
+            //Ignore known issues
+            yaml.TryGetValue("id", out object id);
+            if (id != null && ShouldSkipTemplateValidation((string)yaml["id"]))
+            {
+                return;
+            }
+
+            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
+            var parserName = (string)yaml["FunctionName"];
+            ValidateKql(id.ToString(), queryStr, false);
+        }
+
+        //Will enable this test case once all txt files removed from the parsers folders
+        //[Fact]
+        //public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
+        //{
+        //    var basePath = Utils.GetTestDirectory(TestFolderDepthForSolutionParsers);
+        //    var solutionDirectories = Path.Combine(basePath, "Solutions");
+        //    var parserFolders = Directory.GetDirectories(solutionDirectories, "Parsers", SearchOption.AllDirectories);
+
+        //    var allNonYamlMdFiles = parserFolders
+        //        .SelectMany(parserFolder => Directory.GetFiles(parserFolder, "*", SearchOption.AllDirectories))
+        //        .Where(file => !file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+        //        .ToList();
+
+        //    Assert.True(!allNonYamlMdFiles.Any(), $"All files under Parsers folders are supposed to have .yaml or .md extension");
+        //}
+
+        [Fact]
+        public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
+        {
+            var gitHubApiClient = GitHubApiClient.Instance;
+
+            IReadOnlyList<PullRequestFile> prFiles = gitHubApiClient.GetPullRequestFiles();
+
+            if (prFiles.Count == 0)
+            {
+                // No pull request files found, fail the test with an appropriate message
+                Assert.True(false, "No pull request files found. Unable to perform validation.");
+                return;
+            }
+
+            // Define constants for readability
+            const string parsersFolder = "Parsers";
+            const string parserFolder = "Parser";
+            const string removedStatus = "removed";
+
+            var basePath = Utils.GetTestDirectory(TestFolderDepthForSolutionParsers);
+            var solutionDirectories = Path.Combine(basePath, "Solutions");
+            var parserPaths = Directory.GetDirectories(solutionDirectories, parsersFolder, SearchOption.AllDirectories).ToList();
+            parserPaths.AddRange(Directory.GetDirectories(solutionDirectories, parserFolder, SearchOption.AllDirectories).ToList());
+
+            var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".yaml", ".md" };
+
+            var filteredFiles = prFiles
+                .Where(file =>
+                    parserPaths.Any(parserPath => Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar)).StartsWith(parserPath, StringComparison.OrdinalIgnoreCase)) &&
+                    file.Status != removedStatus &&
+                    !allowedExtensions.Contains(Path.GetExtension(file.FileName)))
+                .ToList();
+
+            // Assert that there are no disallowed extensions
+            Assert.False(filteredFiles.Any(), $"Files with disallowed extensions found: {string.Join(", ", filteredFiles.Select(file => file.FileName))}, Only {string.Join(", ", allowedExtensions)} extensions are allowed under Solution/Parsers folder.");
+        }
+
 
         /// <summary>
         /// Validates the KQL query for the latest Threat Intelligence data.

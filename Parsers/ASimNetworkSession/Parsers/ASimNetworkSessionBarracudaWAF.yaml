@@ -1,0 +1,204 @@
+Parser:
+  Title: Network Session ASIM parser for Barracuda WAF
+  Version: '0.1'
+  LastUpdated: Jun 13 2023
+Product:
+  Name: Barracuda WAF
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda WAF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing Barracuda WAF logs to the ASIM Web Session normalized schema.
+ParserName: ASimNetworkSessionBarracudaWAF
+EquivalentBuiltInParser: _ASim_NetworkSession_BarracudaWAF
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let barracudaSchema = datatable(
+      UnitName_s: string,
+      DeviceReceiptTime_s: string,
+      ActionID_s: string,
+      DestinationIP_s: string,
+      SourceIP: string,
+      host_s: string,
+      HostIP_s: string,
+      Severity_s: string,
+      LogType_s: string,
+      DestinationPort_d: real,
+      SourcePort_d: real,
+      Protocol_s: string,
+      DeviceVersion_s: string,
+      TimeTaken_d: real,
+      _ResourceId: string,
+      RawData: string,
+      Message: string,
+      Computer: string,
+      MG: string,
+      ManagementGroupName: string,
+      TenantId: string,
+      SourceSystem: string
+  )[];
+  let ProtocolLookup = datatable(
+      Protocol_s: string,
+      NetworkProtocol: string,
+      NetworkProtocolVersion: string
+  )[
+      "TCP", "TCP", "",
+      "TCP/ip", "TCP", "",
+      "UDP", "UDP", "",
+      "UDP/ip", "UDP", "",
+      "ICMP", "ICMP", "IPV4",
+      "ICMPv6", "ICMP", "IPV6",
+  ];
+  let SeverityLookup = datatable (severity: int, EventSeverity: string)
+      [
+      0, "High",
+      1, "High",
+      2, "High",
+      3, "Medium",
+      4, "Low",
+      5, "Low",
+      6, "Informational",
+      7, "Informational"
+  ];
+  let EventResultLookup = datatable (
+      ActionID_s: string,
+      EventResult: string,
+      DvcAction: string
+  )
+      [
+      "ALLOW", "Success", "Allow",
+      "DENY", "Failure", "Deny"
+  ];
+  let parser = (disabled: bool=false)
+  {
+  let BarracudaCustom = 
+      union isfuzzy=true
+          barracudaSchema,
+          barracuda_CL
+      | where not(disabled) and LogType_s == "NF"
+      | extend
+          severity = toint(Severity_s)
+      | lookup EventResultLookup on ActionID_s
+      | lookup SeverityLookup on severity
+      | lookup ProtocolLookup on Protocol_s
+      | extend
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "NetworkSession",
+          EventVendor = "Barracuda"
+      | extend
+          Dvc =  UnitName_s,
+          EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)-tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))),
+          DstIpAddr = DestinationIP_s,
+          SrcIpAddr = SourceIP,
+          DvcHostname = host_s,
+          DvcIpAddr = HostIP_s,
+          DstPortNumber = toint(DestinationPort_d),
+          SrcPortNumber = toint(SourcePort_d),
+          EventProductVersion = DeviceVersion_s
+      | extend
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          EventEndTime = EventStartTime
+      | project-away
+          *_d,
+          *_s,
+          _ResourceId,
+          severity,
+          RawData,
+          SourceIP,
+          Message,
+          Computer,
+          MG,
+          ManagementGroupName,
+          TenantId,
+          SourceSystem;
+  let BarracudaCEF = 
+      CommonSecurityLog
+      | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
+      | where DeviceEventCategory == "NF"
+      | extend
+          severity = toint(LogSeverity)
+      | lookup EventResultLookup on $left.DeviceAction == $right.ActionID_s
+      | lookup SeverityLookup on severity
+      | lookup ProtocolLookup on $left.Protocol == $right.Protocol_s
+      | extend
+          EventCount = toint(1),
+          EventProduct = "WAF",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "NetworkSession",
+          EventVendor = "Barracuda"
+      | extend
+          Dvc =  DeviceName,
+          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
+          DstIpAddr = DestinationIP,
+          SrcIpAddr = SourceIP,
+          DvcHostname = DeviceName,
+          DvcIpAddr = DestinationIP,
+          DstPortNumber = toint(DestinationPort),
+          SrcPortNumber = toint(SourcePort),
+          EventProductVersion = DeviceVersion
+      | extend
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          EventEndTime = EventStartTime
+      | project-away
+          ThreatConfidence,
+          CommunicationDirection,
+          AdditionalExtensions,
+          Device*,
+          Source*,
+          Destination*,
+          Activity,
+          LogSeverity,
+          ApplicationProtocol,
+          ProcessID,
+          ExtID,
+          Protocol,
+          Reason,
+          ReceiptTime,
+          SimplifiedDeviceAction,
+          OriginalLogSeverity,
+          ProcessName,
+          EndTime,
+          ExternalID,
+          File*,
+          ReceivedBytes,
+          Message,
+          Old*,
+          EventOutcome,
+          Request*,
+          StartTime,
+          Field*,
+          Flex*,
+          Remote*,
+          Malicious*,
+          severity,
+          ThreatSeverity,
+          IndicatorThreatType,
+          ThreatDescription,
+          _ResourceId,
+          SentBytes,
+          ReportReferenceLink,
+          Computer,
+          TenantId;
+  union isfuzzy = true 
+      BarracudaCustom,
+      BarracudaCEF
+  };
+  parser(disabled=disabled)

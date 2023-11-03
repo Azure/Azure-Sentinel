@@ -46,3 +46,18 @@ NOTE: After Deleting the parser it will take 5-10 min to reflect.
 3.	Repeat step 2 for all the parsers that exist for the name that is shown in the error.
 4.	Reinstall the solution
 5.	Verify that there is only one instance of parser installed.
+   
+![image](https://github.com/Azure/Azure-Sentinel/assets/142014775/a921cb67-a124-46f8-b116-9fbfe5a89d0a)
+
+The Data Connectors blade performs a connectivity check of all connectors on-load - that connectivity check is based on a Sentinel (Log Analytics) Workspace Function (not a Function App Resource in Sentinel’s Resource Group.)
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/142014775/34f5bc92-6ad1-4f96-8d99-e19eea512172)
+
+To delete an existing Kusto Function (or Parser), click and hover over the function name, a flyover panel appears with the delete option:
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/142014775/5c46754d-964f-4edd-8010-c38fd4b51589)
+
+Note after deleting the function named in the workspace error message, re-searching for it should find the duplicate function again. If manually recreating it is necessary, many Data Connectors deployed from the Content Hub will directly link to the 'Kusto Function' Parser KQL source code. These can also be found by browsing the [source repository](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions) for Content Hub solution packages:  Drill down under the solution's folder > Data Connectors > Parsers. 
+
+
+

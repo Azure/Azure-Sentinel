@@ -173,7 +173,9 @@ try
 								GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails
 							}
 							elseif ($objectKeyLowercase -eq "watchlists") {
-								GenerateWatchList -json $json -isPipelineRun $isPipelineRun
+								$watchListFileName = Get-ChildItem $finalPath
+
+								GenerateWatchList -json $json -isPipelineRun $isPipelineRun -watchListFileName $watchListFileName.BaseName
 							}
 						}
 						else
@@ -240,6 +242,9 @@ try
 
 		GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $calculatedPackageVersion;
 		Write-Host "Package Generated Successfully!!"
+
+		# check if mainTemplate and createUiDefinition json files are valid or not
+		CheckJsonIsValid($solutionFolderBasePath)
 	}
 }
 catch {

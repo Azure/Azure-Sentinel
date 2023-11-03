@@ -1,30 +1,47 @@
 id: b00f127c-46fa-40bd-9ab6-b266974d29cc
 name: Detect Disabled Account Sign-in Attempts by Account Name
 description: |
-  'This query searches for failed attempts to sign-in to disabled accounts summarized by account name.'
+  'This query searches for failed attempts to sign-in to disabled accounts summarized by account name.
+   This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
 tactics:
   - InitialAccess
 relevantTechniques:
   - T1078
 query: |
+  let riskScoreCutoff = 20; //Adjust this based on volume of results
   SigninLogs 
   | where ResultType == "50057" 
-  | where ResultDescription =~ "User account is disabled. The account has been disabled by an administrator." 
+  | where ResultDescription == "User account is disabled. The account has been disabled by an administrator." 
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by AppDisplayName, UserPrincipalName
-  | extend timestamp = StartTime, UserName = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  | extend timestamp = StartTime, UserPrincipalName = tolower(UserPrincipalName), AccountCustomEntity = UserPrincipalName 
   | order by count_ desc
-  | extend Account_0_Name = UserName
-  | extend Account_0_UPNSuffix = UPNSuffix
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+  ) on UserPrincipalName
+  | where BlastRadiusInt > riskScoreCutoff
 
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: UserName
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
-version: 1.0.2
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 2.0.1

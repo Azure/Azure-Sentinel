@@ -1,0 +1,172 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+    "view": {
+        "kind": "Form",
+        "properties": {
+            "title": "SAP Disrupt Form View",
+            "steps": [
+                {
+                    "name": "basics",
+                    "label": "Basics",
+                    "elements": [
+                        {
+                            "name": "resourceScope",
+                            "type": "Microsoft.Common.ResourceScope"
+                        },
+                        {
+                            "name": "getRoleAssignment",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "POST",
+                                "path": "providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01",
+                                "body": {
+                                    "query": "[concat('authorizationresources | where resourceGroup == \"', steps('basics').resourceScope.resourceGroup.name, '\" | where properties.roleDefinitionId == \"/providers/Microsoft.Authorization/RoleDefinitions/f4c81013-99ee-4d62-a7ee-b3f1f648599a\" and properties.scope == \"', steps('basics').resourceScope.resourceGroup.id, '\"')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "getLAWorkspace",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('basics').resourceScope.subscription.id,'/resourcegroups/', steps('basics').resourceScope.resourceGroup.name, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+                            }
+                        },
+                        {
+                            "name": "getVirtualMachineIdentity",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "POST",
+                                "path": "providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01",
+                                "body": {
+                                    "query": "resources | where type =~ 'microsoft.compute/virtualmachines' and isnotnull(identity)| project label = name, description = resourceGroup, value = identity.principalId | order by label asc"
+                                }
+                            }
+                        },
+                        {
+                            "name": "sentinelWorkspace",
+                            "type": "Microsoft.Common.DropDown",
+                            "label": "Sentinel Workspace",
+                            "defaultValue": "[parse('[]')]",
+                            "toolTip": "",
+                            "multiselect": false,
+                            "selectAll": true,
+                            "filter": true,
+                            "filterPlaceholder": "Filter items ...",
+                            "multiLine": true,
+                            "visible": true,
+                            "constraints": {
+                                "allowedValues": "[map(steps('basics').getLAWorkspace.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
+                                "required": true
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "disruptSettings",
+                    "label": "Disrupt Settings",
+                    "elements": [
+                        {
+                            "name": "sapSettings",
+                            "type": "Microsoft.Common.Section",
+                            "label": "SAP configuration",
+                            "elements": [
+                                {
+                                    "name": "preReqInfoBox",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": true,
+                                    "options": {
+                                        "text": "Owner rights are needed during deployment for role assignment to the Azure Storage account.",
+                                        "style": "Info"
+                                    }
+                                },
+                                {
+                                    "name": "virtualMachineIdentity",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "SAP agent VM",
+                                    "defaultValue": "[parse('[]')]",
+                                    "toolTip": "",
+                                    "multiselect": false,
+                                    "selectAll": true,
+                                    "filter": true,
+                                    "filterPlaceholder": "Filter items ...",
+                                    "multiLine": true,
+                                    "visible": true,
+                                    "constraints": {
+                                        "allowedValues": "[steps('basics').getVirtualMachineIdentity.data]",
+                                        "required": true
+                                    }
+                                },
+                                {
+                                    "name": "storageAccount",
+                                    "type": "Microsoft.Storage.StorageAccountSelector",
+                                    "label": "Storage account",
+                                    "toolTip": "",
+                                    "defaultValue": {
+                                        "name": "storageaccount01",
+                                        "type": "Premium_LRS"
+                                    },
+                                    "constraints": {
+                                        "allowedTypes": [],
+                                        "excludedTypes": []
+                                    },
+                                    "options": {
+                                        "hideExisting": false
+                                    },
+                                    "visible": true
+                                }
+                            ],
+                            "visible": true
+                        },
+                        {
+                            "name": "disruptSettings",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Disrupt configuration",
+                            "elements": [
+                                {
+                                    "name": "preReqInfoBox2",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[empty(steps('basics').getRoleAssignment.data)]",
+                                    "options": {
+                                        "text": "Missing Sentinel permissions for Playbooks. Configure them in the Sentinel workspace settings blade. After adding, wait up to 15 minutes before redeploying.",
+                                        "style": "Error"
+                                    }
+                                },
+                                {
+                                    "name": "playbookName",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Disrupt playbook",
+                                    "toolTip": "The disrupt Playbook rule name is static and can not be modified.",
+                                    "defaultValue": "DisruptUsingQueueDynamicAlertProperties",
+                                    "readOnly": true
+                                },
+                                {
+                                    "name": "automationRuleName",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Disrupt automation rule",
+                                    "toolTip": "The disrupt automation rule name is static and can not be modified.",
+                                    "defaultValue": "Run Disrupt on Incident Update",
+                                    "readOnly": true
+                                }
+                            ],
+                            "visible": true
+                        }
+                    ]
+                }
+            ]
+        },
+        "outputs": {
+            "kind": "ResourceGroup",
+            "location": "[steps('basics').resourceScope.location.name]",
+            "resourceGroupId": "[steps('basics').resourceScope.resourceGroup.id]",
+            "parameters": {
+                "virtualMachinePrincipalId": "[steps('disruptSettings').sapSettings.virtualMachineIdentity]",
+                "storageAccount": "[steps('disruptSettings').sapSettings.storageAccount]",
+                "sentinelWorkspaceResourceId": "[steps('basics').sentinelWorkspace]",
+                "playbookName": "[steps('disruptSettings').disruptSettings.playbookName]",
+                "automationRuleName": "[steps('disruptSettings').disruptSettings.automationRuleName]"
+            }
+        }
+    }
+}

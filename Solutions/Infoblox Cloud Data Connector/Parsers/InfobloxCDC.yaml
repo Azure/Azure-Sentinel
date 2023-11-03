@@ -1,0 +1,46 @@
+id: 3815f65b-5c24-49ea-ac06-c24b4223a5b6
+Function:
+  Title: Parser for InfobloxCDC
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: InfobloxCDC
+FunctionAlias: InfobloxCDC
+FunctionQuery: |
+    CommonSecurityLog
+    | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector"
+    | extend AEcopy = AdditionalExtensions
+    //Remove DHCP Option codes at end of DHCP logs to prevent invalid chars in fieldnames, causing errors. If you require these advanced fields, remove the following line.
+    | extend AEcopy = trim_end("InfobloxDHCPOptions=;(.*?)",AEcopy)
+    | extend AEcopy = extract_all(@"(?P<key>[^=;]+)=(?P<value>[^=;]+)", dynamic(["key","value"]), AEcopy)
+    | mv-apply AEcopy on (
+        summarize AdditionalExtensionsParsedNested = make_bag(bag_pack(tostring(AEcopy[0]), AEcopy[1]))
+    )
+    | extend AdditionalExtensionsParsed = AdditionalExtensionsParsedNested
+    | evaluate bag_unpack(AdditionalExtensionsParsed)
+    | extend ThreatLevel_Score = toint(column_ifexists("InfobloxThreatLevel", ""))
+    | extend ThreatLevel = case(ThreatLevel_Score>=80, "High",
+                           ThreatLevel_Score>=30 and ThreatLevel_Score<80, "Medium",
+                           ThreatLevel_Score<30 and ThreatLevel_Score>=1, "Low",
+                           ThreatLevel_Score == 0,"Info",
+                           "N/A" )
+    | extend ThreatClass = extract("(.*?)_", 1, tostring(column_ifexists("InfobloxThreatProperty", "")))
+    | extend ThreatProperty = extract("([^_]*$)", 1, tostring(column_ifexists("InfobloxThreatProperty", "")))
+    | extend InfobloxB1FeedName = column_ifexists("InfobloxB1FeedName", "")
+    | extend InfobloxRPZ = column_ifexists("InfobloxRPZ", "")
+    | extend InfobloxB1PolicyAction = column_ifexists("InfobloxB1PolicyAction", "")
+    | extend InfobloxB1PolicyName = column_ifexists("InfobloxB1PolicyName", "")
+    | extend InfobloxDomainCat = column_ifexists("InfobloxDomainCat", "")
+    | extend InfobloxB1ConnectionType = column_ifexists("InfobloxB1ConnectionType", "")
+    | extend InfobloxB1SrcOSVersion = column_ifexists("InfobloxB1SrcOSVersion", "")
+    | extend InfobloxB1Network = column_ifexists("InfobloxB1Network", "")
+    | extend DeviceName = column_ifexists("DeviceName", "")
+    | extend SourceMACAddress = column_ifexists("SourceMACAddress", "")
+    | extend InfobloxLeaseOp = column_ifexists("InfobloxLeaseOp", "")
+    | extend InfobloxLifetime = column_ifexists("InfobloxLifetime", "")
+    | extend InfobloxLeaseUUID = column_ifexists("InfobloxLeaseUUID", "")
+    | extend InfobloxDNSRCode = column_ifexists("InfobloxDNSRCode", "")
+    | extend InfobloxDNSQClass = column_ifexists("InfobloxDNSQClass", "")
+    | extend InfobloxDNSQType = column_ifexists("InfobloxDNSQType", "")
+    | extend InfobloxThreatConfidence = toint(column_ifexists("InfobloxThreatConfidence", ""))
+    | extend ThreatConfidence = toint(column_ifexists("InfobloxThreatConfidence", ""))
