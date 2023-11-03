@@ -1,7 +1,7 @@
 Parser:
   Title: NetworkSession ASIM Parser for VMware Carbon Black Cloud
   Version: '0.1.0'
-  LastUpdated: Oct 04, 2023
+  LastUpdated: Oct 25, 2023
 Product:
   Name: VMware Carbon Black Cloud
 Normalization:
@@ -52,7 +52,7 @@ ParserParams:
     Default: false
 ParserQuery: |
   let NetworkProtocolLookup = datatable (netconn_protocol_s: string, NetworkProtocol: string)
-  [
+    [
       "PROTO_TCP", "TCP",
       "PROTO_UDP", "UDP"
   ];
@@ -142,34 +142,34 @@ ParserQuery: |
               and (array_length(dvcaction) == 0 or DvcAction has_any (dvcaction))
               and ASimMatchingIpAddr != "No match"
               and ASimMatchingHostname != "No match";
-      let threatsdata = CarbonBlackNotifications_CL
-          | where type_s == "THREAT"
-          | project
-              threatInfo_incidentId_g,
-              threatInfo_score_d,
-              threatInfo_summary_s,
-              threatInfo_time_d,
-              threatInfo_threatCause_threatCategory_s,
-              threatInfo_threatCause_causeEventId_g,
-              ruleName_s,
-              deviceInfo_deviceVersion_s,
-              threatInfo_threatCause_originSourceType_s,
-              threatInfo_threatCause_reputation_s,
-              threatInfo_threatCause_reason_s;
-      let alertsdata = CarbonBlackNotifications_CL
-          | where type_s == "CB_ANALYTICS"
-          | project
-              id_g,
-              primary_event_id_g,
-              deviceInfo_deviceVersion_s,
-              threat_id_g,
-              threatInfo_score_d,
-              threatInfo_summary_s,
-              threatInfo_threatCause_reason_s;
       let alldatawiththreat = alldata 
           | where isnotempty(alert_id_g)
-          | lookup threatsdata on $left.alert_id_g == $right.threatInfo_incidentId_g
-          | lookup alertsdata on $left.alert_id_g == $right.id_g
+          | join kind=leftouter(CarbonBlackNotifications_CL
+              | where type_s == "THREAT"
+              | project
+                  threatInfo_incidentId_g,
+                  threatInfo_score_d,
+                  threatInfo_summary_s,
+                  threatInfo_time_d,
+                  threatInfo_threatCause_threatCategory_s,
+                  threatInfo_threatCause_causeEventId_g,
+                  ruleName_s,
+                  deviceInfo_deviceVersion_s,
+                  threatInfo_threatCause_originSourceType_s,
+                  threatInfo_threatCause_reputation_s,
+                  threatInfo_threatCause_reason_s)
+              on $left.alert_id_g == $right.threatInfo_incidentId_g
+          | join kind=leftouter(CarbonBlackNotifications_CL
+              | where type_s == "CB_ANALYTICS"
+              | project
+                  id_g,
+                  primary_event_id_g,
+                  deviceInfo_deviceVersion_s,
+                  threat_id_g,
+                  threatInfo_score_d,
+                  threatInfo_summary_s,
+                  threatInfo_threatCause_reason_s)
+              on $left.alert_id_g == $right.id_g
           | extend 
               ThreatCategory = threatInfo_threatCause_threatCategory_s,
               ThreatFirstReportedTime = unixtime_milliseconds_todatetime(threatInfo_time_d),
@@ -200,7 +200,6 @@ ParserQuery: |
                   ""
               ),
           AdditionalFields_Common = bag_pack(
-                                "Organization Key", org_key_s,
                                 "Process Guid", process_guid_s
                             ),
           DstPortNumber = toint(remote_port_d),
@@ -226,9 +225,17 @@ ParserQuery: |
           EventOriginalUid = event_id_g,
           EventOwner = event_origin_s,
           SrcUsername = process_username_s,
-          SrcProcessName = process_path_s
-      | extend 
-          SrcHostname = coalesce(DvcHostname, SrcIpAddr),
+          SrcProcessName = process_path_s,
+          DvcScopeId = org_key_s
+      | extend
+          EventCount = int(1),
+          EventProduct = "Carbon Black Cloud",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "EndpointNetworkSession",
+          EventVendor = "VMware",
+          SrcHostname = SrcIpAddr,
+          DstHostname = iff(NetworkDirection == "Inbound", coalesce(DvcHostname, DstIpAddr), DstIpAddr),
           NetworkProtocolVersion = case(
                               DstIpAddr contains ".",
                               "IPv4",       
@@ -239,7 +246,7 @@ ParserQuery: |
       | extend
           Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
           EventEndTime = EventStartTime,
-          Dst = DstIpAddr,
+          Dst = coalesce(DstHostname, DstIpAddr),
           Src = coalesce(SrcHostname, SrcIpAddr),
           IpAddr = SrcIpAddr,
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
@@ -250,14 +257,7 @@ ParserQuery: |
           SrcAppName = SrcProcessName,
           SrcAppId = SrcProcessId,
           SrcAppType = "Process",
-          Hostname = SrcHostname
-      | extend
-          EventCount = int(1),
-          EventProduct = "Carbon Black Cloud",
-          EventSchema = "NetworkSession",
-          EventSchemaVersion = "0.2.6",
-          EventType = "EndpointNetworkSession",
-          EventVendor = "VMware"
+          Hostname = DstHostname
       | project-away
           *_d,
           *_s,
