@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.1 | 26-10-2023| Fix to the RecordedFuture-ThreatIntelligenceImport playbook  |
 | 3.0.0       | 20-09-2023                     | Added workbooks for correlating Recorded Future and logs containing IoC of type IP, DNS, URL and Hash <br/> Generate Markdown/HTML response for enrichment comments.<br/> Recorded Future Playbook Alerts playbook and  workbook for visualization.<br/> Recorded Future Classic Alerts playbook and workbook for visualization.<br/> Leveraging ner API for importing threat indicators and deprecating old playbooks. | 
 | 2.4.0 | 29-05-2023 | Sandbox URL enrichment playbook included in the solution <br/> Sandbox of outlook attachment playbook provided as an example outside the solution. <br/> Sandbox of files in Azure storage accounts provided as example outside the solution. <br/> Fix to IOC enrichment playbook don’t report 404 (not found) as an error. |
 |2.3.0 | 13-02-2023 | Layout improvements to the incident enrichment playbook. <br/>Added detections from collective insights to enrichment playbooks.<br/>IncidentId and MITRE Att&ck code added to collective insights.<br/>Fix for image in incident comment. |
