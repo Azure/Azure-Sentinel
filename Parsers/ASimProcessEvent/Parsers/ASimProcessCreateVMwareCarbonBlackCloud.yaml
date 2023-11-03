@@ -1,7 +1,7 @@
 Parser:
   Title: Process Create ASIM parser for VMware Carbon Black Cloud
   Version: '0.1.0'
-  LastUpdated: Oct 03, 2023
+  LastUpdated: Oct 25, 2023
 Product:
   Name: VMware Carbon Black Cloud
 Normalization:
@@ -26,9 +26,9 @@ ParserParams:
     Default: false
 ParserQuery: |
   let EventFieldsLookup = datatable(
-    sensor_action_s: string,
-    DvcAction: string,
-    EventResult: string
+      sensor_action_s: string,
+      DvcAction: string,
+      EventResult: string
   )[
       "ACTION_ALLOW", "Allow", "Success",
       "ACTION_BLOCK", "Block", "Failure",
@@ -58,37 +58,36 @@ ParserQuery: |
           | parse parent_hash_s with * '["' ParentProcessMD5: string  '","' ParentProcessSHA256: string '"]'
           | parse childproc_hash_s with * '["' TargetProcessMD5: string '","' TargetProcessSHA256: string '"]'
           | lookup EventFieldsLookup on sensor_action_s;
-      let threatsdata = CarbonBlackNotifications_CL
-          | where type_s == "THREAT"
-          | project
-              threatInfo_incidentId_g,
-              threatInfo_score_d,
-              threatInfo_summary_s,
-              threatInfo_time_d,
-              threatInfo_threatCause_threatCategory_s,
-              threatInfo_threatCause_causeEventId_g,
-              ruleName_s,
-              deviceInfo_deviceVersion_s,
-              threatInfo_threatCause_originSourceType_s,
-              threatInfo_threatCause_reputation_s,
-              threatInfo_threatCause_reason_s;
-      let alertsdata = CarbonBlackNotifications_CL
-          | where type_s == "CB_ANALYTICS"
-          | project
-              id_g,
-              primary_event_id_g,
-              deviceInfo_deviceVersion_s,
-              threat_id_g,
-              threatInfo_score_d,
-              threatInfo_summary_s,
-              threatInfo_threatCause_reason_s;
       let processdatawiththreat = processdata
           | where isnotempty(alert_id_g) and isnotempty(event_id_g)
-          | lookup threatsdata
+          | join kind=leftouter(CarbonBlackNotifications_CL
+              | where type_s == "THREAT"
+              | project
+                  threatInfo_incidentId_g,
+                  threatInfo_score_d,
+                  threatInfo_summary_s,
+                  threatInfo_time_d,
+                  threatInfo_threatCause_threatCategory_s,
+                  threatInfo_threatCause_causeEventId_g,
+                  ruleName_s,
+                  deviceInfo_deviceVersion_s,
+                  threatInfo_threatCause_originSourceType_s,
+                  threatInfo_threatCause_reputation_s,
+                  threatInfo_threatCause_reason_s)
               on
               $left.alert_id_g == $right.threatInfo_incidentId_g,
               $left.event_id_g == $right.threatInfo_threatCause_causeEventId_g
-          | lookup alertsdata on $left.alert_id_g == $right.id_g, $left.event_id_g == $right.primary_event_id_g
+          | join kind=leftouter (CarbonBlackNotifications_CL
+              | where type_s == "CB_ANALYTICS"
+              | project
+                  id_g,
+                  primary_event_id_g,
+                  deviceInfo_deviceVersion_s,
+                  threat_id_g,
+                  threatInfo_score_d,
+                  threatInfo_summary_s,
+                  threatInfo_threatCause_reason_s)
+              on $left.alert_id_g == $right.id_g, $left.event_id_g == $right.primary_event_id_g
           | extend 
               ThreatDescription = coalesce(threatInfo_summary_s, threatInfo_summary_s1),
               ThreatCategory = threatInfo_threatCause_threatCategory_s,
@@ -159,8 +158,7 @@ ParserQuery: |
           Hash = coalesce(TargetProcessSHA256, TargetProcessMD5),
           CommandLine = TargetProcessCommandLine,
           Process = TargetProcessName,
-          User = TargetUsername
-      | extend 
+          User = TargetUsername,
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
           ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
