@@ -69,7 +69,7 @@ match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("Google Workspace Reports: Invalid Log Analytics Uri.")
 
-
+#testing
 def get_credentials():
     creds = None
     if pickle_string:
