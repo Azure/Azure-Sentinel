@@ -71,6 +71,7 @@ $isPipelineRun = $false
 . "$repositoryBasePath.script/package-automation/catelogAPI.ps1"
 
 try {
+    $ccpDict = @()
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
         #$inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
         $contentToImport = Get-Content -Raw $inputFile | Out-String | ConvertFrom-Json
@@ -136,6 +137,164 @@ try {
             exit 1;
         }
 
+        # ===========start: ccp code changes====================
+        $dataConnectorsInputArray = $contentToImport.PsObject.Properties | Where-Object { $_.Name -eq "Data Connectors" -or $_.Name -eq "DataConnectors"};
+
+        # IDENTIFY CCP DATA DEFINITION IN DATA INPUT FILE
+        foreach ($objectProperties in $dataConnectorsInputArray) {
+            if ($objectProperties.Value -is [System.Array]) {
+                foreach ($file in $objectProperties.Value) {
+                    $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
+
+                    $currentFileDCPath = $solutionBasePath + $solutionName + "/" + $file
+                    $fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
+
+                    # check if dataconnectorDefinitions type exist in dc array
+                    if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions") {
+                        Write-Host "CCP DataConnectorDefinition File Found, FileName is $file"
+                        if ($ccpDict.Count -le 0) {
+                            $ccpDict = [PSCustomObject]@{
+                                DCDefinitionFilePath = $file;
+                                DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
+                                DCFilePath = "";
+                                DCStreamName = "";
+                                DCRFilePath = "";
+                                TableFilePath = "";
+                                TableOutputStream = "";
+                            }
+                        } else {
+                            [array]$ccpDict += [PSCustomObject]@{
+                                DCDefinitionFilePath = $file;
+                                DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
+                                DCFilePath = "";
+                                DCStreamName = "";
+                                DCRFilePath = "";
+                                TableFilePath = "";
+                                TableOutputStream = "";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        $DCFolderName = "Data Connectors"
+        $dcWithoutSpace = $solutionBasePath + $solutionName + "/DataConnectors/"
+        $hasDCWithoutSpace = Test-Path -Path $dcWithoutSpace
+
+        if ($hasDCWithoutSpace) {
+            $DCFolderName = "DataConnectors"
+        }
+
+        # identify ccp files definition provided has corresponding poller files if no then fail it.
+        if ($ccpDict.Count -gt 0) {
+            $identifiedDCPath = $solutionBasePath + $solutionName + "/" + $DCFolderName
+            
+            # identify relation between definition and poller files
+            foreach ($ccpDefinitionFile in $ccpDict) {
+                #identify given file is present in dc folder or not
+                foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+                    if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
+                    $inputFile.Name -eq "Images" -or $inputFile.Name -eq "function.json" -or $inputFile.Name -eq "host.json" -or $inputFile.Name -eq "proxies.json")
+                    {
+                        continue;
+                    }
+                    else {
+                        try
+                        {
+                            $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+
+                            # check if dataconnectorDEfinition id value exist in dataConnectors, connectorDefinitionName field i.e. field value for id = connectorDefinitionName should be same else fail it
+                            if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
+                                if ($fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId) {
+                                    # connectorDefinition file has dataconnector file so file exist
+                                    $ccpDefinitionFile.DCFilePath = $inputFile.FullName
+                                    $ccpDefinitionFile.DCStreamName = $fileContent.properties.dcrConfig.streamName
+                                }
+                            }
+                        }
+                        catch {
+                            Write-Host "Error occured while identifying relation between definition and poller File. Identified error in " + $inputFile.Name + ". Error Details : $_"
+                        }
+                    }
+                }
+            }
+            
+            # identify relation between poller and DCR
+            foreach ($ccpPollerFile in $ccpDict) {
+                #identify given file is present in dc folder or not
+                foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+                    if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
+                    $inputFile.Name -eq "Images" -or $inputFile.Name -eq "function.json" -or $inputFile.Name -eq "host.json" -or $inputFile.Name -eq "proxies.json")
+                    {
+                        continue;
+                    }
+                    else {
+                        $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+
+                        # check if dataconnectorDEfinition id value exist in dataConnectors, connectorDefinitionName field i.e. field value for id = connectorDefinitionName should be same else fail it
+                        try {
+                            if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
+                                if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCStreamName) {
+                                    # connectorDefinition file has dataconnector file so file exist
+                                    $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                    $ccpPollerFile.TableOutputStream = $fileContent.properties.dataFlows[0].outputStream.Replace('Custom-', '')
+                                }
+                            }
+                        }
+                        catch {
+                            Write-Host "Error occured while identifying relation between Poller and DCR File. Identified error in " + $inputFile.Name + ". Error Details : $_"
+                        }
+                    }
+                }
+            }
+
+            # throw exception if any of the relation has blanks i.e definition->Poller, Poller->DCR should be their. DCR to Table is optional.
+            
+
+            # identify relation between DCR and table
+            foreach ($ccpTable in $ccpDict) {
+                #identify given file is present in dc folder or not
+                foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+                    if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
+                    $inputFile.Name -eq "Images" -or $inputFile.Name -eq "function.json" -or $inputFile.Name -eq "host.json" -or $inputFile.Name -eq "proxies.json")
+                    {
+                        continue;
+                    }
+                    else {
+                        $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+
+                        # check if dataconnectorDEfinition id value exist in dataConnectors, connectorDefinitionName field i.e. field value for id = connectorDefinitionName should be same else fail it
+                        try {
+                            if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
+                                if ($fileContent.properties.schema.name -eq $ccpTable.TableOutputStream) {
+                                    # connectorDefinition file has dataconnector file so file exist
+                                    $ccpTable.TableFilePath = $inputFile.FullName
+                                }
+                            }
+                        }
+                        catch {
+                            Write-Host "Error occured while identifying relation between Poller and DCR File. Identified error in " + $inputFile.Name + ". Error Details : $_"
+                        }
+                    }
+                }
+            }
+        }
+
+        # THROW ERROR IF THERE IS NO RELATION BETWEEK DEFINITION->POLLER, POLLER->DCR
+        if ($ccpDict.Count -gt 0) {
+            foreach($localCCPDist in $ccpDict) {
+                if ($localCCPDist.DCDefinitionId -eq "" -or $localCCPDist.DCDefinitionFilePath -eq "" -or
+                $localCCPDist.DCFilePath -eq "" -or $localCCPDist.DCStreamName -eq "" -or $localCCPDist.DCRFilePath -eq "") 
+                {
+                    Write-Host "Please verify if there is a mapping between ConnectorDefiniton with Poller file and Poller file with DCR file!"
+                    exit 1
+                }
+            }
+        }
+
+        # ===========end: ccp code changes====================
+
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
             if ($objectProperties.Value -is [System.Array]) {
                 foreach ($file in $objectProperties.Value) {
@@ -169,7 +328,12 @@ try {
                             GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $isPipelineRun
                         }
                         elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
-                            GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails
+                            if ($ccpDict.Count -gt 0) {
+                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName -$solutionName 
+                            }
+                            else {
+                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName -$solutionName 
+                            }
                         }
                         elseif ($objectKeyLowercase -eq "savedsearches") {
                             GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails

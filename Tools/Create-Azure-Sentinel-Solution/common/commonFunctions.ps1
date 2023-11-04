@@ -1579,10 +1579,19 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     $global:playbookCounter += 1
     }
 
-    function GetDataConnectorMetadata($file, $contentResourceDetails)
+    function GetDataConnectorMetadata($file, $contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict = $null, $solutionBasePath, $solutionName)
     {
         Write-Host "Generating Data Connector using $file"
+        if ($null -ne $ccpDict)
+        {
+            # execute ccp integration code which is using CLV2
+
+            . "$PSScriptRoot/createCCPConnector.ps1" # load ccp resource creator
+            createCCPConnectorResources -contentResourceDetails $contentResourceDetails, -dataFileMetadata $dataFileMetadata -solutionFileMetadata $solutionFileMetadata -dcFolderName $dcFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName
+            return
+        }
                     try {
+                        # BELOW IS OLD WAY OF CCP CONNECTOR CODE I.E CLV1 WHICH ONLY HAS CONNECTORUICONFIG AND POLLER CONFIG SECTION IN SOURCE 
                         $ccpPollingConfig = [PSCustomObject] @{}
                         $ccpConnector = $false
                         $connectorData = ConvertFrom-Json $rawData
