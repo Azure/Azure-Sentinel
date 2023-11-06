@@ -53,19 +53,8 @@ def main(mytimer: func.TimerRequest):
         config = json.loads('{"last_log_id": "","last_date": ""}')
     logging.info(f'Config loaded\n\t{config}')
     connector = Auth0Connector(DOMAIN, API_PATH, CLIENT_ID, CLIENT_SECRET, AUDIENCE)
-    last_log_id, events = connector.get_log_events(script_start_time, config)
-
-    if last_log_id is not None and last_log_id is not '' and len(events) > 0:
-        logging.info(f'Finish script.')
-    else:
-        config['last_log_id'] = last_log_id
-        try:
-            config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
-        except IndexError:
-            logging.info('Known Indexing Scenario. Proceed with execution')
-        logging.info("new config" + str(config))
-        state_manager.post(json.dumps(config))
-        logging.info(f'Finish script.')
+    connector.get_log_events(script_start_time, config)
+    logging.info(f'Finish script.')
 
 class Auth0Connector:
     def __init__(self, domain, api_path, client_id, client_secret, audience):
@@ -94,7 +83,9 @@ class Auth0Connector:
         #last_log_id = "90020230126121002244690048186607762971591195832157732866"
         logging.info(f'\tLast log id extracted: {last_log_id}.')
         if last_log_id is None:
-            return '', []
+            #return '', []
+            self.update_statemarker_file(config, '', [])
+            return
         # first request
         params = {'from': last_log_id, 'take': '100'}
         count = 0
@@ -112,24 +103,19 @@ class Auth0Connector:
                     break
         logging.info('\tFirst request executed.')
         if not resp.json():
-            return last_log_id, []
+            #return last_log_id, []
+            self.update_statemarker_file(config, last_log_id, [])
+            return
         events = resp.json()
         logging.info('\t response object : {events}')
         events.sort(key=lambda item: item['date'], reverse=True)
         last_log_id = events[0]['log_id']
-        config['last_log_id'] = last_log_id
-        try:
-            config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
-        except IndexError:
-            logging.info('Known Indexing Scenario. Proceed with execution')
-        
         for el in events:
             self.sentinel.send(el)
         self.sentinel.flush()
         logging.info('Events sent to Sentinel.')
-
         logging.info("new config" + str(config))
-        self.state_manager.post(json.dumps(config))
+        self.update_statemarker_file(config, last_log_id , events)
 
         if "Link" in resp.headers :
             next_link = resp.headers['Link']
@@ -161,18 +147,13 @@ class Auth0Connector:
                     if len(events)!=0:
                         events.sort(key=lambda item: item['date'], reverse=True)
                         last_log_id = events[0]['log_id']
-                        config['last_log_id'] = last_log_id
-                        try:
-                            config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
-                        except IndexError:
-                            logging.info('Known Indexing Scenario. Proceed with execution')
                         
                         for el in events:
                             self.sentinel.send(el)
                         self.sentinel.flush()
 
                         logging.info("new config" + str(config))
-                        self.state_manager.post(json.dumps(config))
+                        self.update_statemarker_file(config, last_log_id , events)
 
                     if self.check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
@@ -231,3 +212,17 @@ class Auth0Connector:
         duration = now - script_start_time
         max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
         return duration > max_duration
+
+    """This method is used to update the statemareker file with lastprocessed event details
+    """
+    def update_statemarker_file(self, config, last_log_id, events):
+        config['last_log_id'] = last_log_id
+        try:
+            config['last_date'] = events[0]['date'] if last_log_id else config['last_date']
+        except IndexError:
+            logging.info('Known Indexing Scenario. Proceed with execution')
+        logging.info("new config" + str(config))
+        self.state_manager.post(json.dumps(config))
+
+
+        
