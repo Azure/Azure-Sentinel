@@ -24,7 +24,7 @@ A Microsoft Sentinel playbook is utilized by automation rules, therefore to auto
 Basic steps for setup of the playbook and automation rule are as follows :
 
 1. Go to the Automation blade in Microsoft Sentinel.
-2. Create a new playbook from the 'Enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights' [playbook template](https://learn.microsoft.com/en-us/azure/sentinel/use-playbook-templates)
+2. Create a new playbook from the 'Enrich Dynatrace Application Security Attack with related Microsoft Defender XDR insights' [playbook template](https://learn.microsoft.com/en-us/azure/sentinel/use-playbook-templates)
 - KeyvaultName: The name of the keyvault created as pre-requisite
 - DynatraceTenant: xyz.dynatrace.com
 3. Create a new [automation rule](https://learn.microsoft.com/en-us/azure/sentinel/create-manage-use-automation-rules)
