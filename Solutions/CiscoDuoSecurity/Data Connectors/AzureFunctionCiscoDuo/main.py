@@ -153,7 +153,6 @@ def process_auth_logs(admin_api: duo_client.Admin, start_ts, state_manager: Stat
     state_manager.post(str(maxtime))
 
     while len(events) == limit:
-        next_offset = events['metadata']['next_offset']
         if next_offset and next_offset is not None:
             next_offset = ','.join(next_offset)
         else:
