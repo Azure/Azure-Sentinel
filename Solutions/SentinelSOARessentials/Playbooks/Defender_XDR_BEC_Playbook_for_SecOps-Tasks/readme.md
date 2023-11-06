@@ -1,11 +1,11 @@
-# M365D_BEC_Playbook_for_SecOps-Tasks
+# Defender_XDR_BEC_Playbook_for_SecOps-Tasks
 author: Benji Kovacevic
 
 This playbook add Incident Tasks based on Microsoft Defender XDR BEC Playbook for SecOps. This playbook will walk the analyst through four stages of responding to a BEC incident: containment, investigation, remediation and prevention. The step-by-step instructions will help you take the required remedial action to protect information and minimize further risks.
 
 # Quick Deployment
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSentinelSOARessentials%2FPlaybooks%2FM365D_BEC_Playbook_for_SecOps-Tasks%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSentinelSOARessentials%2FPlaybooks%2FM365D_BEC_Playbook_for_SecOps-Tasks%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSentinelSOARessentials%2FPlaybooks%2FDefender_XDR_BEC_Playbook_for_SecOps-Tasks%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSentinelSOARessentials%2FPlaybooks%2FMDefender_XDR_BEC_Playbook_for_SecOps-Tasks%2Fazuredeploy.json)
 <br><br>
 
 # Post-deployment
