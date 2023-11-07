@@ -216,6 +216,8 @@ Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
 
+The parameter WorkspaceID can be found in Azure portal in the overview page of the Log Analytics Workspace. 
+
 Retrieves Indicators Of Compromise (IoCs) from one of the indicator import logic apps, and store them in the ThreatIntelligenceIndicator table. All IndicatorImport playbooks use this playbook for batching. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ThreatIntelligenceImport%2Fazuredeploy.json)
@@ -333,6 +335,7 @@ The Recorded Future Collective Insights aggregates data related to Sigma Rules a
 -Deprecated playbooks can be found in GitHub in the [Deprecated folder](./Deprecated/)
 
 # Known Issues 
+## Version 3.0
 ## Version 3.0
 Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
 ![](Images/2023-09-13-19-16-24.png)
