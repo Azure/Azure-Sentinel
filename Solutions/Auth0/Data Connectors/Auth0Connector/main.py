@@ -114,7 +114,6 @@ class Auth0Connector:
             self.sentinel.send(el)
         self.sentinel.flush()
         logging.info('Events sent to Sentinel.')
-        logging.info("new config" + str(config))
         self.update_statemarker_file(config, last_log_id , events)
 
         if "Link" in resp.headers :
@@ -152,7 +151,6 @@ class Auth0Connector:
                             self.sentinel.send(el)
                         self.sentinel.flush()
 
-                        logging.info("new config" + str(config))
                         self.update_statemarker_file(config, last_log_id , events)
 
                     if self.check_if_script_runs_too_long(script_start_time):
