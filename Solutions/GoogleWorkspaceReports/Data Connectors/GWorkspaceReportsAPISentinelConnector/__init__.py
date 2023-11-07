@@ -1,5 +1,4 @@
 from __future__ import print_function
-import pickle
 from googleapiclient.discovery import build
 import json
 import base64
@@ -8,6 +7,7 @@ import hmac
 import requests
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 import azure.functions as func
 import logging
 import os
@@ -74,7 +74,7 @@ def get_credentials():
     creds = None
     if pickle_string:
         try:
-            creds = pickle.loads(pickle_string)
+            creds = Credentials.from_authorized_user_info(json.loads(pickle_string), SCOPES)
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
     else:
