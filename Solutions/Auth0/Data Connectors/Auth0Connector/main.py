@@ -158,8 +158,7 @@ class Auth0Connector:
                         break
                 except Exception as err:
                     logging.error("Something wrong. Exception error text: {}".format(err))
-                    break
-            return last_log_id, events           
+                    break           
         #logging.info(f'\t New last log id: {last_log_id}\n at date {events[0]["date"]}. Events extracted.')
         return last_log_id, events
 
