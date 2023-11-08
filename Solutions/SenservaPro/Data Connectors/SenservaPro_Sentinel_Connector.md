@@ -2,7 +2,7 @@
 
 
 
-The SenservaPro connector allows you to connect SenservaPro Azure Active Directory focused advanced security analytics data with your Azure Sentinel, allowing you view dashboards from Senservaa, create custom alerts, and improve investigation with Hunting queries also provided by Senserva. The Senserva data is multi-tenant enabled. 
+The SenservaPro connector allows you to connect SenservaPro Microsoft Entra ID focused advanced security analytics data with your Azure Sentinel, allowing you view dashboards from Senservaa, create custom alerts, and improve investigation with Hunting queries also provided by Senserva. The Senserva data is multi-tenant enabled. 
 
 
 > [!NOTE]
@@ -12,7 +12,7 @@ The SenservaPro connector allows you to connect SenservaPro Azure Active Directo
 
 ## Configure and connect SenservaPro 
 
-SenservaPro is fully integrated into Azure and exports logs directly to Azure Sentinel every time a Senserva monitored Azure Active Directory configuration changes, or account status changes due to something like a Risky User warning.
+SenservaPro is fully integrated into Azure and exports logs directly to Azure Sentinel every time a Senserva monitored Microsoft Entra ID configuration changes, or account status changes due to something like a Risky User warning.
 1. In the Azure Sentinel portal, click Data connectors and select 'SenservaPro' and then Open connector page.
 
 2. You will install the data provider to the connector as part of your SenservaPro setup from [our Azure Marketplace offering.](https://azuremarketplace.microsoft.com/marketplace/apps/senservallc.senserva)
