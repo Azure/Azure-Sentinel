@@ -36,11 +36,20 @@ query: |
     | extend accountId=tostring(todynamic(Resources.['accountId']))
     | where Resources contains "accountId" and accountId <> RecipientAccountId
     | join command_executed on s3bucket
+    | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+    | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+    | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+    | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+      AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
