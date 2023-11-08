@@ -1,7 +1,7 @@
-# Confirm-AADRiskyUser
+# Confirm-EntraIDRiskyUser
 author: Nicholas DiCola
 
-This playbook will set the Risky User property in AAD using Graph API.
+This playbook will set the Risky User property in Microsoft Entra ID using Graph API.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
@@ -22,7 +22,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 ## Prerequisites
 
-- You will need to add the managed identity that is created by the Logic App to the Security Administrator role in Azure AD.
+- You will need to add the managed identity that is created by the Logic App to the Security Administrator role in Microsoft Entra ID.
 
 ## Screenshots
 **Incident Trigger**<br>
