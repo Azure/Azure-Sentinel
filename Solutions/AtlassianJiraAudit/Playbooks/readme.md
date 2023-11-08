@@ -224,7 +224,7 @@ Provide a name for the rule and for conditions choose 'Analytics Rule Name conta
 If you only want to sync certain incidents, choose the right condition.
 
 For actions, choose 'Run Playbook' and select the 'Sync-Incidents' Playbook.
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/Sentinel%20-%20Automation%20Rule.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Sentinel%20-%20Automation%20Rule.png)
 
 ## Conclusion
 After this solution, you are able to work on Microsoft Sentinel incidents while staying in your trusted ITSM tool.
