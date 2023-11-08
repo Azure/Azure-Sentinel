@@ -1,10 +1,10 @@
 # Ingest-DynatraceMSDefender365
 author: Dynatrace
 
-This playbook will ingest Microsoft Defender 365 insights to Dynatrace. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/platform/application-security/) enabled, you will also need to install the [Microsoft Defender 365](https://learn.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender) Sentinel connector to make use of this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
+This playbook will ingest Microsoft Defender 365 insights to Dynatrace. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/support/help/how-to-use-dynatrace/application-security) enabled, you will also need to install the [Microsoft Defender 365](https://learn.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender) Sentinel connector to make use of this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
 
 ** Prerequisites ** 
-- Follow [these instructions](https://docs.dynatrace.com/docs/shortlink/token#create-api-token) to generate a Dynatrace access token, the token should have Ingest logs (logs.ingest) scope.
+- Follow [these instructions](https://www.dynatrace.com/support/help/get-started/access-tokens#create-api-token) to generate a Dynatrace access token, the token should have Ingest logs (logs.ingest) scope.
 - [Important step]Store the Dynatrace Access Token as a [secret in Azure Key vault](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-portal) and provide the key vault name during playbook deployment, by convention the secret name should be 'DynatraceAccessToken'.
 
 ** Post Install Notes:**
