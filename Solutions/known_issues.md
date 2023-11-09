@@ -59,5 +59,6 @@ To delete an existing Kusto Function (or Parser), click and hover over the funct
 
 Note after deleting the function named in the workspace error message, re-searching for it should find the duplicate function again. If manually recreating it is necessary, many Data Connectors deployed from the Content Hub will directly link to the 'Kusto Function' Parser KQL source code. These can also be found by browsing the [source repository](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions) for Content Hub solution packages:  Drill down under the solution's folder > Data Connectors > Parsers. 
 
-
+## Known Issue #9 - Limitations of unified system in Oracle Database Audit data connector"
+Analytic rule for SQL injection patterns is not giving appropriate results as we have different oracle servers and trying to have a unified rule is complex,so customers need to do configuration changes at Oracle side.
 
