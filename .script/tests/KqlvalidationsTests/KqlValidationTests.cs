@@ -121,7 +121,15 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForBestPractices(id, queryStr);
             ValidateKqlForLatestTIData(id, queryStr);
+        }
+
+        private void ValidateKqlForBestPractices(string id,string queryStr)
+        {
+          var suggestions =  new OpenAIServiceClient("https://maheshrg.openai.azure.com/", "").GetChatCompletionsAsync(queryStr).Result;
+            var gitHubApiClient = GitHubApiClient.Instance;
+            gitHubApiClient.AddPRComment(suggestions);
         }
 
 
