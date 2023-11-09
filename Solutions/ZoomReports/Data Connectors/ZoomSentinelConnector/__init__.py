@@ -23,13 +23,39 @@ chunksize = 10000
 retry = 3 ## To do : need to move function app configuration
 error=False
 #Max script execution
-SCRIPT_EXECUTION_INTERVAL_MINUTES = int(os.environ['EXECUTION_INTERVAL_MINUTES'])
+SCRIPT_EXECUTION_INTERVAL_MINUTES = os.environ.get('EXECUTION_INTERVAL_MINUTES')
 #Azure function max execution
-AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = int(os.environ['MAX_EXECUTION_TIME_MINUTES'])
+AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = os.environ.get('MAX_EXECUTION_TIME_MINUTES')
 
+def is_number_regex(sn):
+    """ Returns True if string is a number and False for other types. """
+    if re.match("^\d+?\.\d+?$", sn) is None:  
+         return sn.isdigit()
+    else:
+        return False
+##This code checks for script execution time and azure func max interval mins for null,int,float and assign based on validations
+##TODO: Need to optimize the below multiple codes in to single function for resusabilty
+if ((SCRIPT_EXECUTION_INTERVAL_MINUTES in(None,'') or str(SCRIPT_EXECUTION_INTERVAL_MINUTES).isspace())):
+     SCRIPT_EXECUTION_INTERVAL_MINUTES=30 
+else:
+    logging.info("SCRIPT_EXECUTION_INTERVAL_MINUTES: {}".format(SCRIPT_EXECUTION_INTERVAL_MINUTES)) 
+    if(is_number_regex(SCRIPT_EXECUTION_INTERVAL_MINUTES)):
+       SCRIPT_EXECUTION_INTERVAL_MINUTES = int(SCRIPT_EXECUTION_INTERVAL_MINUTES)
+    else:
+       SCRIPT_EXECUTION_INTERVAL_MINUTES=30            
+ ##TODO: Need to optimize the below multiple codes in to single function for resusabilty   
+if ((AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES in(None,'') or str(AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES).isspace())):
+     AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES=29
+else:
+    logging.info("AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES: {}".format(AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES)) 
+    if(is_number_regex(AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES)):
+        AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = int(AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES)
+    else:
+         AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES=29    
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern, str(logAnalyticsUri))
@@ -126,7 +152,8 @@ class Zoom:
         past_time_datetime = datetime.datetime.strptime(past_time, '%Y-%m-%d')
         no_days=(current_time_day-past_time_datetime)
         if(no_days.days>7):
-           current_time_day= (past_time_datetime +datetime.timedelta(days=7))     
+           current_time_day= (past_time_datetime +datetime.timedelta(days=7))
+        logging.info("The current time point is: {}".format(current_time_day))     
         state.post(current_time_day.strftime("%Y-%m-%d"))
         return (past_time, current_time_day.strftime("%Y-%m-%d"))
 
@@ -293,14 +320,18 @@ def results_array_join(result_element, api_req_id, api_req_name):
 def check_if_functiontime_is_over(start_time, interval_minutes, max_script_exec_time_minutes):
     """Returns True if function's execution time is less than interval between function executions and
     less than max azure func lifetime. In other case returns False."""
-    
+
     logging.info("started Max function time check")
+    logging.info("interval_minutes({} time)".format(interval_minutes))
+    logging.info("max_script_exec_time_minutes({} time)".format(max_script_exec_time_minutes))
     min_minutes = min(interval_minutes, max_script_exec_time_minutes)
     if min_minutes > 1:
         max_time = min_minutes * 60 - 30
     else:
         raise Exception("Script execution mins is less than 1 min")
+    logging.info("max time({} time)".format(max_time))
     script_execution_time = time.time() - start_time
+    logging.info("script execution time({} time)".format(script_execution_time))
     if script_execution_time > max_time:
         return True
     else:
