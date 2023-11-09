@@ -57,8 +57,8 @@ class Proofpoint_api:
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
 
     def set_websocket_conn(self, event_type):
+        max_retries = 3
         url = f"wss://logstream.proofpoint.com:443/v1/stream?cid={self.cluster_id}&type={event_type}&sinceTime={self.after_time}&toTime={self.before_time}"
-        logging.info('Opening Websocket logstream {}'.format(url))
         # defining headers for websocket connection (do not change this)
         header = {
             "Connection": "Upgrade",
@@ -72,19 +72,24 @@ class Proofpoint_api:
             'ca_certs': certifi.where(),
             'check_hostname': True
         }
-        try:
-            ws = websocket.create_connection(url, header=header, sslopt=sslopt)
-            ws.settimeout(20)
-            time.sleep(2)
-            logging.info(
-                'Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
-            print(
-                'Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
-            return ws
-        except Exception as err:
-            logging.error('Error while connectiong to websocket {}'.format(err))
-            print('Error while connectiong to websocket {}'.format(err))
-            return None
+        for attempt in range(max_retries):
+            try:
+                logging.info('Opening Websocket logstream {}'.format(url))
+                ws = websocket.create_connection(url, header=header, sslopt=sslopt)
+                ws.settimeout(20)
+                time.sleep(2)
+                logging.info(
+                    'Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
+                print('Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
+                return ws
+            except Exception as err:
+                logging.error('Error while connectiong to websocket {}'.format(err))
+                print('Error while connectiong to websocket {}'.format(err))
+                if attempt < max_retries - 1:
+                    logging.info('Retrying connection in 5 seconds...')
+                    time.sleep(5)  # Wait for a while before retrying
+                else:
+                    return None
 
     def gen_chunks_to_object(self,data,chunksize=100):
         chunk = []

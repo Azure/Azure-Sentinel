@@ -1,0 +1,317 @@
+Parser:
+  Title: User Management ASIM parser for Linux Authpriv logs
+  Version: '0.1.0'
+  LastUpdated: 4 Oct, 2023
+Product:
+  Name: Microsoft
+Normalization:
+  Schema: UserManagement
+  Version: '0.1.1'
+References:
+- Title: ASIM User Management Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Ubuntu remote logging
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man5/rsyslog.conf.5.html 
+- Title: gpasswd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man1/gpasswd.1.html
+- Title: groupadd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupadd.8.html
+- Title: groupdel
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupdel.8.html
+- Title: groupmod
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/groupmod.8.html
+- Title: useradd
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/useradd.8.html
+- Title: userdel
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/userdel.8.html
+- Title: usermod
+  Link: https://manpages.ubuntu.com/manpages/lunar/en/man8/usermod.8.html
+Description: |
+  This ASIM parser supports normalizing Linux authpriv logs delivered using Syslog to the ASIM UserManagement normalized schema.
+ParserName: ASimUserManagementLinuxAuthpriv
+EquivalentBuiltInParser: _ASim_UserManagement_LinuxAuthpriv
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled:bool = false
+  ) {
+  let ActionLookup = datatable (Action:string, EventType:string)
+  [
+      "added",  "UserAddedToGroup",
+      "removed","UserRemovedFromGroup"
+  ];
+  let SeverityLookup = datatable (SeverityLevel:string, EventSeverity:string)
+  [
+      "info", "Informational",
+      "warn", "Low",
+      "err",  "Medium",
+      "crit", "High"
+  ];    
+  let ItemParser = (T:(SyslogMessage:string,SeverityLevel:string,ProcessID:int)) {
+      T
+      | lookup SeverityLookup on SeverityLevel
+      | extend ActingAppId = tostring(ProcessID)
+      | project-away SyslogMessage,SeverityLevel, ProcessID
+  };
+  let SyslogParsed = (
+      Syslog
+      | where not(disabled)
+      | where Computer in (_ASIM_GetSourceBySourceType('LinuxAuthpriv'))
+      | where Facility == "authpriv"
+          and ProcessName in ("useradd","usermod","userdel","groupadd","groupmod","groupdel","gpasswd")
+      | project-away EventTime,Facility,MG,CollectorHostName,SourceSystem,TenantId
+  );
+  union (
+      SyslogParsed
+      | where ProcessName == "useradd"
+          and SyslogMessage startswith "new user: name="
+      | parse SyslogMessage with "new user: name=" TargetUsername ", UID=" TargetUserId ", GID=" GroupId ", " *
+      | extend 
+          EventType   = "UserCreated", 
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "useradd"
+          and SyslogMessage startswith "failed adding user '"
+      | parse SyslogMessage with "failed adding user '" TargetUsername "', exit code: " EventOriginalResultDetails
+      | extend 
+          EventType          = "UserCreated", 
+          EventResult        = "Failure",
+          EventResultDetails = "Other"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "useradd"
+          and SyslogMessage startswith "new group: name="
+      | parse SyslogMessage with "new user: name=" GroupName ", GID=" GroupId
+      | extend 
+          EventType   = "UserCreated", 
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "useradd"
+          and SyslogMessage startswith "cannot open login definitions"
+      | extend EventType     = "UserCreated", 
+          EventResult        = "Failure",
+          EventResultDetails = "NotAuthorized"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName =="useradd" 
+          and SyslogMessage startswith "add '"
+      | parse SyslogMessage with "add '" TargetUsername "'" * "group '" GroupName "'" 
+      | extend 
+          EventType   = "UserCreated",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "usermod"
+          and SyslogMessage startswith "change user name '"
+      | parse SyslogMessage with "change user name '" TargetUsername "'" *
+      | extend 
+          EventType   = "UserModified",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName =="usermod" 
+          and SyslogMessage startswith "add '"
+      | parse SyslogMessage with "add '" TargetUsername "'" * "group '" GroupName "'" 
+      | extend 
+          EventType   = "UserAddedToGroup",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "usermod"
+          and SyslogMessage startswith "change user '"
+          and not (SyslogMessage endswith "' password")
+      | parse SyslogMessage with "change user '" TargetUsername "' " EventSubType " from '" PreviousPropertyValue "' to '" NewPropertyValue "'"
+      | extend 
+          EventType = case (
+              EventSubType == "expiration" and PreviousPropertyValue == "never", "UserDisabled",
+              EventSubType == "expiration" and NewPropertyValue == "never", "UserEnabled",
+              "UserModified"
+          ),
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "usermod"
+          and SyslogMessage startswith "cannot open login definitions"
+      | extend 
+          EventType          = "UserCreated", 
+          EventResult        = "Failure",
+          EventResultDetails = "NotAuthorized"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "usermod"
+          and SyslogMessage startswith "change user '"
+          and SyslogMessage endswith "password"
+      | parse SyslogMessage with "change user '" TargetUsername "' " EventSubType
+      | extend 
+          EventType   = "PasswordChanged",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "usermod"
+          and SyslogMessage startswith "lock user '"
+          and SyslogMessage endswith "' password"
+      | parse SyslogMessage with "lock user '" TargetUsername "' password"
+      | extend 
+          EventType   = "UserLocked",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "userdel"
+          and SyslogMessage startswith "delete '"
+      | parse SyslogMessage with "delete '" TargetUsername "'" * "group '" GroupName "'" *
+      | extend 
+          EventType   = "UserDeleted",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "userdel"
+          and SyslogMessage startswith "delete user '"
+      | parse SyslogMessage with "delete user '" TargetUsername "'" *
+      | extend 
+          EventType   = "UserDeleted",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "userdel"
+          and (SyslogMessage startswith "removed group '" 
+          or SyslogMessage startswith "removed shadow group '")
+      | parse SyslogMessage with "removed" * "group '" GroupName "' owned by '" TargetUsername "'"
+      | extend 
+          EventType   = "UserDeleted",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "groupadd"
+          and SyslogMessage startswith "group added to "
+          and SyslogMessage has "GID="
+      | parse SyslogMessage with "group added to " * "name=" GroupName ", GID=" GroupId
+      | extend 
+          EventType   = "GroupCreated",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "groupadd"
+          and SyslogMessage startswith "group added to "
+          and not(SyslogMessage has "GID=")
+      | parse SyslogMessage with "group added to " * "name=" GroupName
+      | extend 
+          EventType   = "GroupCreated",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "groupadd"
+          and SyslogMessage startswith "new group: name="
+      | parse SyslogMessage with "new group: name=" GroupName ", GID=" GroupId
+      | extend 
+          EventType   = "GroupCreated",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "groupadd"
+          and SyslogMessage startswith "cannot open login definitions"
+      | extend 
+          EventType          = "GroupCreated", 
+          EventResult        = "Failure",
+          EventResultDetails = "NotAuthorized"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "groupmod"
+          and SyslogMessage startswith "group changed in "
+      | parse SyslogMessage with "group changed in " * " (group " Temp_GroupName ", new name: " *
+      | extend 
+          split(Temp_GroupName, "/")
+      | extend 
+          GroupName = tostring(Temp_GroupName[0]),
+          GroupId   = tostring(Temp_GroupName[1])
+      | project-away Temp_GroupName
+      | extend 
+          EventType   = "GroupModified",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "groupmod"
+          and SyslogMessage startswith "failed to change "
+      | parse SyslogMessage with "failed to change " * " (group " Temp_GroupName ", new name: " *
+      | extend split(Temp_GroupName, "/")
+      | extend 
+          GroupName = tostring(Temp_GroupName[0]),
+          GroupId   = tostring(Temp_GroupName[1])
+      | project-away Temp_GroupName
+      | extend 
+          EventType   = "GroupModified",
+          EventResult = "Failure"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "groupdel"
+      | parse SyslogMessage with "group '" GroupName "' removed" *
+      | extend 
+          EventType   = "GroupDeleted",
+          EventResult = "Success"
+      | invoke ItemParser()
+  ),(
+      SyslogParsed
+      | where ProcessName == "gpasswd"
+      | parse SyslogMessage with "user " TargetUsername " " Action " by " ActorUsername " " * " group " GroupName
+      | lookup ActionLookup on Action
+      | project-away Action
+      | extend 
+          EventResult = "Success"
+      | invoke ItemParser()
+  )
+  | invoke _ASIM_ResolveDvcFQDN ("HostName")
+  | project-rename 
+      ActingAppName = ProcessName,
+      DvcId         = _ResourceId,
+      EventUid      = _ItemId
+  | extend
+      ActingAppType       = "Process",
+      ActorUsernameType   = iif(isnotempty(ActorUsername), "Simple", ""),
+      DvcIdType           = iff (DvcId == "", "", "AzureResourceID"),
+      DvcIpAddr           = iif(HostIP == "Unknown IP","",HostIP),
+      DvcOs               = "Linux",
+      EventCount          = int(1),
+      EventEndTime        = TimeGenerated,
+      EventProduct        = "Authpriv",
+      EventSchema         = "UserManagement",
+      EventSchemaVersion  = "0.1.1",
+      EventStartTime      = TimeGenerated,
+      EventVendor         = "Linux",
+      GroupIdType         = iif(isnotempty(GroupId), "UID", ""),
+      GroupNameType       = iif(isnotempty(GroupName), "Simple", ""),
+      Hostname            = DvcHostname,
+      TargetUserIdType    = iif(isnotempty(TargetUserId), "UID", ""),
+      TargetUsernameType  = iif(isnotempty(TargetUsername), "Simple", ""),
+      UpdatedPropertyName = EventSubType,
+      User                = ActorUsername
+  | project-away Computer, HostIP, HostName
+  };
+  parser (
+    disabled = disabled
+  )

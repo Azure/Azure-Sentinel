@@ -1,0 +1,37 @@
+id: 322591e4-5b68-4574-be00-2e1b618eab7c
+name: Hunting Query for Failed CSPM Scan Items
+description: |
+  'Query Searches for all the failed scan results from the CSPM scans'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - prancer_CL
+tactics:
+  - Collection
+relevantTechniques:
+  - T0811
+query: |
+  prancer_CL
+  | where act_s == 'alert'
+      and data_data_result_s == 'failed'
+  | extend snapshot = parse_json(data_data_snapshots_s)
+  | mv-expand snapshot 
+  | extend
+      id = tostring(snapshot.id),
+      structure = tostring(snapshot.structure),
+      reference = tostring(snapshot.reference),
+      source = tostring(snapshot.source),
+      collection = tostring(snapshot.collection),
+      type = tostring(snapshot.type),
+      region = tostring(snapshot.region),
+      resourceTypes = tostring(snapshot.resourceTypes),
+      path = tostring(snapshot.path)
+  | summarize arg_min(id, *) by path, data_data_title_s
+  | project Alert = data_data_title_s, Severity = data_data_severity_s, Cloud_Type = structure, Resource = path, Description = data_data_description_s, Remediation = data_data_remediation_description_s
+entityMappings:
+  - entityType: Azure Resource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: Resource
+
