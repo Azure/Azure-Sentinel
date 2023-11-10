@@ -2,15 +2,13 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Confirm AAD Risky User - Alert Triggered",
-        "description": "This playbook will set the Risky User property in AAD using Graph API.",
-        "prerequisites": [
-            "You will need to add the managed identity that is created by the Logic App to the Security Administrator role in Azure AD."
-        ],
+        "title": "Confirm Microsoft Entra ID Risky User - Incident Triggered",
+        "description": "For each account entity included in the incident, this playbook will set the Risky User property in Microsoft Entra ID using Graph API using a Beta API.",
+        "prerequisites": [ "After playbook is deployed, add the managed identity that is created by the logic app to the Security Administrator role in Microsoft Entra ID." ],
         "lastUpdateTime": "2022-07-25T00:00:00.000Z",
-        "entities": [],
-        "tags": [],
-        "support": {
+        "entities": [ "Account" ],
+        "tags": [ "Remediation" ],
+		"support": {
             "tier": "community"
         },
         "author": {
@@ -19,11 +17,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Confirm-AADRiskyUser",
-            "type": "string"
-        },
-        "UserName": {
-            "defaultValue": "user@domain.com",
+            "defaultValue": "Confirm-EntraIDRiskyUser-Incident",
             "type": "string"
         }
     },
@@ -39,7 +33,7 @@
             "name": "[variables('AzureADConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[variables('AzureADConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
@@ -52,7 +46,7 @@
             "name": "[variables('AzureADIPConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[variables('AzureADIPConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureadip')]"
@@ -66,7 +60,7 @@
             "location": "[resourceGroup().location]",
             "kind": "V1",
             "properties": {
-                "displayName": "[parameters('PlaybookName')]",
+                "displayName": "[variables('AzureSentinelConnectionName')]",
                 "customParameterValues": {},
                 "parameterValueType": "Alternative",
                 "api": {
@@ -81,7 +75,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Confirm-AADRiskyUser_alert",
+                "hidden-SentinelTemplateName": "Confirm-AADRiskyUser_incident",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -97,22 +91,9 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
-                        "Alert_-_Get_incident": {
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            },
-                            "runAfter": {},
-                            "type": "ApiConnection"
-                        },
                         "Entities_-_Get_Accounts": {
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -121,11 +102,7 @@
                                 "method": "post",
                                 "path": "/entities/account"
                             },
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "ApiConnection"
                         },
                         "For_each": {
@@ -133,7 +110,7 @@
                                 "Add_comment_to_incident_(V3)": {
                                     "inputs": {
                                         "body": {
-                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
                                             "message": "<p>User [@{concat(items('For_each')?['Name'], '@', items('For_each')?['UPNSuffix'])}] was confirmed compromised via playbook.</p>"
                                         },
                                         "host": {
@@ -205,7 +182,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_alert": {
+                        "Microsoft_Sentinel_incident": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -215,7 +192,7 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             },
                             "type": "ApiConnectionWebhook"
                         }
