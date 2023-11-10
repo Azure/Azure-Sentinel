@@ -16,7 +16,7 @@ This tool will do the following:
 * Add the URL to the JIRA incident as a comment in Sentinel
 * Sync public comments from JIRA to Sentinel
 
-![Overview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/Solution%20overview.png)
+![Overview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Solution%20overview.png)
 
 [Blog post with more background information](https://www.thecollective.eu/en/insights/setting-up-a-bidirectional-sync-between-sentinel-and-jira)
 
