@@ -154,23 +154,29 @@ try {
                         Write-Host "CCP DataConnectorDefinition File Found, FileName is $file"
                         if ($ccpDict.Count -le 0) {
                             $ccpDict = [PSCustomObject]@{
+                                title = $fileContent.Properties.connectorUiConfig.title;
                                 DCDefinitionFilePath = $file;
                                 DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
-                                DCFilePath = "";
-                                DCStreamName = "";
+                                DCPollerFilePath = "";
+                                DCPollerStreamName = "";
                                 DCRFilePath = "";
                                 TableFilePath = "";
                                 TableOutputStream = "";
+                                PollerDataCollectionEndpoint = "";
+                                PollerDataCollectionRuleImmutableId = "";
                             }
                         } else {
                             [array]$ccpDict += [PSCustomObject]@{
+                                Title = $fileContent.Properties.connectorUiConfig.title;
                                 DCDefinitionFilePath = $file;
                                 DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
-                                DCFilePath = "";
-                                DCStreamName = "";
+                                DCPollerFilePath = "";
+                                DCPollerStreamName = "";
                                 DCRFilePath = "";
                                 TableFilePath = "";
                                 TableOutputStream = "";
+                                PollerDataCollectionEndpoint = "";
+                                PollerDataCollectionRuleImmutableId = "";
                             }
                         }
                     }
@@ -208,8 +214,21 @@ try {
                             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
                                 if ($fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId) {
                                     # connectorDefinition file has dataconnector file so file exist
-                                    $ccpDefinitionFile.DCFilePath = $inputFile.FullName
-                                    $ccpDefinitionFile.DCStreamName = $fileContent.properties.dcrConfig.streamName
+                                    $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
+                                    $ccpDefinitionFile.DCPollerStreamName = $fileContent.properties.dcrConfig.streamName
+                                    if ($null -eq $fileContent.properties.dcrConfig.dataCollectionEndpoint) {
+                                        $ccpDefinitionFile.PollerDataCollectionEndpoint = "data collection endpoint";
+                                    } else {
+                                        $dataCollectionEndpoint = $fileContent.properties.dcrConfig.dataCollectionEndpoint;
+                                        $ccpDefinitionFile.PollerDataCollectionEndpoint = "$dataCollectionEndpoint";
+                                    }
+
+                                    if ($null -eq $fileContent.properties.dcrConfig.dataCollectionRuleImmutableId) {
+                                        $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "data collection rule immutableId";
+                                    } else {
+                                        $dataCollectionRuleImmutableId = $fileContent.properties.dcrConfig.dataCollectionRuleImmutableId;
+                                        $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "$dataCollectionRuleImmutableId";
+                                    }
                                 }
                             }
                         }
@@ -235,7 +254,7 @@ try {
                         # check if dataconnectorDEfinition id value exist in dataConnectors, connectorDefinitionName field i.e. field value for id = connectorDefinitionName should be same else fail it
                         try {
                             if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
-                                if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCStreamName) {
+                                if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
                                     # connectorDefinition file has dataconnector file so file exist
                                     $ccpPollerFile.DCRFilePath = $inputFile.FullName
                                     $ccpPollerFile.TableOutputStream = $fileContent.properties.dataFlows[0].outputStream.Replace('Custom-', '')
@@ -285,7 +304,7 @@ try {
         if ($ccpDict.Count -gt 0) {
             foreach($localCCPDist in $ccpDict) {
                 if ($localCCPDist.DCDefinitionId -eq "" -or $localCCPDist.DCDefinitionFilePath -eq "" -or
-                $localCCPDist.DCFilePath -eq "" -or $localCCPDist.DCStreamName -eq "" -or $localCCPDist.DCRFilePath -eq "") 
+                $localCCPDist.DCPollerFilePath -eq "" -or $localCCPDist.DCPollerStreamName -eq "" -or $localCCPDist.DCRFilePath -eq "") 
                 {
                     Write-Host "Please verify if there is a mapping between ConnectorDefiniton with Poller file and Poller file with DCR file!"
                     exit 1
@@ -329,10 +348,10 @@ try {
                         }
                         elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
                             if ($ccpDict.Count -gt 0) {
-                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName -$solutionName 
+                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName 
                             }
                             else {
-                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName -$solutionName 
+                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName 
                             }
                         }
                         elseif ($objectKeyLowercase -eq "savedsearches") {

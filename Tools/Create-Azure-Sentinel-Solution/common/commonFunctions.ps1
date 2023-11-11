@@ -419,14 +419,16 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         {
             $newMetadata.Properties | Add-Member -Name 'support' -Type NoteProperty -value $supportDetails;
         }
+        
+        if ($global:DependencyCriteria.Count -gt 0) {
+            $dependencies = [PSCustomObject]@{
+                operator = "AND";
+                criteria = $global:DependencyCriteria;
+            };
+    
+            $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+        }
 
-        $dependencies = [PSCustomObject]@{
-            operator = "AND";
-            criteria = $global:DependencyCriteria;
-        };
-        
-        $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
-        
         if ($json.firstPublishDate -and $json.firstPublishDate -ne "") 
         {
             $newMetadata.Properties | Add-Member -Name 'firstPublishDate' -Type NoteProperty -value $json.firstPublishDate;
@@ -1579,15 +1581,19 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     $global:playbookCounter += 1
     }
 
+    $global:ccpCounter = 1
     function GetDataConnectorMetadata($file, $contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict = $null, $solutionBasePath, $solutionName)
     {
         Write-Host "Generating Data Connector using $file"
         if ($null -ne $ccpDict)
         {
             # execute ccp integration code which is using CLV2
-
-            . "$PSScriptRoot/createCCPConnector.ps1" # load ccp resource creator
-            createCCPConnectorResources -contentResourceDetails $contentResourceDetails, -dataFileMetadata $dataFileMetadata -solutionFileMetadata $solutionFileMetadata -dcFolderName $dcFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName
+            if ($global:ccpCounter -eq 1)
+            {
+                . "$PSScriptRoot/createCCPConnector.ps1" # load ccp resource creator
+                createCCPConnectorResources -contentResourceDetails $contentResourceDetails -dataFileMetadata $dataFileMetadata -solutionFileMetadata $solutionFileMetadata -dcFolderName $dcFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName
+                $global:ccpCounter += 1
+            }
             return
         }
                     try {
@@ -2763,10 +2769,19 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         if ($contentResourceDetails.apiVersion -eq '3.0.0')
         {
             $updatecontentpackage = $baseMainTemplate.resources | Where-Object {$_.type -eq "Microsoft.OperationalInsights/workspaces/providers/contentPackages"}
-            $descriptionHtml = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{Logo}}\n\n", ""
-            $md = $descriptionHtml | ConvertFrom-Markdown
-            $updatecontentpackage.properties.descriptionHtml = $md.Html
-            $updatecontentpackage.properties.icon = $contentToImport.Logo
+            if ($updatecontentpackage -is [System.Object[]]) {
+                foreach($contentPackageItem in $updatecontentpackage) {
+                    $descriptionHtml = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{Logo}}\n\n", ""
+                    $md = $descriptionHtml | ConvertFrom-Markdown
+                    $contentPackageItem.properties.descriptionHtml = $md.Html
+                    $contentPackageItem.properties.icon = $contentToImport.Logo
+                }
+            } else {
+                $descriptionHtml = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{Logo}}\n\n", ""
+                $md = $descriptionHtml | ConvertFrom-Markdown
+                $updatecontentpackage.properties.descriptionHtml = $md.Html
+                $updatecontentpackage.properties.icon = $contentToImport.Logo
+            }
         }
         # Update Logo in CreateUiDefinition Description
         if ($contentToImport.Logo) {
@@ -2800,12 +2815,14 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             Write-Host "Failed to write output file $mainTemplateOutputPath" -ForegroundColor Red
             break;
         }
+
         try {
             # Sort UI Steps before writing to file
             $createUiDefinitionOrder = "dataconnectors", "parsers", "workbooks", "analytics", "huntingqueries", "watchlists", "playbooks"
             $global:baseCreateUiDefinition.parameters.steps = $global:baseCreateUiDefinition.parameters.steps | Sort-Object { $createUiDefinitionOrder.IndexOf($_.name) }
             # Ensure single-step UI Definitions have proper type for steps
-            if ($($global:baseCreateUiDefinition.parameters.steps).GetType() -ne [System.Object[]]) {
+            if ($null -ne $global:baseCreateUiDefinition.parameters.steps -and 
+            $($global:baseCreateUiDefinition.parameters.steps).GetType() -ne [System.Object[]]) {
                 $global:baseCreateUiDefinition.parameters.steps = @($global:baseCreateUiDefinition.parameters.steps)
             }
             $global:baseCreateUiDefinition | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $createUiDefinitionOutputPath -Encoding utf8

@@ -86,10 +86,13 @@ function Format-Json {
 }
 
 #build the connection template parameters, according to the connector definition instructions
-function Get-ConnectionsTemplateParameters($activeResource){
+function Get-ConnectionsTemplateParameters($activeResource, $ccpItem){
+    $title = $ccpItem.title;
+    # $dataCollectionEndpoint = $ccpItem.PollerDataCollectionEndpoint;
+    # $dataCollectionRuleImmutableId = $ccpItem.PollerDataCollectionRuleImmutableId;
 
     $paramTestForDefinition = [PSCustomObject]@{
-        defaultValue = "connectorDefinitionName";
+        defaultValue = $title; #"connectorDefinitionName";
         type = "string";
         minLength = 1;
     }
@@ -101,8 +104,8 @@ function Get-ConnectionsTemplateParameters($activeResource){
 
     $dcrConfigParameter = [PSCustomObject]@{
         defaultValue = [PSCustomObject]@{
-            dataCollectionEndpoint = "data collection Endpoint";
-            dataCollectionRuleImmutableId = "data collection rule immutableId";
+            dataCollectionEndpoint = "[variables('_dataCollectionEndpoint$global:connectorCounter')]"; #"data collection Endpoint";
+            dataCollectionRuleImmutableId = "[variables('_dataCollectionRuleImmutableId$global:connectorCounter')]"; #"data collection rule immutableId";
         };
         type = "object";
     }
@@ -151,7 +154,16 @@ function New-ParametersForConnectorInstuctions($instructions)
     }
 }
 
-function Get-MetaDataBaseResource($resourceName, $parentId, $contentId, $kind, $contentVersion){
+function Get-MetaDataBaseResource($resourceName, $parentId, $contentId, $kind, $contentVersion, $dataFileMetadata, $solutionFileMetadata){
+    $author = $dataFileMetadata.Author.Split(" - ");
+    $authorDetails = [PSCustomObject]@{
+        name  = $author[0];
+    };
+    if($null -ne $author[1])
+    {
+        $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+    }
+
     $properties = [PSCustomObject]@{
         parentId  = $parentId;
         contentId =  $contentId;
@@ -162,13 +174,8 @@ function Get-MetaDataBaseResource($resourceName, $parentId, $contentId, $kind, $
             name = "[variables('_solutionName')]";
             kind = "Solution";
         };
-        author = [PSCustomObject]@{
-            name = "[variables('_solutionAuthor')]";
-        };
-        support = [PSCustomObject]@{
-            name = "[variables('_solutionAuthor')]";
-            tier = "[variables('_solutionTier')]";
-        };
+        author = $authorDetails;
+        support = $solutionFileMetadata.support;
     }
 
     return [PSCustomObject]@{
@@ -179,7 +186,7 @@ function Get-MetaDataBaseResource($resourceName, $parentId, $contentId, $kind, $
     }
 }
 
-function Get-MetaDataResource($TemplateCounter){
+function Get-MetaDataResource($TemplateCounter, $dataFileMetadata, $solutionFileMetadata){
     if($templateContentTypeByCounter[$TemplateCounter] -eq "DataConnector")
     {
         $parentIdResourceName = "'Microsoft.SecurityInsights/dataConnectorDefinitions'"
@@ -188,19 +195,19 @@ function Get-MetaDataResource($TemplateCounter){
         $parentIdResourceName = "'Microsoft.SecurityInsights/dataConnectors'"
     }
 
-    $parentId = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), $parentIdResourceName, variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])'))]"
-    $metaDataResourceName = "concat('DataConnector-', variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])'))"
-    $metaDataContentId = "[variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])')]"
-    $metaDatsContentVersion  = "[variables('dataConnectorVersion$($templateKindByCounter[$TemplateCounter])')]"
-    $metaDataResource =  Get-MetaDataBaseResource $metaDataResourceName $parentId $metaDataContentId $templateContentTypeByCounter[$TemplateCounter] $metaDatsContentVersion
+    $parentId = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), $parentIdResourceName, variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)'))]"
+    $metaDataResourceName = "concat('DataConnector-', variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)'))"
+    $metaDataContentId = "[variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')]"
+    $metaDatsContentVersion  = "[variables('dataConnectorVersion$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')]"
+    $metaDataResource =  Get-MetaDataBaseResource $metaDataResourceName $parentId $metaDataContentId $templateContentTypeByCounter[$TemplateCounter] $metaDatsContentVersion $dataFileMetadata $solutionFileMetadata
     
     if($templateContentTypeByCounter[$TemplateCounter] -eq "DataConnector")
     {
         $dependencies = [PSCustomObject]@{
                 "criteria" =  @(
                     [PSCustomObject]@{
-                        "version" = "[variables('dataConnectorVersion$($templateKindByCounter[2])')]";
-                        "contentId" = "[variables('_dataConnectorContentId$($templateKindByCounter[2])')]";
+                        "version" = "[variables('dataConnectorVersion$($templateKindByCounter[2])$($global:connectorCounter)')]";
+                        "contentId" = "[variables('_dataConnectorContentId$($templateKindByCounter[2])$($global:connectorCounter)')]";
                         "kind" = "ResourcesDataConnector"
                     }
                 )
@@ -212,7 +219,7 @@ function Get-MetaDataResource($TemplateCounter){
     return  $metaDataResource;
 }
 
-function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter){
+function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, $ccpItem){
     $contentVersion = "variables('dataConnectorVersion$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')";
     $contentTemplateName = "variables('dataConnectorTemplateName$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')";
     $contentId = "variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')";
@@ -225,17 +232,21 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter){
         $resoureKindTag = "rdc";
     }
 
+    $title = $ccpItem.title;
+    $displayName = $title + "-" + $templateContentTypeByCounter[$TemplateCounter]
+    $randomNumber = Get-Random
     return [PSCustomObject]@{
         type       = "Microsoft.OperationalInsights/workspaces/providers/contentTemplates";
-        apiVersion = "2023-04-01-preview";
-        name        = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', $contentTemplateName, $contentVersion)]";
+        apiVersion = $contentResourceDetails.metadataApiVersion; # "2023-04-01-preview";
+        name        = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', $contentTemplateName, $randomNumber)]";
         location   = "[parameters('workspace-location')]";
         dependsOn  = @(
-            "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            "$($contentResourceDetails.dependsOn)"
+            #"[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
         );
         properties = [PSCustomObject]@{
             contentId  =  "[$contentId]";
-            displayName = "[concat(variables('_solutionName'), $contentTemplateName)]";
+            displayName = $displayName; #"[concat(variables('_solutionName'), $contentTemplateName)]";
             contentKind = $templateContentTypeByCounter[$TemplateCounter];
             mainTemplate = [PSCustomObject]@{
                 '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
@@ -296,49 +307,62 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionVersion" -NotePropertyValue $dataFileMetadata.Version
     }
 
-    if (!$global:baseMainTemplate.variables._solutionAuthor) { 
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionAuthor" -NotePropertyValue $solutionFileMetadata.providers[0]
-    }
+    # if (!$global:baseMainTemplate.variables._solutionAuthor) { 
+    #     $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionAuthor" -NotePropertyValue $solutionFileMetadata.providers[0]
+    # }
 
-    if (!$global:baseMainTemplate.variables._packageIcon) { 
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_packageIcon" -NotePropertyValue "icon icon icon icon"
-    }
+    # if (!$global:baseMainTemplate.variables._packageIcon) { 
+    #     $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_packageIcon" -NotePropertyValue "icon icon icon icon"
+    # }
 
     if (!$global:baseMainTemplate.variables._solutionId) { 
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "$solutionId"
     }
 
-    if (!$global:baseMainTemplate.variables."dataConnectorVersion$($templateKindByCounter[1])") { 
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$($templateKindByCounter[1])" -NotePropertyValue "1.0.0"
+    if (!$global:baseMainTemplate.variables."dataConnectorVersion$($templateKindByCounter[1])$($global:connectorCounter)") { 
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$($templateKindByCounter[1])$($global:connectorCounter)" -NotePropertyValue "1.0.0"
     }
 
-    if (!$global:baseMainTemplate.variables."dataConnectorVersion$($templateKindByCounter[2])") { 
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$($templateKindByCounter[2])" -NotePropertyValue "1.0.0"
+    if (!$global:baseMainTemplate.variables."dataConnectorVersion$($templateKindByCounter[2])$($global:connectorCounter)") { 
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$($templateKindByCounter[2])$($global:connectorCounter)" -NotePropertyValue "1.0.0"
     }
 
-    if (!$global:baseMainTemplate.variables._solutionTier) { 
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionTier" -NotePropertyValue $solutionFileMetadata.support.tier
-    }
+    # if (!$global:baseMainTemplate.variables._solutionTier) { 
+    #     $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionTier" -NotePropertyValue $solutionFileMetadata.support.tier
+    # }
 
     try {
         $activeResource =  @()
         $tableCounter = 1;
 
         foreach ($ccpItem in $ccpDict) {
-            $templateName = $solutionName;
+            $templateName = $ccpItem.title; #$solutionName;
+            $dataCollectionEndpoint = $ccpItem.PollerDataCollectionEndpoint;
+            $dataCollectionRuleImmutableId = $ccpItem.PollerDataCollectionRuleImmutableId;
 
+            if (!$global:baseMainTemplate.variables."_dataCollectionEndpoint$global:connectorCounter") { 
+                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataCollectionEndpoint$global:connectorCounter" -NotePropertyValue "$dataCollectionEndpoint"
+
+                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataCollectionEndpoint$global:connectorCounter" -NotePropertyValue "[variables('dataCollectionEndpoint$global:connectorCounter')]"
+            }
+
+            if (!$global:baseMainTemplate.variables."_dataCollectionRuleImmutableId$global:connectorCounter") { 
+                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataCollectionRuleImmutableId$global:connectorCounter" -NotePropertyValue "$dataCollectionRuleImmutableId"
+
+                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataCollectionRuleImmutableId$global:connectorCounter" -NotePropertyValue "[variables('dataCollectionRuleImmutableId$global:connectorCounter')]"
+            }
             For ($TemplateCounter = 1; $TemplateCounter -lt 3; $TemplateCounter++) {
             
-                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])" -NotePropertyValue "$templateName$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)"
+                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "$templateName"
             
-                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateName$($templateKindByCounter[$TemplateCounter])" -NotePropertyValue "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$(global:connectorCounter)')))]"
+                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateName$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')))]"
                 
-                $templateContent = Get-ContentTemplateResource $contentResourceDetails $TemplateCounter; 
-                $templateContent.properties.mainTemplate.resources += Get-MetaDataResource $TemplateCounter
+                $templateContent = Get-ContentTemplateResource $contentResourceDetails $TemplateCounter $ccpItem; 
+                $templateContent.properties.mainTemplate.resources += Get-MetaDataResource $TemplateCounter $dataFileMetadata $solutionFileMetadata
                 
                 if($TemplateCounter -eq 2)
                 {
-                    $templateContent.properties.mainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$(global:connectorCounter)" -NotePropertyValue "[variables('_dataConnectorContentId$($templateKindByCounter[2])$(global:connectorCounter)')]"        
+                    $templateContent.properties.mainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "[variables('_dataConnectorContentId$($templateKindByCounter[2])$($global:connectorCounter)')]"        
                     $templateContentConnections = $templateContent
                 }
                 else
@@ -350,29 +374,31 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             #========start:dc definition resource===========
             $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath.Replace($solutionName + "/", "").Replace($dcFolderName + "/", "")
             $ccpDataDefinitionFilePath = $solutionBasePath + "/" + $solutionName + "/" + $dcFolderName + "/" + $dcDefinitionFilteredPath
+            $ccpDataDefinitionFilePath = $ccpDataDefinitionFilePath.Replace("//", "/")
             Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
-
+            
             $fileContent = Get-Content -Raw $ccpDataDefinitionFilePath | Out-String | ConvertFrom-Json
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions")
             {
                 Write-Host "Processing for CCP DataDefinition file path: $dcDefinitionFilteredPath"
-                $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$($templateKindByCounter[1])'))]"
+                $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$($templateKindByCounter[1])$($global:connectorCounter)'))]"
 
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                 $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions"
                 $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
                 
                 $activeResource += $armResource
-                $activeResource += Get-MetaDataResource 1
+                $activeResource += Get-MetaDataResource 1 $dataFileMetadata $solutionFileMetadata
             }
             #========end:dc definition resource===========
             #========start:dc definition resource===========
-            $ccpPollerFilePath = $ccpItem.DCRFilePath
+            $ccpPollerFilePath = $ccpItem.DCPollerFilePath
             Write-Host "CCP Poller File Path : $ccpPollerFilePath"
-
+            $ccpPollerFilePath = $ccpPollerFilePath.Replace("//", "/")
             $fileContent = Get-Content -Raw $ccpPollerFilePath | Out-String | ConvertFrom-Json
-
+            
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
+                $placeHolderPatternMatches = '\{{[a-zA-Z0-9]+\}}'
                 Write-Host "Processing for CCP Poller file path: $ccpPollerFilePath"
                 $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$name')]"
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
@@ -386,16 +412,94 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $armResource.properties.auth.ClientId = "[[parameters('ClientId')]"
                     $armResource.properties.auth.ClientSecret = "[[parameters('ClientSecret')]"
 
-                    if($armResource.properties.auth.grantType -eq 'authorization_code')
-                    {
+                    if($armResource.properties.auth.grantType -eq 'authorization_code') {
                         $armResource.properties.auth.AuthorizationCode = "[[parameters('AuthorizationCode')]"
-                    }   
+                    }
+
+                    # AuthorizationEndpoint placeholder
+                    if ($null -ne $armResource.properties.auth.AuthorizationEndpoint -and $armResource.properties.request.auth.AuthorizationEndpoint.contains("{{")) {
+                        $authorizationEndpointValue = $armResource.properties.auth.AuthorizationEndpoint
+                        $placeHoldersMatched = $authorizationEndpointValue | Select-String $placeHolderPatternMatches -AllMatches
+                        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                            $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                            $armResource.properties.request.AuthorizationEndpoint = "[[parameters('" + $placeHolderName + "')]"
+                        }
+                    }
+
+                    # TokenEndpoint placeholder 
+                    if ($null -ne $armResource.properties.auth.TokenEndpoint -and $armResource.properties.request.auth.TokenEndpoint.contains("{{")) {
+                        $tokenEndpointValue = $armResource.properties.auth.TokenEndpoint
+                        $placeHoldersMatched = $tokenEndpointValue | Select-String $placeHolderPatternMatches -AllMatches
+                        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                            $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                            $armResource.properties.request.TokenEndpoint = "[[parameters('" + $placeHolderName + "')]"
+                        }
+                    }
                 }
+                if ($armResource.properties.auth.type -eq 'Basic') {
+                    $armResource.properties.auth.userName = "[[parameters('username')]"
+                    $armResource.properties.auth.password = "[[parameters('password')]"
+                }
+
+                
+                if ($armResource.properties.request.apiEndPoint.contains("{{")) {
+                    # identify any placeholders in apiEndpoint
+                    $endPointUrl = $armResource.properties.request.apiEndPoint                    
+                    $placeHoldersMatched = $endPointUrl | Select-String $placeHolderPatternMatches -AllMatches
+                    
+                    if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                        # has some placeholders 
+                        $finalizedEndpointUrl = ""
+                        $finalizedEndpointUrl = "[[concat("
+                        $closureBrackets = ")]"
+
+                        foreach ($currentPlaceHolder in $placeHoldersMatched.Matches.Value) {
+                            $placeHolderName = $currentPlaceHolder.replace("{{", "").replace("}}", "")
+                            $splitEndpoint = $endPointUrl.Split($currentPlaceHolder)
+                            foreach($splitItem in $splitEndpoint) {
+                                if ($splitItem -eq "") {
+                                    $finalizedEndpointUrl += "parameters('" + $placeHolderName + "')" 
+                                } else {
+                                    if ($finalizedEndpointUrl.Contains("parameters")) {
+                                        $finalizedEndpointUrl += ", '" + $splitItem + "'"
+                                    } else {
+                                        $finalizedEndpointUrl += "$splitItem"
+                                    }
+                                }
+                            }
+                            #$finalizedEndpointUrl += $endPointUrl.Replace($currentPlaceHolder, "parameters('" + $placeHolderName + "')")
+                        }
+
+                        $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
+                    }
+                }
+
+                # retry count placeholders
+                if ($null -ne $armResource.properties.request.retryCount -and ($armResource.properties.request.retryCount -is [System.String] -and $armResource.properties.request.retryCount.contains("{{"))) {
+                    $retryCountValue = $armResource.properties.request.retryCount
+                    $placeHoldersMatched = $retryCountValue | Select-String $placeHolderPatternMatches -AllMatches
+                    if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                        $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                        $armResource.properties.request.retryCount = "[[parameters('" + $placeHolderName + "')]"
+                    }
+                }
+                
+                # rateLimitQPS placeholders
+                if ($null -ne $armResource.properties.request.rateLimitQPS -and ($armResource.properties.request.rateLimitQPS -is [System.String] -and $armResource.properties.request.rateLimitQPS.contains("{{"))) {
+                    $rateLimitQPSValue = $armResource.properties.request.rateLimitQPS
+                    $placeHoldersMatched = $rateLimitQPSValue | Select-String $placeHolderPatternMatches -AllMatches
+                    if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                        $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                        $armResource.properties.request.rateLimitQPS = "[[parameters('" + $placeHolderName + "')]"
+                    }
+                }
+
                 $templateContentConnections.properties.mainTemplate.resources += $armResource
             }
             #========end:dc definition resource===========
             #========start: dcr resource===========
             $ccpDCRFilePath = $ccpItem.DCRFilePath
+            $ccpDCRFilePath = $ccpDCRFilePath.Replace("//", "/")
             Write-Host "CCP DCR File Path : $ccpDCRFilePath"
 
             $fileContent = Get-Content -Raw $ccpDCRFilePath | Out-String | ConvertFrom-Json
@@ -406,7 +510,14 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 if([bool]($fileContent.properties.PSobject.Properties.name -match "dataCollectionEndpointId") -eq $false)
                 {
                     $dcrEndpoint = "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
-                    $fileContent.properties | Add-Member -MemberType NoteProperty -Name dataCollectionEndpointId -Value $dcrEndpoint
+
+                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataCollectionEndpointId$($global:connectorCounter)" -NotePropertyValue "$dcrEndpoint"
+
+                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataCollectionEndpointId$($global:connectorCounter)" -NotePropertyValue "[variables('dataCollectionEndpointId$($global:connectorCounter)')]"
+
+                    #$fileContent.properties | Add-Member -MemberType NoteProperty -Name dataCollectionEndpointId -Value $dcrEndpoint
+
+                    $fileContent.properties | Add-Member -MemberType NoteProperty -Name dataCollectionEndpointId -Value "[variables('_dataCollectionEndpointId$($global:connectorCounter)')]"
                 }
                 
                 foreach ($logAnalyticDestination in $fileContent.properties.destinations.logAnalytics)
@@ -436,12 +547,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             #========end: tables resource===========
 
             ## Build the full package resources
-            $templateContentConnections.properties.mainTemplate.parameters = Get-ConnectionsTemplateParameters $activeResource;
-            $armResourceContentPackage = Get-ContentPackagesForSolution
+            $templateContentConnections.properties.mainTemplate.parameters = Get-ConnectionsTemplateParameters $activeResource $ccpItem;
+            #$armResourceContentPackage = Get-ContentPackagesForSolution #TODO:CHECK WHAT IS THIS USED FOR
             $global:baseMainTemplate.resources += $templateContentConnectorDefinition
             $global:baseMainTemplate.resources += $activeResource
             $global:baseMainTemplate.resources += $templateContentConnections
-            $global:baseMainTemplate.resources += $armResourceContentPackage
+            #$global:baseMainTemplate.resources += $armResourceContentPackage #TODO:CHECK WHAT IS THIS USED FOR
 
             $global:connectorCounter += 1
         }
