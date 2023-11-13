@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import azure.durable_functions as df
 
 API_HOST = os.environ.get('API_HOST', 'https://api.abnormalplatform.com/v1')
-MAX_THREATS = int(os.environ['MAX_NUMBER_OF_THREATS'])
+MAX_THREATS = int(os.environ.get('MAX_NUMBER_OF_THREATS', 120))
 
 class Resources(Enum):
     threats = 0
