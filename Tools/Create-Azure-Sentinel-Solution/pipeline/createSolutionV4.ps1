@@ -49,8 +49,11 @@ try
 			Write-Host "Not able to identify content resource details based on Version. Please verify if Version in data input file is correct!"
 			return;
 		}
-		
-		foreach ($objectProperties in $contentToImport.PsObject.Properties) {
+
+		$ccpDict = @();
+    $isCCPConnector = $false;
+		foreach ($objectProperties in $contentToImport.PsObject.Properties) 
+		{
 			# Access the value of the property
 				if ($objectProperties.Name.ToLower() -eq "name" -or 
 					$objectProperties.Name.ToLower() -eq "author" -or
@@ -96,9 +99,31 @@ try
 						$filesList = $propertyValue
 					}
 
+					# =============start: ccp connector code===============
+					$solutionBasePath = $pipelineBasePath + "/Solutions/";
+
+					$solutionMetadataPath = $solutionBasePath + "$($pipelineDataFileRawContent.Name)/$($pipelineDataFileRawContent.Metadata)"
+					$solutionBaseMetadata = Get-Content -Raw $solutionMetadataPath | Out-String | ConvertFrom-Json
+					if ($null -eq $solutionBaseMetadata) {
+							Write-Host "Please verify if the given path $solutionMetadataPath is correct and/or Solution folder name and Data file Name attribute value is correct!"
+							exit 1
+					}
+
+					if ($isCCPConnector -eq $false) {            
+            $ccpDict = Get-CCP-Dict -dataFileMetadata $pipelineDataFileRawContent -baseFolderPath $solutionBasePath -solutionName $solutionName
+
+            if ($null -eq $ccpDict) {
+                # break as error has occured
+                break;
+            }
+            $isCCPConnector = $true
+					}
+					# =============end: ccp connector code===============
+
 					foreach ($file in $filesList) 
 					{
-						Write-Host "Current file is $file"
+						$fileExtension = $file -split '\.' | Select-Object -Last 1
+						Write-Host "Current file is $file, File extension is $fileExtension"
 
 						if ($objectProperties.Name.ToLower() -eq "parsers") {
 							$finalPath = "" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName + "/Parsers/" + $file.Replace("Parsers/", "")
@@ -140,7 +165,23 @@ try
 
 						try {
 							Write-Host "Downloading $finalPath"
-							$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
+							try {
+								$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
+							}
+							catch [System.IO.FileNotFoundException] {
+								Write-Host "Failed to download $finalPath. FinalPath is $finalPath, Error Details: " + $_.Exception
+	
+								if ($fileExtension -eq "json" -or $fileExtension -eq "JSON") {
+									Write-Host "Retry Failed to download for file path $finalPath"
+									if ($fileExtension -eq "json") {
+										$finalPath = $finalPath.Replace(".json", ".JSON")
+									} else {
+										$finalPath = $finalPath.Replace(".JSON", ".json")
+									}
+									
+									$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
+								}
+							}
 						}
 						catch {
 							Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
@@ -167,7 +208,12 @@ try
 								GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $isPipelineRun
 							}
 							elseif ($objectKeyLowercase -eq "data connectors") {
-								GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails
+								if ($ccpDict.Count -gt 0) {
+									GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName 
+								}
+								else {
+									GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName
+								}
 							}
 							elseif ($objectKeyLowercase -eq "savedsearches") {
 								GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails

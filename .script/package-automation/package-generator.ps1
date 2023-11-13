@@ -1,6 +1,7 @@
 param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $defaultPackageVersion, $solutionOfferId, $inputBaseFolderPath, $isNewSolution)
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 . ./.script/package-automation/catelogAPI.ps1
+. ./Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1 # load ccp functions
 
 function ErrorOutput {
     Write-Host "Package creation process failed!"
@@ -49,11 +50,12 @@ try {
             $zipFileExist = $item -match ([regex]::Escape(".zip"))
             $pythonFileExist = $item -match ([regex]::Escape(".py"))
             $jsonFile = $item -match ([regex]::Escape(".json"))
-            $capsJsonFile = $item -match ([regex]::Escape(".JSON"))
+            #$capsJsonFile = $item -match ([regex]::Escape(".JSON"))
             if ($hostFileExist -or $proxiesFileExist -or $azureDeployFileExist -or $functionFileExist -or $textFileExist -or $zipFileExist -or $pythonFileExist) 
             { }
             else { 
-                if ($jsonFile -or $capsJsonFile) {
+                if ($jsonFile) { 
+                    # -or $capsJsonFile) {
                     $newDataConnectorFilesWithoutExcludedFiles += $item
                 }
             }
@@ -463,6 +465,11 @@ try {
             }
         }
     }
+
+    # =============start: ccp connector code===============
+
+    # =============end: ccp connector code===============
+
     if ($parserFolderResultLength -gt 0) {
         $parserFolderResultArray = $parserFolderResult | ConvertTo-Json -AsArray
         $parsersArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("Parsers")))
@@ -918,9 +925,6 @@ try {
             $property.Name.ToLower() -eq 'parsers' -or 
             $property.Name.ToLower() -eq 'dataconnectors' -or 
             $property.Name.ToLower() -eq 'data connectors') {
-            $gg = $property.Value.GetType()
-            $pp = $property.Name
-            Write-Host "type is $gg , $pp"
             if ($property.Value.GetType().FullName -eq 'System.String') {
                 $customProperties[$property.Name] = $property.Value | ConvertFrom-Json
             }

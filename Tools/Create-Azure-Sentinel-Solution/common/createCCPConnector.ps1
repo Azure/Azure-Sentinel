@@ -233,7 +233,7 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
     }
 
     $title = $ccpItem.title;
-    $displayName = $title + "-" + $templateContentTypeByCounter[$TemplateCounter]
+    $displayName = $title; #  + "-" + $templateContentTypeByCounter[$TemplateCounter]
     $randomNumber = Get-Random
     return [PSCustomObject]@{
         type       = "Microsoft.OperationalInsights/workspaces/providers/contentTemplates";
@@ -327,10 +327,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$($templateKindByCounter[2])$($global:connectorCounter)" -NotePropertyValue "1.0.0"
     }
 
-    # if (!$global:baseMainTemplate.variables._solutionTier) { 
-    #     $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionTier" -NotePropertyValue $solutionFileMetadata.support.tier
-    # }
-
     try {
         $activeResource =  @()
         $tableCounter = 1;
@@ -364,6 +360,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 {
                     $templateContent.properties.mainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "[variables('_dataConnectorContentId$($templateKindByCounter[2])$($global:connectorCounter)')]"        
                     $templateContentConnections = $templateContent
+
+                    $global:DependencyCriteria += [PSCustomObject]@{
+                        kind      = "DataConnector";
+                        contentId = "[variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')]";
+                        version   = if ($dataFileMetadata.TemplateSpec){"[variables('dataConnectorVersion$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')]"}else{$dataFileMetadata.Version};
+                    };
                 }
                 else
                 {
@@ -378,6 +380,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
             
             $fileContent = Get-Content -Raw $ccpDataDefinitionFilePath | Out-String | ConvertFrom-Json
+
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions")
             {
                 Write-Host "Processing for CCP DataDefinition file path: $dcDefinitionFilteredPath"
@@ -386,10 +389,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                 $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions"
                 $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
-                
+
                 $activeResource += $armResource
                 $activeResource += Get-MetaDataResource 1 $dataFileMetadata $solutionFileMetadata
             }
+            
+            
             #========end:dc definition resource===========
             #========start:dc definition resource===========
             $ccpPollerFilePath = $ccpItem.DCPollerFilePath
@@ -403,6 +408,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$name')]"
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                 $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
+                $armResource.kind = $ccpItem.PollerKind;
                 $armResource.properties.connectorDefinitionName = "[[parameters('connectorDefinitionName')]"
                 $armResource.properties.dcrConfig.dataCollectionEndpoint = "[[parameters('dcrConfig').dataCollectionEndpoint]"
                 $armResource.properties.dcrConfig.dataCollectionRuleImmutableId = "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
@@ -548,11 +554,45 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             ## Build the full package resources
             $templateContentConnections.properties.mainTemplate.parameters = Get-ConnectionsTemplateParameters $activeResource $ccpItem;
-            #$armResourceContentPackage = Get-ContentPackagesForSolution #TODO:CHECK WHAT IS THIS USED FOR
             $global:baseMainTemplate.resources += $templateContentConnectorDefinition
             $global:baseMainTemplate.resources += $activeResource
             $global:baseMainTemplate.resources += $templateContentConnections
-            #$global:baseMainTemplate.resources += $armResourceContentPackage #TODO:CHECK WHAT IS THIS USED FOR
+            #$global:baseMainTemplate.resources += $dataDefinitionContent
+
+            if ($global:connectorCounter -eq 1) {
+                $baseDataConnectorStep = [PSCustomObject] @{
+                    name       = "dataconnectors";
+                    label      = "Data Connectors";
+                    bladeTitle = "Data Connectors";
+                    elements   = @();
+                }
+                
+                $global:baseCreateUiDefinition.parameters.steps += $baseDataConnectorStep
+            }
+
+            $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+
+            $baseDataConnectorTextElement = [PSCustomObject] @{
+                name    = "dataconnectors$global:connectorCounter-text";
+                type    = "Microsoft.Common.TextBlock";
+                options = [PSCustomObject] @{
+                    text = $connectorDescriptionText;
+                }
+            }
+
+            $currentStepNum = $global:baseCreateUiDefinition.parameters.steps.Count - 1
+            $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $baseDataConnectorTextElement
+            $connectDataSourcesLink = [PSCustomObject] @{
+                name    = "dataconnectors-link2";
+                type    = "Microsoft.Common.TextBlock";
+                options = [PSCustomObject] @{
+                    link = [PSCustomObject] @{
+                        label = "Learn more about connecting data sources";
+                        uri   = "https://docs.microsoft.com/azure/sentinel/connect-data-sources";
+                    }
+                }
+            }
+            $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
 
             $global:connectorCounter += 1
         }

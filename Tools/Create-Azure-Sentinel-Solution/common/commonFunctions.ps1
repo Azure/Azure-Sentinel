@@ -1892,7 +1892,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         $connectorData.resources[0] -and
                         $connectorData.resources[0].properties -and
                         $connectorData.resources[0].properties.connectorUiConfig -and
-                        $connectorData.resources[0].properties.pollingConfig) {
+                        $connectorData.resources[0].properties.pollingConfig) 
+                    {
                         # Else check if Polling connector
                         $connectorData = $connectorData.resources[0]
                         $connectorUiConfig = $connectorData.properties.connectorUiConfig
@@ -2910,7 +2911,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                     "Microsoft.OperationalInsights/workspaces/savedSearches",
                                     "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
                                     "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
-                                    "Microsoft.OperationalInsights/workspaces/providers/contentPackages")
+                                    "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+                                    "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions")
                     }
             }
             elseif ($version.Major -eq 2)
