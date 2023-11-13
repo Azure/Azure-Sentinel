@@ -8,7 +8,7 @@ import os
 from datetime import datetime, timedelta
 import azure.durable_functions as df
 
-API_HOST = os.environ['API_HOST']
+API_HOST = os.environ.get('API_HOST', 'https://api.abnormalplatform.com/v1')
 MAX_THREATS = int(os.environ['MAX_NUMBER_OF_THREATS'])
 
 class Resources(Enum):
@@ -46,7 +46,7 @@ class AbnormalSoarConnectorAsync:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Soar-Integration-Origin": "AZURE SENTINEL",
-            "Migration-Status": "is_migrated"
+            "Azure-Sentinel-Version": "2023-11-09"
         }
 
     def _get_filter_query(self, filter_param, gte_datetime=None, lte_datetime=None):
@@ -108,7 +108,6 @@ class AbnormalSoarConnectorAsync:
 
     async def generate_resource_ids(self, session, resource, date_filter, output_queue, filter_param, context, post_processing_func=lambda x:[x]):
         query_dict = self._get_filter_query(filter_param, date_filter.get("gte_datetime"), date_filter.get("lte_datetime"))
-        logging.info(f"Calling generate_resource_ids for {resource} with {query_dict}")
         entity_date_set = False 
         nextPageNumber = 1
         while nextPageNumber:
@@ -141,15 +140,13 @@ class AbnormalSoarConnectorAsync:
         gte_datetime = datetime.strptime(gte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
         lte_datetime = datetime.strptime(lte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
 
-        if (lte_datetime - gte_datetime) <= timedelta(hours=1):
+        if (lte_datetime - gte_datetime) <= timedelta(minutes=1):
             logging.warning("Reached minimum date range for filter query")
             return True
         
         return False
 
     def set_date_on_entity(self, context, lte_datetime, entity_value):
-        logging.info(f"Setting date on entity for {entity_value} as {lte_datetime}")
-        
         datetimeEntityId = df.EntityId("SoarDatetimeEntity", "latestDatetime")
         context.signal_entity(datetimeEntityId, "set", {"type": entity_value, "date": lte_datetime})
     
@@ -184,7 +181,6 @@ class AbnormalSoarConnectorAsync:
             input_queue.task_done()
 
     async def get_all_threat_messages(self, threats_date_filter, output_queue, context, caching_func=None):
-        logging.info(f"This is the context in get_all_threat_messages {context}")
 
         intermediate_queue = asyncio.Queue()
         async with aiohttp.ClientSession() as session:
@@ -198,7 +194,6 @@ class AbnormalSoarConnectorAsync:
 
 
     async def get_all_cases(self, cases_date_filter, output_queue, context, caching_func=None):
-        logging.info(f"This is the context in get_all_cases {context}")
         intermediate_queue = asyncio.Queue()
         async with aiohttp.ClientSession() as session:
             producer_post_process_func = lambda x: caching_func(self._extract_case_ids(x)) if caching_func else self._extract_case_ids(x)
