@@ -38,6 +38,12 @@ query: |
     | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, "NO_IP")
     // Picking up only IOC's that contain the entities we want
     | where TI_ipEntity != "NO_IP"
+    // Filtering out rows where the Confidence Score is less than 50 as they would not have an Alert Priority label. 
+    | where ConfidenceScore > 50
+    // Determine AlertPriority based on ConfidenceScore
+    | extend AlertPriority = case(ConfidenceScore > 82, "High",
+                                  ConfidenceScore > 74, "Medium",
+                                  "Low")    
     // Exclude local addresses, using the ipv4_is_private operator
     | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
   let IP_TI_list = toscalar(IP_TI
@@ -72,5 +78,6 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: The IP {{SrcIpAddr}} of the web request matches an IP IoC
   alertDescriptionFormat: The source address {{SrcIpAddr}} of the web request for the URL {{Url}} matches a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence feed for more information about the indicator.
-version: 1.2.3
+  alertSeverityColumnName: AlertPriority
+version: 1.3.0
 kind: Scheduled

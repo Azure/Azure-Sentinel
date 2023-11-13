@@ -40,6 +40,12 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  // Filtering out rows where the Confidence Score is less than 50 as they would not have an Alert Priority label. 
+    | where ConfidenceScore > 50
+    // Determine AlertPriority based on ConfidenceScore
+    | extend AlertPriority = case(ConfidenceScore > 82, "High",
+                                  ConfidenceScore > 74, "Medium",
+                                  "Low")    
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
       table(tableName) | where TimeGenerated >= ago(dt_lookBack)
@@ -74,5 +80,7 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.2.5
+alertDetailsOverride:
+  alertSeverityColumnName: AlertPriority
+version: 1.3.0
 kind: Scheduled
