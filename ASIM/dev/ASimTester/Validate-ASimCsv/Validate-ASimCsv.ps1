@@ -47,4 +47,9 @@ foreach ($schema in $schemas) {
     }
 }
 
+if ($duplicateColumns.count -gt 0) {
+    Write-Warning "Duplicate entries found for the following fields`n"
+} else {
+    Write-Output "`nNo duplicate entries found`n"
+}
 return $duplicateColumns | Sort-Object Schema, ColumnName, Class -Unique
