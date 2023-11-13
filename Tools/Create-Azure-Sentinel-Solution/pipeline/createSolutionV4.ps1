@@ -165,20 +165,22 @@ try
 
 						try {
 							Write-Host "Downloading $finalPath"
-							try {
+
+							$isFilePathPresent = Test-Path -Path "$finalPath"
+							Write-Host "isFilePathPresent $isFilePathPresent"
+							if ($isFilePathPresent) {
 								$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
 							}
-							catch [System.IO.FileNotFoundException] {
-								Write-Host "Failed to download $finalPath. FinalPath is $finalPath, Error Details: " + $_.Exception
-	
+							else {
 								if ($fileExtension -eq "json" -or $fileExtension -eq "JSON") {
-									Write-Host "Retry Failed to download for file path $finalPath"
+									Write-Host "FinalPath $finalPath not found!"
 									if ($fileExtension -eq "json") {
 										$finalPath = $finalPath.Replace(".json", ".JSON")
+
 									} else {
 										$finalPath = $finalPath.Replace(".JSON", ".json")
 									}
-									
+									Write-Host "Updated FinalPath is $finalPath"
 									$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
 								}
 							}
