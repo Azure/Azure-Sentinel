@@ -1,0 +1,161 @@
+{
+    "id": "OktaSSO",
+    "title": "Okta Single Sign-On",
+    "publisher": "Okta",
+    "descriptionMarkdown": "The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft Sentinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.",
+    "graphQueries": [
+        {
+            "metricName": "Total data received",
+            "legend": "Okta Logs",
+            "baseQuery": "Okta_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description" : "Top 10 Active Applications",
+            "query": "Okta_CL \n| mv-expand todynamic(target_s)  \n| where target_s.type == \"AppInstance\"  \n| summarize count() by tostring(target_s.alternateId)  \n| top 10 by count_"
+        },
+        {
+            "description" : "Top 10 Client IP Addresses",
+            "query": "Okta_CL \n| summarize count() by client_ipAddress_s \n| top 10 by count_"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "Okta_CL",
+            "lastDataReceivedQuery": "Okta_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "Okta_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {	
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",	
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",	
+                "scope": "Workspace",	
+                "requiredPermissions": {	
+                    "action": true
+                }
+             }
+        ],
+        "customs": [
+            {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            }, 
+            {
+                "name": "Okta API Token",
+                "description": "An Okta API Token is required. See the documentation to learn more about the [Okta System Log API](https://developer.okta.com/docs/reference/api/system-log/)."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses Azure Functions to connect to Okta SSO to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+        },
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector has been updated, if you have previously deployed an earlier version, and want to update, please delete the existing Okta Azure Function before redeploying this version."
+        },
+        {
+            "title": "",
+            "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+        },
+        {
+            "title": "",
+            "description": "**STEP 1 - Configuration steps for the Okta SSO API**\n\n [Follow these instructions](https://developer.okta.com/docs/guides/create-an-api-token/create-the-token/) to create an API Token." 
+        },
+		{
+            "title": "",
+            "description": "**Note** - For more information on the rate limit restrictions enforced by Okta, please refer to the **[documentation](https://developer.okta.com/docs/reference/rl-global-mgmt/)**." 
+        },
+        {
+            "title": "",
+            "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Okta SSO connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Okta SSO API Authorization Token, readily available.", 
+            "instructions":[
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Workspace ID"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "PrimaryKey"
+                        ],
+                        "label": "Primary Key"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+		{
+				"instructions": [ 
+		{
+			"parameters":{
+				
+				   "instructionSteps": [
+        {
+            "title": "Option 1 - Azure Resource Manager (ARM) Template",
+            "description": "This method provides an automated deployment of the Okta SSO connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentineloktaazuredeployv2-solution)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **API Token** and **URI**. \n - Use the following schema for the `uri` value: `https://<OktaDomain>/api/v1/logs?since=` Replace `<OktaDomain>` with your domain. [Click here](https://developer.okta.com/docs/reference/api-overview/#url-namespace) for further details on how to identify your Okta domain namespace. There is no need to add a time value to the URI, the Function App will dynamically append the inital start time of logs to UTC 0:00 for the current UTC date as time value to the URI in the proper format. \n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy."
+        },
+        {
+            "title": "Option 2 - Manual Deployment of Azure Functions",
+            "description": "Use the following step-by-step instructions to deploy the Okta SSO connector manually with Azure Functions (Deployment via Visual Studio Code).",
+ "instructions": [ 
+                {
+                    "parameters": {
+                      
+                        "instructionSteps": [
+                             {
+							  "title": "Step 1 - Deploy a Function App",
+							  "description": "1. Download the [Azure Function App](https://aka.ms/sentineloktaazurefunctioncodev2) file. Extract archive to your local development computer.\n2. Follow the [function app manual deployment instructions](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AzureFunctionsManualDeployment.md#function-app-manual-deployment-instructions) to deploy the Azure Functions app using VSCode.\n3. After successful deployment of the function app, follow next steps for configuring it."
+							  },
+							{
+                              "title": "Step 2 - Configure the Function App",
+                              "description": "1. Go to Azure Portal for the Function App configuration.\n2. In the Function App, select the Function App Name and select **Configuration**.\n3. In the **Application settings** tab, select **+ New application setting**.\n4. Add each of the following five (5) application settings individually, with their respective string values (case-sensitive): \n\t\tapiToken\n\t\tworkspaceID\n\t\tworkspaceKey\n\t\turi\n\t\tlogAnalyticsUri (optional)\n - Use the following schema for the `uri` value: `https://<OktaDomain>/api/v1/logs?since=` Replace `<OktaDomain>` with your domain. [Click here](https://developer.okta.com/docs/reference/api-overview/#url-namespace) for further details on how to identify your Okta domain namespace. There is no need to add a time value to the URI, the Function App will dynamically append the inital start time of logs to UTC 0:00 for the current UTC date as time value to the URI in the proper format.\n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details.\n - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: https://<CustomerId>.ods.opinsights.azure.us. \n5. Once all application settings have been entered, click **Save**."
+                             }
+                        ]
+                    },
+                    "type": "InstructionStepsGroup"
+                }
+            ]
+        }
+        
+		]
+	},
+			  "type": "InstructionStepsGroup"
+	}
+	]
+}
+       
+    ]
+}

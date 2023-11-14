@@ -1,5 +1,10 @@
+import fs from "fs";
 import { WorkbookValidationError } from "../validationError";
 import { WorkbookMetadata } from "../workbookMetadata";
+
+// Load the skip list from the JSON file
+const skipListFile = "./.script/utils/workbookCheckers/WorkbookPreviewImageValidationSkipList.json";
+const WorkbookPreviewImageValidationSkipList = fs.existsSync(skipListFile) ? JSON.parse(fs.readFileSync(skipListFile, "utf8")).skipList : [];
 
 function isAllPng(previewImagesFileNames: Array<string>): boolean {
     return previewImagesFileNames.every((previewImageFileName: string) => previewImageFileName.toLowerCase().endsWith('.png'));
@@ -23,7 +28,10 @@ function isMissingImages(previewImagesFileNames: Array<string>): boolean {
 
 export function isValidPreviewImageFileNames(items: Array<WorkbookMetadata>) {
   items.forEach((workbookMetadata: WorkbookMetadata) => {
-    
+      // Check if the workbook key is in the skip list
+      if (WorkbookPreviewImageValidationSkipList.includes(workbookMetadata.workbookKey)) {
+          return; // Skip this validation for this workbook
+      }
     if (!isAllPng(workbookMetadata.previewImagesFileNames)) {
         throw new WorkbookValidationError(`Invalid Preview Images for workbook ${workbookMetadata.workbookKey}. All preview images must be png files`);
     }

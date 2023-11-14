@@ -1,0 +1,72 @@
+id: 28ee3c2b-eb4b-44de-a71e-e462843fea72
+name: Infoblox - TI - Syslog Match Found - URL
+description: |
+  'Syslog URL match found in your Infoblox TIDE Threat Intelligence. Customize query count, scheduling, responses and more. Modify data sources, types and threat properties as desired.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes: 
+      - Syslog
+  - connectorId: ThreatIntelligence
+    dataTypes: 
+      - ThreatIntelligenceIndicator
+  - connectorId: InfobloxCloudDataConnectorAma
+    dataTypes: 
+      - CommonSecurityLog (InfobloxCDC)
+  - connectorId: InfobloxCloudDataConnector
+    dataTypes: 
+      - CommonSecurityLog (InfobloxCDC)
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1565
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let TI = ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()  
+  | where Description has_cs "Infoblox - URL"
+  | where isnotempty(DomainName)
+  ;
+  let Data = Syslog
+  | extend HitTime = TimeGenerated
+  | where TimeGenerated >= ago(dt_lookBack)
+  //Extract URL patterns from syslog message
+  | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,SyslogMessage)
+  | where isnotempty(Url)
+  ;
+  TI | join kind=innerunique Data on $left.DomainName == $right.Url
+  | where HitTime >= TimeGenerated and HitTime < ExpirationDateTime
+  | project LatestIndicatorTime, HitTime, SyslogMessage, Computer, ProcessName, Url, HostIP, 
+  AdditionalInformation, Description, ThreatType, TrafficLightProtocolLevel, Type, ConfidenceScore, ExpirationDateTime, SourceSystem, Action, IndicatorId, ExternalIndicatorId, Tags
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: HostIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Url
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+incidentConfiguration:
+  createIncident: true
+version: 1.0.1
+kind: Scheduled

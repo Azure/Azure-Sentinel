@@ -1,0 +1,23 @@
+id: dda93e6b-8a80-4348-a9ee-7c9208cbe410
+Function:
+  Title: Parser for Infoblox_dhcpadded
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: Infoblox_dhcpadded
+FunctionAlias: Infoblox_dhcpadded
+FunctionQuery: |
+    let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
+    let RawData = Syslog
+        | where Computer in (datasource)
+        | where SyslogMessage has "Added"
+        | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
+        | extend responseTime = todatetime(Parser[0]),
+                 RawData_subString = tostring(Parser[3])
+        | project-away Parser;
+    RawData
+        | extend dhcpadded = extract_all(@"([\w\s]+)\sfrom\s(\S+)\sto\s(\S+)", dynamic([1,2,3,4,5]), RawData_subString)[0]
+        | extend Log_Type = strcat(Type," ",tostring(dhcpadded[0])),
+            Source = tostring(dhcpadded[1]),  
+            Dest = tostring(dhcpadded[2])
+        | project-away SyslogMessage, dhcpadded, RawData_subString;

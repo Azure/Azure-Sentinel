@@ -1,0 +1,19 @@
+id: 58b3074c-519b-4812-b784-e8bd7712089a
+Function:
+  Title: Parser for SymantecProxySG
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: SymantecProxySG
+FunctionAlias: SymantecProxySG
+FunctionQuery: |
+    Syslog
+    | where Computer in ("datasource") and Facility == "local0"
+    | parse SyslogMessage with logTime:datetime " " time_taken:long " " c_ip:string " " cs_userdn:string " " cs_auth_groups:string " " exception_id " " sc_filter_result:string ' "' cs_categories:string '" "' cs_referrer:string '" ' sc_status:string " " s_action:string " " cs_method:string ' "' content_type:string '" ' cs_uri_scheme:string " " cs_host:string " " cs_uri_port:string " " cs_uri_path:string " " cs_uri_query:string " " cs_uri_extension:string ' '  Part2:string
+    | extend cs_categories = split(cs_categories,";") 
+    | extend content_type = split(replace(@"%20",@'',tostring(content_type)),";")
+    | parse Part2 with '"' UserAgent '" ' Part3
+    | extend cs_user_agent = iff(Part2 startswith "-", "-", UserAgent),
+         Part3 = iff(Part2 startswith "-", substring(Part2,2), Part3)
+    | parse Part3 with s_ip:string " " sent_bytes:long " " received_bytes:long " " virus_id:string  ' "' app_name:string  '" "' app_operation:string '" ' src_port:string ' "' country:string '" ' cs_threat_risk:string "#015"
+    | project-away Part2, Part3, UserAgent

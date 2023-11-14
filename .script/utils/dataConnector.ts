@@ -200,5 +200,10 @@ export enum ConnectorCategory {
   MicrosoftPurviewInformationProtection="MicrosoftPurviewInformationProtection",
   Dynamics365Activity="Dynamics365Activity",
   CrowdstrikeReplicatorV2="CrowdstrikeReplicatorV2",
-  BloodHoundEnterprise="BloodHoundEnterprise"
+  BloodHoundEnterprise="BloodHoundEnterprise",
+  Corelight="Corelight",
+  CorelightConnectorExporter="CorelightConnectorExporter",
+  AwsS3="AwsS3",
+  AWS="AWS",
+  AzureActiveDirectory="AzureActiveDirectory",
 }
