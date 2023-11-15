@@ -76,6 +76,18 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.AzureDevOpsAuditing;
   }
+  else if (dataTypes[0].name.includes("SecurityAlert"))
+  {
+    return ConnectorCategory.SecurityAlert;
+  }
+  else if (dataTypes[0].name.includes("MicrosoftDefenderForCloudTenantBased"))
+  {
+    return ConnectorCategory.MicrosoftDefenderForCloudTenantBased;
+  }
+  else if (dataTypes[0].name.includes("AwsS3"))
+  {
+    return ConnectorCategory.AwsS3;
+  }
   else if (dataTypes[0].name.includes("AzureDiagnostics"))
   {
     return ConnectorCategory.AzureDiagnostics;
