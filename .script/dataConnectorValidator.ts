@@ -60,6 +60,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
+  else if (dataTypes[0].name.includes("MicrosoftDefenderForCloudTenantBased"))
+  {
+    return ConnectorCategory.MicrosoftDefenderForCloudTenantBased;
+  }
   else if (dataTypes[0].name.includes("ThreatIntelligenceIndicator"))
   {
     return ConnectorCategory.ThreatIntelligenceIndicator;
