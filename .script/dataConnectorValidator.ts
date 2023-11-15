@@ -124,10 +124,6 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.CorelightConnectorExporter;
   }
-  else if (dataTypes[0].name.includes("SecurityAlert"))
-  {
-    return ConnectorCategory.SecurityAlert;
-  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];
