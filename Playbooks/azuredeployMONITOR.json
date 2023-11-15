@@ -1,0 +1,306 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Query Azure Monitor with managed identity",
+        "description": "This playbook will query Azure Monitor with managed identity. alternative to regular AzureMonitor block which does not support managed identity.",
+        "mainSteps": [
+            "Only file hashes entity types will be enriched with this playbook"
+        ],
+        "prerequisites": [
+            "1. Create Azure Integration account in same region than targeted logic app and load the liquid map under name 'azuremonitor'. (manual only at this point)\n2. Make role assignment \"Log Analytics Reader\" to managed identity for appropriate scope"
+        ],
+        "postDeployment": [
+            "None"
+        ],
+        "lastUpdateTime": "2023-04-01T10:00:00.000Z",
+        "entities": [],
+        "tags": [
+            "AzureMonitor"
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "juju4"
+        },
+        "source": {
+            "kind": "Community"
+        },
+        "version": "1.0.0",
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Query Azure Monitor with managed identity",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "resourceTags": {
+            "type": "object",
+            "defaultValue": {
+                "LogicAppsCategory": "security"
+            },
+            "metadata": {
+                "description": "The Azure tags to set on the resource."
+            }
+        },
+        "PlaybookName": {
+            "defaultValue": "AzureMonitor-ManagedId",
+            "type": "string",
+            "metadata": {
+                "description": "The Playbook aka LogicApp name."
+            }
+        },
+        "integrationAccounts_externalid": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Azure ResourceId of Integration account."
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "integrationAccount": {
+                    "id": "[parameters('integrationAccounts_externalid')]"
+                },
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "query": {
+                                            "type": "string"
+                                        },
+                                        "resource_group": {
+                                            "type": "string"
+                                        },
+                                        "resource_name": {
+                                            "type": "string"
+                                        },
+                                        "subscription_id": {
+                                            "type": "string"
+                                        },
+                                        "subscription_name": {
+                                            "type": "string"
+                                        },
+                                        "timerange": {
+                                            "type": "string"
+                                        },
+                                        "workspace_id": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Set_variable_html_as_message": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "html_output",
+                                        "value": "Error (@{outputs('HTTP')['statusCode']}): @{body('Parse_JSON')?['error']?['innererror']?['message']} - innererror: @{body('Parse_JSON')?['error']?['innererror']?['innererror']}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Create_HTML_table": {
+                                        "runAfter": {
+                                            "Transform_JSON_to_JSON": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Table",
+                                        "inputs": {
+                                            "format": "HTML",
+                                            "from": "@body('Transform_JSON_to_JSON')"
+                                        }
+                                    },
+                                    "Set_variable_html_table": {
+                                        "runAfter": {
+                                            "Create_HTML_table": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "html_output",
+                                            "value": "@body('Create_HTML_table')"
+                                        }
+                                    },
+                                    "Transform_JSON_to_JSON": {
+                                        "runAfter": {},
+                                        "type": "Liquid",
+                                        "kind": "JsonToJson",
+                                        "inputs": {
+                                            "content": "@body('HTTP')",
+                                            "integrationAccount": {
+                                                "map": {
+                                                    "name": "azuremonitor"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@outputs('HTTP')['statusCode']",
+                                                200
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://api.loganalytics.io",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "query": "@triggerBody()?['query']"
+                                },
+                                "uri": "https://api.loganalytics.io/v1/workspaces/@{triggerBody()?['workspace_id']}/query"
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "html_output",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string"
+                                                },
+                                                "correlationId": {
+                                                    "type": "string"
+                                                },
+                                                "innererror": {
+                                                    "properties": {
+                                                        "code": {
+                                                            "type": "string"
+                                                        },
+                                                        "innererror": {
+                                                            "properties": {
+                                                                "code": {
+                                                                    "type": "string"
+                                                                },
+                                                                "message": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "message": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "message": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "html_output": "@{variables('html_output')}",
+                                    "status_code": "@outputs('HTTP')['statusCode']"
+                                },
+                                "statusCode": "@outputs('HTTP')['statusCode']"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            }
+        }
+    ]
+}
