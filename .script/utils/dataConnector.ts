@@ -206,6 +206,5 @@ export enum ConnectorCategory {
   AwsS3="AwsS3",
   AWS="AWS",
   AzureActiveDirectory="AzureActiveDirectory",
-  MicrosoftDefenderForCloudTenantBased="MicrosoftDefenderForCloudTenantBased",
-  SecurityAlert="SecurityAlert"
+  MicrosoftDefenderForCloudTenantBased="MicrosoftDefenderForCloudTenantBased"
 }
