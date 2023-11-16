@@ -6,7 +6,7 @@ import argparse
 import sys
 from distutils.version import StrictVersion
 
-SCRIPT_VERSION = 3.0
+SCRIPT_VERSION = 2.4
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
@@ -563,7 +563,7 @@ class OperatingSystemVerifications:
                                     "This will disable SELinux temporarily, as it can harm the data ingestion. In order to disable it permanently please follow this documentation- {}".format(
         SELINUX_DOCUMENTATION)
     IPTABLES_BLOCKING_TRAFFIC_ERROR_MESSAGE = "Iptables might be blocking incoming traffic to the agent." \
-                                              " Please verify there are no firewall rules blocking incoming traffic to port 514 and run again."
+                                              " Please verify there are no firewall rules blocking incoming traffic to port {} and run again."
     FULL_DISK_ERROR_MESSAGE = "There is less than 1 GB of free disk space left on this machine." \
                               " Having a full disk can harm the agent functionality and eventually cause data loss" \
                               " Please free disk space on this machine and run again."
@@ -596,13 +596,21 @@ class OperatingSystemVerifications:
         if policy_command_object.is_successful == "Skip":
             print_warning(policy_command_object.command_result_err)
             return True
-        command_name = "verify_iptables_rules_permissive"
+        command_name = "verify_iptables_rules_permissive_514"
         command_to_run = "sudo iptables -S | grep -E '514' | grep INPUT"
         rules_command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
         rules_command_object.run_full_test(exclude=True)
         if (not rules_command_object.is_successful or (not policy_command_object.is_successful and (
                 not rules_command_object.is_successful or rules_command_object.command_result == ""))):
-            print_warning(self.IPTABLES_BLOCKING_TRAFFIC_ERROR_MESSAGE)
+            print_warning(self.IPTABLES_BLOCKING_TRAFFIC_ERROR_MESSAGE.format('514'))
+        if IS_AGENT_VERSION_UPDATED:
+            command_name = "verify_iptables_rules_permissive_28330"
+            command_to_run = "sudo iptables -S | grep -E '28330' | grep INPUT"
+            rules_command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
+            rules_command_object.run_full_test(exclude=True)
+            if (not rules_command_object.is_successful or (not policy_command_object.is_successful and (
+                    not rules_command_object.is_successful or rules_command_object.command_result == ""))):
+                print_warning(self.IPTABLES_BLOCKING_TRAFFIC_ERROR_MESSAGE.format('28330'))
 
     def verify_free_disk_space(self):
         """
