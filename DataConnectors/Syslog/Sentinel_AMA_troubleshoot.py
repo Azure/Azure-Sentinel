@@ -6,7 +6,7 @@ import argparse
 import sys
 from distutils.version import StrictVersion
 
-SCRIPT_VERSION = 2.31
+SCRIPT_VERSION = 3.0
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
@@ -18,6 +18,8 @@ PATH_FOR_CSS_TICKET = {
     "Gov": "https://portal.azure.us/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"}
 AGENT_CONF_FILE = "/etc/opt/microsoft/azuremonitoragent/config-cache/mdsd.hr.json"
 AGENT_VERSION = "0.0"
+UPDATED_AGENT_VERSION = "1.28.11"
+IS_AGENT_VERSION_UPDATED = False
 AGENT_MIN_HARDENING_VERSION = "1.26.0"
 FAILED_TESTS_COUNT = 0
 STREAM_SCENARIO = "cef"  # default value
@@ -279,6 +281,15 @@ class AgentInstallationVerifications:
                 "Detected AMA running version- {}".format(AGENT_VERSION))
 
     @staticmethod
+    def is_agent_version_updated():
+        """
+        Starting from agent version of 1.28.11 the forwarding mechanism of the agent changed.
+        This function tess whether the agent on the machine is running with this updated agent version.
+        """
+        global IS_AGENT_VERSION_UPDATED
+        IS_AGENT_VERSION_UPDATED = StrictVersion(UPDATED_AGENT_VERSION) <= StrictVersion(AGENT_VERSION)
+
+    @staticmethod
     def print_arc_version():
         """
         Checking if ARC is installed. If so- prints the version of it.
@@ -313,6 +324,8 @@ class AgentInstallationVerifications:
         self.verify_agent_is_running()
         self.print_arc_version()
         self.verify_oms_not_running()
+        self.is_agent_version_updated()
+
 
 
 class DCRConfigurationVerifications:
@@ -432,8 +445,10 @@ class SyslogDaemonVerifications:
     def __init__(self):
         self.command_name = "verify_Syslog_daemon_listening"
         self.SYSLOG_DAEMON = ""
-        self.syslog_daemon_forwarding_path = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf",
+        self.syslog_daemon_forwarding_path_old = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf",
                                               "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent.conf"}
+        self.syslog_daemon_forwarding_path_new = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent-omfwd.conf",
+                                                  "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent-tcp.conf"}
         self.No_Syslog_daemon_error_message = "Could not detect any running Syslog daemon on the machine. The supported Syslog daemons are Rsyslog and Syslog-ng. Please install one of them and run this script again."
         self.Syslog_daemon_not_listening_warning = "Warning: the Syslog daemon- {} is running but not listening on the machine or is listening to a non-default port"
         self.Syslog_daemon_not_forwarding_error = "{} configuration was found invalid in this file {}. The forwarding of the syslog daemon to the agent might not work. Please install the agent in order to get the updated Syslog daemon forwarding configuration file, and try again."
@@ -478,9 +493,10 @@ class SyslogDaemonVerifications:
             if command_object.is_successful == "Warn":
                 print_warning(self.Syslog_daemon_not_listening_warning.format(self.SYSLOG_DAEMON))
 
-    def verify_syslog_daemon_forwarding_configuration(self):
+    def verify_syslog_daemon_forwarding_configuration_old(self):
         """
         Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
+        Valid for the new AMA version.
         """
         if self.SYSLOG_DAEMON != "":
             syslog_daemon_forwarding_keywords = {
@@ -488,14 +504,35 @@ class SyslogDaemonVerifications:
                 "syslog-ng": ['destination', 'd_azure_mdsd', 'unix-dgram', 'azuremonitoragent', 'syslog', 'socket',
                               's_src']}
             command_name = "verify_Syslog_daemon_forwarding_configuration"
-            command_to_run = "sudo cat " + self.syslog_daemon_forwarding_path[self.SYSLOG_DAEMON]
+            command_to_run = "sudo cat " + self.syslog_daemon_forwarding_path_old[self.SYSLOG_DAEMON]
             result_keywords_array = syslog_daemon_forwarding_keywords[self.SYSLOG_DAEMON]
             command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
             command_object.run_full_test()
             if not command_object.is_successful:
                 print_error(self.Syslog_daemon_not_forwarding_error.format(self.SYSLOG_DAEMON,
-                                                                           self.syslog_daemon_forwarding_path[
+                                                                           self.syslog_daemon_forwarding_path_old[
                                                                                self.SYSLOG_DAEMON]))
+
+    def verify_syslog_daemon_forwarding_configuration_new(self):
+        """
+        Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
+        Valid for the new AMA version.
+        """
+        if self.SYSLOG_DAEMON != "":
+            syslog_daemon_forwarding_keywords = {
+                "rsyslog": ['omfwd', 'azuremonitoragent', 'LinkedList', 'tcp'],
+                "syslog-ng": ['destination', 'd_azure_mdsd', 'log-fifo-size', 's_src', 'flow-control']}
+            command_name = "verify_Syslog_daemon_forwarding_configuration"
+
+            command_to_run = "sudo cat " + self.syslog_daemon_forwarding_path_new[self.SYSLOG_DAEMON]
+            result_keywords_array = syslog_daemon_forwarding_keywords[self.SYSLOG_DAEMON]
+            command_object = CommandVerification(command_name, command_to_run, result_keywords_array)
+            command_object.run_full_test()
+            if not command_object.is_successful:
+                print_error(self.Syslog_daemon_not_forwarding_error.format(self.SYSLOG_DAEMON,
+                                                                           self.syslog_daemon_forwarding_path_new[
+                                                                               self.SYSLOG_DAEMON]))
+
 
     def run_all_verifications(self):
         """
@@ -504,7 +541,10 @@ class SyslogDaemonVerifications:
         global FAILED_TESTS_COUNT
         if self.determine_syslog_daemon():
             self.verify_syslog_daemon_listening()
-            self.verify_syslog_daemon_forwarding_configuration()
+            if IS_AGENT_VERSION_UPDATED:
+                self.verify_syslog_daemon_forwarding_configuration_new()
+            else:
+                self.verify_syslog_daemon_forwarding_configuration_old()
         else:
             mock_command = CommandVerification(self.command_name, "")
             mock_command.print_result_to_prompt()
