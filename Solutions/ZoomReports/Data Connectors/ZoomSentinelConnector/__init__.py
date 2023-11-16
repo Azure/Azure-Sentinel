@@ -27,31 +27,46 @@ SCRIPT_EXECUTION_INTERVAL_MINUTES = os.environ.get('EXECUTION_INTERVAL_MINUTES')
 #Azure function max execution
 AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = os.environ.get('MAX_EXECUTION_TIME_MINUTES')
 
+##Default values
+Default_Values = {
+  "SCRIPT_EXECUTION_INTERVAL_MINUTES": 30,
+  "AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES": 29,
+}
+##Original Values
+Orginal_Values={
+    "SCRIPT_EXECUTION_INTERVAL_MINUTES":SCRIPT_EXECUTION_INTERVAL_MINUTES,
+    "AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES":AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES
+}
+
 def is_number_regex(sn):
     """ Returns True if string is a number and False for other types. """
     if re.match("^\d+?\.\d+?$", sn) is None:  
          return sn.isdigit()
     else:
         return False
-##This code checks for script execution time and azure func max interval mins for null,int,float and assign based on validations
-##TODO: Need to optimize the below multiple codes in to single function for resusabilty
-if ((SCRIPT_EXECUTION_INTERVAL_MINUTES in(None,'') or str(SCRIPT_EXECUTION_INTERVAL_MINUTES).isspace())):
-     SCRIPT_EXECUTION_INTERVAL_MINUTES=30 
-else:
-    logging.info("SCRIPT_EXECUTION_INTERVAL_MINUTES: {}".format(SCRIPT_EXECUTION_INTERVAL_MINUTES)) 
-    if(is_number_regex(SCRIPT_EXECUTION_INTERVAL_MINUTES)):
-       SCRIPT_EXECUTION_INTERVAL_MINUTES = int(SCRIPT_EXECUTION_INTERVAL_MINUTES)
+
+##This code checks for script execution time and azure func max interval mins for null,int,float and assign based on validations and need to validate the varables    
+def validate_varable(Var_value,var):
+    """ Returns True if string is a number and False for other data types. """   
+    if ((Var_value in(None,'') or str(Var_value).isspace())):
+        temp_var=Default_Values.get(var)   
+        globals()[var]=int(temp_var)
+                      
     else:
-       SCRIPT_EXECUTION_INTERVAL_MINUTES=30            
- ##TODO: Need to optimize the below multiple codes in to single function for resusabilty   
-if ((AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES in(None,'') or str(AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES).isspace())):
-     AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES=29
-else:
-    logging.info("AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES: {}".format(AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES)) 
-    if(is_number_regex(AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES)):
-        AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES = int(AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES)
-    else:
-         AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES=29    
+        logging.info("{}: {}".format(var,Var_value)) 
+        if(is_number_regex(Var_value)):
+          globals()[var]=int(Var_value)
+        else:
+          tempmsg="Please enter correct value for {}".format(var)
+          raise Exception(tempmsg)
+        
+def paramter_validation():
+    """ Validates the paramters for the inputs with default values by comparing with orginal values. """   
+    for key,val in  Orginal_Values.items():
+     validate_varable(val,key)       
+
+##This method is used for parameter validation
+paramter_validation()
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
