@@ -2,7 +2,7 @@
 This function app will be used to get the zoom reports.
 
 ## Configure your Zoom API app.
-You also need to configure your Zoom account. To do this go to https://marketplace.zoom.us/ and log in with a user who has admin access to your Zoom account i.e. by signin to zoom with your credentials i.e. username/password& zoom verfication code.
+You also need to configure your Zoom account. To do this go to https://marketplace.zoom.us/ and log in with a user who has admin access to your Zoom account i.e. by signin to zoom with your credentials i.e. username/password & zoom verfication code.
 1. Select ‘Develop’ in the top right hand corner and click ‘Build App’.
 2. Select ‘Server to Server Oauth App’ as your app type.
 3. Give your app a name.
