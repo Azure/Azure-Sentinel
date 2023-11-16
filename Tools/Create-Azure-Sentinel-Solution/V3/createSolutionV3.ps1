@@ -196,7 +196,21 @@ try {
                         }
                         elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
                             if ($ccpDict.Count -gt 0) {
-                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName 
+                                $isCCPConnectorFile = $false;
+                                foreach($item in $ccpDict) {
+                                    if ($item.DCDefinitionFullPath -eq $finalPath) {
+                                        $isCCPConnectorFile = $true
+                                        break;
+                                    }
+                                }
+
+                                if ($isCCPConnectorFile) {
+                                    # current file is a ccp connector
+                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName 
+                                } else {
+                                    # current file is a normal connector
+                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName 
+                                }
                             }
                             else {
                                 GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName 

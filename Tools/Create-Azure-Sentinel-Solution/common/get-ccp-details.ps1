@@ -1,6 +1,6 @@
 
 function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
-  try {
+    try {
     $ccpDict = @()
     $dataConnectorsInputArray = $dataFileMetadata.PsObject.Properties | Where-Object { $_.Name -eq "Data Connectors" -or $_.Name -eq "DataConnectors"};
 
@@ -19,6 +19,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                     if ($ccpDict.Count -le 0) {
                         $ccpDict = [PSCustomObject]@{
                             title = $fileContent.Properties.connectorUiConfig.title;
+                            DCDefinitionFullPath = $currentFileDCPath
                             DCDefinitionFilePath = $file;
                             DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
                             DCPollerFilePath = "";
@@ -33,6 +34,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                     } else {
                         [array]$ccpDict += [PSCustomObject]@{
                             Title = $fileContent.Properties.connectorUiConfig.title;
+                            DCDefinitionFullPath = $currentFileDCPath
                             DCDefinitionFilePath = $file;
                             DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
                             DCPollerFilePath = "";
