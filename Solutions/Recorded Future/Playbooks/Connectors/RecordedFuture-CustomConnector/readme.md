@@ -1,3 +1,6 @@
+More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../readme.md).
+
+
 ## RecordedFuture-CustomConnector
 Type: Logic-app custom connector\
 Included in Recorded Future Intelligence Solution: No\

@@ -1,5 +1,5 @@
 id: acbf7ef6-f964-44c3-9031-7834ec68175f
-name: Recorded Future - Threat Hunting - Domain- All Actors
+name: Recorded Future - Threat Hunting - Domain - All Actors
 description: |
   'Recorded Future Threat Hunting domain correlation for all actors.'
 severity: Medium
@@ -7,7 +7,6 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligenceUploadIndicatorsAPI
     dataTypes:
       - ThreatIntelligenceIndicator
-      - Squid_Proxy_Domain_CL
 queryFrequency: 15m
 queryPeriod: 1d
 triggerOperator: gt
@@ -15,31 +14,35 @@ triggerThreshold: 0
 customDetails: 
   - ActorInformation: RecordedFuturePortalLink
 alertDetailsOverride:
-  - alertDisplayNameFormat: " {{Description}} "
+  - alertDisplayNameFormat: "{{Description}}"
     alertDescriptionFormat: "**{{Description}}**\n\nCorrelation found on {{Domain_s}} from the {{Type}} table.\n"
     alertDynamicProperties:
       - alertProperty: AlertLink
         value: RecordedFuturePortalLink
 query: |
-  Squid_Proxy_Domain_CL
-  | where isnotempty(Domain_s)
-  | join kind=inner (ThreatIntelligenceIndicator
-  | where Active == true
-  | where Description startswith "Recorded Future - Threat Hunt"
+  let ioc_lookBack = 1d;
+  // The source table (imDns) can be replaced by any infrastructure table containing domain/dns data.
+  // The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns  
+  imDns
+  | where isnotempty(Domain)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look at Domain IOCs
   | where isnotempty(DomainName)
-  | distinct DomainName, Description, Tags
-  )
-  on $left.Domain_s == $right.DomainName
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators  
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.Domain == $right.DomainName 
+  // select column from the source table to match with Recorded Future $left.Domain
   | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
-  | project Domain_s, Description, Type, Src_IPv4_s, TimeGenerated, RecordedFuturePortalLink
+  | project Domain, Description, Type, TimeGenerated, RecordedFuturePortalLink
 entityMappings:
   - entityType: DNSResolution
     fieldMappings:
       - identifier: DomainName
-        columnName: Domain_s
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: Src_IPv4_s
+        columnName: Domain
 version: 1.0.1
 kind: Scheduled

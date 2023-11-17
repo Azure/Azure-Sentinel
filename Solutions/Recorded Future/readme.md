@@ -5,7 +5,7 @@ Instructions how to install and use Recorded Future Solution for Microsoft Senti
 
 Recorded Future also provide standalone Playbooks in this repository for EntraID (identity) and Defender for endpoints:
 
-**Recorded Future Sentinel Solution**
+**Recorded Future Intelligence Solution**
 - [Installation guide](./playbooks/readme.md)
 
 **Recorded Future Defender Integrations**

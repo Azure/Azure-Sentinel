@@ -1,5 +1,5 @@
 id: 3f6f0d1a-f2f9-4e01-881a-c55a4a71905b
-name: Recorded Future - Threat Hunting - Url- All Actors
+name: Recorded Future - Threat Hunting - Url - All Actors
 description: |
   'Recorded Future Threat Hunting Url correlation for all actors.'
 severity: Medium
@@ -7,7 +7,6 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligenceUploadIndicatorsAPI
     dataTypes:
       - ThreatIntelligenceIndicator
-      - Squid_Proxy_URL_CL
 queryFrequency: 15m
 queryPeriod: 1d
 triggerOperator: gt
@@ -21,26 +20,34 @@ alertDetailsOverride:
       - alertProperty: AlertLink
         value: RecordedFuturePortalLink
 query: |
-  Squid_Proxy_URL_CL
-  | where isnotempty(URL_s)
-  | join kind=inner (ThreatIntelligenceIndicator
-  | where Active == true
-  | where Description startswith "Recorded Future - Threat Hunt"
+  let ioc_lookBack = 1d;
+  // The source table (imWebSession) can be replaced by any infrastructure table containing Url data.
+  // The following workbook: Recorded Future - Url Correlation will help researching available data and selecting tables and columns  
+  imWebSession
   | where isnotempty(Url)
-  | distinct Url, Description, Tags
-  )
-  on $left.URL_s == $right.Url
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(Url)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators  
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.Url == $right.Url
+  // select column from the source table to match with Recorded Future $left.Url
   | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
-  | project Url, Description, Type, Src_IPv4_s, TimeGenerated, RecordedFuturePortalLink, Domain_s
+  | project Url, Description, Type, DstIpAddr, TimeGenerated, RecordedFuturePortalLink, DstDomain
 entityMappings:
   - entityType: DNSResolution
     fieldMappings:
       - identifier: DomainName
-        columnName: Domain_s
+        columnName: DstDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: Src_IPv4_s
+        columnName: DstIpAddr
   - entityType: URL
     fieldMappings:
       - identifier: Url

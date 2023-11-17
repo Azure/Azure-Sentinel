@@ -10,16 +10,20 @@ requiredDataConnectors:
 tags:
   - RecordedFuture
 query: |
-  EndpointProtection_HASH_CL
-  | where isnotempty(Hash_s)
-  | join kind=inner (ThreatIntelligenceIndicator
+  imFileEvent
+  | where isnotempty(Hash)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(FileHashValue)
+  // Only look at Recorded Future Threat Hunt Indicators.
   | where Description startswith "Recorded Future - Threat Hunt"
-  | where Active == true
-  | distinct FileHashValue
-  ) on $left.Hash_s == $right.FileHashValue
-  | project Hash_s, Hash_Type_s
-  | extend FileHash_0_Value = Hash_s
-  | extend FileHash_0_Algorithm = Hash_Type_s
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.Hash == $right.FileHashValue
+  | project Hash, HashType
+  | extend FileHash_0_Value = Hash
+  | extend FileHash_0_Algorithm = HashType
 entityMappings:
   - entityType: FileHash
     fieldMappings:
@@ -28,4 +32,4 @@ entityMappings:
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: Hash_Type_s
+        columnName: HashType

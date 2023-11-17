@@ -13,15 +13,17 @@ Recorded Future is the world's largest provider of intelligence for enterprise s
 
 [Learn more about Recorded Future for Microsoft Sentinel](https://www.recordedfuture.com/microsoft-azure-sentinel-integration)
 
+[Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here!](https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta)
+
 
 # Key Features
 Recorded Future for Microsoft Sentinel offers a range of powerful intelligence capabilities, some of the key features include:
 ## **IOC Detection (Detect)**
 
-The TI-Processor playbooks pulls risk lists from Recorded Future and writes the contained indicators to the Sentinel ThreatIntelligenceIndicator table via the RecordedFuture-ImportToSentinel playbook. 
+The TI-IndicatorImport playbooks pulls risk lists from Recorded Future and writes the contained indicators to the Microsoft Sentinel ThreatIntelligenceIndicator table via the RecordedFuture-ThreatIntelligenceImport playbook. 
 ![](Images/2023-04-19-17-08-46.png)
 
-Microsoft Sentinel analytic rules correlates threat intelligence indicators with logs provided to Sentinel and creates alerts/incidents for matches found.
+Microsoft Sentinel analytic rules correlates threat intelligence indicators with logs provided to Microsoft Sentinel and creates alerts/incidents for matches found.
 
 ![](Images/2023-04-19-17-46-32.png)
 
@@ -30,26 +32,26 @@ Microsoft Sentinel analytic rules correlates threat intelligence indicators with
 Automation rules triggers on each incident and enriches incidents with Recorded Future intelligence. 
 ![](Images/2023-04-19-17-46-13.png)
 
-## **Malware Sandbox Analysis**
+## **Malware Sandbox Analysis (Sandbox)**
 
 Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The sandbox provides safe and immediate behavioral analysis, helping contextualize key artifacts in an investigation, leading to faster triage.
 ![](Images/2023-06-26-10-04-42.png)
 
-## **Import Alerts** (SOC Efficiency)
+## **Import Alerts (SOC Efficiency)**
 
-To increase the visibility and availability of Recorded Future Alerts. Import Recorded Future Alerts and Playbook Alerts from Recorded Future Portal into Sentinel. 
+To increase the visibility and availability of Recorded Future Alerts. Import Recorded Future Alerts and Playbook Alerts from Recorded Future Portal into Microsoft Sentinel. 
 
-## Risk lists
-Risk lists are curated lists that contain Indicators of Compromise (IOCs), such as IP addresses, domains, file hashes, or URLs associated with malicious activity. These lists are generated based on a wide array of Recorded Future intelligence sources, including open web, dark web, and other technical sources.
+## ***Recorded Future Automated Threat Hunt (Threat Hunt)**
+Threat hunting is the proactive and iterative process of searching for and detecting cyber threats that have evaded traditional security measures, such as firewalls, antivirus software, and intrusion detection systems. It involves using a combination of manual and automated techniques to identify and investigate potential security breaches and intrusions within an organization's network.
+
+[More about Threat Hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires login)
+
+## More about Risk Lists
+Risk Lists are curated lists that contain Indicators of Compromise (IOCs), such as IP addresses, domains, file hashes, or URLs associated with malicious activity. These lists are generated based on a wide array of Recorded Future intelligence sources, including open web, dark web, and other technical sources.
 
 * [Manage Risk Lists](https://www.recordedfuture.com/support/install-configure-manage-risk-lists)
 * [About Risk Lists](https://support.recordedfuture.com/hc/en-us/articles/115000897248-Recorded-Future-Risk-Lists) (requires login)
 * [Risk List Download Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (requires login)
-
-## Recorded Future Automated Threat Hunt 
-Threat hunting is the proactive and iterative process of searching for and detecting cyber threats that have evaded traditional security measures, such as firewalls, antivirus software, and intrusion detection systems. It involves using a combination of manual and automated techniques to identify and investigate potential security breaches and intrusions within an organization's network.
-
-[More about Threat Hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires login)
 
 # Before You Begin
 
@@ -59,22 +61,25 @@ The following article describes roles and permissions in Microsoft Sentinel [Rol
 
 To install and manage Playbooks/Logic Apps, the following permissions are required on the resource group [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) and [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
 
-The **Threat Intelligence Upload Indicators API** in Sentinel must be enabled in order for indicators to be forwarded to Sentinel ThreatIntelligenceIndicator table.
+## Content Hub prerequisites  
 
-![](Images/2023-09-13-15-51-44.png)
+The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be installed in order for indicators to be forwarded to Microsoft Sentinel ThreatIntelligenceIndicator table. The Threat Intelligence Solution contains both the deprecated **Threat Intelligence Platforms Data Connector** and the new **Threat Intelligence Upload Indicators API**.
 
-DEPRECATED! The **Threat Intelligence Platforms Data Connector** in Sentinel must be enabled in order for indicators to be forwarded from the Graph Security API to Sentinel. (This connector is being deprecated by Microsoft and future updates of this solution will use the Threat Intelligence Upload Indicators API).
-
-![](Images/2023-04-19-16-28-20.png)
+![](Images/2023-11-17-22-53-18.png)
 
 ## Connectors Authorization 
 Each connector need to be authorized after playbook/logic app installation. Expand all nodes in the logic app after installation and look for blocks marked with a warning sign. Open and authorize all connections.
 
+[Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here!](https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta)
+
+or
+
 Recorded Future requires API keys to communicate with our API. To obtain API keys, please visit [Recorded Future Requesting API Tokens](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens) (Require Recorded Future Login) and request API token for ```Recorded Future for Microsoft Sentinel``` or/and ```Recorded Future Sandbox for Microsoft Sentinel```.
-![](Images/2023-09-08-12-13-06.png) \
+
+<img src="Images/2023-09-08-12-13-06.png" width="400"  /><br/>
 or 
 
-![](Images/2023-09-08-12-13-54.png)
+<img src="Images/2023-09-08-12-13-54.png" width="400"  />
 
 
 The Recorded Future solution uses the following connectors:
@@ -114,17 +119,20 @@ There are two options for installing playbooks and starting automate threat resp
 ![](Images/2023-04-18-08-43-42.png)
 1. If the installation was completed successfully, you will now have Workbook templates, Automation Playbook templates and Analytic Rules templates.
 
-To use the workbooks, playbooks and analytic rules, install them inside of Sentinel by selecting the respective template and install/activate/create. 
+To use the workbooks, playbooks and analytic rules, install them inside of Microsoft Sentinel by selecting the respective template and install/activate/create. 
 
 ## Playbooks one by one installation
 To install individual playbooks one by one, use the buttons next to the descriptions of the individual playbooks further down in this document.
 
-> **Due to internal dependencies, please deploy and activate the ThreatIntelligenceImport playbook before any of the IndicatorProcessor/TIProcessor playbooks.**
+> **Due to internal dependencies, please deploy and activate the ThreatIntelligenceImport playbook before any of the IndicatorProcessor playbooks.**
 
 # Upgrade from previous versions
 
 ### From version 2.4
 We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. You need to install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Investigate the risk lists being downloaded and the cadence and use the same configuration using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting. 
+
+Our support will end when Microsoft decommission the underlying API. More information can be found on [Microsoft Learn](https://learn.microsoft.com/en-us/azure/sentinel/understand-threat-intelligence#add-threat-indicators-to-microsoft-sentinel-with-the-threat-intelligence-platforms-data-connector)
+
 ### From version 1
 If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Install the new all IndicatorImport and enrichment -playbooks. Select a different name than the once already installed and reauthenticate them. Configure the IndicatorImport playbooks to pull your selection of risk lists. After validating that the new playbooks works as expected you can deactivate the V1 versions. 
 
@@ -137,25 +145,25 @@ Note that it is possible to deploy several instances of the same template by giv
 
 ![](Images/2023-04-19-16-49-53.png)
 
-The parameter PlaybookNameBatching is the name of the ThreatIntelligenceImport playbook that will handle batch processing of indicators into Sentinel. In the last step press **Create and continue to designer**.
+The parameter **PlaybookNameBatching** is the name of the ThreatIntelligenceImport playbook that will handle batch processing of indicators into Microsoft Sentinel. In the last step press **Create and continue to designer**.
 ![](Images/2023-04-19-16-51-12.png)
 
-In the designer, locate all steps that show a warning and authenticate these steps. Authentication looks different for each connection. More information on this can be found in the chapter above called Connector Authorization.
+In the designer, locate all steps that show a warning and authenticate these steps. Authentication looks different for each connection. More information on this can be found in the chapter above called Connector Authorization. [More information about playbook authentication](https://learn.microsoft.com/en-us/azure/sentinel/authenticate-playbooks-to-sentinel).
 
 ![](Images/2023-04-18-14-39-40.png)
 
-## Change risk list 
-You can change risk list to pull in to your environment. This can be done in the default playbook or you can install several instances of one playbook. 
-Example: You would like to use both ```Actively Communicating Validated C&C Server``` and ```Recent Phishing Host``` ip risk lists. 
+## Change Risk List 
+To can change Risk List to pull in to your environment. This can be done in the default playbook or you can install several instances of one playbook. 
+Example: You would like to use both ```Actively Communicating Validated C&C Server``` and ```Recent Phishing Host``` ip Risk Lists. 
 Select the **RecordedFuture-IP-IndicatorImport** template from ```Automation -> Playbook``` twice and save with different names like ```Recorded Future - Actively Communicating Validated C&C Server - IndicatorImport``` and ```Recorded Future - Phishing Host - IndicatorImport```. 
 
-Change the risk list to download and modify the description in the ```RecordedFuture-Threatlntelligencelmport``` step in the logic app. 
+Change the Risk List to download and modify the description in the ```RecordedFuture-Threatlntelligencelmport``` step in the logic app. 
 ![](Images/2023-09-08-12-01-37.png)
 
 ## Configure Cadence of Risk List Ingestion 
-Its possible to adjust the cadence of risk list download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
+Its possible to adjust the cadence of Risk List download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
 
-The first step of all TIProcessing Playbooks is a recurrence step, it is possible to adjust the cadence by modifying the interval and frequency parameters.
+The first step of all IndicatorImport Playbooks is a recurrence step, it is possible to adjust the cadence by modifying the interval and frequency parameters.
 ![](Images/2023-04-18-14-52-32.png)
 
 If you do so however, it is critical that you also adjust the expirationDateTime parameter in the final block of that logic app to be synchronized with the recurrence timing. Failure to do so can result in either:
@@ -164,8 +172,8 @@ If you do so however, it is critical that you also adjust the expirationDateTime
 
 If you are unsure of how to do this, please consult Recorded Future Professional Services.
 ![](Images/2023-06-26-10-59-49.png)
-## Query Risk lists
-After successfully running and importing one or more risk lists it is possible to query the imported data in your Log Analytics Workspace. 
+## Query Risk Lists
+After successfully running and importing one or more Risk Lists it is possible to query the imported data in your Log Analytics Workspace. 
 
 Example queries:  
 ``` sql 
@@ -175,7 +183,7 @@ ThreatIntelligenceIndicator
 | take 10
 
 // List 10 rows from ThreatIntelligenceIndicator log imported from the  
-// IP - Actively Communicating C&C Server risk list 
+// IP - Actively Communicating C&C Server Risk List 
 ThreatIntelligenceIndicator
 |where Description == "Recorded Future - IP - Actively Communicating C&C Server"
 | take 10
@@ -188,8 +196,8 @@ ThreatIntelligenceIndicator
 
 ![](Images/2023-04-18-16-39-00.png)
 
-## Activate Analytic Rules for IoC detection 
-Automatically enrich IOCs in incidents by following the steps below: 
+## Activate Automation Rules for IoC enrichment 
+Automatically enrich IOCs in all created incidents by following the steps below: 
 
 1. Open Microsoft Sentinel.
 2. Go to Automation and select *Create Automation rule*
@@ -197,24 +205,28 @@ Automatically enrich IOCs in incidents by following the steps below:
 4. Select the following options:
    * Trigger: **When an incident is created**
    * Action: **Run playbook**
-   * Playbook (successfully configured): 
-     - **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** or
-     - **RecordedFuture-Sandbox_Enrichment-Url**
+   * Playbook (must first be successfully configured): 
+     - [**RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash**](#recordedfuture-ioc_enrichment-ip_domain_url_hash) or
+     - [**RecordedFuture-Sandbox_Enrichment-Url**](Sandboxing/readme.md#recordedfuture-sandbox_enrichment-url)
 5. Done
 
 The Recorded Future playbook is now configured to run when incidents are triggered, and it will enrich the following IOC types: IP, Domain, URL, or Hash.
 
 # Playbooks
-This section lists all available Recorded Future Playbooks. 
+Note that all playbooks are not included in the Solution. It is stated in the description for each playbook as Included in Solution: Yes/No. The playbooks that are not included is considered preview and might be included in future versions.  
 
+Playbooks in subfolders:
 - [Sandbox playbooks](./Sandboxing/readme.md)
 - [Recorded Future Threat Hunt Playbooks](./ThreatHunting/readme.md)
 - [Recorded Future Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md)
+- [Deprecated but still supported Playbooks](Deprecated/readme.md)
+
+##
 
 ## RecordedFuture-ThreatIntelligenceImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
 The parameter WorkspaceID can be found in Azure portal in the overview page of the Log Analytics Workspace. 
 
@@ -226,7 +238,7 @@ Retrieves Indicators Of Compromise (IoCs) from one of the indicator import logic
 ## RecordedFuture-Domain-IndicatorImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
 
 Retrieves the [Microsoft Sentinel Domain Default Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules) (requires login), Domain IOC with risk greater than 65 and adds the IOCs to the ThreatIntelligenceIndicator table.
@@ -238,7 +250,7 @@ Retrieves the [Microsoft Sentinel Domain Default Risk List ](https://support.rec
 ## RecordedFuture-Hash-IndicatorImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
 Retrieves the [Microsoft Sentinel Hash Observed in Underground Testing Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115000846167-Hash-Risk-Rules) (requires login), Hashes based on the observedMalwareTesting Risk Rule and adds the IOCs to the ThreatIntelligenceIndicator table.
 
@@ -248,7 +260,7 @@ Retrieves the [Microsoft Sentinel Hash Observed in Underground Testing Risk List
 ## RecordedFuture-IP-IndicatorImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
 Retrieves the [Actively Communicating Validated C&C Server Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules) (requires login), Observing C2 communications with infected machines or adversary control by Recorded Future Network Traffic Analysis.
 
@@ -258,7 +270,7 @@ Retrieves the [Actively Communicating Validated C&C Server Risk List ](https://s
 ## RecordedFuture-URL-IndicatorImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
 Retrieves the [Microsoft Sentinel URL Recently Reported by Insikt Group Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules) (requires login), URLs based on the Recently Reported by Insikt Group rule and adds the IOCs to the ThreatIntelligenceIndicator table.
 
@@ -268,7 +280,7 @@ Retrieves the [Microsoft Sentinel URL Recently Reported by Insikt Group Risk Lis
 ## RecordedFuture-Alert-Importer
 Type: Alerting\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
 Retrieves Alerts and stores them in a custom log in the Log Analytic Workspace. More information on [Alerts](https://support.recordedfuture.com/hc/en-us/articles/115002151327-Setting-up-Event-Alerts) (requires login)
 
@@ -283,7 +295,7 @@ The Alert importer playbook also creates incidents when receiving alerts. Its po
 ## RecordedFuture-Playbook-Alert-Importer
 Type: Alerting\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
 Retrieves Playbook Alerts and stores them in a custom log in the Log Analytic Workspace. More information on [Playbook Alerts](https://support.recordedfuture.com/hc/en-us/articles/13152506878739-Playbook-Alerting-Rules-) (requires login)
 
@@ -294,9 +306,10 @@ Retrieves Playbook Alerts and stores them in a custom log in the Log Analytic Wo
 
 ## RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash
 Type: Response\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Included in Recorded Future Intelligence Solution: Yes\
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
-Enriches IOCs (IPs, Domains, URLs and hashes) in Sentinel incidents with Recorded Future Intelligence. The Playbook adds the following data for all IOCs an incident: 
+Enriches IOCs (IPs, Domains, URLs and hashes) in Microsoft Sentinel incidents with Recorded Future Intelligence. The Playbook adds the following data for all IOCs an incident: 
 
 * Recorded Future Risk Score
 * Triggered Risk Rules 
@@ -318,7 +331,7 @@ After one of the enrichment playbooks is installed and all connections are confi
 
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRuleMenu.png)<br/>
 
-In Sentinel, go to Automation and create **Automation rule**. Give the new rule a name, select the trigger **When incident is created**, select the action **Run playbook** and finally select **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** or **RecordedFuture-Sandbox_Enrichment-Url** as the playbook. 
+In Microsoft Sentinel, go to Automation and create **Automation rule**. Give the new rule a name, select the trigger **When incident is created**, select the action **Run playbook** and finally select **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** or **RecordedFuture-Sandbox_Enrichment-Url** as the playbook. 
 
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png)<br/>
 
@@ -331,13 +344,9 @@ The Recorded Future Collective Insights aggregates data related to Sigma Rules a
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/IntelligenceCloudParameter.png)
 
 
-# DEPRECATED Playbooks
--Deprecated playbooks can be found in GitHub in the [Deprecated folder](./Deprecated/)
-
 # Known Issues 
 ## Version 3.0
-## Version 3.0
-Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
+Microsoft Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
 ![](Images/2023-09-13-19-16-24.png)
 
 A workaround is to reinstall and overwrite the playbooks from the template in Playbook Template tab and not using the upgrade wizard. Before overwriting an active playbook make note of the risk list downloaded, the description, cadence of downloading. 

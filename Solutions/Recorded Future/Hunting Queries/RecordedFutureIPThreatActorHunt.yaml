@@ -10,16 +10,20 @@ requiredDataConnectors:
 tags:
   - RecordedFuture
 query: |
-  NetScreen_Firewall_CL
-  | join kind= innerunique  (ThreatIntelligenceIndicator
+  imNetworkSession
+  | join kind= innerunique  (
+    ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(NetworkIP)
+  // Only look at Recorded Future Threat Hunt Indicators.
   | where Description startswith "Recorded Future - Threat Hunt"
-  | where Active == true
-  | distinct NetworkIP
-  ) on $left.Dst_IPv4_s == $right.NetworkIP
-  | project Dst_IPv4_s
-  | extend IP_0_Address = Dst_IPv4_s
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.DstIpAddr == $right.NetworkIP
+  | project DstIpAddr
+  | extend IP_0_Address = DstIpAddr
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: Dst_IPv4_s
+        columnName: IP_0_Address

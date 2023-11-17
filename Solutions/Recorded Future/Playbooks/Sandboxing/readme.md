@@ -1,4 +1,7 @@
 # Recorded Future Sandboxing
+
+More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../readme.md).
+
 ## **Malware Sandbox Analysis**
 
 Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The sandbox provides safe and immediate behavioral analysis, helping contextualize key artifacts in an investigation, leading to faster triage.
@@ -7,12 +10,12 @@ Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The 
 ## RecordedFuture-Sandbox_Enrichment-Url
 Type: Response\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json)
 
-Enables URL submission to Recorded Future's Malware Analysis Sandbox, the playbook will also create a Sentinel incident with the following information from the analysis report:
+Enables URL submission to Recorded Future's Malware Analysis Sandbox, the playbook will also create a Microsoft Sentinel incident with the following information from the analysis report:
 
 * Severity Score
 * signatures
@@ -26,12 +29,12 @@ To set up automatic enrichment, map alerts to a [custom analytic rule](https://l
 ## RecordedFuture-Sandbox_Outlook_Attachment
 Type: Response\
 Included in Recorded Future Intelligence Solution: No\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json)
 
-Enables submission of file attachments, from Microsoft Outlook emails, to Recorded to Future's Malware Analysis Sandbox. The playbook also creates a Sentinel incident with a summary of the analysis report. 
+Enables submission of file attachments, from Microsoft Outlook emails, to Recorded to Future's Malware Analysis Sandbox. The playbook also creates a Microsoft Sentinel incident with a summary of the analysis report. 
 
 The email address that received the attachment will also receive an email with the summary.
 
@@ -48,12 +51,12 @@ To set up automatic enrichment, map alerts to a [custom analytic rule](https://l
 ## RecordedFuture-Sandbox_StorageAccount
 Type: Response\
 Included in Recorded Future Intelligence Solution: No\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](#connector-authorization) section. 
+Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json)
 
-Enables security and IT teams to submit files to Recorded Future's Malware Analysis Sandbox. The playbook will generate an Sentinel incident, and add a comment with a the following data from the analysis report:
+Enables security and IT teams to submit files to Recorded Future's Malware Analysis Sandbox. The playbook will generate a Microsoft Sentinel incident, and add a comment with a the following data from the analysis report:
 
 * Severity Score
 * signatures
@@ -68,11 +71,11 @@ To set up automatic enrichment, map alerts to a [custom analytic rule](https://l
 
 
 ## Automate Incident Enrichment
-After one of the enrichment playbooks is installed and all connections are configured. Create an automation rule to automate the enrichment process. This will automate  enrichment of Recorded Future intelligence to known entities in all incidents. 
+After enrichment playbooks is installed and all connections are configured. Create an automation rule to automate enrichment of known entities with Recorded Future intelligence in all incidents. 
 
 ![](../RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRuleMenu.png)<br/>
 
-In Sentinel, go to Automation and create **Automation rule**. Give the new rule a name, select the trigger **When incident is created**, select the action **Run playbook** and finally select **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** or **RecordedFuture-Sandbox_Enrichment-Url** as the playbook. 
+In Microsoft Sentinel, go to Automation and create **Automation rule**. Give the new rule a name, select the trigger **When incident is created**, select the action **Run playbook** and finally select **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** or **RecordedFuture-Sandbox_Enrichment-Url** as the playbook. 
 
 ![](../RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png)<br/>
 

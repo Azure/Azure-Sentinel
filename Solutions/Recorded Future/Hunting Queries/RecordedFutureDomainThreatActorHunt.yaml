@@ -10,22 +10,26 @@ requiredDataConnectors:
 tags:
   - RecordedFuture
 query: |
-  Squid_Proxy_Domain_CL
-  | where isnotempty(Domain_s)
-  | join kind=inner (ThreatIntelligenceIndicator
-  | where Active == true
+  imDns
+  | where isnotempty(Domain)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(DomainName)
+  // Only look at Recorded Future Threat Hunt Indicators.
   | where Description startswith "Recorded Future - Threat Hunt"
-  | distinct DomainName
-  ) on $left.Domain_s == $right.DomainName
-  | project Domain_s, Src_IPv4_s
-  | extend IP_0_Address = Src_IPv4_s
-  | extend DNS_0_DomainName = Domain_s
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.Domain == $right.DomainName
+  | project Domain, DstIpAddr
+  | extend IP_0_Address = DstIpAddr
+  | extend DNS_0_DomainName = Domain
 entityMappings:
   - entityType: DNSResolution
     fieldMappings:
       - identifier: DomainName
-        columnName: Domain_s
+        columnName: Domain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: Src_IPv4_s
+        columnName: DstIpAddr

@@ -10,16 +10,19 @@ requiredDataConnectors:
 tags:
   - RecordedFuture
 query: |
-  Squid_Proxy_URL_CL
-  | where isnotempty(URL_s)
-  | join kind=inner (ThreatIntelligenceIndicator
+  imWebSession
+  | where isnotempty(Url)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(Url)
+  // Only look at Recorded Future Threat Hunt Indicators.
   | where Description startswith "Recorded Future - Threat Hunt"
-  | where Active == true
-  | distinct Url
-  )
-  on $left.URL_s == $right.Url
-  | project URL_s
-  | extend URL_0_Url = URL_s
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.Url == $right.Url
+  | project Url
+  | extend URL_0_Url = Url
 entityMappings:
   - entityType: URL
     fieldMappings:
