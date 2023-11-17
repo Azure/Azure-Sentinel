@@ -155,11 +155,9 @@ try {
             
             $ccpDict = Get-CCP-Dict -dataFileMetadata $contentToImport -baseFolderPath $solutionBasePath -solutionName $solutionName
 
-            if ($null -eq $ccpDict) {
-                # break as error has occured
-                break;
+            if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
+                $isCCPConnector = $true
             }
-            $isCCPConnector = $true
         }
 
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
