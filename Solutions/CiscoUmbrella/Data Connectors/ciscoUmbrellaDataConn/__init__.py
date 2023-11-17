@@ -442,7 +442,7 @@ class UmbrellaClient:
                     }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
-                event['EventType'] = 'cloudfirewalllogs'
+                event['EventType'] = 'firewalllogs'
                 yield event
 
 
