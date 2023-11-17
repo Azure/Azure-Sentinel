@@ -1,0 +1,60 @@
+id: 97ad74c4-fdd9-4a3f-b6bf-5e28f4f71e06
+name: Brute Force Attack against GitHub Account
+description: |
+  'Attackers who are trying to guess your users' passwords or use brute-force methods to get in. If your organization is using SSO with Microsoft Entra ID, authentication logs to GitHub.com will be generated. Using the following query can help you identify a sudden increase in failed logon attempt of users.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let LearningPeriod = 7d;
+  let BinTime = 1h;
+  let RunTime = 1h;
+  let StartTime = 1h;  
+  let sensitivity = 2.5;
+  let EndRunTime = StartTime - RunTime;
+  let EndLearningTime = StartTime + LearningPeriod;
+  let aadFunc = (tableName:string){
+  table(tableName)  
+  | where TimeGenerated between (ago(EndLearningTime) .. ago(EndRunTime))
+  | where AppDisplayName =~ "GitHub.com"
+  | where ResultType != 0
+  | make-series FailedLogins = count() on TimeGenerated from ago(LearningPeriod) to ago(EndRunTime) step BinTime by UserPrincipalName, Type
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(FailedLogins, sensitivity, -1, 'linefit')
+  | mv-expand FailedLogins to typeof(double), TimeGenerated to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)  
+  | where TimeGenerated >= ago(RunTime)
+  | where Anomalies > 0 and Baseline > 0
+  | join kind=inner (
+            table(tableName)  
+            | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+            | where AppDisplayName =~ "GitHub.com"
+            | where ResultType != 0
+            | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddresses = make_set(IPAddress,100), Locations = make_set(LocationDetails,20), Devices = make_set(DeviceDetail,20) by UserPrincipalName          
+        ) on UserPrincipalName
+  | extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 2.0.1
+kind: Scheduled
