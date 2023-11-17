@@ -2,24 +2,17 @@ Function Get-AuditLogs {
     <#
     .SYNOPSIS
         Retrieves audit logs from 1Password API.
-
     .DESCRIPTION
         This function retrieves audit logs from 1Password API using the provided parameters. It can retrieve logs starting from a specific time or using a cursor value. The retrieved logs are then processed to rename reserved Microsoft Sentinel column names.
-
     .PARAMETER lastRunTime
         Specifies the start time to retrieve audit logs from. If not provided, the function retrieves all available logs.
-
     .PARAMETER cursor
         Specifies the cursor value to retrieve audit logs from. If not provided, the function retrieves logs starting from the provided lastRunTime.
-
     .PARAMETER api
         Specifies the API endpoint to retrieve audit logs from.
-
     .EXAMPLE
         Get-AuditLogs -lastRunTime "2022-01-01T00:00:00Z" -api "https://my-1password-api.com"
-
         This example retrieves all audit logs starting from January 1st, 2022 from the specified 1Password API endpoint.
-
     .NOTES
         Author: Rogier Dijkman
     #>
@@ -64,6 +57,8 @@ Function Get-AuditLogs {
             }
         } Until ($apiResponse.has_more -eq $false)
 
+        # Add Log source value
+        $result | add-member "log_source" -NotePropertyValue "$api"
         # rename reserved Microsoft Sentinel column names [uuid and type]
         if ($results.uuid) {
             $results | ForEach-Object {
@@ -151,22 +146,16 @@ Function Get-Cursor {
     <#
     .SYNOPSIS
         Retrieves the cursor value from a JSON file stored in Azure Blob Storage.
-
     .DESCRIPTION
         This function retrieves the cursor value from a JSON file stored in Azure Blob Storage. The cursor value is used to keep track of the last processed event in the 1Password data connector.
-
     .PARAMETER AzureWebJobsStorage
         The connection string for the Azure Blob Storage account.
-
     .PARAMETER storageAccountContainer
         The name of the container in the Azure Blob Storage account where the JSON file is stored.
-
     .PARAMETER cursor
         The name of the JSON file containing the cursor value.
-
     .EXAMPLE
         Get-Cursor -AzureWebJobsStorage $AzureWebJobsStorage -storageAccountContainer "1password" -cursor "1password_cursor"
-
     .NOTES
         Author: Rogier Dijkman
     #>
@@ -213,7 +202,7 @@ Function Get-Cursor {
             }
             else {
                 Write-Warning "[!] No context was found for cursor [$cursor]"
-                $timestamp = Set-TimeStamp -AzureWebJobsStorage $AzureWebJobsStorage -storageAccountContainer $storageAccountContainer
+                Set-TimeStamp -AzureWebJobsStorage $AzureWebJobsStorage -storageAccountContainer $storageAccountContainer
             }
         }
         catch {
@@ -226,20 +215,16 @@ Function Send-Data {
     <#
     .SYNOPSIS
     Sends data to a specified endpoint using an Azure access token.
-
     .DESCRIPTION
     This function sends data to a specified endpoint using an Azure access token. The access token is obtained using the Get-AzAccessToken cmdlet.
-
     .PARAMETER body
     The data to be sent to the endpoint.
-
     .EXAMPLE
     $body = @{
         "key1" = "value1"
         "key2" = "value2"
     }
     Send-Data -body $body
-
     .NOTES
     This function requires the Get-AzAccessToken cmdlet to be installed. It also requires the $env:dataCollectionEndpoint environment variable to be set to the desired endpoint URL.
     #>
@@ -350,7 +335,7 @@ Function Get-TimeStamp {
     $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 
     $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
-    $blobs = Get-AzStorageBlob -Container $storageAccountContainer -Context $storageAccountContext | Select Name
+    $blobs = Get-AzStorageBlob -Container $storageAccountContainer -Context $storageAccountContext | Select-Object Name
     if ($null -eq $blobs) {
         Set-TimeStamp @storagePayload
     }

@@ -173,6 +173,10 @@ resource table 'Microsoft.OperationalInsights/workspaces/tables@2021-12-01-previ
       name: 'user'
       type: 'dynamic'
     }
+    {
+      name: 'log_source'
+      type: 'string'
+    }
   ]
   }
   }
