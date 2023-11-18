@@ -69,10 +69,10 @@ $isPipelineRun = $false
 
 $commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
 $catelogAPIFilePath = $repositoryBasePath + ".script/package-automation/catelogAPI.ps1"
-$getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1"
+$getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/"
 
 . $commonFunctionsFilePath # load common functions
-. $catelogAPIFilePath # load catelogapi functions
+. $catelogAPIFilePath # load catelog api functions
 . $getccpDetailsFilePath # load ccp functions
 
 try {
@@ -293,6 +293,9 @@ try {
 
         GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $contentToImport.Version;
         RunArmTtkOnPackage -solutionName $solutionName -isPipelineRun $false;
+
+        # check if mainTemplate and createUiDefinition json files are valid or not
+        CheckJsonIsValid($solutionFolderBasePath)
     }
 }
 catch {
