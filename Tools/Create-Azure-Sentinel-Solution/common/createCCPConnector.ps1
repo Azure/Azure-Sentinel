@@ -104,8 +104,8 @@ function Get-ConnectionsTemplateParameters($activeResource, $ccpItem){
 
     $dcrConfigParameter = [PSCustomObject]@{
         defaultValue = [PSCustomObject]@{
-            dataCollectionEndpoint = "[[parameters('dataCollectionEndpoint')]"; #"data collection Endpoint";
-            dataCollectionRuleImmutableId = "[[parameters('dataCollectionRuleImmutableId')]"; #"data collection rule immutableId";
+            dataCollectionEndpoint = "[[parameters('dataCollectionEndpointId$($global:connectorCounter)')]"; #"data collection Endpoint";
+            dataCollectionRuleImmutableId = "[[parameters('dataCollectionRuleImmutableId$($global:connectorCounter)')]"; #"data collection rule immutableId";
         };
         type = "object";
     }
@@ -284,6 +284,17 @@ function Get-ArmResource($name, $type, $kind, $properties){
     }
 }
 
+function addNewParameter($parameterName) {
+    $hasParameter = [bool]($global:baseMainTemplate.PSobject.Properties.name -match "$parameterName")
+    if (!$hasParameter) {
+        $global:baseMainTemplate.parameters | Add-Member -NotePropertyName "$parameterName" -NotePropertyValue ([PSCustomObject] @{
+            defaultValue = "Enter $parameterName value";
+            type         = "string";
+            minLength    = 1;
+        })
+    }
+}
+
 # THIS IS THE STARTUP FUNCTION FOR CCP RESOURCE CREATOR
 function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict, $solutionBasePath, $solutionName) {
     $solutionId = $solutionFileMetadata.publisherId + "." + $solutionFileMetadata.offerId
@@ -361,6 +372,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                 $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions"
 
+                # $hasParameters = [bool](($armResource.parameters).PSobject.Properties.name -match "parameters")
+                # if (!$hasParameters) {
+                #     $newParameterObject = New-Object -TypeName PSObject
+                #     $armResource | Add-Member -NotePropertyName "parameters" -NotePropertyValue $newParameterObject
+                # }
+
                 $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
                 if ($hasLocationProperty) {
                     $locationProperty = $armResource.location
@@ -369,6 +386,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                         $armResource.location = "[[parameters('$($placeHolderName)')]"
+                        addNewParameter -parameterName $placeHolderName
                     }
                 }
 
@@ -393,30 +411,43 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                 $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                 $armResource.kind = $ccpItem.PollerKind;
-                #$armResource.properties.connectorDefinitionName = "[[parameters('connectorDefinitionName')]"
-                #$armResource.properties.dcrConfig.dataCollectionEndpoint = "[[parameters('dcrConfig').dataCollectionEndpoint]"
                 
+                $hasParameters = [bool](($armResource.parameters).PSobject.Properties.name -match "parameters")
+                if (!$hasParameters) {
+                    $newParameterObject = New-Object -TypeName PSObject
+                    $armResource | Add-Member -NotePropertyName "parameters" -NotePropertyValue $newParameterObject
+                }
+
                 # dataCollectionEndpoint
-                $hasDataCollectionEndpoint = [bool]($armResource.properties.dcrConfig.PSobject.Properties.name -match "dataCollectionEndpoint")
+                $hasDataCollectionEndpoint = [bool](($armResource.properties).dcrConfig.PSobject.Properties.name -match "dataCollectionEndpoint")
                 if ($hasDataCollectionEndpoint) {
                     $dataCollectionEndpointProperty = $armResource.properties.dcrConfig.dataCollectionEndpoint
                     $placeHoldersMatched = $dataCollectionEndpointProperty | Select-String $placeHolderPatternMatches -AllMatches
 
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                        $armResource.properties.dcrConfig.dataCollectionEndpoint = "[[parameters('$($placeHolderName)')]"
+                        $dataCollectionEndpointNameValue = "$($placeHolderName)$($global:connectorCounter)"
+                        $armResource.properties.dcrConfig.dataCollectionEndpoint = "[[parameters('$($dataCollectionEndpointNameValue)')]"
+
+                        $armResource.parameters | Add-Member -NotePropertyName "$dataCollectionEndpointNameValue" -NotePropertyValue "Enter dataCollectionEndpointId value"
+
+                        #addNewParameter -parameterName $dataCollectionEndpointNameValue
                     }
                 }
 
                 # dataCollectionRuleImmutableId
-                $hasDataCollectionRuleImmutableId = [bool]($armResource.properties.dcrConfig.PSobject.Properties.name -match "dataCollectionRuleImmutableId")
+                $hasDataCollectionRuleImmutableId = [bool](($armResource.properties).dcrConfig.PSobject.Properties.name -match "dataCollectionRuleImmutableId")
                 if ($hasDataCollectionRuleImmutableId) {
                     $dataCollectionRuleImmutableIdProperty = $armResource.properties.dcrConfig.dataCollectionRuleImmutableId
                     $placeHoldersMatched = $dataCollectionRuleImmutableIdProperty | Select-String $placeHolderPatternMatches -AllMatches
 
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                        $armResource.properties.dcrConfig.dataCollectionRuleImmutableId = "[[parameters('$($placeHolderName)')]"
+                        $dataCollectionRuleImmutableIdValue = "$($placeHolderName)$($global:connectorCounter)"
+                        $armResource.properties.dcrConfig.dataCollectionRuleImmutableId = "[[parameters('$($dataCollectionRuleImmutableIdValue)')]"
+
+                        #addNewParameter -parameterName $dataCollectionRuleImmutableIdValue
+                        $armResource.parameters | Add-Member -NotePropertyName "$dataCollectionRuleImmutableIdValue" -NotePropertyValue "Enter dataCollectionRuleImmutableId value"
                     }
                 }
 
@@ -431,6 +462,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                             $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.auth.ClientId = "[[parameters('$($placeHolderName)')]"
+
+                            $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter ClientId value"
+                            #addNewParameter -parameterName $placeHolderName
                         }
                     }
 
@@ -443,6 +477,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                             $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.auth.ClientSecret = "[[parameters('$($placeHolderName)')]"
+
+                            $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter Client Secret value"
+                            #addNewParameter -parameterName $placeHolderName
                         }
                     }
 
@@ -456,6 +493,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                                 $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                 $armResource.properties.auth.AuthorizationCode = "[[parameters('$($placeHolderName)')]"
+
+                                $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter AuthorizationCode value"
+                                #addNewParameter -parameterName $placeHolderName
                             }
                         }
                     }
@@ -467,6 +507,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                             $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.request.AuthorizationEndpoint = "[[parameters('" + $placeHolderName + "')]"
+
+                            $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter AuthorizationEndpoint value"
+                            #addNewParameter -parameterName $placeHolderName
                         }
                     }
 
@@ -477,6 +520,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                             $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.request.TokenEndpoint = "[[parameters('" + $placeHolderName + "')]"
+
+                            $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter TokenEndpoint value"
+                            #addNewParameter -parameterName $placeHolderName
                         }
                     }
                 }
@@ -490,6 +536,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                             $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.auth.username = "[[parameters('$($placeHolderName)')]"
+
+                            if (!$armResource.parameters.username) {
+                                $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter username value"
+                                #addNewParameter -parameterName $placeHolderName
+                            }
                         }
                     }
 
@@ -502,6 +553,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                             $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.auth.password = "[[parameters('$($placeHolderName)')]"
+
+                            $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter password value"
+                            #addNewParameter -parameterName $placeHolderName
                         }
                     }
                 }
@@ -515,6 +569,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                             $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.auth.ApiKey = "[[parameters('$($placeHolderName)')]"
+
+                            $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter ApiKey value"
+                            addNewParameter -parameterName $placeHolderName
                         }
                     }
                 }
@@ -536,6 +593,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             foreach($splitItem in $splitEndpoint) {
                                 if ($splitItem -eq "") {
                                     $finalizedEndpointUrl += "parameters('" + $placeHolderName + "')" 
+                                    addNewParameter -parameterName $placeHolderName
                                 } else {
                                     if ($finalizedEndpointUrl.Contains("parameters")) {
                                         $finalizedEndpointUrl += ", '" + $splitItem + "'"
@@ -546,7 +604,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             }
                         }
 
-                        $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
+                        #$armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
+
+                        if (!$armResource.parameters.request.apiEndPoint) {
+                            $armResource.parameters | Add-Member -NotePropertyName "apiEndPoint" -NotePropertyValue "Enter ApiEndPoint value"
+                        }
                     }
                 }
 
@@ -557,6 +619,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                         $armResource.properties.request.retryCount = "[[parameters('" + $placeHolderName + "')]"
+
+                        $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter retryCount value"
                     }
                 }
                 
@@ -567,6 +631,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                         $armResource.properties.request.rateLimitQPS = "[[parameters('" + $placeHolderName + "')]"
+
+                        $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter rateLimitQPS value"
                     }
                 }
 
@@ -583,23 +649,18 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules")
             {
                 Write-Host "Processing for CCP DCR file path: $ccpDCRFilePath"
-                if([bool]($fileContent.properties.PSobject.Properties.name -match "dataCollectionEndpointId") -eq $false)
-                {
-                    $dcrEndpoint = "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
-
-                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataCollectionEndpointId$($global:connectorCounter)" -NotePropertyValue "$dcrEndpoint"
-
-                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataCollectionEndpointId$($global:connectorCounter)" -NotePropertyValue "[variables('dataCollectionEndpointId$($global:connectorCounter)')]"
-
-                    $fileContent.properties | Add-Member -MemberType NoteProperty -Name dataCollectionEndpointId -Value "[variables('_dataCollectionEndpointId$($global:connectorCounter)')]"
-                }
-                
                 foreach ($logAnalyticDestination in $fileContent.properties.destinations.logAnalytics)
                 {
                     $logAnalyticDestination.workspaceResourceId = "[variables('workspaceResourceId')]"
                 }
 
                 $armResource = Get-ArmResource $fileContent.name $fileContent.type $fileContent.kind $fileContent.properties
+
+                # $hasParameters = [bool](($armResource.parameters).PSobject.Properties.name -match "parameters")
+                # if (!$hasParameters) {
+                #     $newParameterObject = New-Object -TypeName PSObject
+                #     $armResource | Add-Member -NotePropertyName "parameters" -NotePropertyValue $newParameterObject
+                # }
 
                 # location
                 $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
@@ -609,12 +670,13 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                        $armResource.location = "[[parameters('$($placeHolderName)')]"
+                        #$armResource.location = "[[parameters('$($placeHolderName)')]"
+                        addNewParameter -parameterName $placeHolderName
                     }
                 }
 
                 # dataCollectionEndpointId
-                $hasDataCollectionEndpointIdProperty = [bool]($armResource.PSobject.Properties.name -match "dataCollectionEndpointId")
+                $hasDataCollectionEndpointIdProperty = [bool](($armResource.properties).PSobject.Properties.name -match "dataCollectionEndpointId")
                 if ($hasDataCollectionEndpointIdProperty) {
                     $dataCollectionEndpointIdProperty = $armResource.properties.dataCollectionEndpointId
                     $placeHoldersMatched = $dataCollectionEndpointIdProperty | Select-String $placeHolderPatternMatches -AllMatches
@@ -622,11 +684,16 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                         $armResource.properties.dataCollectionEndpointId = "[[parameters('$($placeHolderName)')]"
+
+                        # if (!$armResource.parameters.dataCollectionEndpointId) {
+                        #     $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter dataCollectionEndpointId value"
+                        # }
+                        addNewParameter -parameterName $placeHolderName
                     }
                 }
 
                 # workspaceResourceId
-                $hasWorkspaceResourceIdProperty = [bool]($armResource.PSobject.Properties.name -match "workspaceResourceId")
+                $hasWorkspaceResourceIdProperty = [bool](($armResource.properties).PSobject.Properties.name -match "workspaceResourceId")
                 if ($hasWorkspaceResourceIdProperty) {
                     $workspaceResourceIdProperty = $armResource.properties.destinations.logAnalytics.workspaceResourceId
                     $placeHoldersMatched = $workspaceResourceIdProperty | Select-String $placeHolderPatternMatches -AllMatches
@@ -634,6 +701,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                         $armResource.properties.destinations.logAnalytics.workspaceResourceId = "[[parameters('$($placeHolderName)')]"
+
+                        # if (!$armResource.parameters.workspaceResourceId) {
+                        #     $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter workspaceResourceId value"
+                        # }
+                        addNewParameter -parameterName $placeHolderName
                     }
                 }
 
@@ -654,6 +726,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $fileContent.properties.schema.name = "[variables('_logAnalyticsTableId$tableCounter')]"
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
 
+                # $hasParameters = [bool](($armResource.parameters).PSobject.Properties.name -match "parameters")
+                # if (!$hasParameters) {
+                #     $newParameterObject = New-Object -TypeName PSObject
+                #     $armResource | Add-Member -NotePropertyName "parameters" -NotePropertyValue $newParameterObject
+                # }
+
                 $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
                 if ($hasLocationProperty) {
                     $locationProperty = $armResource.location
@@ -661,7 +739,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                        $armResource.location = "[[parameters('$($placeHolderName)')]"
+                        #$armResource.location = "[[parameters('$($placeHolderName)')]"
+                        addNewParameter -parameterName $placeHolderName
                     }
                 }
 

@@ -229,7 +229,14 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAct
         else {
             if ($val -is [PSCustomObject]) {
                 if ($($val.PsObject.Properties).Count -eq 0) {
-                    $resourceObj.PsObject.Properties.Remove($key)
+                    if ($key -eq "dataSources") {
+                        $resourceObj.$key = "[variables('TemplateEmptyObject')]";
+                        if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyObject" -NotePropertyValue "[json('{}')]"
+                        }
+                    } else {
+                        $resourceObj.PsObject.Properties.Remove($key)
+                    }
                 }
                 else {
                     $resourceObj.$key = $(removePropertiesRecursively $val $isWorkbook $isAction $isInputs)

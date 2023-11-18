@@ -69,7 +69,7 @@ $isPipelineRun = $false
 
 $commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
 $catelogAPIFilePath = $repositoryBasePath + ".script/package-automation/catelogAPI.ps1"
-$getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/"
+$getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1"
 
 . $commonFunctionsFilePath # load common functions
 . $catelogAPIFilePath # load catelog api functions
