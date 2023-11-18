@@ -129,9 +129,6 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
             }
         }
 
-        # throw exception if any of the relation has blanks i.e definition->Poller, Poller->DCR should be their. DCR to Table is optional.
-        
-
         # identify relation between DCR and table
         foreach ($ccpTable in $ccpDict) {
             #identify given file is present in dc folder or not
@@ -167,7 +164,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
             if ($localCCPDist.DCDefinitionId -eq "" -or $localCCPDist.DCDefinitionFilePath -eq "" -or
             $localCCPDist.DCPollerFilePath -eq "" -or $localCCPDist.DCPollerStreamName -eq "" -or $localCCPDist.DCRFilePath -eq "") 
             {
-                Write-Host "Please verify if there is a mapping between ConnectorDefiniton with Poller file and/or Poller file with DCR file!"
+                Write-Host "Please verify if there is a mapping between ConnectorDefiniton with Poller file and/or Poller file with DCR file! If mapping is correct then check type property for ccp files!"
                 exit 1
             }
         }

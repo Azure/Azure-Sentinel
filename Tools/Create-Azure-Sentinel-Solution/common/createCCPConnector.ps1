@@ -88,8 +88,8 @@ function Format-Json {
 #build the connection template parameters, according to the connector definition instructions
 function Get-ConnectionsTemplateParameters($activeResource, $ccpItem){
     $title = $ccpItem.title;
-    # $dataCollectionEndpoint = $ccpItem.PollerDataCollectionEndpoint;
-    # $dataCollectionRuleImmutableId = $ccpItem.PollerDataCollectionRuleImmutableId;
+    #$dataCollectionEndpoint = $ccpItem.PollerDataCollectionEndpoint;
+    #$dataCollectionRuleImmutableId = $ccpItem.PollerDataCollectionRuleImmutableId;
 
     $paramTestForDefinition = [PSCustomObject]@{
         defaultValue = $title; #"connectorDefinitionName";
@@ -104,8 +104,8 @@ function Get-ConnectionsTemplateParameters($activeResource, $ccpItem){
 
     $dcrConfigParameter = [PSCustomObject]@{
         defaultValue = [PSCustomObject]@{
-            dataCollectionEndpoint = "[variables('_dataCollectionEndpoint$global:connectorCounter')]"; #"data collection Endpoint";
-            dataCollectionRuleImmutableId = "[variables('_dataCollectionRuleImmutableId$global:connectorCounter')]"; #"data collection rule immutableId";
+            dataCollectionEndpoint = "[[parameters('dataCollectionEndpoint')]"; #"data collection Endpoint";
+            dataCollectionRuleImmutableId = "[[parameters('dataCollectionRuleImmutableId')]"; #"data collection rule immutableId";
         };
         type = "object";
     }
@@ -318,21 +318,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
         $tableCounter = 1;
 
         foreach ($ccpItem in $ccpDict) {
-            $templateName = $ccpItem.title; #$solutionName;
-            $dataCollectionEndpoint = $ccpItem.PollerDataCollectionEndpoint;
-            $dataCollectionRuleImmutableId = $ccpItem.PollerDataCollectionRuleImmutableId;
-
-            if (!$global:baseMainTemplate.variables."_dataCollectionEndpoint$global:connectorCounter") { 
-                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataCollectionEndpoint$global:connectorCounter" -NotePropertyValue "$dataCollectionEndpoint"
-
-                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataCollectionEndpoint$global:connectorCounter" -NotePropertyValue "[variables('dataCollectionEndpoint$global:connectorCounter')]"
-            }
-
-            if (!$global:baseMainTemplate.variables."_dataCollectionRuleImmutableId$global:connectorCounter") { 
-                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataCollectionRuleImmutableId$global:connectorCounter" -NotePropertyValue "$dataCollectionRuleImmutableId"
-
-                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataCollectionRuleImmutableId$global:connectorCounter" -NotePropertyValue "[variables('dataCollectionRuleImmutableId$global:connectorCounter')]"
-            }
+            $templateName = $ccpItem.title;
             For ($TemplateCounter = 1; $TemplateCounter -lt 3; $TemplateCounter++) {
             
                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "$templateName"
@@ -374,11 +360,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                 $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions"
-
-                # $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
-                # if ($hasLocationProperty -and $armResource.location.contains("{{")) {
-                #     $armResource.location = "[[parameters('location')]"
-                # }
 
                 $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
                 if ($hasLocationProperty) {
@@ -656,6 +637,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                 }
 
+                $armResource = $(removePropertiesRecursively $armResource $false)
                 $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
             }
             #========end: dcr resource===========
