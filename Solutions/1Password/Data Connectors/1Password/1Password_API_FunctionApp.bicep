@@ -266,7 +266,6 @@ resource storageAccountName_default_storageContainer 'Microsoft.Storage/storageA
   }
 }
 
-
 output functionAppName string = functionName
 output storageAccountName string = storageAccountName
 output keyVaultName string = keyVaultName
