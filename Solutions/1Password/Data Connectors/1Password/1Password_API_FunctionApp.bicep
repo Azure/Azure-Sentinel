@@ -3,7 +3,7 @@ Deploys a Function App that queries the 1Password API and sends the data to a Lo
 The Function App is deployed with an Application Insights instance, a Key Vault instance, and a Storage Account.
 The Key Vault instance is used to store the API Key for the 1Password API and the Storage Account is used to store cursors.
 */
-? /* TODO: User defined functions are not supported and have not been decompiled */
+/* TODO: User defined functions are not supported and have not been decompiled */
 
 @description('Specifies the name of the Function App.')
 param functionName string
@@ -265,6 +265,7 @@ resource storageAccountName_default_storageContainer 'Microsoft.Storage/storageA
     publicAccess: 'None'
   }
 }
+
 
 output functionAppName string = functionName
 output storageAccountName string = storageAccountName
