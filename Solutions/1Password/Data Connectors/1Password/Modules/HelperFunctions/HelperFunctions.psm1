@@ -33,7 +33,7 @@ Function Get-AuditLogs {
     $result = @()
 
     $headers = @{
-        'Authorization' = "Bearer $env:BearerToken"
+        'Authorization' = "Bearer $env:API-Key"
         'ContentType'   = 'Application/Json'
     }
 
