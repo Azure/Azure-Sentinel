@@ -493,10 +493,10 @@ class SyslogDaemonVerifications:
             if command_object.is_successful == "Warn":
                 print_warning(self.Syslog_daemon_not_listening_warning.format(self.SYSLOG_DAEMON))
 
-    def verify_syslog_daemon_forwarding_configuration_old(self):
+    def verify_syslog_daemon_forwarding_configuration_pre_1_28(self):
         """
         Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
-        Valid for the new AMA version.
+        This function will be used in case the script detects the agent running is of a version older than 1.28.11.
         """
         if self.SYSLOG_DAEMON != "":
             syslog_daemon_forwarding_keywords = {
@@ -513,10 +513,10 @@ class SyslogDaemonVerifications:
                                                                            self.syslog_daemon_forwarding_path_old[
                                                                                self.SYSLOG_DAEMON]))
 
-    def verify_syslog_daemon_forwarding_configuration_new(self):
+    def verify_syslog_daemon_forwarding_configuration_post_1_28(self):
         """
         Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
-        Valid for the new AMA version.
+        This function will be used in case the script detects the agent running is of a version later than 1.28.11.
         """
         if self.SYSLOG_DAEMON != "":
             syslog_daemon_forwarding_keywords = {
@@ -542,9 +542,9 @@ class SyslogDaemonVerifications:
         if self.determine_syslog_daemon():
             self.verify_syslog_daemon_listening()
             if IS_AGENT_VERSION_UPDATED:
-                self.verify_syslog_daemon_forwarding_configuration_new()
+                self.verify_syslog_daemon_forwarding_configuration_post_1_28()
             else:
-                self.verify_syslog_daemon_forwarding_configuration_old()
+                self.verify_syslog_daemon_forwarding_configuration_pre_1_28()
         else:
             mock_command = CommandVerification(self.command_name, "")
             mock_command.print_result_to_prompt()
