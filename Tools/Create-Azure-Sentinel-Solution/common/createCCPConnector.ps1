@@ -419,7 +419,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
 
                 # dataCollectionEndpoint
-                $hasDataCollectionEndpoint = [bool](($armResource.properties).dcrConfig.PSobject.Properties.name -match "dataCollectionEndpoint")
+                $hasDataCollectionEndpoint = [bool](($armResource.properties.dcrConfig).PSobject.Properties.name -match "dataCollectionEndpoint")
                 if ($hasDataCollectionEndpoint) {
                     $dataCollectionEndpointProperty = $armResource.properties.dcrConfig.dataCollectionEndpoint
                     $placeHoldersMatched = $dataCollectionEndpointProperty | Select-String $placeHolderPatternMatches -AllMatches
@@ -436,7 +436,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
 
                 # dataCollectionRuleImmutableId
-                $hasDataCollectionRuleImmutableId = [bool](($armResource.properties).dcrConfig.PSobject.Properties.name -match "dataCollectionRuleImmutableId")
+                $hasDataCollectionRuleImmutableId = [bool](($armResource.properties.dcrConfig).PSobject.Properties.name -match "dataCollectionRuleImmutableId")
                 if ($hasDataCollectionRuleImmutableId) {
                     $dataCollectionRuleImmutableIdProperty = $armResource.properties.dcrConfig.dataCollectionRuleImmutableId
                     $placeHoldersMatched = $dataCollectionRuleImmutableIdProperty | Select-String $placeHolderPatternMatches -AllMatches
