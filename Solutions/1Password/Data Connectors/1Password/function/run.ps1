@@ -22,14 +22,17 @@ $endpoints = @('auditevents', 'signinattempts', 'itemusages')
 
 foreach ($api in $endpoints) {
     try {
-        $cursor = Get-Cursor @storagePayload -cursor $api
-        $result += Get-AuditLogs -cursor $cursor -api $api
+        $cursor = Get-Cursor @storagePayload -cursor $api -ErrorAction SilentlyContinue
+        if ($cursor) {
+            $result += Get-AuditLogs -cursor $cursor -api $api
+        } else {
+            $result += Get-AuditLogs -lastRunTime $currentStartTime -api $api
+        }
     } catch {
         $result += Get-AuditLogs -lastRunTime $currentStartTime -api $api
     }
 
     if ($result.count -gt 1) {
-        Write-Host "Sending $($result.count) to the Data Collection Rule"
         Send-Data -body ($result | ConvertTo-Json)
         $updateTime = $true
     } else {

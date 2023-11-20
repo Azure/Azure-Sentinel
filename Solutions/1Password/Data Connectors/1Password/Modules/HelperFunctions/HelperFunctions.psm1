@@ -33,7 +33,7 @@ Function Get-AuditLogs {
     $result = @()
 
     $headers = @{
-        'Authorization' = "Bearer $env:API-Key"
+        'Authorization' = "Bearer $env:BearerToken"
         'ContentType'   = 'Application/Json'
     }
 
@@ -49,7 +49,7 @@ Function Get-AuditLogs {
         }
     }
 
-    # try {
+    try {
         $uri = "$($env:apiEndpoint)/api/v1/$api"
         Do {
             $apiResponse = (Invoke-RestMethod -Method POST -Uri $uri -Headers $headers -body ($payload | ConvertTo-Json))
@@ -80,10 +80,10 @@ Function Get-AuditLogs {
             }
         }
         Write-Host "Results found: $($results.count)"
-    # }
-    # catch {
-    #     Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
-    # }
+    }
+    catch {
+        Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
+    }
     Set-Cursor -cursor $api -cursorValue $apiResponse.cursor @storagePayload
 
     return $results
@@ -184,7 +184,7 @@ Function Get-Cursor {
         $blobContext = Get-AzStorageBlob `
             -Blob "$cursor.json" `
             -Container $storageAccountContainer `
-            -Context $storageAccountContext
+            -Context $storageAccountContext  
     }
     catch {
         Write-Output "Unable to access [$cursor.json]"
