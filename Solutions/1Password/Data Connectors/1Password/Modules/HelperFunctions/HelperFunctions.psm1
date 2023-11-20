@@ -1,21 +1,24 @@
 Function Get-AuditLogs {
     <#
     .SYNOPSIS
-        Retrieves audit logs from 1Password API.
+        This function retrieves data from an API and performs some transformations on the results.
     .DESCRIPTION
-        This function retrieves audit logs from 1Password API using the provided parameters. It can retrieve logs starting from a specific time or using a cursor value. The retrieved logs are then processed to rename reserved Microsoft Sentinel column names.
+        The function takes in parameters for lastRunTime, cursor, and api. It uses these parameters to construct the API request and retrieve data from the API.
+        The retrieved data is then processed and transformed. The function adds a log source value, renames reserved Microsoft Sentinel column names, and outputs the results.
     .PARAMETER lastRunTime
-        Specifies the start time to retrieve audit logs from. If not provided, the function retrieves all available logs.
+        The last run time of the function. This parameter is optional.
     .PARAMETER cursor
-        Specifies the cursor value to retrieve audit logs from. If not provided, the function retrieves logs starting from the provided lastRunTime.
+        The cursor value for pagination. This parameter is optional.
     .PARAMETER api
-        Specifies the API endpoint to retrieve audit logs from.
+        The API endpoint to retrieve data from. This parameter is optional.
+    .OUTPUTS
+        The function returns an array of results retrieved from the API.
     .EXAMPLE
-        Get-AuditLogs -lastRunTime "2022-01-01T00:00:00Z" -api "https://my-1password-api.com"
-        This example retrieves all audit logs starting from January 1st, 2022 from the specified 1Password API endpoint.
-    .NOTES
-        Author: Rogier Dijkman
+        $results = Get-ApiData -lastRunTime "2022-01-01T00:00:00" -cursor "abc123" -api "https://api.example.com"
+
+        This example retrieves data from the API with the specified last run time, cursor, and API endpoint.
     #>
+
     param (
         [Parameter(Mandatory = $false)]
         [string]$lastRunTime,
@@ -30,7 +33,7 @@ Function Get-AuditLogs {
     $result = @()
 
     $headers = @{
-        'Authorization' = "Bearer $env:BearerToken"
+        'Authorization' = "Bearer $env:API-Key"
         'ContentType'   = 'Application/Json'
     }
 
@@ -62,10 +65,7 @@ Function Get-AuditLogs {
             Write-Host "Adding Log Source '$($api)'"
             $results | add-member "log_source" -NotePropertyValue "$api"
         }
-
-        # Add Log source value
-        $result | add-member "log_source" -NotePropertyValue "$api"
-        # rename reserved Microsoft Sentinel column names [uuid and type]
+        #rename reserved Microsoft Sentinel column names [uuid and type]
         if ($results.uuid) {
             $results | ForEach-Object {
                 $_ | add-member "uuid_s" -NotePropertyValue $_."uuid"
