@@ -5,7 +5,6 @@ Date Created: 6/10/2019 16:19
 """
 import json, requests, urllib3, urllib
 from lxml import html
-from lxml import etree
 
 def epmAuth(dispatcher, username, password):
     """
