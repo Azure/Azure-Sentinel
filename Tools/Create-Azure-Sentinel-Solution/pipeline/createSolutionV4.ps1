@@ -209,9 +209,24 @@ try
 							elseif ($objectKeyLowercase -eq "playbooks") {
 								GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $isPipelineRun
 							}
-							elseif ($objectKeyLowercase -eq "data connectors") {
+							elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
+
 								if ($ccpDict.Count -gt 0) {
-									GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName 
+									$isCCPConnectorFile = $false;
+									foreach($item in $ccpDict) {
+											if ($item.DCDefinitionFullPath -eq $finalPath) {
+													$isCCPConnectorFile = $true
+													break;
+											}
+									}
+
+									if ($isCCPConnectorFile) {
+											# current file is a ccp connector
+											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName 
+									} else {
+											# current file is a normal connector
+											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName
+									}
 								}
 								else {
 									GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName
