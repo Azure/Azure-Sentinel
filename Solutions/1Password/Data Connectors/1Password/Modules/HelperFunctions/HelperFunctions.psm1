@@ -58,6 +58,12 @@ Function Get-AuditLogs {
         } Until ($apiResponse.has_more -eq $false)
 
         # Add Log source value
+        if ($results) {
+            Write-Host "Adding Log Source '$($api)'"
+            $results | add-member "log_source" -NotePropertyValue "$api"
+        }
+
+        # Add Log source value
         $result | add-member "log_source" -NotePropertyValue "$api"
         # rename reserved Microsoft Sentinel column names [uuid and type]
         if ($results.uuid) {
