@@ -24,16 +24,16 @@ foreach ($api in $endpoints) {
     try {
         $cursor = Get-Cursor @storagePayload -cursor $api -ErrorAction SilentlyContinue
         if ($cursor) {
-            $result += Get-AuditLogs -cursor $cursor -api $api
+            $results += Get-AuditLogs -cursor $cursor -api $api
         } else {
-            $result += Get-AuditLogs -lastRunTime $currentStartTime -api $api
+            $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
         }
     } catch {
-        $result += Get-AuditLogs -lastRunTime $currentStartTime -api $api
+        $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
     }
 
-    if ($result.count -gt 1) {
-        Send-Data -body ($result | ConvertTo-Json)
+    if ($results.count -gt 1) {
+        Send-Data -body ($results | ConvertTo-Json)
         $updateTime = $true
     } else {
         Write-Host "No new data was found"
