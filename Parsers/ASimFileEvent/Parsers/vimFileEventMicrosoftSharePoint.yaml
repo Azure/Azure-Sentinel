@@ -49,16 +49,16 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let _ASIM_ResolveActorUsername = (T:(*), UsernameField: string) { 
-      T
-      | extend ActorUsername = column_ifexists(UsernameField,"")
-      | extend windows = ActorUsername has '\\'
-      | extend 
-          ActorUsernameType = iff (windows, "Windows", "UPN"),
-          ActorUserUpn =  iff (windows, "", ActorUsername),
-          ActorWindowsUsername = iff (windows, ActorUsername, "")
+  let _ASIM_ResolveActorUsername = (T: (*), UsernameField: string) { 
+    T
+    | extend ActorUsername = column_ifexists(UsernameField, "")
+    | extend windows = ActorUsername has '\\'
+    | extend 
+        ActorUsernameType = iff (windows, "Windows", "UPN"),
+        ActorUserUpn =  iff (windows, "", ActorUsername),
+        ActorWindowsUsername = iff (windows, ActorUsername, "")
   };
-    let operations = datatable (Operation:string, EventType:string, EventSubType:string) [
+  let operations = datatable (Operation: string, EventType: string, EventSubType: string) [
       "FileUploaded", "FileCreated", "Upload",
       "FileAccessedExtended", "FileAccessed", "Extended",
       "FileRecycled", "FileDeleted", "Recycle",
@@ -87,16 +87,16 @@ ParserQuery: |
       "FolderDeleted", "FolderDeleted", "",
       "FileCheckedIn", "FileCreatedOrModified", "Checkin",
       "FileCheckedOut", "FileAccessed", "Checkout"
-    ];
-    let multiple_file_operations = dynamic([
+  ];
+  let multiple_file_operations = dynamic([
       "FileRenamed",
       "FileMoved",
       "FileCopied",
       "FolderCopied",
       "FolderMoved",
       "FolderRenamed"
-    ]);
-    let parser=(
+      ]);
+  let parser=(
       starttime: datetime=datetime(null),
       endtime: datetime=datetime(null),
       eventtype_in: dynamic=dynamic([]),
@@ -107,12 +107,12 @@ ParserQuery: |
       hashes_has_any: dynamic=dynamic([]),
       dvchostname_has_any: dynamic=dynamic([]),
       disabled: bool=false
-      ){
+      ) {
       let OfficeActivityProjected = 
           OfficeActivity
           | where not(disabled)
           | where (isnull(starttime) or TimeGenerated >= starttime) 
-            and (isnull(endtime) or TimeGenerated <= endtime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
           | where RecordType == "SharePointFileOperation" and Operation != "FileMalwareDetected"
           | where ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(ClientIP, srcipaddr_has_any_prefix))) and 
               ((array_length(actorusername_has_any) == 0) or (UserId has_any (actorusername_has_any))) and
@@ -120,7 +120,28 @@ ParserQuery: |
               ((array_length(srcfilepath_has_any) == 0) or (OfficeObjectId has_any (srcfilepath_has_any))) and
               (array_length(hashes_has_any) == 0) and
               (array_length(dvchostname_has_any) == 0)
-          | project Operation, OrganizationId, OrganizationName, SourceRecordId, OfficeWorkload, UserId, ClientIP, UserAgent, Start_Time, TimeGenerated, Type, OfficeObjectId, SourceFileName, SourceFileExtension, DestinationFileName, DestinationFileExtension, Site_Url, DestinationRelativeUrl, UserKey, MachineDomainInfo, MachineId; // ,_ItemId 
+          | project
+              Operation,
+              OrganizationId,
+              OrganizationName,
+              SourceRecordId,
+              OfficeWorkload,
+              UserId,
+              ClientIP,
+              UserAgent,
+              Start_Time,
+              TimeGenerated,
+              Type,
+              OfficeObjectId,
+              SourceFileName,
+              SourceFileExtension,
+              DestinationFileName,
+              DestinationFileExtension,
+              Site_Url,
+              DestinationRelativeUrl,
+              UserKey,
+              MachineDomainInfo,
+              MachineId; // ,_ItemId 
       let SingleFileOperationEvents = 
           OfficeActivityProjected
           | where Operation !in (multiple_file_operations)
@@ -128,6 +149,9 @@ ParserQuery: |
               TargetFilePath = OfficeObjectId,
               TargetFileName = SourceFileName,
               TargetFileExtension = SourceFileExtension
+          // Post-filtering
+          | where (array_length(srcfilepath_has_any) == 0) and
+              ((array_length(targetfilepath_has_any) == 0) or (TargetFilePath has_any (targetfilepath_has_any)))
           | extend 
               TargetFilePathType = "URL"
           | project-away DestinationFileName, DestinationFileExtension, DestinationRelativeUrl
@@ -146,6 +170,9 @@ ParserQuery: |
               TargetFilePath = strcat (Site_Url, DestinationRelativeUrl, "/", TargetFileName),
               TargetFilePathType = "URL",
               SrcFilePathType = "URL"
+          // Post-filtering
+          | where ((array_length(srcfilepath_has_any) == 0) or (SrcFilePath has_any (srcfilepath_has_any))) and
+              ((array_length(targetfilepath_has_any) == 0) or (TargetFilePath has_any (targetfilepath_has_any)))
           | project-away DestinationRelativeUrl
       ;
       union SingleFileOperationEvents, MultipleFileOperationsEvents
