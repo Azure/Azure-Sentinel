@@ -8,11 +8,11 @@ Threat hunting is the proactive and iterative process of searching for and detec
 - [More about Automated threat hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires login)
 
 # Playbooks
-[Requirements](../readme.md#before-you-begin)
+
 ## RecordedFuture-ThreatMap-Importer
 Type: Threat Hunt\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
+Requires [**/RecordedFuture-CustomConnector**](../Connectors/RecordedFuture-CustomConnector/readme.md) and API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ThreatMap-Importer%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ThreatMap-Importer%2Fazuredeploy.json)
@@ -24,7 +24,7 @@ Import Recorded Future Threat Map data and stores it in a custom table. Display 
 ## RecordedFuture-ActorThreatHunt-IndicatorImport
 Type: Threat Hunt\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
+Requires [**/RecordedFuture-CustomConnector**](../Connectors/RecordedFuture-CustomConnector/readme.md) and API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ActorThreatHunt-IndicatorImport%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ActorThreatHunt-IndicatorImport%2Fazuredeploy.json)
@@ -35,7 +35,6 @@ Fetch threat actor information from the threat actor map. The logic app will run
 
 Match the recurrence and valid_until_delta_hours to avoid duplicates in the ThreatIntelligenceIndicator table and duplicate detections leading to multiple incidents created.
 
-Setup the Analytic Rules shipped in the Solution to correlate this data with your infrastructure and if incidents are created implement  [Recorded Future Enrichment](../readme.md#RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash) to enhance triage. 
-
+Setup the Analytic Rules shipped in the Solution to correlate this data with your infrastructure and if incidents are created implement  [Recorded Future Enrichment](../Enrichment/readme.md#recordedfuture-ioc_enrichment-ip_domain_url_hash) to enhance triage. 
 
 ![](Images/2023-10-26-19-50-43.png)
