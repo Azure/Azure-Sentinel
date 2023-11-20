@@ -49,7 +49,7 @@ Function Get-AuditLogs {
         }
     }
 
-    try {
+    # try {
         $uri = "$($env:apiEndpoint)/api/v1/$api"
         Do {
             $apiResponse = (Invoke-RestMethod -Method POST -Uri $uri -Headers $headers -body ($payload | ConvertTo-Json))
@@ -80,10 +80,10 @@ Function Get-AuditLogs {
             }
         }
         Write-Host "Results found: $($results.count)"
-    }
-    catch {
-        Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
-    }
+    # }
+    # catch {
+    #     Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
+    # }
     Set-Cursor -cursor $api -cursorValue $apiResponse.cursor @storagePayload
 
     return $results
