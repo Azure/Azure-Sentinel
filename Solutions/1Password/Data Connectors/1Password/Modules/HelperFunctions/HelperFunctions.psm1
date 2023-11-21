@@ -14,7 +14,7 @@ Function Get-AuditLogs {
     .OUTPUTS
         The function returns an array of results retrieved from the API.
     .EXAMPLE
-        $results = Get-ApiData -lastRunTime "2022-01-01T00:00:00" -cursor "abc123" -api "https://api.example.com"
+        $results = Get-AuditLogs -lastRunTime "2022-01-01T00:00:00" -cursor "abc123" -api "https://api.example.com"
 
         This example retrieves data from the API with the specified last run time, cursor, and API endpoint.
     #>
@@ -33,28 +33,31 @@ Function Get-AuditLogs {
     $result = @()
 
     $headers = @{
-        'Authorization' = "Bearer $env:API-Key"
+        'Authorization' = "Bearer $env:APIKey"
         'ContentType'   = 'Application/Json'
     }
 
     if ($cursor) {
+        Write-Host "Processing cursor"
         $payload = @{
             'cursor' = $cursor
         }
     }
     else {
+        Write-Host "Processing Time Stamp"
         $payload = @{
             'start_time' = $lastRunTime
             'limit'      = 100
         }
     }
 
-    try {
+    # try {
         $uri = "$($env:apiEndpoint)/api/v1/$api"
         Do {
             $apiResponse = (Invoke-RestMethod -Method POST -Uri $uri -Headers $headers -body ($payload | ConvertTo-Json))
             $results += $apiResponse.items
-
+            Write-Warning "API Response: $apiResponse"
+                
             $payload = @{
                 "cursor" = $apiResponse.cursor
             }
@@ -80,11 +83,16 @@ Function Get-AuditLogs {
             }
         }
         Write-Host "Results found: $($results.count)"
-    }
-    catch {
+    # }
+    # catch {
         Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
+    # }
+    if ($apiResponse.cursor) {
+        Set-Cursor -cursor $api -cursorValue $apiResponse.cursor @storagePayload    
+    } else {
+        Set-Cursor -cursor $api -cursorValue 'none' @storagePayload
     }
-    Set-Cursor -cursor $api -cursorValue $apiResponse.cursor @storagePayload
+    
 
     return $results
 }
