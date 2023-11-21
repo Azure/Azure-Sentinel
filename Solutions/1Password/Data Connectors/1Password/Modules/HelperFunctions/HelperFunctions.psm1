@@ -56,8 +56,7 @@ Function Get-AuditLogs {
         Do {
             $apiResponse = (Invoke-RestMethod -Method POST -Uri $uri -Headers $headers -body ($payload | ConvertTo-Json))
             $results += $apiResponse.items
-            Write-Warning "API Response: $apiResponse"
-                
+
             $payload = @{
                 "cursor" = $apiResponse.cursor
             }
@@ -65,7 +64,7 @@ Function Get-AuditLogs {
 
         # Add Log source value
         if ($results) {
-            Write-Host "Adding Log Source '$($api)'"
+            Write-Verbose "Adding Log Source '$($api)'"
             $results | add-member "log_source" -NotePropertyValue "$api"
         }
         #rename reserved Microsoft Sentinel column names [uuid and type]
@@ -88,11 +87,11 @@ Function Get-AuditLogs {
         Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
     # }
     if ($apiResponse.cursor) {
-        Set-Cursor -cursor $api -cursorValue $apiResponse.cursor @storagePayload    
+        Set-Cursor -cursor $api -cursorValue $apiResponse.cursor @storagePayload
     } else {
         Set-Cursor -cursor $api -cursorValue 'none' @storagePayload
     }
-    
+
 
     return $results
 }
@@ -192,7 +191,7 @@ Function Get-Cursor {
         $blobContext = Get-AzStorageBlob `
             -Blob "$cursor.json" `
             -Container $storageAccountContainer `
-            -Context $storageAccountContext  
+            -Context $storageAccountContext
     }
     catch {
         Write-Output "Unable to access [$cursor.json]"

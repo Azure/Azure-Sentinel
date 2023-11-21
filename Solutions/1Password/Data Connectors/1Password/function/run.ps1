@@ -22,6 +22,7 @@ $endpoints = @('auditevents', 'signinattempts', 'itemusages')
 
 foreach ($api in $endpoints) {
     try {
+        # continue if the cursor does not exist and proceed with the lastRunTime
         $cursor = Get-Cursor @storagePayload -cursor $api -ErrorAction SilentlyContinue
         if ($cursor) {
             $results += Get-AuditLogs -cursor $cursor -api $api
