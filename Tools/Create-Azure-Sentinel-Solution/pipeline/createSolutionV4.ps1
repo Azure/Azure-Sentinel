@@ -1,7 +1,8 @@
 # this is only for build pipeline not for local use
 param ($pipelineBasePath, $pipelineSolutionName, $pipelineDataFileRawContent, $dataFileName, $dataConnectorFolderName, $dataFolderActualName, $instrumentationKey, $pullRequestNumber, $runId, $calculatedPackageVersion, $defaultPackageVersion, $isWatchListInsideOfWorkbooksFolder = $false)
 . ./Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1 # load common functions
-. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load common functions
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load log analytics functions
+. ./Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1 # load ccp functions
 
 try 
 {
@@ -14,7 +15,8 @@ try
 	Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateSolutionV4: Starting execution for Solution $pipelineSolutionName." -Severity Information -CustomProperties $customProperties
 
 	$path = ("" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName + "/" + $dataFolderActualName + "/" + $dataFileName + "")
-
+	$solutionFolderBasePath = "" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName;
+	
 	foreach ($inputFile in $(Get-ChildItem $path)) {
 		$contentToImport = $pipelineDataFileRawContent
 		$basePath = "" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName + "/"
@@ -118,6 +120,7 @@ try
             }
             $isCCPConnector = $true
 					}
+					Write-Host "isCCPConnector $isCCPConnector"
 					# =============end: ccp connector code===============
 
 					foreach ($file in $filesList) 
@@ -207,7 +210,7 @@ try
 								GetWorkbookDataMetadata -file $file -isPipelineRun $isPipelineRun -contentResourceDetails $contentResourceDetails -baseFolderPath $pipelineBasePath -contentToImport $contentToImport
 							}
 							elseif ($objectKeyLowercase -eq "playbooks") {
-								GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $isPipelineRun
+								GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $true
 							}
 							elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
 

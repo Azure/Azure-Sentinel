@@ -6,11 +6,17 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
 
     # IDENTIFY CCP DATA DEFINITION IN DATA INPUT FILE
     foreach ($objectProperties in $dataConnectorsInputArray) {
-        if ($objectProperties.Value -is [System.Array]) {
-            foreach ($file in $objectProperties.Value) {
+        $items = $objectProperties.Value 
+        if ($items -is [System.String]) {
+            $items = $items | ConvertFrom-Json
+        }
+        #if ($objectProperties.Value -is [System.Array]) {
+            foreach ($file in $items) {
                 $file = $file.Replace("$baseFolderPath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
 
                 $currentFileDCPath = $baseFolderPath + $solutionName + "/" + $file
+                $currentFileDCPath = $currentFileDCPath.Replace("//", "/")
+                
                 $fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
 
                 # check if dataconnectorDefinitions type exist in dc array
@@ -49,7 +55,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                     }
                 }
             }
-        }
+        #}
     }
 
     # identify ccp files definition provided has corresponding poller files if no then fail it.

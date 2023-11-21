@@ -297,6 +297,7 @@ function addNewParameter($parameterName) {
 
 # THIS IS THE STARTUP FUNCTION FOR CCP RESOURCE CREATOR
 function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict, $solutionBasePath, $solutionName) {
+    Write-Host "Inside of CCP Connector Code!"
     $solutionId = $solutionFileMetadata.publisherId + "." + $solutionFileMetadata.offerId
     $placeHolderPatternMatches = '\{{[a-zA-Z0-9]+\}}'
 
@@ -656,12 +657,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                 $armResource = Get-ArmResource $fileContent.name $fileContent.type $fileContent.kind $fileContent.properties
 
-                # $hasParameters = [bool](($armResource.parameters).PSobject.Properties.name -match "parameters")
-                # if (!$hasParameters) {
-                #     $newParameterObject = New-Object -TypeName PSObject
-                #     $armResource | Add-Member -NotePropertyName "parameters" -NotePropertyValue $newParameterObject
-                # }
-
                 # location
                 $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
                 if ($hasLocationProperty) {
@@ -685,9 +680,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                         $armResource.properties.dataCollectionEndpointId = "[[parameters('$($placeHolderName)')]"
 
-                        # if (!$armResource.parameters.dataCollectionEndpointId) {
-                        #     $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter dataCollectionEndpointId value"
-                        # }
                         addNewParameter -parameterName $placeHolderName
                     }
                 }
@@ -702,9 +694,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                         $armResource.properties.destinations.logAnalytics.workspaceResourceId = "[[parameters('$($placeHolderName)')]"
 
-                        # if (!$armResource.parameters.workspaceResourceId) {
-                        #     $armResource.parameters | Add-Member -NotePropertyName "$placeHolderName" -NotePropertyValue "Enter workspaceResourceId value"
-                        # }
                         addNewParameter -parameterName $placeHolderName
                     }
                 }
@@ -725,12 +714,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $resourceName = "[variables('_logAnalyticsTableId$tableCounter')]"
                 $fileContent.properties.schema.name = "[variables('_logAnalyticsTableId$tableCounter')]"
                 $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
-
-                # $hasParameters = [bool](($armResource.parameters).PSobject.Properties.name -match "parameters")
-                # if (!$hasParameters) {
-                #     $newParameterObject = New-Object -TypeName PSObject
-                #     $armResource | Add-Member -NotePropertyName "parameters" -NotePropertyValue $newParameterObject
-                # }
 
                 $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
                 if ($hasLocationProperty) {
