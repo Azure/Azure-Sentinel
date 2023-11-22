@@ -52,7 +52,7 @@ There are two options for installing playbooks and starting automate threat resp
 
 1. Installing the playbooks one by one by from this Readme further down in this document.
 
-## 1.Content Hub Installation
+## 1. Content Hub Installation
 
 1. Locate the Recorded Future Solution in the Content Hub.
 ![](Images/2023-04-18-08-39-58.png)
@@ -66,7 +66,7 @@ Note that the solution  install templates and you have to use the templates to i
 When installing playbooks from templates, read the description and lookout for dependencies that might have to be installed
 ![](Images/2023-11-20-12-34-15.png)
 
-## 2.Playbooks one by one installation
+## 2. Playbooks one by one installation
 To install individual playbooks one by one, use the buttons next to the descriptions of the individual playbooks further down in this document.
 
 > **Due to internal dependencies, please deploy and activate the ThreatIntelligenceImport playbook before any of the \*-IndicatorImport playbooks.**
