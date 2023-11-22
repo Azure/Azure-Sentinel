@@ -84,7 +84,7 @@ Function Get-AuditLogs {
         Write-Host "Results found: $($results.count)"
     # }
     # catch {
-        Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
+        # Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
     # }
     if ($apiResponse.cursor) {
         Set-Cursor -cursor $api -cursorValue $apiResponse.cursor @storagePayload
@@ -257,11 +257,11 @@ Function Send-Data {
         "ContentType"    = 'application/json'
     }
 
-    try {
+    # try {
         Invoke-RestMethod -Uri "$uri" -Body $body @requestHeader
-    } catch {
-        Write-Warning "Unable to sent data. Validate if the account '$($token.UserId)' has Access to the Data Collection Rule"
-    }
+    # } catch {
+        # Write-Warning "Unable to sent data. Validate if the account '$($token.UserId)' has Access to the Data Collection Rule"
+    # }
 
 }
 
