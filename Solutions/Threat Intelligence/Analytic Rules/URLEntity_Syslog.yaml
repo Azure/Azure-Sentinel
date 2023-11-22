@@ -26,10 +26,11 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(Url)
+  | where TimeGenerated >= ago(ioc_lookBack)
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
     Syslog
@@ -41,7 +42,6 @@ query: |
   ) on Url
   | where Syslog_TimeGenerated < ExpirationDateTime
   | summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by IndicatorId, Url
-  | where Active == true and ExpirationDateTime > now()
   | project timestamp = Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, Url, HostIP
 entityMappings:
   - entityType: Host
