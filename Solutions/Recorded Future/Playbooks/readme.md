@@ -1,8 +1,6 @@
 [<img alt="Recorded Future" src="Enrichment\RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
 # Recorded Future Intelligence for Microsoft Sentinel
 
-# Before You Begin
-
 ## Roles and Permissions
 
 Microsoft article that describes roles and permissions in Microsoft Sentinel [Roles and permissions in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/roles).
@@ -33,7 +31,7 @@ The Recorded Future solution uses the following connectors:
 
 - **/azuresentinel** - [Documentation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/azuresentinel/)
 
-- **/microsoftgraphsecurity** - [Documenation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/). The playbooks using this API is being DEPRECATED and will transition to new playbooks using azuresentinel api.
+- **/microsoftgraphsecurity** - [Documenation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/). The playbooks using this API is being DEPRECATED and will transition to new playbooks using /azuresentinel api.
 
 ## Ingestion and Operational costs
 Playbook(Logic apps) may result in additional ingestion or operational costs:
@@ -72,13 +70,12 @@ To install individual playbooks one by one, use the buttons next to the descript
 > **Due to internal dependencies, please deploy and activate the ThreatIntelligenceImport playbook before any of the \*-IndicatorImport playbooks.**
 
 # Upgrade from previous versions
-
 Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.  
 
 ### From version 2.4
-We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. You need to install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Investigate the risk lists being downloaded and the cadence and use the same configuration using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting. 
+We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. Going forward, install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Use the same risk lists being downloaded today, same cadence, and use the same description using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting. 
 
-Our support will end when Microsoft decommission the underlying API. More information can be found on [Microsoft Learn](https://learn.microsoft.com/en-us/azure/sentinel/understand-threat-intelligence#add-threat-indicators-to-microsoft-sentinel-with-the-threat-intelligence-platforms-data-connector)
+Our support will end when Microsoft shut down the underlying API. More information can be found on [Microsoft Learn](https://learn.microsoft.com/en-us/azure/sentinel/understand-threat-intelligence#add-threat-indicators-to-microsoft-sentinel-with-the-threat-intelligence-platforms-data-connector) (No end date has communicated from Microsoft at this point November 2023).
 
 ### From version 1
 If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Install the new all IndicatorImport and enrichment -playbooks. Select a different name than the once already installed and reauthenticate them. Configure the IndicatorImport playbooks to pull your selection of risk lists. After validating that the new playbooks works as expected you can deactivate the V1 versions. 
@@ -121,21 +118,30 @@ If you are unsure of how to do this, please consult Recorded Future Professional
 ![](Images/2023-06-26-10-59-49.png)
 
 ## Automate Incident Enrichment
-After one of the enrichment playbooks is installed and all connections are configured. Create an automation rule to automate the enrichment process. This will automate  enrichment of Recorded Future intelligence to known entities in all incidents. 
+After one of the enrichment playbooks is installed and all connections are configured. Create an automation rule to automate the enrichment process. This will automate enrichment of Recorded Future intelligence to known entities in all incidents. 
 
-![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRuleMenu.png)<br/>
+1. Open Microsoft Sentinel.
+2. Go to Automation and select **Create Automation rule**
+3. Name the rule
+4. Select the following options:
+   * Trigger: **When an incident is created**
+   * Action: **Run playbook**
+   * Playbook (must first be successfully configured): 
+     - [**RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash**](Enrichment/readme.md#recordedfuture-ioc_enrichment-ip_domain_url_hash) or
+     - [**RecordedFuture-Sandbox_Enrichment-Url**](Sandboxing/readme.md#recordedfuture-sandbox_enrichment-url)
+5. Done
 
-In Microsoft Sentinel, go to Automation and create **Automation rule**. Give the new rule a name, select the trigger **When incident is created**, select the action **Run playbook** and finally select **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** or **RecordedFuture-Sandbox_Enrichment-Url** as the playbook. 
+The enrichment is now configured to run when incidents are triggered, and it will post comments for the following IOC types: IP, Domain, URL, or Hash.
 
-![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png)<br/>
-
-This will trigger the Recorded Future playbook to run when any incident is created. Recorded future will then enrich the incident if it contains entities of types IP, Domain, Url or FileHash. 
+<img src="Enrichment/RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png" width="500"><br/>
 
 ## Recorded Future Collective Insights Configuration
-The Recorded Future Collective Insights aggregates data related to Sigma Rules and other indicators, driving collective insights to better identify threats. Anonymized, unattributable data is collected for analytical purposes to identify trends and insights with the Collective Insights. The **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** playbook gives end users the ability to contribute collective insights to the Collective Insights.
+Recorded Future Collective Insights aggregates data related to Sigma Rules and other indicators, driving collective insights to better identify threats. Anonymized, unattributable data is collected for analytical purposes to identify trends and insights with the Collective Insights. The **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** playbook contributes to collective insights. 
 [Click here to learn more](https://support.recordedfuture.com/hc/en-us/articles/19308547864339) (Require Recorded Future Login)
 
-![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/IntelligenceCloudParameter.png)
+To opt-out from Collective insights by setting the CollectiveInsights parameter to [false]
+
+<img src="Enrichment/RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/IntelligenceCloudParameter.png" width="500"><br/>
 
 ## Query Risk Lists
 After successfully running and importing one or more Risk Lists it is possible to query the imported data in your Log Analytics Workspace. 
@@ -161,33 +167,17 @@ ThreatIntelligenceIndicator
 
 ![](Images/2023-04-18-16-39-00.png)
 
-## Activate Automation Rules for IoC enrichment 
-After installing enrichment playbooks do not forget to automatically enrichment of IOCs in all created incidents by following the steps below: 
-
-1. Open Microsoft Sentinel.
-2. Go to Automation and select *Create Automation rule*
-3. Name the rule
-4. Select the following options:
-   * Trigger: **When an incident is created**
-   * Action: **Run playbook**
-   * Playbook (must first be successfully configured): 
-     - [**RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash**](#recordedfuture-ioc_enrichment-ip_domain_url_hash) or
-     - [**RecordedFuture-Sandbox_Enrichment-Url**](Sandboxing/readme.md#recordedfuture-sandbox_enrichment-url)
-5. Done
-
-The Recorded Future playbook is now configured to run when incidents are triggered, and it will enrich the following IOC types: IP, Domain, URL, or Hash.
-
 # Playbooks
-Note that all playbooks are not included in the Solution. It is stated in the description for each playbook as Included in Solution: Yes/No. The playbooks that are not included is considered preview and might be included in future versions.  
+All playbooks are not included in the Content Hub Solution. It is stated in the description of each playbook as 'Included in Solution: Yes/No'. Some of the playbooks are considered previews or examples, but they might be added in future versions.   
 
 Playbooks in subfolders:
 - [Enrichment Playbooks](Enrichment/readme.md)
 - [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md)
 - [Alert Playbooks](Alerts/readme.md)
 - [Sandbox Playbooks](./Sandboxing/readme.md)
-- [Recorded Future Threat Hunt Playbooks](./ThreatHunting/readme.md)
-- [Recorded Future Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md)
-- [Deprecated but still supported Risk List Playbooks](Deprecated/readme.md)
+- [Threat Hunt Playbooks](./ThreatHunting/readme.md)
+- [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md)
+- [Deprecated Risk List Playbooks](Deprecated/readme.md)
 
 
 # Known Issues 
