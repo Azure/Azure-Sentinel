@@ -31,7 +31,6 @@ query: |
   let ioc_lookBack = 14d;
   let IP_TI = ThreatIntelligenceIndicator
     | where TimeGenerated >= ago(ioc_lookBack)
-    | where Active == true and ExpirationDateTime > now()
     // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
     // Taking the first non-empty value based on potential IOC match availability
     | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, "NO_IP")
@@ -39,7 +38,8 @@ query: |
     | where TI_ipEntity != "NO_IP"
     // Exclude local addresses, using the ipv4_is_private operator
     | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId;
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now();
   let IP_TI_list = toscalar(IP_TI
     | summarize NIoCs = dcount(TI_ipEntity), IoCs = make_set(TI_ipEntity)
     | project IoCs = iff(NIoCs > HAS_ANY_MAX, dynamic([]), IoCs));
