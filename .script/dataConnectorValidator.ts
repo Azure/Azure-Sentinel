@@ -60,9 +60,9 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
-  else if (dataTypes[0].name.includes("SecurityAlert"))
+  else if (dataTypes[0].name.includes("SecurityAlert(ASC)"))
   {
-    return ConnectorCategory.SecurityAlert;
+    return ConnectorCategory.SecurityAlertASC;
   }
   else if (dataTypes[0].name.includes("ThreatIntelligenceIndicator"))
   {
