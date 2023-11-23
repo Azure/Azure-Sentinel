@@ -206,5 +206,9 @@ export enum ConnectorCategory {
   AwsS3="AwsS3",
   AWS="AWS",
   AzureActiveDirectory="AzureActiveDirectory",
-  SecurityAlert="SecurityAlert"
+  SecurityAlert="SecurityAlert",
+  AzureActivity="AzureActivity",
+  PowerBIActivity="PowerBIActivity",
+  SecurityAlertOATP="SecurityAlert(OATP)",
+  SecurityAlertASC="SecurityAlert(ASC)"
 }
