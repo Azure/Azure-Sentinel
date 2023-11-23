@@ -72,6 +72,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.MicrosoftPurviewInformationProtection;
   }
+  else if (dataTypes[0].name.includes("AzureActivity"))
+  {
+    return ConnectorCategory.AzureActivity;
+  }
   else if (dataTypes[0].name.includes("Event"))
   {
     return ConnectorCategory.Event;
