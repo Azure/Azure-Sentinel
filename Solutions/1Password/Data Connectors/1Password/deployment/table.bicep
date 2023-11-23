@@ -33,8 +33,8 @@ var customTable = 'Custom-${customLogTable}'
 resource dce 'Microsoft.Insights/dataCollectionEndpoints@2021-04-01' = {
   name: dataCollectionEndpointName
   location: location
-  properties:{
-    networkAcls:{
+  properties: {
+    networkAcls: {
       publicNetworkAccess: 'Enabled'
     }
   }
@@ -63,8 +63,8 @@ resource dcr 'Microsoft.Insights/dataCollectionRules@2021-09-01-preview' = {
         destinations: [
           workspace.name
         ]
-      outputStream: customTable
-      transformKql: 'source | extend TimeGenerated = now()'
+        outputStream: customTable
+        transformKql: 'source | extend TimeGenerated = now()'
       }
     ]
   }
@@ -78,107 +78,107 @@ resource table 'Microsoft.OperationalInsights/workspaces/tables@2021-12-01-previ
   name: customLogTable
   parent: workspace
   properties: {
-  schema: {
-    name: customLogTable
-    columns: [
-    {
-      name: 'SourceSystem'
-      type: 'string'
+    schema: {
+      name: customLogTable
+      columns: [
+        {
+          name: 'SourceSystem'
+          type: 'string'
+        }
+        {
+          name: 'TimeGenerated'
+          type: 'datetime'
+        }
+        {
+          name: 'uuid_s'
+          type: 'string'
+        }
+        {
+          name: 'session_uuid'
+          type: 'string'
+        }
+        {
+          name: 'timestamp'
+          type: 'datetime'
+        }
+        {
+          name: 'country'
+          type: 'string'
+        }
+        {
+          name: 'category'
+          type: 'string'
+        }
+        {
+          name: 'action_type'
+          type: 'string'
+        }
+        {
+          name: 'details'
+          type: 'dynamic'
+        }
+        {
+          name: 'target_user'
+          type: 'dynamic'
+        }
+        {
+          name: 'client'
+          type: 'dynamic'
+        }
+        {
+          name: 'location'
+          type: 'dynamic'
+        }
+        {
+          name: 'actor_uuid'
+          type: 'string'
+        }
+        {
+          name: 'actor_details'
+          type: 'dynamic'
+        }
+        {
+          name: 'action'
+          type: 'string'
+        }
+        {
+          name: 'object_type'
+          type: 'string'
+        }
+        {
+          name: 'object_uuid'
+          type: 'string'
+        }
+        {
+          name: 'aux_info'
+          type: 'string'
+        }
+        {
+          name: 'session'
+          type: 'dynamic'
+        }
+        {
+          name: 'used_version'
+          type: 'int'
+        }
+        {
+          name: 'vault_uuid'
+          type: 'string'
+        }
+        {
+          name: 'item_uuid'
+          type: 'string'
+        }
+        {
+          name: 'user'
+          type: 'dynamic'
+        }
+        {
+          name: 'log_source'
+          type: 'string'
+        }
+      ]
     }
-    {
-      name: 'TimeGenerated'
-      type: 'datetime'
-    }
-    {
-      name: 'uuid_s'
-      type: 'string'
-    }
-    {
-      name: 'session_uuid'
-      type: 'string'
-    }
-    {
-      name: 'timestamp'
-      type: 'datetime'
-    }
-    {
-      name: 'country'
-      type: 'string'
-    }
-    {
-      name: 'category'
-      type: 'string'
-    }
-    {
-      name: 'action_type'
-      type: 'string'
-    }
-    {
-      name: 'details'
-      type: 'dynamic'
-    }
-    {
-      name: 'target_user'
-      type: 'dynamic'
-    }
-    {
-      name: 'client'
-      type: 'dynamic'
-    }
-    {
-      name: 'location'
-      type: 'dynamic'
-    }
-    {
-      name: 'actor_uuid'
-      type: 'string'
-    }
-    {
-      name: 'actor_details'
-      type: 'dynamic'
-    }
-    {
-      name: 'action'
-      type: 'string'
-    }
-    {
-      name: 'object_type'
-      type: 'string'
-    }
-    {
-      name: 'object_uuid'
-      type: 'string'
-    }
-    {
-      name: 'aux_info'
-      type: 'string'
-    }
-    {
-      name: 'session'
-      type: 'dynamic'
-    }
-    {
-      name: 'used_version'
-      type: 'int'
-    }
-    {
-      name: 'vault_uuid'
-      type: 'string'
-    }
-    {
-      name: 'item_uuid'
-      type: 'string'
-    }
-    {
-      name: 'user'
-      type: 'dynamic'
-    }
-    {
-      name: 'log_source'
-      type: 'string'
-    }
-  ]
-  }
   }
 }
 
