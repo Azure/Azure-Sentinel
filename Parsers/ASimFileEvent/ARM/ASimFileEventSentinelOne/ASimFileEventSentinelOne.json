@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimFileEventSentinelOne",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "File Event ASIM Parser for SentinelOne",
+            "category": "ASIM",
+            "FunctionAlias": "ASimFileEventSentinelOne",
+            "query": "let GetWindowsFilenamePart = (path: string) { tostring(split(path, @'\\')[-1]) };\nlet GetLinuxFilenamePart = (path: string) { tostring(split(path, @'/')[-1]) };\nlet EventTypeLookup = datatable (alertInfo_eventType_s: string, EventType: string)\n    [\n    \"FILECREATION\", \"FileCreated\",\n    \"FILEMODIFICATION\", \"FileModified\",\n    \"FILEDELETION\", \"FileDeleted\",\n    \"FILERENAME\", \"FileRenamed\"\n];\nlet ThreatConfidenceLookup_undefined = datatable(\n    alertInfo_analystVerdict_s: string,\n    ThreatConfidence_undefined: int\n)\n    [\n    \"FALSE_POSITIVE\", 5,\n    \"Undefined\", 15,\n    \"SUSPICIOUS\", 25,\n    \"TRUE_POSITIVE\", 33 \n];\nlet ThreatConfidenceLookup_suspicious = datatable(\n    alertInfo_analystVerdict_s: string,\n    ThreatConfidence_suspicious: int\n)\n    [\n    \"FALSE_POSITIVE\", 40,\n    \"Undefined\", 50,\n    \"SUSPICIOUS\", 60,\n    \"TRUE_POSITIVE\", 67 \n];\nlet ThreatConfidenceLookup_malicious = datatable(\n    alertInfo_analystVerdict_s: string,\n    ThreatConfidence_malicious: int\n)\n    [\n    \"FALSE_POSITIVE\", 75,\n    \"Undefined\", 80,\n    \"SUSPICIOUS\", 90,\n    \"TRUE_POSITIVE\", 100 \n];\nlet parser = (disabled: bool=false) {\n    let allFileData = SentinelOne_CL\n        | where not(disabled)\n            and event_name_s == \"Alerts.\"\n            and alertInfo_eventType_s in ('FILECREATION', 'FILEMODIFICATION', 'FILEDELETION', 'FILERENAME');\n    let windowsFileData = allFileData\n        | where agentDetectionInfo_osFamily_s == \"windows\"\n        | extend\n            TargetFilePathType = \"Windows Local\",\n            TargetFileName = GetWindowsFilenamePart(targetProcessInfo_tgtFilePath_s),\n            SrcFileName = GetWindowsFilenamePart(targetProcessInfo_tgtFileOldPath_s);\n    let otherFileData = allFileData\n        | where agentDetectionInfo_osFamily_s != \"windows\"\n        | extend\n            TargetFilePathType = \"Unix\",\n            TargetFileName = GetLinuxFilenamePart(targetProcessInfo_tgtFilePath_s),\n            SrcFileName = GetLinuxFilenamePart(targetProcessInfo_tgtFileOldPath_s);\n    let parseddata = union windowsFileData, otherFileData\n        | lookup EventTypeLookup on alertInfo_eventType_s;\n    let undefineddata = parseddata\n        | where ruleInfo_treatAsThreat_s == \"UNDEFINED\"\n        | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;\n    let suspiciousdata = parseddata\n        | where ruleInfo_treatAsThreat_s == \"Suspicious\"\n        | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;\n    let maaliciousdata = parseddata\n        | where ruleInfo_treatAsThreat_s == \"Malicious\"\n        | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;\n    union undefineddata, suspiciousdata, maaliciousdata\n    | extend\n        ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious),\n        EventSeverity = iff(ruleInfo_severity_s == \"Critical\", \"High\", ruleInfo_severity_s),\n        EventVendor = \"SentinelOne\",\n        EventProduct = \"SentinelOne\",\n        EventResult = \"Success\",\n        EventSchema = \"FileEvent\",\n        EventSchemaVersion = \"0.2.1\",\n        EventCount = toint(1),\n        DvcAction = \"Allowed\",\n        ActorUsername = sourceProcessInfo_user_s\n    | project-rename\n        EventStartTime = sourceProcessInfo_pidStarttime_t,\n        EventOriginalSeverity = ruleInfo_severity_s,\n        EventUid = _ItemId,\n        ActingProcessCommandLine = sourceProcessInfo_commandline_s,\n        ActingProcessGuid = sourceProcessInfo_uniqueId_g,\n        ActingProcessId = sourceProcessInfo_pid_s,\n        ActingProcessName = sourceProcessInfo_name_s,\n        DvcId = agentDetectionInfo_uuid_g,\n        DvcOs = agentDetectionInfo_osName_s,\n        DvcOsVersion = agentDetectionInfo_osRevision_s,\n        EventOriginalType = alertInfo_eventType_s,\n        EventOriginalUid = alertInfo_dvEventId_s,\n        RuleName = ruleInfo_name_s,\n        TargetFileCreationTime = targetProcessInfo_tgtFileCreatedAt_t,\n        SrcFilePath = targetProcessInfo_tgtFileOldPath_s,\n        TargetFilePath = targetProcessInfo_tgtFilePath_s,\n        TargetFileSHA1 = targetProcessInfo_tgtFileHashSha1_s,\n        TargetFileSHA256 = targetProcessInfo_tgtFileHashSha256_s,\n        ThreatOriginalConfidence = ruleInfo_treatAsThreat_s\n    | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')\n    | extend\n        Dvc = coalesce(DvcHostname, DvcId, EventProduct),\n        EventEndTime = EventStartTime,\n        Rule = RuleName,\n        FileName = TargetFileName,\n        FilePath = TargetFilePath,\n        Process = ActingProcessName,\n        User = ActorUsername,\n        Hash = coalesce(TargetFileSHA256, TargetFileSHA1)\n    | extend\n        ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),\n        ActorUserType = _ASIM_GetUserType(ActorUsername, \"\"),\n        DvcIdType = iff(isnotempty(DvcId), \"Other\", \"\"),\n        HashType = case(\n              isnotempty(Hash) and isnotempty(TargetFileSHA256),\n              \"TargetFileSHA256\",\n              isnotempty(Hash) and isnotempty(TargetFileSHA1),\n              \"TargetFileSHA1\",\n              \"\"\n          ) \n    | project-away \n        *_d,\n        *_s,\n        *_g,\n        *_t,\n        *_b,\n        _ResourceId,\n        Computer,\n        MG,\n        ManagementGroupName,\n        RawData,\n        SourceSystem,\n        TenantId,\n        ThreatConfidence_*\n};\nparser(disabled = disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
