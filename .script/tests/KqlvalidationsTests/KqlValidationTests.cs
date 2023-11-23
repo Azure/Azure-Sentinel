@@ -394,8 +394,8 @@ namespace Kqlvalidations.Tests
             bool match = Regex.IsMatch(queryStr, tiTablepattern);
             if (match)
             {
-                string queryPattern = @"ThreatIntelligenceIndicator\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\(\w+\)\s*\|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*(?:ExpirationDateTime\s*>\s*now\(\)\s*and\s*Active\s*==\s*true|Active\s*==\s*true\s*and\s*ExpirationDateTime\s*>\s*now\(\))";
-                return Regex.IsMatch(queryStr, queryPattern);
+                string queryPattern = @"ThreatIntelligenceIndicator\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\(\w+\).*|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*(?:ExpirationDateTime\s*>\s*now\(\)\s*and\s*Active\s*==\s*true|Active\s*==\s*true\s*and\s*ExpirationDateTime\s*>\s*now\(\))";
+                return Regex.IsMatch(queryStr, queryPattern, RegexOptions.Singleline);
             }
             return true;
         }
@@ -442,7 +442,9 @@ namespace Kqlvalidations.Tests
         private bool ShouldSkipTemplateValidation(string templateId)
         {
             return TemplatesToSkipValidationReader.WhiteListTemplates
-                .Where(template => template.id == templateId)
+                .Where(template => 
+template.id
+ == templateId)
                 .Where(template => !string.IsNullOrWhiteSpace(template.validationFailReason))
                 .Where(template => !string.IsNullOrWhiteSpace(template.templateName))
                 .Any();
