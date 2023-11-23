@@ -37,6 +37,7 @@ resource "google_pubsub_subscription" "sentinel-subscription" {
 }
 
 resource "google_logging_project_sink" "sentinel-sink" {
+  project = data.google_project.project.project_id
   count = var.organization-id == "" ? 1 : 0
   name = "audit-logs-sentinel-sink"
   destination = "pubsub.googleapis.com/projects/${data.google_project.project.project_id}/topics/${var.topic-name}"
