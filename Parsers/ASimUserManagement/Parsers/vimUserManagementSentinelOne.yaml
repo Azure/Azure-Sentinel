@@ -1,7 +1,7 @@
 Parser:
   Title: User Management ASIM parser for SentinelOne
   Version: '0.1.1'
-  LastUpdated: Oct 05, 2023
+  LastUpdated: Nov 07, 2023
 Product:
   Name: SentinelOne
 Normalization:
@@ -82,45 +82,45 @@ ParserQuery: |
       eventtype_in: dynamic=dynamic([]),
       disabled: bool=false
       ) {
-      let alldata = SentinelOne_CL
-          | where not(disabled)
-          | where event_name_s == "Activities."
-              and (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
-              and activityType_d in (UsermanagementactivityIds)
-              and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DataFields_s, srcipaddr_has_any_prefix))
-              and (array_length(targetusername_has_any) == 0 or DataFields_s has_any (targetusername_has_any))
-              and (array_length(actorusername_has_any) == 0 or DataFields_s has_any (actorusername_has_any))
-          | parse-kv DataFields_s as (byUser: string, username: string, email: string, ipAddress: string, group: string, groupName: string, name: string, oldDescription: string, oldRole: string, description: string, role: string, userScope: string, scopeLevelName: string, scopeName: string, roleName: string, modifiedFields: string, deactivationPeriodInDays: string, descriptionChanged: string, groupType: string, newValue: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
-          | where array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(ipAddress, srcipaddr_has_any_prefix)
-          | parse modifiedFields with 'Modified fields: ' ModifiedFields: string
-          | parse description_s with * "with id=" id: string "," restOfMessage
-          | lookup EventTypeLookup on activityType_d;
-      let enableddisabled = alldata
-          | where activityType_d in (67, 42)
-          | extend 
-              EventType = iff(primaryDescription_s has "enabled", "UserEnabled", "UserDisabled"),
-              PreviousPropertyValue = iff(primaryDescription_s has "enabled", "disabled", "enabled"),
-              NewPropertyValue = iff(primaryDescription_s has "enabled", "enabled", "disabled");
-      let otherdata = alldata
-          | where activityType_d !in(67, 42)
-          | extend
-              PreviousPropertyValue = case(
-                                          activityType_d == 141 and descriptionChanged == "true",
-                                          oldDescription, 
-                                          activityType_d == 141 and descriptionChanged == "false",
-                                          oldRole,
-                                          ""
-                                      ),
-              NewPropertyValue = case(
+      SentinelOne_CL
+      | where not(disabled)
+      | where event_name_s == "Activities."
+          and (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
+          and activityType_d in (UsermanagementactivityIds)
+          and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DataFields_s, srcipaddr_has_any_prefix))
+          and (array_length(targetusername_has_any) == 0 or DataFields_s has_any (targetusername_has_any))
+          and (array_length(actorusername_has_any) == 0 or DataFields_s has_any (actorusername_has_any))
+      | parse-kv DataFields_s as (byUser: string, username: string, email: string, ipAddress: string, group: string, groupName: string, name: string, oldDescription: string, oldRole: string, description: string, role: string, userScope: string, scopeLevelName: string, scopeName: string, roleName: string, modifiedFields: string, deactivationPeriodInDays: string, descriptionChanged: string, groupType: string, newValue: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
+      | where array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(ipAddress, srcipaddr_has_any_prefix)
+      | parse modifiedFields with 'Modified fields: ' ModifiedFields: string
+      | parse description_s with * "with id=" id: string "," restOfMessage
+      | lookup EventTypeLookup on activityType_d
+      | extend
+          EventType = iff(activityType_d in (67, 42) and primaryDescription_s has "enabled", "UserEnabled", "UserDisabled")
+      | where (array_length(eventtype_in) == 0 or (EventType in (eventtype_in)))
+      | extend 
+          PreviousPropertyValue = case(
+                              activityType_d in (67, 42) and primaryDescription_s has "enabled",
+                              "disabled",
+                              activityType_d in (67, 42) and primaryDescription_s has "disabled",
+                              "enabled",
+                              activityType_d == 141 and descriptionChanged == "true",
+                              oldDescription, 
+                              activityType_d == 141 and descriptionChanged == "false",
+                              oldRole,
+                              ""
+                          ),
+          NewPropertyValue = case(
+                        activityType_d in (67, 42) and primaryDescription_s has "enabled",
+                        "enabled", 
+                        activityType_d in (67, 42) and primaryDescription_s has "disabled",
+                        "disabled",
                         activityType_d == 141 and descriptionChanged == "true",
                         description, 
                         activityType_d == 141 and descriptionChanged == "false",
                         role,
                         ""
-                    );
-      union enableddisabled, otherdata
-      | where (array_length(eventtype_in) == 0 or (EventType in (eventtype_in)))
-      | extend 
+                    ),
           ActorUsername = iff(activityType_d == 102, "SentinelOne", coalesce(byUser, username, email)),        
           GroupName = coalesce(group, groupName, name),
           TargetUsername = iff(isnotempty(byUser) or activityType_d in (147, 42), username, "")
