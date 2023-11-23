@@ -208,5 +208,6 @@ export enum ConnectorCategory {
   AzureActiveDirectory="AzureActiveDirectory",
   SecurityAlert="SecurityAlert",
   AzureActivity="AzureActivity",
-  PowerBIActivity="PowerBIActivity"
+  PowerBIActivity="PowerBIActivity",
+  SecurityAlertOATP="SecurityAlert(OATP)"
 }

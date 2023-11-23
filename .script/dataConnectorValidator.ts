@@ -84,6 +84,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Event;
   }
+  else if (dataTypes[0].name.includes("SecurityAlert(OATP)"))
+  {
+    return ConnectorCategory.SecurityAlertOATP;
+  }
   else if (dataTypes[0].name.includes("AzureDevOpsAuditing"))
   {
     return ConnectorCategory.AzureDevOpsAuditing;
