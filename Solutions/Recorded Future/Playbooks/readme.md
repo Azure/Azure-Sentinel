@@ -208,6 +208,8 @@ Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. 
 
+The parameter WorkspaceID can be found in Azure portal in the overview page of the Log Analytics Workspace. 
+
 Retrieves Indicators Of Compromise (IoCs) from one of the indicator import logic apps, and store them in the ThreatIntelligenceIndicator table. All IndicatorImport playbooks use this playbook for batching. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ThreatIntelligenceImport%2Fazuredeploy.json)
@@ -387,8 +389,8 @@ The Recorded Future Intelligence Cloud aggregates data related to Sigma Rules an
 # DEPRECATED Playbooks
 These playbooks will be removed in future version on Recorder Future Solution. 
 ## RecordedFuture-ImportToSentinel
-[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
-Type: Detection
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.\
+Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes
 
 Retrieves all Risk Lists (IOCs), and adds them to the ThreatIntelligenceIndicator table. All TIProcessor playbooks use this playbook.
@@ -397,8 +399,8 @@ Retrieves all Risk Lists (IOCs), and adds them to the ThreatIntelligenceIndicato
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-ImportToSentinel%2Fazuredeploy.json)
 
 ## RecordedFuture-IP-Actively_Comm_C2_Server-TIProcessor
-[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
-Type: Detection
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.\
+Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes
 
 Retrieves the [ Risk List - Actively Communicating C&C IPs](https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules) (requires login),  and adds the IOCs to the ThreatIntelligenceIndicator table.
@@ -407,8 +409,8 @@ Retrieves the [ Risk List - Actively Communicating C&C IPs](https://support.reco
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IP-Actively_Comm_C2_Server-IndicatorProcessor%2Fazuredeploy.json)
 
 ## RecordedFuture-DOMAIN-C2_DNS_Name-TIProcessor
-[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
-Type: Detection 
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.\
+Type: Detection \
 Included in Recorded Future Intelligence Solution: Yes
 
 Retrieves the [Risk List - C&C DNS Name Domain](https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
@@ -417,8 +419,8 @@ Retrieves the [Risk List - C&C DNS Name Domain](https://support.recordedfuture.c
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-DOMAIN-C2_DNS_Name-IndicatorProcessor%2Fazuredeploy.json)
 
 ## RecordedFuture-URL-Recent_Rep_by_Insikt-TIProcessor
-[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
-Type: Detection 
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.\
+Type: Detection \
 Included in Recorded Future Intelligence Solution: Yes
 
 Retrieves the [ Risk List - Recently Reported by Insikt Group URL](https://support.recordedfuture.com/hc/en-us/articles/115010052768-URL-Risk-Rules) (requires login) and adds the IOCs to the ThreatIntelligenceIndicator table.
@@ -427,8 +429,8 @@ Retrieves the [ Risk List - Recently Reported by Insikt Group URL](https://suppo
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-URL-Recent_Rep_by_Insikt_Group-IndicatorProcessor%2Fazuredeploy.json)
 
 ## RecordedFuture-HASH-Obs_in_Underground-TIProcessor
-[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
-Type: Detection 
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.\
+Type: Detection \
 Included in Recorded Future Intelligence Solution: Yes
 
 Retrieves the[ Risk List - Observed in Underground Virus Testing Sites Hash](https://support.recordedfuture.com/hc/en-us/articles/115000846167-Hash-Risk-Rules) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
@@ -437,8 +439,8 @@ Retrieves the[ Risk List - Observed in Underground Virus Testing Sites Hash](htt
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-HASH-Observed_in_Underground_Virus_Test_Sites-IndicatorProcessor%2Fazuredeploy.json)
 
 ## RecordedFuture-Ukraine-IndicatorProcessor
-[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.
-Type: Detection
+[DEPRECATED]: Use the new RecordedFuture-ThreatIntelligenceImport playbook.\
+Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes
 
 Retrieves the [Risk List - Ukraine Threat List of Related IOCs](https://support.recordedfuture.com/hc/en-us/articles/4484981411475-Resource-Center-on-the-Ukraine-Conflict) (requires login), and adds the IOCs to the ThreatIntelligenceIndicator table.
@@ -448,7 +450,7 @@ Retrieves the [Risk List - Ukraine Threat List of Related IOCs](https://support.
 
 
 # Known Issues 
-## Version 2.5
+## Version 3.0
 Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
 ![](Images/2023-09-13-19-16-24.png)
 

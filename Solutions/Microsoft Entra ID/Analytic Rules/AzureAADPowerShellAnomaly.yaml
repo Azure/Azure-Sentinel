@@ -1,0 +1,57 @@
+id: 50574fac-f8d1-4395-81c7-78a463ff0c52
+name: Microsoft Entra ID PowerShell accessing non-Entra ID resources
+description: |
+  'This will alert when a user or application signs in using Microsoft Entra ID PowerShell to access non-Active Directory resources, such as the Azure Key Vault, which may be undesired or unauthorized behavior.
+  For capabilities and expected behavior of the Microsoft Entra ID PowerShell module, see: https://docs.microsoft.com/powershell/module/azuread/?view=azureadps-2.0.
+  For further information on Microsoft Entra ID Signin activity reports, see: https://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  let aadFunc = (tableName:string){
+  table(tableName)
+  | where AppId =~ "1b730954-1685-4b74-9bfd-dac224a7b894" // AppDisplayName IS Azure Active Directory PowerShell
+  | where TokenIssuerType =~ "AzureAD"
+  | where ResourceIdentity !in ("00000002-0000-0000-c000-000000000000", "00000003-0000-0000-c000-000000000000") // ResourceDisplayName IS NOT Windows Azure Active Directory OR Microsoft Graph
+  | extend Status = todynamic(Status)
+  | where Status.errorCode == 0 // Success
+  | project-reorder IPAddress, UserAgent, ResourceDisplayName, UserDisplayName, UserId, UserPrincipalName, Type
+  | order by TimeGenerated desc
+  // New entity mapping
+  | extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.3
+kind: Scheduled
