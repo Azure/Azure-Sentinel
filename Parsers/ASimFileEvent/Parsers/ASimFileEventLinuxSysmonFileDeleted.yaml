@@ -1,0 +1,94 @@
+Parser:
+  Title: File delete activity ASIM parser for Sysmon for Linux
+  Version: "0.2.1"
+  LastUpdated: Nov 17, 2023
+Product:
+  Name: Microsoft Sysmon for Linux
+Normalization:
+  Schema: FileEvent
+  Version: "0.1.0"
+References:
+  - Title: ASIM File Schema
+    Link: https://aka.ms/ASimFileEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: This ASIM parser supports normalizing Sysmon for Linux events 23 and 26, stored in the Syslog table, to the ASIM file activity schema file delete event.
+ParserName: ASimFileEventLinuxSysmonFileDeleted
+EquivalentBuiltInParser: _ASim_FileEvent_LinuxSysmonFileDeleted
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    disabled: bool=false
+    ) {
+    Syslog
+    | where not(disabled)
+    | where SyslogMessage has ('<Provider Name="Linux-Sysmon"') and SyslogMessage has_any('<EventID>23</EventID>', '<EventID>26</EventID>')	
+    | parse SyslogMessage with  
+        '<Event><System><Provider Name="Linux-Sysmon" Guid="{ff032593-a8d3-4f13-b0d6-01fc615a0f97}"/><EventID>'msgEventId: string'</EventID>'
+        *
+        '<EventRecordID>'msgEventRecordID: string'</EventRecordID>'
+        *
+        '<Computer>'msgComputer: string'</Computer>'
+        '<Security UserId="'msgUserId: string'"/>'
+        *
+        '<Data Name="ProcessGuid">{'msgProcessGuid: string'}</Data>'
+        '<Data Name="ProcessId">'msgProcessId: string'</Data>'
+        '<Data Name="User">'msgUser: string'</Data>'
+        '<Data Name="Image">'msgImage: string'</Data>'
+        '<Data Name="TargetFilename">'msgTargetFilename: string'</Data>'
+        '<Data Name="Hashes">'msgHashes: string'</Data>' *	
+    | extend
+        EventCount=int(1)
+        ,
+        EventStartTime =TimeGenerated
+        ,
+        EventEndTime=TimeGenerated
+        ,
+        EventType = 'FileDeleted'
+        ,
+        EventResult ='Success' 
+        ,
+        EventProduct='Sysmon for Linux'
+        ,
+        EventProductVersion='v13.22' 
+        ,
+        EventVendor ='Microsoft'
+        ,
+        EventSchemaVersion ='0.1.0'
+        ,
+        DvcOs = 'Linux'
+        ,
+        TargetFilePathType='Unix'
+        ,
+        ActorUsernameType='Simple'
+    | project-rename
+        DvcHostname=Computer
+        ,
+        EventOriginalUid=msgEventRecordID
+        ,
+        EventOriginalType =msgEventId 
+        ,
+        ActorUsername=msgUser
+        ,
+        ActingProcessName =msgImage
+        ,
+        ActingProcessId=msgProcessId
+        ,
+        ActingProcessGuid=msgProcessGuid
+        ,
+        TargetFilePath =msgTargetFilename
+    // ------  Alias
+    | extend
+        Process=ActingProcessName
+        ,
+        FilePath=TargetFilePath
+        ,
+        Dvc =DvcHostname
+        ,
+        User=ActorUsername
+    | project-away SyslogMessage
+  };
+  parser (disabled = disabled)
