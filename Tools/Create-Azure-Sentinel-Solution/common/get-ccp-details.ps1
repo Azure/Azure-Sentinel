@@ -31,6 +31,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                             DCPollerFilePath = "";
                             DCPollerStreamName = "";
                             DCRFilePath = "";
+                            DCROutputStream = "";
                             TableFilePath = "";
                             TableOutputStream = "";
                             PollerDataCollectionEndpoint = "";
@@ -46,6 +47,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                             DCPollerFilePath = "";
                             DCPollerStreamName = "";
                             DCRFilePath = "";
+                            DCROutputStream = "";
                             TableFilePath = "";
                             TableOutputStream = "";
                             PollerDataCollectionEndpoint = "";
@@ -125,6 +127,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                                 # connectorDefinition file has dataconnector file so file exist
                                 $ccpPollerFile.DCRFilePath = $inputFile.FullName
                                 $ccpPollerFile.TableOutputStream = $fileContent.properties.dataFlows[0].outputStream.Replace('Custom-', '')
+                                $ccpPollerFile.DCROutputStream = $fileContent.properties.dataFlows[0].outputStream
                             }
                         }
                     }
@@ -150,7 +153,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                     # check if dataconnectorDEfinition id value exist in dataConnectors, connectorDefinitionName field i.e. field value for id = connectorDefinitionName should be same else fail it
                     try {
                         if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
-                            if ($fileContent.properties.schema.name -eq $ccpTable.TableOutputStream) {
+                            if ($fileContent.outputStreamName -eq $ccpTable.DCROutputStream) {
                                 # connectorDefinition file has dataconnector file so file exist
                                 $ccpTable.TableFilePath = $inputFile.FullName
                             }

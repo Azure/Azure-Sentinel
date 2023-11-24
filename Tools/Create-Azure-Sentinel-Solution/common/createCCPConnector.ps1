@@ -330,7 +330,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
         $tableCounter = 1;
 
         foreach ($ccpItem in $ccpDict) {
-            $templateName = $ccpItem.title;
+            $templateName = $ccpItem.DCDefinitionId; #$ccpItem.title;
             For ($TemplateCounter = 1; $TemplateCounter -lt 3; $TemplateCounter++) {
             
                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "$templateName"
@@ -590,26 +590,32 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                         foreach ($currentPlaceHolder in $placeHoldersMatched.Matches.Value) {
                             $placeHolderName = $currentPlaceHolder.replace("{{", "").replace("}}", "")
-                            $splitEndpoint = $endPointUrl.Split($currentPlaceHolder)
+                            $splitEndpoint = $endPointUrl -split "($currentPlaceHolder)"
+                            $commaCount = 0
                             foreach($splitItem in $splitEndpoint) {
-                                if ($splitItem -eq "") {
-                                    $finalizedEndpointUrl += "parameters('" + $placeHolderName + "')" 
-                                    addNewParameter -parameterName $placeHolderName
-                                } else {
-                                    if ($finalizedEndpointUrl.Contains("parameters")) {
-                                        $finalizedEndpointUrl += ", '" + $splitItem + "'"
+                                if ($splitItem -eq $currentPlaceHolder) {
+                                    if ($finalizedEndpointUrl -eq '') {
+                                        $finalizedEndpointUrl += "parameters('" + $placeHolderName + "')"
                                     } else {
-                                        $finalizedEndpointUrl += "$splitItem"
+                                        $finalizedEndpointUrl += ", parameters('" + $placeHolderName + "')"
+                                    }
+                                    addNewParameter -parameterName $placeHolderName
+                                    
+                                    if (!$armResource.parameters.$placeHolderName) {
+                                        $armResource.parameters | Add-Member -NotePropertyName " $placeHolderName" -NotePropertyValue "Enter $placeHolderName value"
+                                    }
+                                } else {
+                                    if ($commaCount -eq 0) {
+                                        $finalizedEndpointUrl += "'"+ $splitItem + "'"
+                                        $commaCount += 1
+                                    } else {
+                                        $finalizedEndpointUrl += ", '" + $splitItem + "'"
                                     }
                                 }
                             }
                         }
 
-                        #$armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
-
-                        if (!$armResource.parameters.request.apiEndPoint) {
-                            $armResource.parameters | Add-Member -NotePropertyName "apiEndPoint" -NotePropertyValue "Enter ApiEndPoint value"
-                        }
+                        $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
                     }
                 }
 
@@ -655,6 +661,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $logAnalyticDestination.workspaceResourceId = "[variables('workspaceResourceId')]"
                 }
 
+                $dcrPlaceHolderMatched = $fileContent.name | Select-String $placeHolderPatternMatches -AllMatches
+                if ($dcrPlaceHolderMatched.Matches.Value.Count -gt 0) {
+                    $startIndexOfOpenBraces = $fileContent.name.indexOf('{{')
+                    $nameWithoutPlaceHolder = $fileContent.name.substring(0, $startIndexOfOpenBraces)
+                    $fileContent.name = "[concat('"+ $nameWithoutPlaceHolder + "', parameters('workspace'))]"
+                }
                 $armResource = Get-ArmResource $fileContent.name $fileContent.type $fileContent.kind $fileContent.properties
 
                 # location
@@ -698,6 +710,15 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                 }
 
+                # check if streamName and outputSteamName values are correct or not. If no then make it same
+                $dataFlowStreamName = $fileContent.properties.dataFlows[0].streams[0]
+                $dataFlowOutputStreamName = $fileContent.properties.dataFlows[0].outputStream
+
+                if ($dataFlowStreamName -ne $dataFlowOutputStreamName) {
+                    Write-Host "In DCR file, 'dataflow.streamName' and 'dataflow.outputStream' values are different. Resetting values for both to 'dataflow.streamName' value!"
+                    $fileContent.properties.dataFlows[0].outputStream = $dataFlowStreamName
+                }
+
                 $armResource = $(removePropertiesRecursively $armResource $false)
                 $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
             }
@@ -706,29 +727,29 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             $ccpTablesFilePath = $ccpItem.TableFilePath
             Write-Host "CCP Table File Path : $ccpTablesFilePath"
 
-            $fileContent = Get-Content -Raw $ccpTablesFilePath | Out-String | ConvertFrom-Json
+            if ($null -ne $ccpTablesFilePath -and $ccpTablesFilePath -ne '') {
+                $fileContent = Get-Content -Raw $ccpTablesFilePath | Out-String | ConvertFrom-Json
 
-            if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables")
-            {
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "_logAnalyticsTableId$tableCounter" -NotePropertyValue $fileContent.name
-                $resourceName = "[variables('_logAnalyticsTableId$tableCounter')]"
-                $fileContent.properties.schema.name = "[variables('_logAnalyticsTableId$tableCounter')]"
-                $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
+                if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables")
+                {
+                    $resourceName = $fileContent.name
+                    $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
 
-                $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
-                if ($hasLocationProperty) {
-                    $locationProperty = $armResource.location
-                    $placeHoldersMatched = $locationProperty | Select-String $placeHolderPatternMatches -AllMatches
+                    $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
+                    if ($hasLocationProperty) {
+                        $locationProperty = $armResource.location
+                        $placeHoldersMatched = $locationProperty | Select-String $placeHolderPatternMatches -AllMatches
 
-                    if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                        $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                        #$armResource.location = "[[parameters('$($placeHolderName)')]"
-                        addNewParameter -parameterName $placeHolderName
+                        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                            $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                            #$armResource.location = "[[parameters('$($placeHolderName)')]"
+                            addNewParameter -parameterName $placeHolderName
+                        }
                     }
-                }
 
-                $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
-                $tableCounter ++;
+                    $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
+                    $tableCounter ++;
+                }
             }
             #========end: tables resource===========
 
