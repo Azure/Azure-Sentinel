@@ -1,8 +1,10 @@
 name: Slash Command Dispatch
 env:
-    REPO_OWNER: "${{ vars.REPO_OWNER }}"
-    REPO_NAME: "${{ vars.REPO_NAME }}"
-    GITHUB_TOKEN: "${{ secrets.PAT }}"
+  REPO_OWNER: "${{ vars.REPO_OWNER }}"
+  REPO_NAME: "${{ vars.REPO_NAME }}"
+  GITHUB_APPS_ID: "${{ secrets.APPLICATION_ID }}"
+  GITHUB_APPS_KEY: "${{ secrets.APPLICATION_PRIVATE_KEY }}"
+
 on:
   issue_comment:
     types: [created]
@@ -24,10 +26,19 @@ jobs:
     needs: [pullRequestStatus, checkAutomatedPR]
     if: ${{ needs.pullRequestStatus.outputs.isPullRequestMerged == 'False' && needs.checkAutomatedPR.outputs.isAutomatedPR == 'False' && !github.event.pull_request.head.repo.fork}}
     steps:
+      - name: Generate a token
+        id: generate_token
+        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92
+        with:
+          app_id: ${{ env.GITHUB_APPS_ID }}
+          private_key: ${{ env.GITHUB_APPS_KEY }}
+
       - name: Slash Command Dispatch
         uses: peter-evans/slash-command-dispatch@67dfeb76529b35541a7c536976cba367cd2d364b
+        env:
+          GeneratedToken: ${{ steps.generate_token.outputs.token }}
         with:
-          token: ${{ env.GITHUB_TOKEN }}
+          token: ${{ env.GeneratedToken }}
           commands: |
             package
             Package
