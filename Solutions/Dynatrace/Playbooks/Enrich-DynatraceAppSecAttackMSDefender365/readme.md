@@ -1,10 +1,10 @@
-# Enrich-DynatraceAppSecAttackMSDefender365
+# Enrich-DynatraceAppSecAttackMSDefenderXDR
 author: Dynatrace
 
-This playbook will Report only Microsoft Defender 365 insights related to Dynatrace Application Security Attack back to Dynatrace. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/support/help/how-to-use-dynatrace/application-security) and [Microsoft Defender 365](https://learn.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender) enabled in your enviornment to make use of this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
+This playbook will Report only Microsoft Defender XDR insights related to Dynatrace Application Security Attack back to Dynatrace. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/platform/application-security/) and [Microsoft Defender XDR](https://learn.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender) enabled in your enviornment to make use of this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
 
 ** Prerequisites ** 
-- Follow [these instructions](https://www.dynatrace.com/support/help/get-started/access-tokens#create-api-token) to generate a Dynatrace access token, the token should have Read attacks (attacks.read) and Ingest logs (logs.ingest) scopes.
+- Follow [these instructions](https://docs.dynatrace.com/docs/shortlink/token#create-api-token) to generate a Dynatrace access token, the token should have Read attacks (attacks.read) and Ingest logs (logs.ingest) scopes.
 - [Important step]Store the Dynatrace Access Token as a [secret in Azure Key vault](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-portal) and provide the key vault name during playbook deployment, by convention the secret name should be 'DynatraceAccessToken'.
 
 ** Post Install Notes:**
@@ -28,7 +28,7 @@ Basic steps for setup of the playbook and automation rule are as follows :
 - KeyvaultName: The name of the keyvault created as pre-requisite
 - DynatraceTenant: xyz.dynatrace.com
 3. Create a new [automation rule](https://learn.microsoft.com/en-us/azure/sentinel/create-manage-use-automation-rules)
-- Name : Enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights
+- Name : Enrich Dynatrace Application Security Attack with related Microsoft Defender XDR insights
 - Trigger : When incident is created
 - Conditions : If Analytic rule name contains 'Dynatrace Application Security - Attack detection'
-- Actions : Run playbook EnrichDynatraceAppSecAttackMSDefender365
+- Actions : Run playbook EnrichDynatraceAppSecAttackMSDefenderXDR
