@@ -24,7 +24,9 @@ AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
 LOGTYPE = os.environ.get('LogType',"alert, audit")
 
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
-MAX_PERIOD_MINUTES = 60 * 6
+MAX_SCRIPT_EXEC_TIME_MINUTES = 2
+MAX_PERIOD_MINUTES = 60 * 1
+FIELD_SIZE_LIMIT_BYTES = 1000 * 32
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -39,9 +41,10 @@ if not match:
 
 async def main(mytimer: func.TimerRequest):
     logging.info('Script started.')
+    start_ts = int(time.time())
     async with aiohttp.ClientSession() as session:
         async with aiohttp.ClientSession() as session_sentinel:
-            prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, session=session, session_sentinel=session_sentinel)
+            prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, start_ts, session=session, session_sentinel=session_sentinel)
 
             tasks = [
                 prisma.process_alerts()
@@ -57,7 +60,7 @@ async def main(mytimer: func.TimerRequest):
 
 
 class PrismaCloudConnector:
-    def __init__(self, api_url, username, password, session: aiohttp.ClientSession, session_sentinel: aiohttp.ClientSession):
+    def __init__(self, api_url, username, password, start_ts, session: aiohttp.ClientSession, session_sentinel: aiohttp.ClientSession):
         self.api_url = api_url
         self.__username = username
         self.__password = password
@@ -67,27 +70,42 @@ class PrismaCloudConnector:
         self._auth_lock = asyncio.Lock()
         self.alerts_state_manager = StateManagerAsync(FILE_SHARE_CONN_STRING, share_name='prismacloudcheckpoint', file_path='prismacloudlastalert')
         self.auditlogs_state_manager = StateManagerAsync(FILE_SHARE_CONN_STRING, share_name='prismacloudcheckpoint', file_path='prismacloudlastauditlog')
-        self.sentinel = AzureSentinelMultiConnectorAsync(self.session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
+        self.sentinel = AzureSentinelMultiConnectorAsync(self.session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, FIELD_SIZE_LIMIT_BYTES, queue_size=10000)
         self.sent_alerts = 0
         self.sent_audit_logs = 0
         self.last_alert_ts = None
         self.last_audit_ts = None
+        self.start_ts = start_ts
 
     async def process_alerts(self):
         last_alert_ts_ms = await self.alerts_state_manager.get()
         max_period = (int(time.time()) - MAX_PERIOD_MINUTES * 60) * 1000
-        if not last_alert_ts_ms or int(last_alert_ts_ms) < max_period:
+        #if not last_alert_ts_ms or int(last_alert_ts_ms) < max_period:
+        if not last_alert_ts_ms:
             alert_start_ts_ms = max_period
-            logging.info('Last alert was too long ago or there is no info about last alert timestamp.')
+            logging.info('There is no info about last alert timestamp.')
         else:
-            alert_start_ts_ms = int(last_alert_ts_ms) + 1
+            alert_start_ts_ms = int(last_alert_ts_ms)
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
             last_alert_ts_ms = alert['alertTime']
+            if 'policy' in alert and 'complianceMetadata' in alert['policy']: 
+                policy_complianceMetadata = alert['policy']['complianceMetadata']
+                if(len(json.dumps(policy_complianceMetadata).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                    queue_list = self.sentinel._split_big_request(policy_complianceMetadata)
+                    count = 1
+                    for q in queue_list:
+                        columnname = 'complianceMetadataPart' + str(count)
+                        alert['policy'][columnname] = q
+                        count+=1
             alert = self.clear_alert(alert)
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
+            if check_if_script_runs_too_long(self.start_ts):
+                logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                return
+
 
         self.last_alert_ts = last_alert_ts_ms
 
@@ -155,6 +173,7 @@ class PrismaCloudConnector:
         }
 
         unix_ts_now = (int(time.time()) - 10) * 1000
+
         data = {
             "timeRange": {
                 "type": "absolute",
@@ -164,7 +183,8 @@ class PrismaCloudConnector:
                 }
             },
             "sortBy": ["alertTime:asc"],
-            "detailed": True
+            "detailed": True,
+            "limit": 100
         }
         data = json.dumps(data)
         async with self.session.post(uri, headers=headers, data=data) as response:
@@ -188,6 +208,10 @@ class PrismaCloudConnector:
                 res = json.loads(res)
             for item in res['items']:
                 yield item
+            
+            if check_if_script_runs_too_long(self.start_ts):
+                logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                return
 
     @staticmethod
     def clear_alert(alert):
@@ -228,3 +252,9 @@ class PrismaCloudConnector:
         if self.last_audit_ts:
             await self.auditlogs_state_manager.post(str(self.last_audit_ts))
             logging.info('Last audit ts saved - {}'.format(self.last_audit_ts))
+
+def check_if_script_runs_too_long(script_start_time):
+    now = int(time.time())
+    duration = now - script_start_time
+    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
+    return duration > max_duration

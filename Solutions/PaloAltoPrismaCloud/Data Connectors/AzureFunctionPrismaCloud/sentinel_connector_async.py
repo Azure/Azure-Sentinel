@@ -116,3 +116,15 @@ class AzureSentinelMultiConnectorAsync:
 
     def get_log_type_connector(self, log_type):
         return self.connectors.get(log_type)
+
+    def _check_size(self, queue):
+        data_bytes_len = len(json.dumps(queue).encode())
+        return data_bytes_len < self.field_size_limit_bytes
+
+    def _split_big_request(self, queue):
+        if self._check_size(queue):
+            return [queue]
+        else:
+            middle = int(len(queue) / 2)
+            queues_list = [queue[:middle], queue[middle:]]
+            return self._split_big_request(queues_list[0]) + self._split_big_request(queues_list[1])
