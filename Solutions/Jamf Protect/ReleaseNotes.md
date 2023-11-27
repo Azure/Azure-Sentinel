@@ -7,5 +7,5 @@
 | 2.1.1       | 03-03-2023                     | Updating **Analytic Rules** to include MITRE Tactics and Techniques.
 | 2.1.0       | 10-02-2023                     | Added **Data Connector** for monitoring logs
 |             |                                | Added **Analytics Rules** for automated incident creation within Microsoft Sentinel
-|             |                                | Improved Workbook and added Endpoint Telemetry
+|             |                                | Improved **Workbook** and added Endpoint Telemetry
 | 2.0.0       | 12-10-2022                     | Initial Solution Release |
