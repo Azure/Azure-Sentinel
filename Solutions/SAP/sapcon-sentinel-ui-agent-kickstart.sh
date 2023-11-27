@@ -430,7 +430,7 @@ elif [ "$MODE" == "kvsi" ]; then
 	cmdparams+=" -e AZURE_CLIENT_ID=$APPID -e AZURE_CLIENT_SECRET=$APPSECRET -e AZURE_TENANT_ID=$TENANT"
 fi
 if [ $HOSTNETWORK ]; then
-	cmdparams+=" --network host"
+	cmdparams+=" --network host "
 fi
 sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams --name "$containername" $dockerimage$tagver >/dev/null
 

@@ -204,5 +204,11 @@ export enum ConnectorCategory {
   Corelight="Corelight",
   CorelightConnectorExporter="CorelightConnectorExporter",
   AwsS3="AwsS3",
-  AWS="AWS"
+  AWS="AWS",
+  AzureActiveDirectory="AzureActiveDirectory",
+  SecurityAlert="SecurityAlert",
+  AzureActivity="AzureActivity",
+  PowerBIActivity="PowerBIActivity",
+  SecurityAlertOATP="SecurityAlert(OATP)",
+  SecurityAlertASC="SecurityAlert(ASC)"
 }
