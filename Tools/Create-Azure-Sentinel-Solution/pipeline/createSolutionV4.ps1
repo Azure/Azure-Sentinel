@@ -1,7 +1,7 @@
 # this is only for build pipeline not for local use
 param ($pipelineBasePath, $pipelineSolutionName, $pipelineDataFileRawContent, $dataFileName, $dataConnectorFolderName, $dataFolderActualName, $instrumentationKey, $pullRequestNumber, $runId, $calculatedPackageVersion, $defaultPackageVersion, $isWatchListInsideOfWorkbooksFolder = $false)
 . ./Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1 # load common functions
-. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load common functions
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load app insights functions
 
 try 
 {
@@ -23,7 +23,7 @@ try
 		$baseMetadata = $pipelineDataFileRawContent
 		$metadataCounter = 0
 		$global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $global:solutionId
+		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
 		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
 		
 		$metadataAuthor = $contentToImport.Author.Split(" - ");
@@ -242,6 +242,9 @@ try
 
 		GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $calculatedPackageVersion;
 		Write-Host "Package Generated Successfully!!"
+
+		# check if mainTemplate and createUiDefinition json files are valid or not
+		CheckJsonIsValid($solutionFolderBasePath)
 	}
 }
 catch {

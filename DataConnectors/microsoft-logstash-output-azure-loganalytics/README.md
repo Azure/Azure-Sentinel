@@ -23,8 +23,10 @@ Install the microsoft-logstash-output-azure-loganalytics, use [Logstash Working 
 For offline setup follow [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 This plugin supports the following versions
-- Logstash 7 Between 7.0 and 7.17.10
-- Logstash 8 Between 8.0 and 8.8.1
+- 7.0 - 7.17.13
+- 8.0 - 8.9
+- 8.11
+
 
 Please note that when using Logstash 8, it is recommended to disable ECS in pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 

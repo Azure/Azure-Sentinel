@@ -1,0 +1,161 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+      "workspace": {
+          "type": "string",
+          "defaultValue": "",
+          "metadata": {
+              "description": "Workspace name for Log Analytics where Sentinel is setup"
+          }
+      },
+      "retryCount": {
+          "type": "int",
+          "defaultValue": 3,
+          "metadata": {
+              "description": "The number of request retries to try. Example: 3"
+          }
+      },
+      "queryWindowInMin": {
+          "type": "int",
+          "defaultValue": 5,
+          "metadata": {
+              "description": "The available query window, in minutes. Example: 5"
+          }
+      }
+  },
+  "resources": [
+      {
+          "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid(subscription().subscriptionId))]",
+          "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(subscription().subscriptionId))]",
+          "apiVersion": "2021-03-01-preview",
+          "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+          "kind": "APIPolling",
+          "properties": {
+              "connectorUiConfig": {
+                  "id": "SeraphicWebSecurity",
+                  "title": "Seraphic Web Security",
+                  "publisher": "Seraphic",
+                  "descriptionMarkdown": "The Seraphic Web Security data connector provides the capability to ingest [Seraphic Web Security](https://seraphicsecurity.com/) events and alerts into Microsoft Sentinel.",
+                  "graphQueriesTableName": "SeraphicWebSecurity_CL",
+                  "graphQueries": [
+                      {
+                          "metricName": "Total events received",
+                          "legend": "Seraphic Web Security Events",
+                          "baseQuery": "{{graphQueriesTableName}}\n| where bd_type_s == 'Event'"
+                      },
+                      {
+                          "metricName": "Total alerts received",
+                          "legend": "Seraphic Web Security Alerts",
+                          "baseQuery": "{{graphQueriesTableName}}\n| where bd_type_s == 'Alert'"
+                      }
+                  ],
+                  "sampleQueries": [
+                      {
+                          "description": "All Seraphic Web Security events",
+                          "query": "{{graphQueriesTableName}}\n| where bd_type_s == 'Event'\n| sort by TimeGenerated desc"
+                      },
+                      {
+                          "description": "All Seraphic Web Security alerts",
+                          "query": "{{graphQueriesTableName}}\n| where bd_type_s == 'Alert'\n| sort by TimeGenerated desc"
+                      }
+                  ],
+                  "dataTypes": [
+                      {
+                          "name": "{{graphQueriesTableName}}",
+                          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                      }
+                  ],
+                  "connectivityCriterias": [
+                      {
+                          "type": "SentinelKindsV2",
+                          "value": [
+                              "APIPolling"
+                          ]
+                      }
+                  ],
+                  "availability": {
+                      "status": 1,
+                      "isPreview": false
+                  },
+                  "permissions": {
+                      "resourceProvider": [
+                          {
+                              "provider": "Microsoft.OperationalInsights/workspaces",
+                              "permissionsDisplayText": "read and write permissions are required.",
+                              "providerDisplayName": "Workspace",
+                              "scope": "Workspace",
+                              "requiredPermissions": {
+                                  "action": true,
+                                  "write": true,
+                                  "read": true,
+                                  "delete": true
+                              }
+                          }
+                      ],
+                      "customs": [
+                          {
+                              "name": "Seraphic API key",
+                              "description": "API key for Microsoft Sentinel connected to your Seraphic Web Security tenant. To get this API key for your tenant - [read this documentation](https://constellation.seraphicsecurity.com/integrations/microsoft_sentinel/Guidance/MicrosoftSentinel-IntegrationGuide-230822.pdf)."
+                          }
+                      ]
+                  },
+                  "instructionSteps": [
+                      {
+                          "title": "Connect Seraphic Web Security",
+                          "description": "Please insert the integration name, the Seraphic integration URL and your workspace name for Microsoft Sentinel:",
+                          "instructions": [
+                              {
+                                  "parameters": {
+                                      "enable": "true",
+                                      "userRequestPlaceHoldersInput": [
+                                          {
+                                              "displayText": "Integration Name",
+                                              "requestObjectKey": "apiEndpoint",
+                                              "placeHolderName": "{{subscriptionId}}"
+                                          },
+                                          {
+                                              "displayText": "Integration URL",
+                                              "requestObjectKey": "apiEndpoint",
+                                              "placeHolderName": "{{endpoint}}"
+                                          },
+                                          {
+                                              "displayText": "Workspace Name - Log Analytics",
+                                              "requestObjectKey": "apiEndpoint",
+                                              "placeHolderName": "{{workspaceName}}"
+                                          }
+                                      ]
+                                  },
+                                  "type": "APIKey"
+                              }
+                          ]
+                      }
+                  ]
+              },
+              "pollingConfig": {
+                  "owner": "ASI",
+                  "version": "2.0",
+                  "source": "PaaS",
+                  "auth": {
+                      "authType": "APIKey",
+                      "APIKeyName": "x-api-key"
+                  },
+                  "request": {
+                      "apiEndpoint": "{{endpoint}}",
+                      "rateLimitQPS": 2,
+                      "httpMethod": "Get",
+                      "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                      "retryCount": "[parameters('retryCount')]",
+                      "queryWindowInMin": "[parameters('queryWindowInMin')]",
+                      "timeoutInSeconds": 120
+                  },
+                  "response": {
+                      "eventsJsonPaths": [
+                          "$"
+                      ]
+                  }
+              }
+          }
+      }
+  ]
+}
