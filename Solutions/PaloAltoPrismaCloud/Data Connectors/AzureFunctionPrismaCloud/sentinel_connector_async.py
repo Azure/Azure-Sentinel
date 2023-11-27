@@ -90,10 +90,11 @@ class AzureSentinelConnectorAsync:
 
 
 class AzureSentinelMultiConnectorAsync:
-    def __init__(self, session: aiohttp.ClientSession, log_analytics_uri, workspace_id, shared_key, queue_size=1000, queue_size_bytes=25 * (2**20)):
+    def __init__(self, session: aiohttp.ClientSession, log_analytics_uri, workspace_id, shared_key, field_size_limit_bytes, queue_size=1000, queue_size_bytes=25 * (2**20)):
         self.log_analytics_uri = log_analytics_uri
         self.workspace_id = workspace_id
         self.shared_key = shared_key
+        self.field_size_limit_bytes = field_size_limit_bytes
         self.queue_size = queue_size
         self.queue_size_bytes = queue_size_bytes
         self.connectors = dict()
