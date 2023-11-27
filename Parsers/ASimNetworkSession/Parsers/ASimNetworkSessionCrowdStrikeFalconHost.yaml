@@ -20,8 +20,8 @@ References:
     https://falcon.us-2.crowdstrike.com/documentation/page/eb1587d1/siem-connector#mc98af8f
 Description: |
   This ASIM parser supports normalizing CrowdStrike Falcon Endpoint Protection logs to the ASIM Network Session normalized schema. These events are captured through CrowdStrike Falcon Endpoint Protection data connector which allows you to easily connect your CrowdStrike Falcon Event Stream with Microsoft Sentinel.
-ParserName: ASimNetworkSessionCrowdStrikeFalcon
-EquivalentBuiltInParser: _ASim_NetworkSession_CrowdStrikeFalcon
+ParserName: ASimNetworkSessionCrowdStrikeFalconHost
+EquivalentBuiltInParser: _ASim_NetworkSession_CrowdStrikeFalconHost
 ParserParams:
   - Name: disabled
     Type: bool
@@ -180,7 +180,7 @@ ParserQuery: |
                 Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr);
         let networkaccessdata = alldata
             | where DeviceEventClassID has "Network Access In A Detection Summary Event"
-            | parse-kv AdditionalExtensions as (CSMTRPatternDisposition: string) with (pair_delimiter=";", kv_delimiter="=")
+            | parse-kv AdditionalExtensions as (CSMTRPatternDisposition: string, tactic: string, technique: string, objective: string) with (pair_delimiter=";", kv_delimiter="=")
             | lookup ActionLookup on EventOutcome
             | invoke _ASIM_ResolveSrcFQDN('DestinationHostName')
             | extend
@@ -194,9 +194,9 @@ ParserQuery: |
                 SrcDomainType = iff(isnotempty(DestinationNTDomain), "Windows", SrcDomainType),
                 AdditionalFields = bag_pack(
                         "CSMTRPatternDisposition", CSMTRPatternDisposition, 
-                        "Tactic", Activity,
-                        "Technique", DeviceAction,
-                        "Objective", Reason,
+                        "Tactic", coalesce(tactic, Activity),
+                        "Technique", coalesce(technique, DeviceAction),
+                        "Objective", coalesce(objective, Reason),
                         DeviceCustomString6Label, DeviceCustomString6
                     )
             | project-rename
@@ -226,7 +226,7 @@ ParserQuery: |
             EventSchema = "NetworkSession",
             EventSchemaVersion = "0.2.6",
             EventVendor = "CrowdStrike",
-            EventProduct = "Falcon",
+            EventProduct = "FalconHost",
             EventType = "EndpointNetworkSession"
         | project-rename
             EventOriginalType = DeviceEventClassID,
