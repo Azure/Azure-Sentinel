@@ -1,8 +1,8 @@
 
-function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
+function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFolderName) {
     try {
     $ccpDict = @()
-    $dataConnectorsInputArray = $dataFileMetadata.PsObject.Properties | Where-Object { $_.Name -eq "Data Connectors" -or $_.Name -eq "DataConnectors"};
+    $dataConnectorsInputArray = $dataFileMetadata.PsObject.Properties | Where-Object { $_.Name -eq "$DCFolderName" };
 
     # IDENTIFY CCP DATA DEFINITION IN DATA INPUT FILE
     foreach ($objectProperties in $dataConnectorsInputArray) {
@@ -10,54 +10,53 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
         if ($items -is [System.String]) {
             $items = $items | ConvertFrom-Json
         }
-        #if ($objectProperties.Value -is [System.Array]) {
-            foreach ($file in $items) {
-                $file = $file.Replace("$baseFolderPath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
 
-                $currentFileDCPath = $baseFolderPath + $solutionName + "/" + $file
-                $currentFileDCPath = $currentFileDCPath.Replace("//", "/")
+        foreach ($file in $items) {
+            $file = $file.Replace("$baseFolderPath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
+
+            $currentFileDCPath = $baseFolderPath + $solutionName + "/" + $file
+            $currentFileDCPath = $currentFileDCPath.Replace("//", "/")
                 
-                $fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
+            $fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
 
-                # check if dataconnectorDefinitions type exist in dc array
-                if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions") {
-                    Write-Host "CCP DataConnectorDefinition File Found, FileName is $file"
-                    if ($ccpDict.Count -le 0) {
-                        $ccpDict = [PSCustomObject]@{
-                            title = $fileContent.Properties.connectorUiConfig.title;
-                            DCDefinitionFullPath = $currentFileDCPath
-                            DCDefinitionFilePath = $file;
-                            DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
-                            DCPollerFilePath = "";
-                            DCPollerStreamName = "";
-                            DCRFilePath = "";
-                            DCROutputStream = "";
-                            TableFilePath = "";
-                            TableOutputStream = "";
-                            PollerDataCollectionEndpoint = "";
-                            PollerDataCollectionRuleImmutableId = "";
-                            PollerKind = "";
-                        }
-                    } else {
-                        [array]$ccpDict += [PSCustomObject]@{
-                            Title = $fileContent.Properties.connectorUiConfig.title;
-                            DCDefinitionFullPath = $currentFileDCPath
-                            DCDefinitionFilePath = $file;
-                            DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
-                            DCPollerFilePath = "";
-                            DCPollerStreamName = "";
-                            DCRFilePath = "";
-                            DCROutputStream = "";
-                            TableFilePath = "";
-                            TableOutputStream = "";
-                            PollerDataCollectionEndpoint = "";
-                            PollerDataCollectionRuleImmutableId = "";
-                            PollerKind = "";
-                        }
+            # check if dataconnectorDefinitions type exist in dc array
+            if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions") {
+                Write-Host "CCP DataConnectorDefinition File Found, FileName is $file"
+                if ($ccpDict.Count -le 0) {
+                    $ccpDict = [PSCustomObject]@{
+                        title = $fileContent.Properties.connectorUiConfig.title;
+                        DCDefinitionFullPath = $currentFileDCPath
+                        DCDefinitionFilePath = $file;
+                        DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
+                        DCPollerFilePath = "";
+                        DCPollerStreamName = "";
+                        DCRFilePath = "";
+                        DCROutputStream = "";
+                        TableFilePath = "";
+                        TableOutputStream = "";
+                        PollerDataCollectionEndpoint = "";
+                        PollerDataCollectionRuleImmutableId = "";
+                        PollerKind = "";
+                    }
+                } else {
+                    [array]$ccpDict += [PSCustomObject]@{
+                        Title = $fileContent.Properties.connectorUiConfig.title;
+                        DCDefinitionFullPath = $currentFileDCPath
+                        DCDefinitionFilePath = $file;
+                        DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
+                        DCPollerFilePath = "";
+                        DCPollerStreamName = "";
+                        DCRFilePath = "";
+                        DCROutputStream = "";
+                        TableFilePath = "";
+                        TableOutputStream = "";
+                        PollerDataCollectionEndpoint = "";
+                        PollerDataCollectionRuleImmutableId = "";
+                        PollerKind = "";
                     }
                 }
             }
-        #}
+        }
     }
 
     # identify ccp files definition provided has corresponding poller files if no then fail it.
@@ -78,10 +77,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                     {
                         $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
 
-                        # check if dataconnectorDEfinition id value exist in dataConnectors, connectorDefinitionName field i.e. field value for id = connectorDefinitionName should be same else fail it
                         if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
                             if ($fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId) {
-                                # connectorDefinition file has dataconnector file so file exist
                                 $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
                                 $ccpDefinitionFile.DCPollerStreamName = $fileContent.properties.dcrConfig.streamName
                                 $ccpDefinitionFile.PollerKind = $fileContent.kind;
@@ -110,7 +107,6 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
         
         # identify relation between poller and DCR
         foreach ($ccpPollerFile in $ccpDict) {
-            #identify given file is present in dc folder or not
             foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
                 if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
                 $inputFile.Name -eq "Images" -or $inputFile.Name -eq "function.json" -or $inputFile.Name -eq "host.json" -or $inputFile.Name -eq "proxies.json")
@@ -120,11 +116,9 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                 else {
                     $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
 
-                    # check if dataconnectorDEfinition id value exist in dataConnectors, connectorDefinitionName field i.e. field value for id = connectorDefinitionName should be same else fail it
                     try {
                         if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
                             if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
-                                # connectorDefinition file has dataconnector file so file exist
                                 $ccpPollerFile.DCRFilePath = $inputFile.FullName
                                 $ccpPollerFile.TableOutputStream = $fileContent.properties.dataFlows[0].outputStream.Replace('Custom-', '')
                                 $ccpPollerFile.DCROutputStream = $fileContent.properties.dataFlows[0].outputStream
@@ -140,7 +134,6 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
 
         # identify relation between DCR and table
         foreach ($ccpTable in $ccpDict) {
-            #identify given file is present in dc folder or not
             foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
                 if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
                 $inputFile.Name -eq "Images" -or $inputFile.Name -eq "function.json" -or $inputFile.Name -eq "host.json" -or $inputFile.Name -eq "proxies.json")
@@ -150,11 +143,9 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
                 else {
                     $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
 
-                    # check if dataconnectorDEfinition id value exist in dataConnectors, connectorDefinitionName field i.e. field value for id = connectorDefinitionName should be same else fail it
                     try {
                         if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
                             if ($fileContent.name -eq $ccpTable.TableOutputStream) {
-                                # connectorDefinition file has dataconnector file so file exist
                                 $ccpTable.TableFilePath = $inputFile.FullName
                             }
                         }
@@ -167,7 +158,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
         }
     }
 
-    # THROW ERROR IF THERE IS NO RELATION BETWEEK DEFINITION->POLLER, POLLER->DCR
+    # THROW ERROR IF THERE IS NO RELATION BETWEEN DEFINITION->POLLER AND/OR POLLER->DCR
     if ($ccpDict.Count -gt 0) {
         foreach($localCCPDist in $ccpDict) {
             if ($localCCPDist.DCDefinitionId -eq "" -or $localCCPDist.DCDefinitionFilePath -eq "" -or
@@ -185,4 +176,36 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName) {
     Write-Host "Error in get-ccpdetails. Error Details: $_"
     return $null;
   }
+}
+
+function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, $DCFolderName) {
+    # call this only when there are atleast 1 ccp connector
+    $ccpTablesFilePaths = @()
+    $identifiedDCPath = ($baseFolderPath + $solutionName + "/" + $DCFolderName).Replace("//", "/")
+
+    foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+        if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
+        $inputFile.Name -eq "Images" -or $inputFile.Name -eq "function.json" -or $inputFile.Name -eq "host.json" -or $inputFile.Name -eq "proxies.json")
+        {
+            continue;
+        }
+        else {
+            $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+
+            if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
+                $currentTableFilePath = $fileContent.FullName
+                if ($existingCCPDict.Count -gt 0) {
+                    # check if current file path already present in variable $existingCCPDict if not present then add it in new variable list
+                    foreach ($ccpRecord in $existingCCPDict) {
+                        if ($ccpRecord.TableFilePath -ne '' -and $ccpRecord.TableFilePath -ne $currentTableFilePath) {
+                            $ccpTablesFilePaths += $currentTableFilePath
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    # return unique file paths only for tables
+    return $ccpTablesFilePaths | Sort-Object -Unique;
 }

@@ -77,6 +77,8 @@ $getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solu
 
 try {
     $ccpDict = @();
+    $ccpTablesFilePaths = @();
+    $ccpTablesCounter = 1; 
     $isCCPConnector = $false;
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
         #$inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
@@ -153,12 +155,14 @@ try {
         if ($isCCPConnector -eq $false) {
             $DCFolderName = "Data Connectors"
             
-            $ccpDict = Get-CCP-Dict -dataFileMetadata $contentToImport -baseFolderPath $solutionBasePath -solutionName $solutionName
+            $ccpDict = Get-CCP-Dict -dataFileMetadata $contentToImport -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $DCFolderName
 
             if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
                 $isCCPConnector = $true
+                $ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $baseFolderPath -solutionName $solutionName -DCFolderName $DCFolderName
             }
         }
+        Write-Host "isCCPConnector $isCCPConnector"
 
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
             if ($objectProperties.Value -is [System.Array]) {
@@ -204,14 +208,14 @@ try {
 
                                 if ($isCCPConnectorFile) {
                                     # current file is a ccp connector
-                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName 
+                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
                                 } else {
                                     # current file is a normal connector
-                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName 
+                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
                                 }
                             }
                             else {
-                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName 
+                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter 
                             }
                         }
                         elseif ($objectKeyLowercase -eq "savedsearches") {

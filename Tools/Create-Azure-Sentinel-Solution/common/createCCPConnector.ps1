@@ -296,7 +296,7 @@ function addNewParameter($parameterName, $isSecret = $false) {
 }
 
 # THIS IS THE STARTUP FUNCTION FOR CCP RESOURCE CREATOR
-function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict, $solutionBasePath, $solutionName) {
+function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict, $solutionBasePath, $solutionName, $ccpTables, $ccpTablesCounter) {
     Write-Host "Inside of CCP Connector Code!"
     $solutionId = $solutionFileMetadata.publisherId + "." + $solutionFileMetadata.offerId
     $placeHolderPatternMatches = '\{{[a-zA-Z0-9]+\}}'
@@ -363,7 +363,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             $ccpDataDefinitionFilePath = $ccpDataDefinitionFilePath.Replace("//", "/")
             Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
             
-            $fileContent = Get-Content -Raw $ccpDataDefinitionFilePath | Out-String | ConvertFrom-Json
+            $fileContent = Get-Content -Raw "$ccpDataDefinitionFilePath" | Out-String | ConvertFrom-Json
 
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions")
             {
@@ -397,7 +397,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             $ccpPollerFilePath = $ccpItem.DCPollerFilePath
             Write-Host "CCP Poller File Path : $ccpPollerFilePath"
             $ccpPollerFilePath = $ccpPollerFilePath.Replace("//", "/")
-            $fileContent = Get-Content -Raw $ccpPollerFilePath | Out-String | ConvertFrom-Json
+            $fileContent = Get-Content -Raw "$ccpPollerFilePath" | Out-String | ConvertFrom-Json
 
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
                 
@@ -647,7 +647,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             $ccpDCRFilePath = $ccpDCRFilePath.Replace("//", "/")
             Write-Host "CCP DCR File Path : $ccpDCRFilePath"
 
-            $fileContent = Get-Content -Raw $ccpDCRFilePath | Out-String | ConvertFrom-Json
+            $fileContent = Get-Content -Raw "$ccpDCRFilePath" | Out-String | ConvertFrom-Json
 
             if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules")
             {
@@ -727,7 +727,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             Write-Host "CCP Table File Path : $ccpTablesFilePath"
 
             if ($null -ne $ccpTablesFilePath -and $ccpTablesFilePath -ne '') {
-                $fileContent = Get-Content -Raw $ccpTablesFilePath | Out-String | ConvertFrom-Json
+                $fileContent = Get-Content -Raw "$ccpTablesFilePath" | Out-String | ConvertFrom-Json
 
                 if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables")
                 {
@@ -750,6 +750,35 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
                     $tableCounter ++;
                 }
+            }
+
+            if ($null -ne $ccpTables -and $ccpTables.count -gt 0 -and $ccpTablesCounter -eq 0) {
+                # add additional tables if any and run this code only once
+
+                foreach ($tableFilePath in $ccpTables) {
+                    $fileContent = Get-Content -Raw "$tableFilePath" | Out-String | ConvertFrom-Json
+
+                    if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables")
+                    {
+                        $resourceName = $fileContent.name
+                        $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
+
+                        $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
+                        if ($hasLocationProperty) {
+                            $locationProperty = $armResource.location
+                            $placeHoldersMatched = $locationProperty | Select-String $placeHolderPatternMatches -AllMatches
+
+                            if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                                addNewParameter -parameterName $placeHolderName -isSecret $false
+                            }
+                        }
+
+                        $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
+                    }
+                }
+
+                $ccpTablesCounter += 1
             }
             #========end: tables resource===========
 

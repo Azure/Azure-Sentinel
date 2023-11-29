@@ -53,6 +53,8 @@ try
 		}
 
 		$ccpDict = @();
+		$ccpTablesFilePaths = @()
+		$ccpTablesCounter = 1; 
     $isCCPConnector = $false;
 		foreach ($objectProperties in $contentToImport.PsObject.Properties) 
 		{
@@ -112,15 +114,15 @@ try
 					}
 
 					if ($isCCPConnector -eq $false) {            
-            $ccpDict = Get-CCP-Dict -dataFileMetadata $pipelineDataFileRawContent -baseFolderPath $solutionBasePath -solutionName $solutionName
+            $ccpDict = Get-CCP-Dict -dataFileMetadata $pipelineDataFileRawContent -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataFolderActualName
 
-            if ($null -eq $ccpDict) {
-                # break as error has occured
-                break;
-            }
-            $isCCPConnector = $true
+            if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
+							$isCCPConnector = $true
+							$ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataFolderActualName
+						}
 					}
 					Write-Host "isCCPConnector $isCCPConnector"
+
 					# =============end: ccp connector code===============
 
 					foreach ($file in $filesList) 
@@ -225,14 +227,14 @@ try
 
 									if ($isCCPConnectorFile) {
 											# current file is a ccp connector
-											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName 
+											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
 									} else {
 											# current file is a normal connector
-											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName
+											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
 									}
 								}
 								else {
-									GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName
+									GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
 								}
 							}
 							elseif ($objectKeyLowercase -eq "savedsearches") {
