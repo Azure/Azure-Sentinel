@@ -217,6 +217,8 @@ class PrismaCloudConnector:
     def clear_alert(alert):
         if 'resource' in alert and 'data' in alert['resource']:
             del alert['resource']['data']
+        if 'policy' in alert and 'complianceMetadataPart2' in alert['policy']:
+            del alert['policy']['complianceMetadata']
         return alert
 
     async def get_audit_logs(self, start_time):
