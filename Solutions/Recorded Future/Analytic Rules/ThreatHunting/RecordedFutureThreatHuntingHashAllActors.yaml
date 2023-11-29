@@ -13,6 +13,15 @@ triggerOperator: gt
 triggerThreshold: 0
 customDetails: 
   ActorInformation: RecordedFuturePortalLink
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
 alertDetailsOverride:
   alertDisplayNameFormat: '{{Description}}'
   alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{Hash_s}} from the {{Type}} table.\n'
@@ -25,6 +34,7 @@ query: |
   // The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  
   imFileEvent
   | where isnotempty(Hash)
+  | extend lowerHash=tolower(Hash)
   | join kind=inner (
   ThreatIntelligenceIndicator
   // Only look for IOCs
@@ -35,8 +45,9 @@ query: |
   | where TimeGenerated >= ago(ioc_lookBack)
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true and ExpirationDateTime > now()
-  ) on $left.Hash == $right.FileHashValue
-  // select column from the source table to match with Recorded Future $left.Hash
+  | extend lowerHash=tolower(FileHashValue)
+  ) on lowerHash
+  // select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash
   | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
   | project Hash, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink
 

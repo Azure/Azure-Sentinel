@@ -13,6 +13,13 @@ triggerOperator: gt
 triggerThreshold: 0
 customDetails: 
   ActorInformation: RecordedFuturePortalLink
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
 alertDetailsOverride:
   alertDisplayNameFormat: '{{Description}}'
   alertDescriptionFormat: '*{{Description}}**\n\nCorrelation found on {{Url}} from the {{Type}} table.\n'
@@ -25,6 +32,7 @@ query: |
   // The following workbook: Recorded Future - Url Correlation will help researching available data and selecting tables and columns  
   imWebSession
   | where isnotempty(Url)
+  | extend lowerUrl=tolower(Url)
   | join kind=inner (
   ThreatIntelligenceIndicator
   // Only look for IOCs
@@ -35,8 +43,9 @@ query: |
   | where TimeGenerated >= ago(ioc_lookBack)
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true and ExpirationDateTime > now()
-  ) on $left.Url == $right.Url
-  // select column from the source table to match with Recorded Future $left.Url
+  | extend lowerUrl=tolower(Url)
+  ) on lowerUrl
+  // select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Url
   | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
   | project Url, Description, Type, TimeGenerated, RecordedFuturePortalLink
 entityMappings:
