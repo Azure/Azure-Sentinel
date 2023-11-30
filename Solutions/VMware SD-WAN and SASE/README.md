@@ -1,15 +1,15 @@
-## VMware SD-WAN and SASE Solution for Microsoft Sentinel
+# VMware SD-WAN and SASE Solution for Microsoft Sentinel
 
 VMware SASE and SD-WAN are cloud-native networking and security solutions that offer a comprehensive approach to securing and optimizing branch connectivity for today's distributed enterprises. By integrating VMware SASE and SD-WAN with Microsoft Sentinel, you can gain a unified view of your network and security posture, enabling you to proactively identify and remediate threats, improve application performance, and reduce operational complexity. 
 
-## Release Notes:
+# Release Notes:
 v1.0.0 (Initial release):
 
-# Solutions supported:
+## Solutions supported:
 1. VMware SD-WAN
 2. VMware Cloud Web Security
 
-# Events collected:
+## Events collected:
 
 Via Syslog (Using AMA):
 1. Edge Firewall Events
