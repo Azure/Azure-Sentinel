@@ -20,7 +20,7 @@ NOT_RUNNING_FUNCTION_STATES = [
     None
 ]
 
-EVENT_TYPES =(os.environ.get("FncSignals") or "observation").split(",")
+EVENT_TYPES =(os.environ.get("FncEvents") or "observation").split(",")
 EVENT_TYPES = [event.strip() for event in EVENT_TYPES if event]
 DETECTIONS = (os.environ.get("FncDetections") or "true").strip().lower() == 'true'
 TERMINATE_APP = os.environ.get("FncTerminateApp").strip().lower() == 'true'
@@ -44,7 +44,7 @@ def validate_configuration():
         raise InputError(f'FncAccountCode is required.')
 
     if EVENT_TYPES and not SUPPORTED_EVENTS.issuperset(EVENT_TYPES):
-        raise InputError(f"FncSignals must be one or more of {SUPPORTED_EVENTS}")
+        raise InputError(f"FncEvents must be one or more of {SUPPORTED_EVENTS}")
 
     sentinel_customer_id = (os.environ.get('WorkspaceId') or '').strip()
     if not sentinel_customer_id:

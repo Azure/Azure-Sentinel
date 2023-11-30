@@ -24,7 +24,7 @@ def post_data(events: list[dict], log_type_suffix: str):
     rfc1123date = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = _build_signature(rfc1123date, content_length, method, content_type, resource)
-    log_type = f'FncSignals{log_type_suffix.title()}'
+    log_type = f'FncEvents{log_type_suffix.title()}'
 
     headers = {
         'content-type': content_type,
@@ -35,7 +35,7 @@ def post_data(events: list[dict], log_type_suffix: str):
 
     response = requests.post(LOG_ANALYTICS_URI, data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
-        logging.info(f'SentinelClient: posted {len(events)} signals to {log_type}')
+        logging.info(f'SentinelClient: posted {len(events)} events to {log_type}')
     else:
         logging.error(f"SentinelClient: failed to post events to Sentinel. Response code: {response.status_code}")
 

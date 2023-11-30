@@ -15,8 +15,8 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         return
 
     if days_to_collect > 0:
-        signals = list(checkpoints.keys())
-        yield context.call_activity('FetchAndSendByDayActivity', {'day': days_to_collect, 'signals': signals})
+        events = list(checkpoints.keys())
+        yield context.call_activity('FetchAndSendByDayActivity', {'day': days_to_collect, 'events': events})
         args['days_to_collect'] = days_to_collect-1
         # Run the orchastrator new for each day to help avoid timeouts.
         context.continue_as_new(args)

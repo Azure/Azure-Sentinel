@@ -12,42 +12,42 @@ ACCOUNT_CODE = os.environ.get("FncAccountCode")
 
 def main(checkpoints: dict) -> str:
     new_checkpoints = {}
-    for signal_type, checkpoint in checkpoints.items():
+    for event_type, checkpoint in checkpoints.items():
         if not checkpoints:
             return ""
 
-        logging.info(f'FetchAndSendActivity: signal: {signal_type} checkpoint: {checkpoint}')
+        logging.info(f'FetchAndSendActivity: event: {event_type} checkpoint: {checkpoint}')
 
         ctx = Context()
         start_date = datetime.fromisoformat(checkpoint).replace(tzinfo=timezone.utc)
-        if signal_type == 'detections':
-            fetch_and_send_detections(ctx, signal_type, start_date)
+        if event_type == 'detections':
+            fetch_and_send_detections(ctx, event_type, start_date)
         else:
-            fetch_and_send_events(ctx, signal_type, start_date)
+            fetch_and_send_events(ctx, event_type, start_date)
 
         if ctx.checkpoint is None:
             return ""
-        new_checkpoints[signal_type] = ctx.checkpoint.isoformat()
+        new_checkpoints[event_type] = ctx.checkpoint.isoformat()
 
     return new_checkpoints
 
 
-def fetch_and_send_events(ctx: Context, signal_type: str, start_date: datetime):
+def fetch_and_send_events(ctx: Context, event_type: str, start_date: datetime):
     for events in fetch_events(context=ctx,
                                name='sentinel',
-                               event_types=[signal_type],
+                               event_types=[event_type],
                                account_code=ACCOUNT_CODE,
                                start_date=start_date,
                                access_key=AWS_ACCESS_KEY,
                                secret_key=AWS_SECRET_KEY):
-        post_data(events, signal_type)
+        post_data(events, event_type)
 
 
-def fetch_and_send_detections(ctx: Context, signal_type: str, start_date: datetime):
+def fetch_and_send_detections(ctx: Context, event_type: str, start_date: datetime):
     for events in fetch_detections(context=ctx,
                                name='sentinel',
                                account_code=ACCOUNT_CODE,
                                start_date=start_date,
                                access_key=AWS_ACCESS_KEY,
                                secret_key=AWS_SECRET_KEY):
-        post_data(events, signal_type) 
+        post_data(events, event_type) 
