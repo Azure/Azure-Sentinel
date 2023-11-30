@@ -425,7 +425,9 @@ function  GetBucketDetails {
         while ($startTime -le $now) {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=46"
-            
+            $TotalSizeinGB = 0
+            foreach ($items in (Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Select-Object Size)) { $TotalSizeinGB += $items.Size/1GB }
+            Write-Host "Bucket files size is $TotalSizeinGB under $s3BucketName and Prefix folder $keyPrefix ."
             Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "C:\tmp"
             Write-Host "Files under $keyPrefix are downloaded."
 
