@@ -425,7 +425,8 @@ function  GetBucketDetails {
         while ($startTime -le $now) {
             #$keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=46"
-            $keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=45"
+            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=45"
+            $keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=44"
             Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "C:\tmp"
             Write-Host "Files under $keyPrefix are downloaded."
 
