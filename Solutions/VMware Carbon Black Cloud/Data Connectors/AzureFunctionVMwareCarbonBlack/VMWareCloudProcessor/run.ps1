@@ -427,6 +427,10 @@ function  GetBucketDetails {
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=46"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=45"
             $keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=44"
+            $TotalSizeinGB = 0
+
+            foreach ($items in (Get-S3Object -BucketName $BucketName -keyPrefix $keyPrefix | Select-Object Size)) { $TotalSizeinGB += $items.Size/1GB }
+            Write-Host "Bucket files size is $TotalSizeinGB under $BucketName and Prefix folder $keyPrefix ."
             Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "C:\tmp"
             Write-Host "Files under $keyPrefix are downloaded."
 
