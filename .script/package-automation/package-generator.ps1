@@ -49,11 +49,11 @@ try {
             $zipFileExist = $item -match ([regex]::Escape(".zip"))
             $pythonFileExist = $item -match ([regex]::Escape(".py"))
             $jsonFile = $item -match ([regex]::Escape(".json"))
-            $capsJsonFile = $item -match ([regex]::Escape(".JSON"))
+
             if ($hostFileExist -or $proxiesFileExist -or $azureDeployFileExist -or $functionFileExist -or $textFileExist -or $zipFileExist -or $pythonFileExist) 
             { }
             else { 
-                if ($jsonFile -or $capsJsonFile) {
+                if ($jsonFile) {
                     $newDataConnectorFilesWithoutExcludedFiles += $item
                 }
             }
