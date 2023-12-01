@@ -46,6 +46,10 @@ namespace Kqlvalidations.Tests
 
                         if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
                         {
+                            Console.WriteLine($"GitHub App ID: {appId}");
+                            Console.WriteLine($"Installation ID: {installationId}");
+                            Console.WriteLine($"Private Key: {privateKey}");
+
                             throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
                         }
 
