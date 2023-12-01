@@ -40,9 +40,9 @@ namespace Kqlvalidations.Tests
                 {
                     if (_instance == null)
                     {
-                        var appId = Environment.GetEnvironmentVariable("GitHubAppID",EnvironmentVariableTarget.Process);
-                        var installationId = Environment.GetEnvironmentVariable("GitHubAppInstallationID", EnvironmentVariableTarget.Process);
-                        var privateKey = Environment.GetEnvironmentVariable("GitHubAppPrivateKey", EnvironmentVariableTarget.Process);
+                        var appId = Environment.GetEnvironmentVariable("GitHubAppID");
+                        var installationId = Environment.GetEnvironmentVariable("GitHubAppInstallationID");
+                        var privateKey = Environment.GetEnvironmentVariable("GitHubAppPrivateKey");
 
                         if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
                         {
