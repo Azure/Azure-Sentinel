@@ -40,9 +40,9 @@ namespace Kqlvalidations.Tests
                 {
                     if (_instance == null)
                     {
-                        var appId = Environment.GetEnvironmentVariable("GitHubAppID");
-                        var installationId = Environment.GetEnvironmentVariable("GitHubAppInstallationID");
-                        var privateKey = Environment.GetEnvironmentVariable("GitHubAppPrivateKey");
+                        var appId = GetAzurePipelineVariable("GitHubAppID");
+                        var installationId = GetAzurePipelineVariable("GitHubAppInstallationID");
+                        var privateKey = GetAzurePipelineVariable("GitHubAppPrivateKey");
 
                         if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
                         {
@@ -58,6 +58,17 @@ namespace Kqlvalidations.Tests
             return _instance;
         }
 
+        private static string GetAzurePipelineVariable(string variableName)
+        {
+            var variableValue = Environment.GetEnvironmentVariable($"SECRET_{variableName}", EnvironmentVariableTarget.Process);
+
+            if (string.IsNullOrEmpty(variableValue))
+            {
+                throw new InvalidOperationException($"Azure Pipeline variable {variableName} not found.");
+            }
+
+            return variableValue;
+        }
 
         public void SetRepositoryDetails(string owner, string repo)
         {
