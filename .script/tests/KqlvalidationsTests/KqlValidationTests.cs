@@ -128,7 +128,7 @@ namespace Kqlvalidations.Tests
         private void ValidateKqlForBestPractices(string queryStr)
         {
             var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr);
-            var gitHubApiClient = GitHubApiClient.Instance;
+            var gitHubApiClient = GitHubApiClient.Create();
             //gitHubApiClient.AddFileComment(filename,suggestions);
             gitHubApiClient.AddPRComment(suggestions);
         }
@@ -329,7 +329,7 @@ namespace Kqlvalidations.Tests
         [Fact]
         public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
         {
-            var gitHubApiClient = GitHubApiClient.Instance;
+            var gitHubApiClient = GitHubApiClient.Create();
 
             IReadOnlyList<PullRequestFile> prFiles = gitHubApiClient.GetPullRequestFiles();
 

@@ -1,13 +1,21 @@
-﻿using Octokit;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Net.Http;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Threading.Tasks;
+using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
+using Octokit;
 
 namespace Kqlvalidations.Tests
 {
     public sealed class GitHubApiClient
     {
         private static GitHubApiClient _instance;
+        private static readonly object _lock = new object();
         private readonly GitHubClient _client;
 
         private string _owner = "Azure";
@@ -15,43 +23,46 @@ namespace Kqlvalidations.Tests
         private int? _prNumber;
         private IReadOnlyList<PullRequestFile> _cachedPullRequestFiles;
 
-        private GitHubApiClient()
+        
+
+        private GitHubApiClient(string accessToken)
         {
-            var accessToken = "";
             var credentials = new Credentials(accessToken);
             _client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
             _client.Credentials = credentials;
         }
 
-        public static GitHubApiClient Instance
+        public static GitHubApiClient Create()
         {
-            get
+            if (_instance == null)
             {
-                if (_instance == null)
+                lock (_lock)
                 {
-                    _instance = new GitHubApiClient();
+                    if (_instance == null)
+                    {
+                        var appId = Environment.GetEnvironmentVariable("GitHubAppID");
+                        var installationId = Environment.GetEnvironmentVariable("GitHubAppInstallationID");
+                        var privateKey = Environment.GetEnvironmentVariable("GitHubAppPrivateKey");
+
+                        if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
+                        {
+                            throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
+                        }
+
+                        var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
+                        var accessToken = GetInstallationAccessToken(appId, installationId, jwtToken).Result;
+                        _instance = new GitHubApiClient(accessToken);
+                    }
                 }
-                return _instance;
             }
+            return _instance;
         }
+
 
         public void SetRepositoryDetails(string owner, string repo)
         {
             _owner = owner;
             _repo = repo;
-        }
-
-        public int GetPullRequestNumber()
-        {
-            if (_prNumber == null)
-            {
-                int.TryParse(Environment.GetEnvironmentVariable("PRNUM"), out int prNumber);
-                _prNumber = prNumber;
-                //uncomment below for debugging with a PR
-                //_prNumber =9476;
-            }
-
-            return _prNumber.GetValueOrDefault();
         }
 
         public IReadOnlyList<PullRequestFile> GetPullRequestFiles()
@@ -64,49 +75,12 @@ namespace Kqlvalidations.Tests
                 }
                 catch (Exception ex)
                 {
-                    // Handle the exception as needed
-                    Console.WriteLine($"Error occurred while getting PR files. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
+                    HandleException("Error occurred while getting PR files", ex);
                     _cachedPullRequestFiles = new List<PullRequestFile>();
                 }
             }
 
             return _cachedPullRequestFiles;
-        }
-
-        public void AddFileComment(string filePath, string comment)
-        {
-            try
-            {
-                int prNumber = GetPullRequestNumber();
-                if (prNumber == 0)
-                {
-                    Console.WriteLine("PR number not available. Cannot add comment.");
-                    return;
-                }
-
-                // Retrieve the list of files in the pull request
-                var files = GetPullRequestFiles();
-
-                // Find the file in the list of changed files
-                var file = files[0];
-
-                if (file != null)
-                {
-                    PullRequestReviewCommentCreate reviewCommentCreate = new PullRequestReviewCommentCreate(comment, file.Sha, file.FileName,0);
-
-                    // Create a review comment for the specific file
-                    var newComment = _client.PullRequest.ReviewComment.Create(_owner, _repo, prNumber, reviewCommentCreate).Result;
-                }
-                else
-                {
-                    Console.WriteLine($"File '{filePath}' not found in the list of changed files. Cannot add comment.");
-                }
-            }
-            catch (Exception ex)
-            {
-                // Handle the exception as needed
-                Console.WriteLine($"Error occurred while adding file comment. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
-            }
         }
 
         public void AddPRComment(string comment)
@@ -120,19 +94,91 @@ namespace Kqlvalidations.Tests
                     return;
                 }
 
-                PullRequestReviewCreate pullRequestReviewCreate = new PullRequestReviewCreate();
-                pullRequestReviewCreate.Body = comment;
-                pullRequestReviewCreate.Event = PullRequestReviewEvent.Comment;
+                var pullRequestReviewCreate = new PullRequestReviewCreate
+                {
+                    Body = comment,
+                    Event = PullRequestReviewEvent.Comment
+                };
 
-                //wrtie a comment to the PR saying files committed successfully
                 var newComment = _client.PullRequest.Review.Create(_owner, _repo, prNumber, pullRequestReviewCreate).Result;
             }
             catch (Exception ex)
             {
-                // Handle the exception as needed
-                Console.WriteLine($"Error occurred while adding PR comment. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
+                HandleException("Error occurred while adding PR comment", ex);
             }
         }
 
+        private static string RemovePemHeaderAndFooter(string privateKey)
+        {
+            const string header = "-----BEGIN RSA PRIVATE KEY-----";
+            const string footer = "-----END RSA PRIVATE KEY-----";
+
+            int start = privateKey.IndexOf(header) + header.Length;
+            int end = privateKey.IndexOf(footer, start);
+
+            return privateKey.Substring(start, end - start).Replace("\r", "").Replace("\n", "");
+        }
+
+        private static string GenerateJwtToken(string appId, string privateKey)
+        {
+            using (RSA rsa = RSA.Create())
+            {
+                rsa.ImportRSAPrivateKey(Convert.FromBase64String(privateKey), out _);
+
+                var now = DateTimeOffset.UtcNow;
+                var expiration = now.AddMinutes(10); // Adjust the expiration time as needed
+
+                var signingCredentials = new SigningCredentials(new RsaSecurityKey(rsa), SecurityAlgorithms.RsaSha256);
+
+                var claims = new[]
+                {
+                new Claim("iat", now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer),
+                new Claim("exp", expiration.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer),
+                new Claim("iss", appId)
+            };
+
+                var token = new JwtSecurityToken(claims: claims, signingCredentials: signingCredentials);
+                var handler = new JwtSecurityTokenHandler();
+
+                return handler.WriteToken(token);
+            }
+        }
+
+        private static async Task<string> GetInstallationAccessToken(string appId, string installationId, string jwtToken)
+        {
+            var installationUrl = $"https://api.github.com/app/installations/{installationId}/access_tokens";
+            var httpClient = new HttpClient();
+
+            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {jwtToken}");
+            httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+            httpClient.DefaultRequestHeaders.Add("User-Agent", "MicrosoftSentinelValidationApp");
+
+            var response = await httpClient.PostAsync(installationUrl, null);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            dynamic json = JsonConvert.DeserializeObject(content);
+
+            return json.token;
+        }
+
+        private void HandleException(string errorMessage, Exception ex)
+        {
+            Console.WriteLine($"{errorMessage}. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
+        }
+
+        public int GetPullRequestNumber()
+        {
+            if (_prNumber == null)
+            {
+                int.TryParse(Environment.GetEnvironmentVariable("PRNUM"), out int prNumber);
+                _prNumber = prNumber;
+                // Uncomment below for debugging with a PR
+                // _prNumber = 9476;
+            }
+
+            return _prNumber.GetValueOrDefault();
+        }
     }
+
 }
