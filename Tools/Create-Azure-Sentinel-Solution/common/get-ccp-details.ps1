@@ -14,9 +14,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
         foreach ($file in $items) {
             $file = $file.Replace("$baseFolderPath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
 
-            $currentFileDCPath = $baseFolderPath + $solutionName + "/" + $file
-            $currentFileDCPath = $currentFileDCPath.Replace("//", "/")
-                
+            $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
+
             $fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
 
             # check if dataconnectorDefinitions type exist in dc array
@@ -182,6 +181,7 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
     # call this only when there are atleast 1 ccp connector
     $ccpTablesFilePaths = @()
     $identifiedDCPath = ($baseFolderPath + $solutionName + "/" + $DCFolderName).Replace("//", "/")
+    #$currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $identifiedDCPath).Replace("//", "/")
 
     foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
         if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 

@@ -159,7 +159,7 @@ try {
 
             if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
                 $isCCPConnector = $true
-                $ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $baseFolderPath -solutionName $solutionName -DCFolderName $DCFolderName
+                $ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $DCFolderName
             }
         }
         Write-Host "isCCPConnector $isCCPConnector"
