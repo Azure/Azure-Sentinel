@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
@@ -34,6 +35,12 @@ namespace Kqlvalidations.Tests
 
         public static GitHubApiClient Create()
         {
+            //write all env variables to console
+            foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
+            {
+                Console.WriteLine("  {0} = {1}", de.Key, de.Value);
+            }
+
             if (_instance == null)
             {
                 lock (_lock)
