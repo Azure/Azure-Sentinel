@@ -196,10 +196,15 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
                 $currentTableFilePath = $inputFile.FullName
                 if ($existingCCPDict.Count -gt 0) {
                     # check if current file path already present in variable $existingCCPDict if not present then add it in new variable list
+                    $isTablePresent = $false;
                     foreach ($ccpRecord in $existingCCPDict) {
-                        if ($ccpRecord.TableFilePath -ne '' -and $ccpRecord.TableFilePath -ne $currentTableFilePath) {
-                            $ccpTablesFilePaths += "$currentTableFilePath"
+                        if ($ccpRecord.TableFilePath -ne '' -and $ccpRecord.TableFilePath -eq $currentTableFilePath) {
+                            $isTablePresent = $true;
+                            break;
                         }
+                    }
+                    if (!$isTablePresent) {
+                        $ccpTablesFilePaths += "$currentTableFilePath"
                     }
                 }
             }

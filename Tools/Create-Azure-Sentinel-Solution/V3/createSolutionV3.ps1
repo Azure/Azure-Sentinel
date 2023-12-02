@@ -163,7 +163,7 @@ try {
             }
         }
         Write-Host "isCCPConnector $isCCPConnector"
-
+        $ccpConnectorCodeExecutionCounter = 1;
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
             if ($objectProperties.Value -is [System.Array]) {
                 foreach ($file in $objectProperties.Value) {
@@ -206,15 +206,22 @@ try {
                                     }
                                 }
 
-                                if ($isCCPConnectorFile) {
+                                if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
                                     # current file is a ccp connector
                                     GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
-                                } else {
+
+                                    $ccpConnectorCodeExecutionCounter += 1
+                                } 
+                                elseif ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -gt 1) {
+                                    continue;
+                                }
+                                else {
                                     # current file is a normal connector
                                     GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
                                 }
                             }
                             else {
+                                # current file is a normal connector
                                 GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter 
                             }
                         }
