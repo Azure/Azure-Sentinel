@@ -1713,7 +1713,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     }
 
     $global:ccpCounter = 1
-    function GetDataConnectorMetadata($file, $contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict = $null, $solutionBasePath, $solutionName)
+    function GetDataConnectorMetadata($file, $contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict = $null, $solutionBasePath, $solutionName, $ccpTables, $ccpTablesCounter)
     {
         Write-Host "Generating Data Connector using $file"
         if ($null -ne $ccpDict)
@@ -1722,7 +1722,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             if ($global:ccpCounter -eq 1)
             {
                 . "$PSScriptRoot/createCCPConnector.ps1" # load ccp resource creator
-                createCCPConnectorResources -contentResourceDetails $contentResourceDetails -dataFileMetadata $dataFileMetadata -solutionFileMetadata $solutionFileMetadata -dcFolderName $dcFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName
+                createCCPConnectorResources -contentResourceDetails $contentResourceDetails -dataFileMetadata $dataFileMetadata -solutionFileMetadata $solutionFileMetadata -dcFolderName $dcFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTables -ccpTablesCounter $ccpTablesCounter
                 $global:ccpCounter += 1
             }
             return

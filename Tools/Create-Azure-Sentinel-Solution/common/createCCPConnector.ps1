@@ -331,7 +331,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
         $tableCounter = 1;
 
         foreach ($ccpItem in $ccpDict) {
-            $templateName = $ccpItem.DCDefinitionId; #$ccpItem.title;
+            $templateName = $ccpItem.DCDefinitionId; 
             For ($TemplateCounter = 1; $TemplateCounter -lt 3; $TemplateCounter++) {
             
                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "$templateName"
@@ -664,12 +664,19 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "$dataCollectionEndpointIdPropertyName" -NotePropertyValue "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
                         }
                     }
+                } else {
+                    # if dataCollectionEndpointId property not present then add it 
+                    $armResource.properties | Add-Member -MemberType NoteProperty -Name "dataCollectionEndpointId" -Value "[variables('dataCollectionEndpointId')]"
+
+                    if (!$global:baseMainTemplate.variables.dataCollectionEndpointId) {
+                        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataCollectionEndpointId" -NotePropertyValue "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
+                    }
                 }
 
                 # workspaceResourceId
-                $hasWorkspaceResourceIdProperty = [bool](($armResource.properties).PSobject.Properties.name -match "workspaceResourceId")
+                $hasWorkspaceResourceIdProperty = [bool](($armResource.properties.destinations.logAnalytics[0]).PSobject.Properties.name -match "workspaceResourceId")
                 if ($hasWorkspaceResourceIdProperty) {
-                    $workspaceResourceIdProperty = $armResource.properties.destinations.logAnalytics.workspaceResourceId
+                    $workspaceResourceIdProperty = $armResource.properties.destinations.logAnalytics[0].workspaceResourceId
                     $placeHoldersMatched = $workspaceResourceIdProperty | Select-String $placeHolderPatternMatches -AllMatches
 
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
@@ -678,6 +685,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                         $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $false
                     }
+                } else {
+                    # if workspaceResourceId property not present then add it 
+                    $armResource.properties.destinations.logAnalytics | Add-Member -MemberType NoteProperty -Name "workspaceResourceId" -Value "[[parameters('workspaceResourceId')]"
+
+                    $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'workspaceResourceId' -isSecret $false
                 }
 
                 $armResource = $(removePropertiesRecursively $armResource $false)
@@ -712,7 +724,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
             }
 
-            if ($null -ne $ccpTables -and $ccpTables.count -gt 0 -and $ccpTablesCounter -eq 0) {
+            if ($null -ne $ccpTables -and $ccpTables.count -gt 0 -and $ccpTablesCounter -eq 1) {
                 # add additional tables if any and run this code only once
 
                 foreach ($tableFilePath in $ccpTables) {
@@ -743,7 +755,22 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             #========end: tables resource===========
 
             ## Build the full package resources
-            $templateContentConnections.properties.mainTemplate.parameters = Get-ConnectionsTemplateParameters $activeResource $ccpItem;
+            $paramItems1 = Get-ConnectionsTemplateParameters $activeResource $ccpItem;
+            $finalParameters = $templateContentConnections.properties.mainTemplate.parameters;
+            foreach ($prop1 in $paramItems1.psobject.Properties) {
+                $hasProperty = $false;
+                foreach ($prop2 in $finalParameters.psobject.Properties) {
+                    if ($prop1.Name -eq $prop2.Name) {
+                        $hasProperty = $true
+                        break;
+                    }
+                }
+
+                if (!$hasProperty) {
+                    $finalParameters | Add-Member -MemberType NoteProperty -Name $prop1.Name -Value $prop1.Value
+                }
+            }
+
             $global:baseMainTemplate.resources += $templateContentConnectorDefinition
             $global:baseMainTemplate.resources += $activeResource
             $global:baseMainTemplate.resources += $templateContentConnections

@@ -193,12 +193,12 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
             $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
 
             if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
-                $currentTableFilePath = $fileContent.FullName
+                $currentTableFilePath = $inputFile.FullName
                 if ($existingCCPDict.Count -gt 0) {
                     # check if current file path already present in variable $existingCCPDict if not present then add it in new variable list
                     foreach ($ccpRecord in $existingCCPDict) {
                         if ($ccpRecord.TableFilePath -ne '' -and $ccpRecord.TableFilePath -ne $currentTableFilePath) {
-                            $ccpTablesFilePaths += $currentTableFilePath
+                            $ccpTablesFilePaths += "$currentTableFilePath"
                         }
                     }
                 }
@@ -206,6 +206,5 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
         }
     }
 
-    # return unique file paths only for tables
-    return $ccpTablesFilePaths | Sort-Object -Unique;
+    return $ccpTablesFilePaths;
 }
