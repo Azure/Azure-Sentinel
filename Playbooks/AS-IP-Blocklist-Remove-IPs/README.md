@@ -4,8 +4,8 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-IP-Blocklist-Remove-IPs%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-IP-Blocklist-Remove-IPs%2Fmain%2Fazuredeploy.json)       
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel Incident. It will remove the IP address from Microsoft Sentinel Incidents from a Microsoft Azure Conditional Access Named Locations list, indicating compromised IP addresses.
                                                                                                                                      
@@ -17,9 +17,9 @@ This playbook is intended to be run from a Microsoft Sentinel Incident. It will 
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* A Microsoft Azure [Named Locations List](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-a-named-locations-list)
-* An [App Registration](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-an-app-registration) for using the Microsoft Graph API
-* An [Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-an-azure-key-vault-secret) containing your App Registration Secret 
+* A Microsoft Azure [Named Locations List](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-a-named-locations-list)
+* An [App Registration](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-an-app-registration) for using the Microsoft Graph API
+* An [Azure Key Vault Secret](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-an-azure-key-vault-secret) containing your App Registration Secret 
 
 
 # 
@@ -92,7 +92,7 @@ Enter a description and select the desired expiration date, then click "**Add**"
 
 ![NamedLocations_Create_App_Registration_9](Images/NamedLocations_Create_App_Registration_9.png)
 
-Copy the generated "**Value**" and save it for the next step, [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-an-azure-key-vault-secret).
+Copy the generated "**Value**" and save it for the next step, [Create an Azure Key Vault Secret](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-an-azure-key-vault-secret).
 
 ![NamedLocations_Create_App_Registration_10](Images/NamedLocations_Create_App_Registration_10.png)
 
@@ -109,7 +109,7 @@ Choose a name for the secret, such as "**Update-Named-Locations--App-Registratio
 
 ![NamedLocations_Key_Vault_2](Images/NamedLocations_Key_Vault_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fgranting-access-to-azure-key-vault).
 
 ![NamedLocations_Key_Vault_3](Images/NamedLocations_Key_Vault_3.png)
 
@@ -123,8 +123,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-IP-Blocklist-Remove-IPs%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-IP-Blocklist-Remove-IPs%2Fmain%2Fazuredeploy.json)                                             
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fazuredeploy.json)                                             
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
@@ -136,17 +136,17 @@ In the **Instance Details** section:
 
 * **Playbook Name**: This can be left as "**AS-IP-Blocklist-Remove-IPs**" or you may change it.  
 
-* **Named Locations List Name**: Enter the value of the Named Locations list created in [Create a Named Locations list](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-a-named-locations-list).
+* **Named Locations List Name**: Enter the value of the Named Locations list created in [Create a Named Locations list](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-a-named-locations-list).
 
-* **Named Locations List ID**: Enter the value of the Named Locations list ID referenced in [Create a Named Locations list](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-a-named-locations-list).
+* **Named Locations List ID**: Enter the value of the Named Locations list ID referenced in [Create a Named Locations list](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-a-named-locations-list).
 
-* **App Registration ID**: Enter the value of the Application (client) ID referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-an-app-registration).
+* **App Registration ID**: Enter the value of the Application (client) ID referenced in [Create an App Registration](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-an-app-registration).
 
-* **App Registration Tenant**: Enter the value of the Directory (tenant) ID referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-an-app-registration).
+* **App Registration Tenant**: Enter the value of the Directory (tenant) ID referenced in [Create an App Registration](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-an-app-registration).
 
-* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-an-azure-key-vault-secret).
 
-* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs#create-an-azure-key-vault-secret).
+* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-an-azure-key-vault-secret).
 
 Towards the bottom, click on “**Review + create**”. 
 
