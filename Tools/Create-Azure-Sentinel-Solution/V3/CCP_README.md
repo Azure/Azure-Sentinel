@@ -230,7 +230,7 @@ Every CCP connector will have 4 building blocks and should be specified in seque
 ```json
 [
   {
-    "name": "tableNameShouldBeMeanful",
+    "name": "<tableNameShouldBeMeanful>",
     "type": "Microsoft.OperationalInsights/workspaces/tables",
     "apiVersion": "2021-03-01-privatepreview",
     "properties": {
