@@ -680,6 +680,16 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                 }
 
+                if (!$global:baseMainTemplate.parameters.resourceGroupName) {
+                    $resourceGroupNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[resourceGroup().name]"; metadata = [PSCustomObject] @{ description = "resource group name where Microsoft Sentinel is setup" }; }
+                    $global:baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "resourceGroupName" -Value $resourceGroupNameParameter
+                }
+
+                if (!$global:baseMainTemplate.parameters.subscription) {
+                    $subscriptionParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[last(split(subscription().id, '/'))]"; metadata = [PSCustomObject] @{ description = "subscription id where Microsoft Sentinel is setup" }; }
+                    $global:baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "subscription" -Value $subscriptionParameter
+                }
+
                 # workspaceResourceId
                 $hasWorkspaceResourceIdProperty = [bool](($armResource.properties.destinations.logAnalytics[0]).PSobject.Properties.name -match "workspaceResourceId")
                 if ($hasWorkspaceResourceIdProperty) {

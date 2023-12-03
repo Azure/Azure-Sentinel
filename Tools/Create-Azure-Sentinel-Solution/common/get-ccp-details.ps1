@@ -15,7 +15,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
             $file = $file.Replace("$baseFolderPath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
 
             $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
-
+            Write-Host "currentFileDCPath $currentFileDCPath"
             $fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
 
             # check if dataconnectorDefinitions type exist in dc array

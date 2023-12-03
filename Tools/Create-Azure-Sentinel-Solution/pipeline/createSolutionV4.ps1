@@ -104,7 +104,7 @@ try
 					}
 
 					# =============start: ccp connector code===============
-					$solutionBasePath = $pipelineBasePath + "/Solutions/";
+					$solutionBasePath = ($pipelineBasePath + "/Solutions/").Replace("//", "/");
 
 					$solutionMetadataPath = $solutionBasePath + "$($pipelineDataFileRawContent.Name)/$($pipelineDataFileRawContent.Metadata)"
 					$solutionBaseMetadata = Get-Content -Raw $solutionMetadataPath | Out-String | ConvertFrom-Json
@@ -114,11 +114,11 @@ try
 					}
 
 					if ($isCCPConnector -eq $false) {            
-            $ccpDict = Get-CCP-Dict -dataFileMetadata $pipelineDataFileRawContent -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataFolderActualName
+            [array]$ccpDict = Get-CCP-Dict -dataFileMetadata $pipelineDataFileRawContent -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataConnectorFolderName
 
             if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
 							$isCCPConnector = $true
-							[array]$ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataFolderActualName
+							[array]$ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataConnectorFolderName
 						}
 					}
 					Write-Host "isCCPConnector $isCCPConnector"
@@ -164,6 +164,7 @@ try
 							}
 						}
 						
+						$finalPath = $finalPath.Replace("//", "/")
 						Write-Host "Final Path is $finalPath"
 						$rawData = $null
 						Send-AppInsightsTraceTelemetry -InstrumentationKey "$instrumentationKey" -Message "CreateSolutionV4: For Solution $pipelineSolutionName, Current file path is $finalPath" -Severity Information -CustomProperties $customProperties
@@ -193,7 +194,7 @@ try
 						catch {
 							Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
 							Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; 'ErrorDetails'="CreateSolutionV4 : Error occured in catch block: $_"; 'EventName'="CreateSolutionV4" }
-							break;
+							exit 1;
 						}
 
 						try {

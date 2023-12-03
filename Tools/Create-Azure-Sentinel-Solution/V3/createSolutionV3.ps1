@@ -168,7 +168,7 @@ try {
             if ($objectProperties.Value -is [System.Array]) {
                 foreach ($file in $objectProperties.Value) {
                     $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
-                    $finalPath = $basePath + $solutionName + "/" + $file
+                    $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")
                     $rawData = $null
                     try {
                         Write-Host "Downloading $finalPath"
