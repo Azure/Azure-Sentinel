@@ -118,11 +118,11 @@ try
 
             if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
 							$isCCPConnector = $true
-							$ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataFolderActualName
+							[array]$ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataFolderActualName
 						}
 					}
 					Write-Host "isCCPConnector $isCCPConnector"
-
+					$ccpConnectorCodeExecutionCounter = 1;
 					# =============end: ccp connector code===============
 
 					foreach ($file in $filesList) 
@@ -225,10 +225,14 @@ try
 											}
 									}
 
-									if ($isCCPConnectorFile) {
+									if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
 											# current file is a ccp connector
 											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
-									} else {
+									} 
+									elseif ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -gt 1) {
+										continue;
+									}
+									else {
 											# current file is a normal connector
 											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
 									}
