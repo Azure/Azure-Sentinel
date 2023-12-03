@@ -121,15 +121,14 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             //ValidateKql(id, queryStr);
-            ValidateKqlForBestPractices(queryStr);
+            ValidateKqlForBestPractices(queryStr,fileName);
             //ValidateKqlForLatestTIData(id, queryStr);
         }
 
-        private void ValidateKqlForBestPractices(string queryStr)
+        private void ValidateKqlForBestPractices(string queryStr, string filename)
         {
-            var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr);
+            var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr,filename);
             var gitHubApiClient = GitHubApiClient.Create();
-            //gitHubApiClient.AddFileComment(filename,suggestions);
             gitHubApiClient.AddPRComment(suggestions);
         }
 

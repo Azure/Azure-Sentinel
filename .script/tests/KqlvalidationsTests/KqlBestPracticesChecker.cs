@@ -5,7 +5,7 @@ namespace Kqlvalidations.Tests
 {
     public class KqlBestPracticesChecker
     {
-        public static string CheckBestPractices(string queryStr)
+        public static string CheckBestPractices(string queryStr, string fileName)
         {
             var suggestions = new List<string>();
 
@@ -46,13 +46,18 @@ namespace Kqlvalidations.Tests
             CheckMaterializeFunction(queryStr, suggestions);
 
             // Combine suggestions into a single string
-            return FormatSuggestionsWithDisclaimer(suggestions);
+            return FormatSuggestionsWithDisclaimer(suggestions,fileName);
         }
 
-        private static string FormatSuggestionsWithDisclaimer(List<string> suggestions)
+        private static string FormatSuggestionsWithDisclaimer(List<string> suggestions, string fileName)
         {
-            var formattedSuggestions = new List<string>();
+            var formattedSuggestions = new List<string>
+            {
+                // Suggestions for the file comment
+                $"KQL Best Practices Suggestions for: **{fileName}**"
+            };
 
+            // Add numbered suggestions
             for (int i = 0; i < suggestions.Count; i++)
             {
                 formattedSuggestions.Add($"{i + 1}. {suggestions[i]}");
@@ -63,6 +68,7 @@ namespace Kqlvalidations.Tests
 
             return string.Join("\n", formattedSuggestions);
         }
+
 
 
         private static void CheckDontUseLongForDatetime(string queryStr, List<string> suggestions)
