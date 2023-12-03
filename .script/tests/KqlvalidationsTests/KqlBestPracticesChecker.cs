@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace Kqlvalidations.Tests
 {
+    /// <summary>
+    /// Class for KQL Best practices checker
+    /// </summary>
     public class KqlBestPracticesChecker
     {
         public static string CheckBestPractices(string queryStr, string fileName)
@@ -46,9 +49,15 @@ namespace Kqlvalidations.Tests
             CheckMaterializeFunction(queryStr, suggestions);
 
             // Combine suggestions into a single string
-            return FormatSuggestionsWithDisclaimer(suggestions,fileName);
+            return FormatSuggestionsWithDisclaimer(suggestions, fileName);
         }
 
+        /// <summary>
+        /// Formats suggestions
+        /// </summary>
+        /// <param name="suggestions">suggestions</param>
+        /// <param name="fileName">filename</param>
+        /// <returns>formatted suggestions</returns>
         private static string FormatSuggestionsWithDisclaimer(List<string> suggestions, string fileName)
         {
             var formattedSuggestions = new List<string>
@@ -70,7 +79,11 @@ namespace Kqlvalidations.Tests
         }
 
 
-
+        /// <summary>
+        /// Don't use the long data type for datetime columns.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         private static void CheckDontUseLongForDatetime(string queryStr, List<string> suggestions)
         {
             var functionsToCheck = new List<string>
@@ -81,64 +94,182 @@ namespace Kqlvalidations.Tests
         "unixtime_seconds_todatetime"
     };
 
+            string[] lines = queryStr.Split('\n');
+
             foreach (var function in functionsToCheck)
             {
-                // Example: Check if queryStr contains the function and suggest not using long
-                if (queryStr.Contains($"{function}("))
+                foreach (var line in lines)
                 {
-                    suggestions.Add($"Consider using datetime columns directly instead of the long data type. " +
-                                    $"KQL works better with datetime than long. " +
-                                    $"You can use update policies to convert unix time to the datetime data type during ingestion. " +
-                                    $"Function causing the suggestion: {function}");
+                    // Skip commented lines
+                    if (line.Trim().StartsWith("//"))
+                    {
+                        continue;
+                    }
+
+                    // Example: Check if line contains the function and suggest not using long
+                    if (line.Contains($"{function}("))
+                    {
+                        suggestions.Add($"Consider using datetime columns directly instead of the long data type. " +
+                                        $"KQL works better with datetime than long. " +
+                                        $"You can use update policies to convert unix time to the datetime data type during ingestion. " +
+                                        $"Function causing the suggestion: {function}");
+                        break;  // No need to check other lines once a suggestion is added
+                    }
                 }
             }
         }
 
+
+        /// <summary>
+        /// Use the has operator instead of contains for string operators.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         private static void CheckUseHasInsteadOfContains(string queryStr, List<string> suggestions)
         {
-            // Check for the use of contains operator and suggest using has operator
-            if (queryStr.Contains("contains", StringComparison.OrdinalIgnoreCase))
+            var lines = queryStr.Split('\n');
+
+            foreach (var line in lines)
             {
-                suggestions.Add("Use the 'has' operator instead of 'contains' for string operators.");
+                var trimmedLine = line.Trim();
+
+                // Skip commented lines
+                if (trimmedLine.StartsWith("//"))
+                {
+                    continue;
+                }
+
+                // Check for the use of contains and suggest using has
+                if (trimmedLine.Contains("contains", StringComparison.OrdinalIgnoreCase))
+                {
+                    suggestions.Add("Use the 'has' operator instead of 'contains' for string operators.");
+                    break;  // No need to continue checking once the pattern is found
+                }
             }
         }
 
+
+        /// <summary>
+        ///  Use == instead of =~ for case-insensitive comparisons.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         private static void CheckUseEqualsInsteadOfEqualsTilde(string queryStr, List<string> suggestions)
         {
-            // Check for the use of =~ operator and suggest using == operator for case-sensitive comparisons
-            if (queryStr.Contains("=~", StringComparison.OrdinalIgnoreCase))
+            var lines = queryStr.Split('\n');
+
+            foreach (var line in lines)
             {
-                suggestions.Add("Use the '==' operator instead of '=~' for case-sensitive comparisons.");
+                var trimmedLine = line.Trim();
+
+                // Skip commented lines
+                if (trimmedLine.StartsWith("//"))
+                {
+                    continue;
+                }
+
+                // Check for the use of =~ and suggest using == for case-sensitive comparisons
+                if (trimmedLine.Contains("=~", StringComparison.OrdinalIgnoreCase))
+                {
+                    suggestions.Add("Use the '==' operator instead of '=~' for case-sensitive comparisons.");
+                    break;  // No need to continue checking once the pattern is found
+                }
             }
         }
 
+
+        /// <summary>
+        ///  Use in instead of in~ for case-sensitive comparisons.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         private static void CheckUseInInsteadOfInTilde(string queryStr, List<string> suggestions)
         {
-            // Check for the use of in~ and suggest using in operator for case-sensitive comparisons
-            if (queryStr.Contains("in~", StringComparison.OrdinalIgnoreCase))
+            var lines = queryStr.Split('\n');
+
+            foreach (var line in lines)
             {
-                suggestions.Add("Use the 'in' operator instead of 'in~' for case-sensitive comparisons.");
+                var trimmedLine = line.Trim();
+
+                // Skip commented lines
+                if (trimmedLine.StartsWith("//"))
+                {
+                    continue;
+                }
+
+                // Check for the use of in~ and suggest using in operator for case-sensitive comparisons
+                if (trimmedLine.Contains("in~", StringComparison.OrdinalIgnoreCase))
+                {
+                    suggestions.Add("Use the 'in' operator instead of 'in~' for case-sensitive comparisons.");
+                    break;  // No need to continue checking once the pattern is found
+                }
             }
         }
 
+
+        /// <summary>
+        ///  Use contains_cs instead of contains for case-sensitive comparisons.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         private static void CheckUseContainsCSInsteadOfContains(string queryStr, List<string> suggestions)
         {
-            // Check for the use of contains and suggest using contains_cs operator for case-sensitive comparisons
-            if (queryStr.Contains("contains", StringComparison.OrdinalIgnoreCase))
+            var lines = queryStr.Split('\n');
+
+            foreach (var line in lines)
             {
-                suggestions.Add("Use the 'contains_cs' operator instead of 'contains' for case-sensitive comparisons.");
+                var trimmedLine = line.Trim();
+
+                // Skip commented lines
+                if (trimmedLine.StartsWith("//"))
+                {
+                    continue;
+                }
+
+                // Check for the use of contains and suggest using contains_cs operator for case-sensitive comparisons
+                if (trimmedLine.Contains("contains", StringComparison.OrdinalIgnoreCase))
+                {
+                    suggestions.Add("Use the 'contains_cs' operator instead of 'contains' for case-sensitive comparisons.");
+                    break;  // No need to continue checking once the pattern is found
+                }
             }
         }
 
+
+        /// <summary>
+        /// Don't use * for searching text. Look in a specific column.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         private static void CheckSearchTextInSpecificColumn(string queryStr, List<string> suggestions)
         {
-            // Check for the presence of '*' in the query.
-            if (queryStr.Contains('*'))
+            var lines = queryStr.Split('\n');
+
+            foreach (var line in lines)
             {
-                suggestions.Add("Don't use '*' for searching text. Look in a specific column.");
+                var trimmedLine = line.Trim();
+
+                // Skip commented lines
+                if (trimmedLine.StartsWith("//"))
+                {
+                    continue;
+                }
+
+                // Check for the presence of '*' in the query.
+                if (trimmedLine.Contains('*'))
+                {
+                    suggestions.Add("Don't use '*' for searching text. Look in a specific column.");
+                    break;  // No need to continue checking once the pattern is found
+                }
             }
         }
 
+
+        /// <summary>
+        /// Check Let Statement Reuse
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         public static void CheckLetStatementReuse(string queryStr, List<string> suggestions)
         {
             string[] lines = queryStr.Split('\n');
@@ -162,6 +293,13 @@ namespace Kqlvalidations.Tests
             }
         }
 
+        /// <summary>
+        ///  Count the number of times a variable is used after its declaration
+        /// </summary>
+        /// <param name="lines">query lines</param>
+        /// <param name="variableName">variable name</param>
+        /// <param name="startIndex">start index</param>
+        /// <returns>returns count</returns>
         private static int CountVariableUsage(string[] lines, string variableName, int startIndex)
         {
             int count = 0;
@@ -179,6 +317,11 @@ namespace Kqlvalidations.Tests
             return count;
         }
 
+        /// <summary>
+        /// Check for case-insensitive comparisons
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         public static void CheckCaseInsensitiveComparisons(string queryStr, List<string> suggestions)
         {
             string[] lines = queryStr.Split('\n');
@@ -186,6 +329,12 @@ namespace Kqlvalidations.Tests
             foreach (string line in lines)
             {
                 string trimmedLine = line.Trim();
+
+                // Ignore commented lines
+                if (trimmedLine.StartsWith("//"))
+                {
+                    continue;
+                }
 
                 // Check for tolower() or toupper() in the query
                 if (trimmedLine.Contains("tolower(") || trimmedLine.Contains("toupper("))
@@ -197,6 +346,11 @@ namespace Kqlvalidations.Tests
             }
         }
 
+        /// <summary>
+        /// Check for Filter on a table column.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         public static void CheckFilteringOnCalculatedColumn(string queryStr, List<string> suggestions)
         {
             string[] lines = queryStr.Split('\n');
@@ -230,6 +384,11 @@ namespace Kqlvalidations.Tests
             }
         }
 
+        /// <summary>
+        ///  Check for the use of summarize operator
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         public static void CheckSummarizeOperator(string queryStr, List<string> suggestions)
         {
             string[] lines = queryStr.Split('\n');
@@ -251,6 +410,11 @@ namespace Kqlvalidations.Tests
             }
         }
 
+        /// <summary>
+        ///  Check for the use of join operator
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         public static void CheckJoinOperator(string queryStr, List<string> suggestions)
         {
             string[] lines = queryStr.Split('\n');
@@ -276,6 +440,11 @@ namespace Kqlvalidations.Tests
             }
         }
 
+        /// <summary>
+        ///  Check Usage of the materialize operator.
+        /// </summary>
+        /// <param name="queryStr">query string</param>
+        /// <param name="suggestions">suggestions list</param>
         public static void CheckMaterializeFunction(string queryStr, List<string> suggestions)
         {
             string[] lines = queryStr.Split('\n');
@@ -299,8 +468,5 @@ namespace Kqlvalidations.Tests
                 }
             }
         }
-
-
-
     }
 }

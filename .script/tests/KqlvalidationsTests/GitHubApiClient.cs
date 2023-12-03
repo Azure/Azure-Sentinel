@@ -47,9 +47,9 @@ namespace Kqlvalidations.Tests
                 {
                     if (_instance == null)
                     {
-                        var appId = Environment.GetEnvironmentVariable("GITHUBAPPID111");
-                        var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID111");
-                        var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY111");
+                        var appId = Environment.GetEnvironmentVariable("GitHubAppID");
+                        var installationId = Environment.GetEnvironmentVariable("GitHubAppInstallationID");
+                        var privateKey = Environment.GetEnvironmentVariable("GitHubAppPrivateKey");
 
                         if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
                         {
@@ -92,7 +92,7 @@ namespace Kqlvalidations.Tests
 
             return _cachedPullRequestFiles;
         }
-
+                
         public void AddPRComment(string comment)
         {
             try
