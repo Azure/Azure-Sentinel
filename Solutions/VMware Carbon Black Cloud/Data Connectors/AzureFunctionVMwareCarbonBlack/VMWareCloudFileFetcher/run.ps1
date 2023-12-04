@@ -21,12 +21,14 @@ param($Timer)
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
 $logAnalyticsUri = $env:logAnalyticsUri
+[int]$maxMainQueuemessages=150
+[int]$maxdurationminutes=10
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
-
+$script_start_time=([System.DateTime]::UtcNow)
 
 
 # The function will call the Carbon Black API and retrieve the Audit, Event, and Notifications Logs
@@ -51,9 +53,12 @@ function CarbonBlackAPI()
     $AWSAccessKeyId = $env:AWSAccessKeyId
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
     $queueName=$env:queueName
+    $backlogQueue=$env:backlogQueue
     $carbonBlackStorage=$env:AzureWebJobsStorage
 
-    
+    $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time))
+    $now = [System.DateTime]::UtcNow
+ 
 
     # Remove if addition slash or space added in hostName
     $hostName = $hostName.Trim() -replace "[.*/]$",""
@@ -133,8 +138,8 @@ function CarbonBlackAPI()
     {
         if($LogTypeArr -contains "event")
         {
-            $json = Convert-ToJSON -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable -logtype "event"
-            CreateQueuePostMessageToQueue($json)
+            GetBucketFiles($EventprefixFolder)
+           
             
         }
         else{
@@ -153,8 +158,7 @@ function CarbonBlackAPI()
         {
             if(-not([string]::IsNullOrWhiteSpace($s3BucketName)) -and -not([string]::IsNullOrWhiteSpace($AWSAccessKeyId)) -and -not([string]::IsNullOrWhiteSpace($AWSSecretAccessKey)) -and -not([string]::IsNullOrWhiteSpace($OrgKey)))
             {
-                $json = Convert-ToJSON -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable -logtype "alert"
-                CreateQueuePostMessageToQueue($json)
+                GetBucketFiles($AlertprefixFolder)
                 
             }
         }
@@ -253,19 +257,152 @@ An example
 .NOTES
 General notes
 #>
-function  Convert-ToJSON($s3BucketName,$prefixFolder,$tableName,$logtype)
+function  Convert-ToJSON($s3BucketName,$keyPrefix,$tableName,$logtype)
 {
 
     $bucketObject = [PSCustomObject]@{
         s3BucketName = $s3BucketName
-        prefixFolder = $prefixFolder
+        keyPrefix = $keyPrefix
         tableName = $tableName
         logType=$logtype
         msgId=New-Guid
     }
 return ConvertTo-Json -InputObject $bucketObject
 }
+<#
+.SYNOPSIS
+#
 
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function GetStorageContext()
+{
+if(-not([string]::IsNullOrWhiteSpace($carbonBlackStorage)))
+{
+ $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
+ return $ctx
+}
+
+}
+<#
+.SYNOPSIS
+#
+
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function GetQueueCount()
+{
+    $context=GetStorageContext
+    $messageCount = (Get-AzStorageQueue -Context $context | where-object{$_.name -eq $queueName}).ApproximateMessageCount
+    return $messageCount
+}
+<#
+.SYNOPSIS
+##
+
+.DESCRIPTION
+Long description
+
+.PARAMETER percentage
+Parameter description
+
+.PARAMETER script_start_time
+Parameter description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function check_if_script_runs_too_long($percentage, $script_start_time)
+{
+ [int]$seconds=(60)
+ [int]$duration = $(([System.DateTime]::UtcNow - $script_start_time).Seconds)
+ [int]$temp=$maxdurationminutes * $seconds 
+ [double]$maxduration= $temp * 0.8
+ return $duration -gt $maxduration
+}
+<#
+.SYNOPSIS
+#
+
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function GetBucketFiles($prefixFolder)
+{
+    IF ($Null -ne $s3BucketName) {
+        Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
+        while ($startTime -le $now) {
+            $prefixFolder="carbon-black-events"
+            #$keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
+            $keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=2/hour=23/minute=30"
+            #$path=Get-ChildItem -Path $keyPrefix -Recurse
+            $paths=@()
+            foreach ($items in (Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Select-Object Key )) 
+            { 
+                $path = split-path $items.Key
+                if($path.Contains("second="))
+                {
+                    $paths += $path   
+                }
+               
+            }
+            $paths = $paths | sort -Unique
+            Write-Host $paths
+
+        foreach($item in $paths)
+        {
+            
+          $item=$item.Replace($OrgKey,"")
+          if($prefixFolder -eq "carbon-black-events")
+           {
+            $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $EventLogTable -logtype "event"
+           }
+           else {
+            $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"
+           }
+            if((GetQueueCount) -gt $maxMainQueuemessages)
+            {
+                CreateQueuePostMessageToQueue -message $json -queueN $backlogQueue
+            }
+            else {
+
+                CreateQueuePostMessageToQueue -message $json -queueN $queueName
+            }
+            if((check_if_script_runs_too_long -percentage 0.8 -script_start_time $script_start_time))
+            {
+                break
+            }
+
+        }
+            $startTime = $startTime.AddMinutes(1)
+       
+        }
+
+    }
+}
 <#
 .SYNOPSIS
 This method used for posting to queue
@@ -281,7 +418,7 @@ An example
 .NOTES
 General methods
 #>
-function CreateQueuePostMessageToQueue($message)
+function CreateQueuePostMessageToQueue($message,$queueN)
 {
    
 try
@@ -291,11 +428,12 @@ try
         $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
         if ($null -ne $ctx)
         {
-            $queue = Get-AzStorageQueue –Name $queueName –Context $ctx
+            
+            $queue = Get-AzStorageQueue –Name $queueN –Context $ctx
             if(-not $queue)
             {
                #Creating the queue
-               $queue = New-AzStorageQueue –Name $queueName -Context $ctx  
+               $queue = New-AzStorageQueue –Name $queueN -Context $ctx  
             }
             else {
                 
@@ -308,9 +446,9 @@ try
         }
         if ($null -ne $queue) 
         {  
-            
+           
            $queueMessage = [Microsoft.Azure.Storage.Queue.CloudQueueMessage]::new(($message))
-
+           
            $status=$queue.CloudQueue.AddMessageAsync($queueMessage).GetAwaiter().GetResult()
         }
         else
