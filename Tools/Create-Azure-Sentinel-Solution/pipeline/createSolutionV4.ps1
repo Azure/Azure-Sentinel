@@ -25,7 +25,7 @@ try
 		$baseMetadata = $pipelineDataFileRawContent
 		$metadataCounter = 0
 		$global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $global:solutionId
+		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
 		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
 		
 		$metadataAuthor = $contentToImport.Author.Split(" - ");
@@ -173,7 +173,7 @@ try
 							Write-Host "Downloading $finalPath"
 
 							$isFilePathPresent = Test-Path -Path "$finalPath"
-							Write-Host "isFilePathPresent $isFilePathPresent"
+							Write-Host "Is $finalPath file path present $isFilePathPresent"
 							if ($isFilePathPresent) {
 								$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
 							}
@@ -182,7 +182,6 @@ try
 									Write-Host "FinalPath $finalPath not found!"
 									if ($fileExtension -eq "json") {
 										$finalPath = $finalPath.Replace(".json", ".JSON")
-
 									} else {
 										$finalPath = $finalPath.Replace(".JSON", ".json")
 									}
