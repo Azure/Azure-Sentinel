@@ -36,7 +36,7 @@ namespace Kqlvalidations.Tests
         public static GitHubApiClient Create()
         {
             //write all env variables to console
-            foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
+            foreach (DictionaryEntry de in Environment.GetEnvironmentVariables(EnvironmentVariableTarget.Process))
             {
                 Console.WriteLine("  {0} = {1}", de.Key, de.Value);
             }
