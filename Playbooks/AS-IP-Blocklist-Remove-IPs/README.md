@@ -22,12 +22,12 @@ The following items are required under the template settings during deployment:
 * An [Azure Key Vault Secret](https://github.com/%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist-Remove-IPs%2Fcreate-an-azure-key-vault-secret) containing your App Registration Secret 
 
 
-# 
+#
 ### Setup
                                                                                                                                      
 #### Create a Named Locations list:
 
-Navigate to the Microsoft Azure Active Directory Menu:
+Navigate to the Microsoft Entra ID Menu:
 
 https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview
 
@@ -52,7 +52,7 @@ The JSON response body includes all Named Location lists, along with their IDs.
 
 #### Create an App Registration:
  
-Navigate to the Navigate to the Microsoft Azure Active Directory App Registrations page:
+Navigate to the Navigate to the Microsoft Entra ID App Registrations page:
 
 https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade
 
