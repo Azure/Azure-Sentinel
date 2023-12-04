@@ -3,6 +3,7 @@ param($Timer)
 
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
+##TODO: need to move params and validations
 [int]$maxMainQueuemessages=150
 [int]$maxdurationminutes=10
 # The 'IsPastDue' porperty is 'true' when the current function invocation is later than scheduled.
@@ -203,6 +204,33 @@ function GetMessageFromQueue($queueNm)
 }
 <#
 .SYNOPSIS
+##
+
+.DESCRIPTION
+Long description
+
+.PARAMETER percentage
+Parameter description
+
+.PARAMETER script_start_time
+Parameter description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function check_if_script_run_too_long($percentage, $script_start_time)
+{
+ [int]$seconds=(60)
+ [int]$duration = $(([System.DateTime]::UtcNow - $script_start_time).Seconds)
+ [int]$temp=$maxdurationminutes * $seconds 
+ [double]$maxduration= $temp * 0.8
+ return $duration -gt $maxduration
+}
+<#
+.SYNOPSIS
 #
 
 .DESCRIPTION
@@ -318,6 +346,10 @@ function ProcessBacklog()
         if((GetQCount -queueN $queueName) -eq $maxMainQueuemessages)
         {
              break
+        }
+        if((check_if_script_run_too_long -percentage 0.8 -script_start_time $script_start_time))
+        {
+            break
         }
         $backlogcount=GetQCount -queueN $backlogQueue
     }

@@ -21,6 +21,7 @@ param($Timer)
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
 $logAnalyticsUri = $env:logAnalyticsUri
+##TODO: need to move params and validations
 [int]$maxMainQueuemessages=150
 [int]$maxdurationminutes=10
 
