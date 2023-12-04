@@ -31,14 +31,23 @@ function ProcessBucketFiles ()
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
     $queueName=$env:queueName
     $carbonBlackStorage=$env:AzureWebJobsStorage
-    try {
-        GetBucketDetails -s3BucketName $QueueItem["s3BucketName"] -prefixFolder $QueueItem["prefixFolder"] -tableName $QueueItem["tableName"] -logtype $QueueItem["logtype"]
+
+        $totalEvents = GetBucketDetails -s3BucketName $QueueItem["s3BucketName"] -prefixFolder $QueueItem["keyPrefix"] -tableName $QueueItem["tableName"] -logtype $QueueItem["logtype"]
+        if (-not([string]::IsNullOrWhiteSpace($totalEvents)))
+        {
+            try {
+                    ProcessData -alleventobjs $totalEvents -logtype $QueueItem["tableName"] -endTime $([DateTime]::UtcNow)
+                    Write-Host "Pushed events to $($QueueItem["tableName"])"
+                }
+            catch {
+                    $string_err = $_ | Out-String
+                    Write-Host $string_err
+                }
+            Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")	
+        }
+        Write-Host "Successfully processed the carbon black files from AWS and FA instance took $(([System.DateTime]::UtcNow - $now).Seconds) seconds to process the data"
     }
-    catch {
-        Write-Host "Error, error message: $($Error[0].Exception.Message)"
-    }
-   
-}
+
 
     # Function to build the authorization signature to post to Log Analytics
     function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource) {
@@ -53,7 +62,7 @@ function ProcessBucketFiles ()
         $authorization = 'SharedKey {0}:{1}' -f $customerId, $encodedHash;
         return $authorization;
     }
-    
+
 # Function to POST the data payload to a Log Analytics workspace
 function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
     $TimeStampField = "DateValue"
@@ -212,27 +221,7 @@ An example
 .NOTES
 General notes
 #>
-Function Expand-GZipFile {
-    Param(
-        $infile,
-        $outfile
-    )
-	Write-Host "Processing Expand-GZipFile for: infile = $infile, outfile = $outfile"
-    $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
-    $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)
-    $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)
 
-    $buffer = New-Object byte[](1024)
-    while ($true) {
-        $read = $gzipstream.Read($buffer, 0, 1024)
-        if ($read -le 0) { break }
-		$output.Write($buffer, 0, $read)
-	}
-
-    $gzipStream.Close()
-    $output.Close()
-    $inputfile.Close()
-}
 
 <#
 .SYNOPSIS
@@ -317,26 +306,25 @@ An example
 General notes
 #>
  function ProcessData($alleventobjs, $logtype, $endTime) {
-    Write-Host "Process Data function:- EventsLength - $($allEventsLength), Logtype - $($logtype) and Endtime - $($endTime)"
+    Write-Host "Process Data function:- EventsLength - $($alleventobjs), Logtype - $($logtype) and Endtime - $($endTime)"
     $customerId = $env:workspaceId
     $sharedKey = $env:workspacekey
     $responseCode = 200
-    if ($alleventobjs -ne $null) {
+    if ($null -ne $alleventobjs ) {
         $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
         $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)).Count / 1024 / 1024
         Write-Host "Total mbytes :- $($mbytes) for type :- $($logtype)"
         # Check the payload size, if under 30MB post to Log Analytics.
         if (($mbytes -le 30)) {
-            $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tableName
+            $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $logtype
             if($responseCode -eq 200){
-                Write-Host "SUCCESS: $allEventsLength total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
-                DeleteMessageFromQueue
-            
+                Write-Host "SUCCESS: $alleventobjs total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
+                #DeleteMessageFromQueue
             }
         }
         else {
             Write-Host "Warning!: Total data size is > 30mb hence performing the operation of split and process."
-            $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $tableName
+            $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $logtype
         }
     }
     else {
@@ -359,33 +347,6 @@ An example
 .NOTES
 General notes
 #>
-function  DeleteMessageFromQueue()
-{
-    $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
-    if ($ctx -ne $null)
-    {
-      $queue = Get-AzStorageQueue –Name $queueName –Context $ctx
-    }
-    else
-    {
-      Write-Host "Storage context not available"
-    }
-    if ($queue -ne $null) 
-    {  
-       
-       $status= $queue.CloudQueue.DeleteMessageAsync($TriggerMetadata.Id,$TriggerMetadata.PopReceipt).GetAwaiter().GetResult()
-
-       if($status -ne $null)
-       {
-         Write-Host "Message Deleted successfully"
-       }
-
-    }
-    else
-    {
-      Write-Host "unable to get queue details"
-    }
-}
 <#
 .SYNOPSIS
 This method is used to get the bucket details i.e. carbon black cloud files from AWS
@@ -418,72 +379,92 @@ function  GetBucketDetails {
         $tableName,
         $logtype
     )
-    
-  
-    IF ($Null -ne $s3BucketName) {
-        Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
-        while ($startTime -le $now) {
-            $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
-            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=9/day=6/hour=13/minute=46"
-            $TotalSizeinGB = 0
-            foreach ($items in (Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Select-Object Size)) { $TotalSizeinGB += $items.Size/1GB }
-            Write-Host "Bucket files size is $TotalSizeinGB under $s3BucketName and Prefix folder $keyPrefix ."
-            Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "C:\tmp"
-            Write-Host "Files under $keyPrefix are downloaded."
-
-            if (Test-Path -Path "/tmp/$keyPrefix") {
-                Get-ChildItem -Path "/tmp" -Recurse -Include *.gz |
-                Foreach-Object {
-                    $filename = $_.FullName
-                    $infile = $_.FullName
-                    $outfile = $_.FullName -replace ($_.Extension, '')
-                    Expand-GZipFile $infile.Trim() $outfile.Trim()
-                    $null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
-                    $filename = $filename -replace ($_.Extension, '')
-                    $filename = $filename.Trim()
-                    $AllEvents = [System.Collections.ArrayList]::new()
-
-                    foreach ($logEvent in [System.IO.File]::ReadLines($filename))
-                    {
-                        $logs = $logEvent | ConvertFrom-Json
-                        $hash = @{}
-                        $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
-                        $logevents = $hash
-
-                        if($logtype -eq "event")
-                        {
-                            EventsFieldsMapping -events $logevents
-                        }
-                        if($logtype -eq "alert")
-                        {
-                            AlertsFieldsMapping -alerts $logevents
-                        }
-                        $AllEvents.Add($logevents)
-                    }
-
-                    $EventLogsJSON = $AllEvents
-
-                    if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
-                    {
-                        try {
-                            $responseCode = ProcessData -alleventobjs $EventLogsJSON -logtype $tableName -endTime $now
-                            Write-Host "Pushed events to $($tableName)"
-                        }
-                        catch {
-                            $string_err = $_ | Out-String
-                            Write-Host $string_err
-                        }
-                        Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-                    }
-                    $null = Remove-Variable -Name AllEvents
+    $aggregatedEvents = [System.Collections.ArrayList]::new()
+    try {
+        IF ($Null -ne $s3BucketName) {
+            Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
+            if($startTime -le $now) {
+                $keyValuePairs = $prefixFolder -split '\\'
+                $s3Dict = @{}
+                foreach ($pair in $keyValuePairs) {
+                    $key, $value = $pair -split '='
+                    $s3Dict[$key] = $value
                 }
-
-                Remove-Item -LiteralPath "/tmp/$keyPrefix" -Force -Recurse
+                $keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
+                $obj = Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix
+                if ($null -eq $obj -or $obj -eq "") {
+                    Write-Host "The folder/file $keyPrefix does not exist in the bucket $s3BucketName"
+                    exit
+                } else {
+                Write-Host "Object $key is $($obj.Size) bytes"
+                $sql = "select * from s3object"
+                $inputSerialization = New-Object Amazon.S3.Model.InputSerialization
+                $inputSerialization.JSON = New-Object Amazon.S3.Model.JSONInput
+                $inputSerialization.JSON.JsonType = 'DOCUMENT'
+                $inputSerialization.CompressionType = 'GZIP'
+                $outSerialization = New-Object Amazon.S3.Model.OutputSerialization
+                $outSerialization.JSON = New-Object Amazon.S3.Model.JSONOutput
+                $obj | % {
+                    try {
+                        if ($_.Size -gt 0) {
+                            $loopItem = $_
+                            $time = [System.DateTime]::UtcNow
+                            Write-Host "Making request to AWS for downloading file startTime: $time, S3Bucket: $($_.BucketName), S3File: $($_.Key) "
+                            $result = Select-S3ObjectContent `
+                            -Expression $sql `
+                            -Bucket $_.BucketName `
+                            -ExpressionType "SQL" `
+                            -InputSerialization $inputSerialization `
+                            -OutputSerialization $outSerialization `
+                            -Key $_.Key
+                            # read the data from $result.Payload which is a memorystream
+                            $data = New-Object System.IO.StreamReader($result.Payload)
+                            $outputStream = $data.ReadToEnd()
+                            Write-Host "Download from AWS completed.  S3File: $($_.Key), S3Bucket: $($_.BucketName), FileSize in mb: $($outputStream.Length/1MB), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
+                            $data.Close()
+                            #clean
+                            $data.Dispose()
+                            $events = DataTransformation -data $outputStream -tableName $tableName -logtype $logtype
+                            $aggregatedEvents.Add($events)
+                            }
+                    }
+                    catch {
+                        $err = $_.Exception.Message
+                        Write-Host "Error in downloading file from AWS S3. S3File: $($loopItem.Key), S3Bucket: $($loopItem.BucketName), Error: $err"
+                    }
+                }
             }
-
-            $startTime = $startTime.AddMinutes(1)
+            }
         }
     }
+    catch {
+        $string_err = $_ | Out-String
+         Write-Host $string_err
+    }
+    return $aggregatedEvents
 }
+
+function DataTransformation
+{
+    param (
+        $data,
+        $tableName,
+        $logtype
+    )
+        $logs = $data | ConvertFrom-Json
+        $hash = @{}
+        $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
+        $logevents = $hash
+
+        if($logtype -eq "event")
+        {
+            EventsFieldsMapping -events $logevents
+        }
+        if($logtype -eq "alert")
+        {
+            AlertsFieldsMapping -alerts $logevents
+        }
+        return $logevents
+    }
 
 ProcessBucketFiles
