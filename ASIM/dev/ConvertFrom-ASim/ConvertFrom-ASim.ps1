@@ -1,12 +1,15 @@
 [CmdletBinding()]
 param (
     [Parameter(Mandatory = $true)]
+    [alias("templates", "t")]
     [string]$FilesPath,
 
     [Parameter(Mandatory = $false)]
+    [alias("dest", "d")]
     [string]$OutputFolder,
 
     [Parameter(Mandatory = $false)]
+    [alias("--object", "-o")]
     [switch]$ReturnObject
 )
 
