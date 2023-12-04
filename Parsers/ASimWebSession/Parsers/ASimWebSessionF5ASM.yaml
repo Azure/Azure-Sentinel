@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM parser for F5 BIG-IP Application Security Manager (ASM)
   Version: '0.1.0'
-  LastUpdated: Oct 25 2023
+  LastUpdated: Dec 04 2023
 Product:
   Name: F5 BIG-IP Application Security Manager (ASM)
 Normalization:
@@ -82,13 +82,12 @@ ParserQuery: |
                         "Attack Type", DeviceCustomString4,
                         "Policy Apply Date", DeviceCustomDate1,
                         "Web Application Name", DeviceCustomString2
-                    );
+                    ),
+              Dst = DstIpAddr;
       let AnomalyDetectionData = AllData
           | where DeviceEventClassID in (DeviceEventClassIDList)
           | extend
               EventResult = iff(DeviceAction =~ "passed", "Success", "Failure"),
-              DstIpAddr = DvcIpAddr,
-              DstHostname = DvcHostname,
               AdditionalFields = bag_pack(
                         "Detection Average", FieldDeviceCustomNumber1,
                         "Dropped Requests", FieldDeviceCustomNumber2,
@@ -97,7 +96,6 @@ ParserQuery: |
                         "Web Application Name", DeviceCustomString2
                     ),
               ThreatId = tostring(FieldDeviceCustomNumber3)
-          | extend Hostname = DstHostname
           | project-away ApplicationProtocol, ExtID;
       union GeneralEnforcementData, AnomalyDetectionData
       | lookup DvcActionLookup on DeviceAction
@@ -129,8 +127,7 @@ ParserQuery: |
           SrcUserIdType = iff(isnotempty(SrcUserId), "Other", ""),
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
           SrcUserType = _ASIM_GetUserType(SrcUsername, SrcUserId),
-          Dst = coalesce(DstIpAddr, DstHostname),
-          Dvc = coalesce(DvcIpAddr, DvcHostname),
+          Dvc = coalesce(DvcFQDN, DvcHostname, DvcIpAddr),
           EventEndTime = EventStartTime,
           Src = SrcIpAddr,
           IpAddr = SrcIpAddr,
