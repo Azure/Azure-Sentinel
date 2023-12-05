@@ -1,4 +1,4 @@
-"""This File contains custom Exception class foe Rubrik."""
+"""This File contains custom Exception class for Rubrik."""
 
 
 class RubrikException(Exception):

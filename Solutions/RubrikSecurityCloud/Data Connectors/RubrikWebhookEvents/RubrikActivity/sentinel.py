@@ -3,17 +3,20 @@ import base64
 import datetime
 import hashlib
 import hmac
-import logging
-import os
 import requests
-from .RubrikException import RubrikException
+from ..shared_code.consts import LOGS_STARTS_WITH, WORKSPACE_ID, WORKSPACE_KEY
+from ..shared_code.logger import applogger
+from ..shared_code.rubrik_exception import RubrikException
 
-customer_id = os.environ.get("WorkspaceID")
-shared_key = os.environ.get("WorkspaceKey")
 
-
-class AzureSentinel:
+class MicrosoftSentinel:
     """AzureSentinel class is used to post data into log Analytics workspace."""
+
+    def __init__(self) -> None:
+        """Intialize instance variables for MicrosoftSentinel class."""
+        self.logs_start_with = "{}(MicrosoftSentinel)".format(LOGS_STARTS_WITH)
+        self.customer_id = WORKSPACE_ID
+        self.shared_key = WORKSPACE_KEY
 
     def build_signature(
         self,
@@ -37,11 +40,11 @@ class AzureSentinel:
             + resource
         )
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-        decoded_key = base64.b64decode(shared_key)
+        decoded_key = base64.b64decode(self.shared_key)
         encoded_hash = base64.b64encode(
             hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()
         ).decode()
-        authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
+        authorization = "SharedKey {}:{}".format(self.customer_id, encoded_hash)
         return authorization
 
     # Build and send a request to the POST API
@@ -69,13 +72,13 @@ class AzureSentinel:
                 resource,
             )
         except Exception as err:
-            logging.error("Error occurred: {}".format(err))
+            applogger.error("{} Error occurred: {}".format(self.logs_start_with, err))
             raise RubrikException(
                 "Error while generating signature for posting data into log analytics."
             )
         uri = (
             "https://"
-            + customer_id
+            + self.customer_id
             + ".ods.opinsights.azure.com"
             + resource
             + "?api-version=2016-04-01"
@@ -90,20 +93,27 @@ class AzureSentinel:
         try:
             response = requests.post(uri, data=body, headers=headers)
             if response.status_code >= 200 and response.status_code <= 299:
-                logging.info(response.status_code)
-                logging.info("Accepted: Data Posted Successfully to microsoft sentinel.")
+                applogger.info(
+                    "{} Data posted successfully to {} table in Log Analytics Workspace.".format(
+                        self.logs_start_with, log_type
+                    )
+                )
             else:
+                applogger.info(
+                    "Response code: {} from posting data to log analytics.\nError: {}".format(
+                        response.status_code, response.content
+                    )
+                )
                 raise RubrikException(
                     "Response code: {} from posting data to log analytics.\nError: {}".format(
                         response.status_code, response.content
                     )
                 )
-        except RubrikException as err:
-            logging.error(err)
+        except RubrikException as error:
+            applogger.error("{} Error:{}".format(self.logs_start_with, error))
             raise RubrikException(
                 "RubrikException: Error while posting data to sentinel."
             )
         except Exception as error:
-            logging.error(error)
-            raise RubrikException("Exception: Error while posting data to sentinel.")
-        return response.status_code
+            applogger.error("{} Error:{}".format(self.logs_start_with, error))
+            raise RubrikException()
