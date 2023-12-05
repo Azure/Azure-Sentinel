@@ -11,6 +11,9 @@ using System.Threading.Tasks;
 
 namespace Kqlvalidations.Tests
 {
+    /// <summary>
+    /// Class for GitHub API client
+    /// </summary>
     public sealed class GitHubApiClient
     {
         private static GitHubApiClient _instance;
@@ -23,7 +26,10 @@ namespace Kqlvalidations.Tests
         private IReadOnlyList<PullRequestFile> _cachedPullRequestFiles;
 
 
-
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GitHubApiClient"/> class.
+        /// </summary>
+        /// <param name="accessToken">access token</param>
         private GitHubApiClient(string accessToken)
         {
             var credentials = new Credentials(accessToken);
@@ -31,6 +37,11 @@ namespace Kqlvalidations.Tests
             _client.Credentials = credentials;
         }
 
+        /// <summary>
+        /// Creates singleton instance of <see cref="GitHubApiClient"/>
+        /// </summary>
+        /// <returns>singleton instance of GitHub Client</returns>
+        /// <exception cref="InvalidOperationException">returns the exception in case if there is an issue with app id, installtion id, private key.</exception>
         public static GitHubApiClient Create()
         {
             if (_instance == null)
@@ -52,7 +63,7 @@ namespace Kqlvalidations.Tests
                         }
 
                         var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
-                        var accessToken = GetInstallationAccessToken(appId, installationId, jwtToken).Result;
+                        var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
                         _instance = new GitHubApiClient(accessToken);
                     }
                 }
@@ -60,12 +71,10 @@ namespace Kqlvalidations.Tests
             return _instance;
         }
 
-        public void SetRepositoryDetails(string owner, string repo)
-        {
-            _owner = owner;
-            _repo = repo;
-        }
-
+        /// <summary>
+        /// Gets the pull request files.
+        /// </summary>
+        /// <returns>returns pull request files.</returns>
         public IReadOnlyList<PullRequestFile> GetPullRequestFiles()
         {
             if (_cachedPullRequestFiles == null)
@@ -80,10 +89,13 @@ namespace Kqlvalidations.Tests
                     _cachedPullRequestFiles = new List<PullRequestFile>();
                 }
             }
-
             return _cachedPullRequestFiles;
         }
 
+        /// <summary>
+        /// Adds PR comment.
+        /// </summary>
+        /// <param name="comment">comment</param>
         public void AddPRComment(string comment)
         {
             try
@@ -109,6 +121,11 @@ namespace Kqlvalidations.Tests
             }
         }
 
+        /// <summary>
+        /// Removes the Pem header and footer
+        /// </summary>
+        /// <param name="privateKey">priavte key</param>
+        /// <returns>returns private key without header and footer</returns>
         private static string RemovePemHeaderAndFooter(string privateKey)
         {
             const string header = "-----BEGIN RSA PRIVATE KEY-----";
@@ -120,6 +137,12 @@ namespace Kqlvalidations.Tests
             return privateKey.Substring(start, end - start).Replace("\r", "").Replace("\n", "");
         }
 
+        /// <summary>
+        /// Generates the JWT token with app id and private key
+        /// </summary>
+        /// <param name="appId">app id</param>
+        /// <param name="privateKey">private key</param>
+        /// <returns>jwt token</returns>
         private static string GenerateJwtToken(string appId, string privateKey)
         {
             using (RSA rsa = RSA.Create())
@@ -145,7 +168,14 @@ namespace Kqlvalidations.Tests
             }
         }
 
-        private static async Task<string> GetInstallationAccessToken(string appId, string installationId, string jwtToken)
+        /// <summary>
+        /// Gets the GitHub access token
+        /// </summary>
+        /// <param name="appId">GitHub app id</param>
+        /// <param name="installationId">app installation id</param>
+        /// <param name="jwtToken">jwt token</param>
+        /// <returns>GitHub access token</returns>
+        private static async Task<string> GetInstallationAccessToken(string installationId, string jwtToken)
         {
             var installationUrl = $"https://api.github.com/app/installations/{installationId}/access_tokens";
             var httpClient = new HttpClient();
@@ -163,11 +193,20 @@ namespace Kqlvalidations.Tests
             return json.token;
         }
 
+        /// <summary>
+        /// Handles the excpetion
+        /// </summary>
+        /// <param name="errorMessage">Error Message</param>
+        /// <param name="ex">Excpetion</param>
         private void HandleException(string errorMessage, Exception ex)
         {
             Console.WriteLine($"{errorMessage}. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
         }
 
+        /// <summary>
+        /// Gets the pull request number.
+        /// </summary>
+        /// <returns>Pull request number.</returns>
         public int GetPullRequestNumber()
         {
             if (_prNumber == null)
@@ -177,7 +216,6 @@ namespace Kqlvalidations.Tests
                 // Uncomment below for debugging with a PR
                 //_prNumber = 9476;
             }
-
             return _prNumber.GetValueOrDefault();
         }
     }
