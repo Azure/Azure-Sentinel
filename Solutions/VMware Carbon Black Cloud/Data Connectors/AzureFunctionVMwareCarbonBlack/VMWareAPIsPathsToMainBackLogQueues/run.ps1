@@ -121,7 +121,7 @@ function postCheckpointLastFailure($message)
     $Context = New-AzStorageContext -ConnectionString $azstoragestring
     if((Get-AzStorageContainer -Context $Context).Name -contains "lastfailurelog"){
         #Set Container
-        $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastfailurelog" -Context $Context).Name -Blob "lastlog.log"
+        $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastfailurelog" -Context $Context).Name -Blob "lastfailurelog.log"
         $lastfailuremessage = $blob.ICloudBlob.DownloadText()
         $lastmessage = $lastfailuremessage
         $message | Out-File "$env:TEMP\lastfailurelog.log"
