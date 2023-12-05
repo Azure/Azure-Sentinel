@@ -49,7 +49,6 @@ function GenerateDate()
     $startTime=getCheckpoint
     $startTime = Get-Date -Date $startTime
 
-    #$startTime = [System.DateTime]::UtcNow.AddMinutes(-$(5))
     if($null -ne $startTime)
     {
         Write-Host "The last start time in file share is" $startTime
@@ -61,7 +60,6 @@ function GenerateDate()
     
     $now = [System.DateTime]::UtcNow
     $Duration = New-TimeSpan -Start $startTime -End $now
-    #[int]$noofmins = $(($now - $startTime).Minutes)
     [int]$noofmins = $Duration.Minutes
     if($noofmins -gt 5)
     {
@@ -135,7 +133,78 @@ function postCheckpointLastFailure($message)
     
    
 }
+<#
+.SYNOPSIS
+#
 
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function CarbonBlackNotifications()
+{
+            $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
+            $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
+            if ($notifications.success -eq $true)
+            {
+                $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
+                if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
+                {
+                    $responseObj = (ConvertFrom-Json $NotifLogJson)
+                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
+                    Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+                }
+                else
+                {
+                        Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
+                }
+            }
+            else
+            {
+                Write-Host "Notifications API status failed , Please check."
+            }
+}
+<#
+.SYNOPSIS
+#
+
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function CarbobBlackAuditLogs()
+{
+    $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
+
+    if ($auditLogsResult.success -eq $true)
+    {
+        $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
+        if (-not([string]::IsNullOrWhiteSpace($AuditLogsJSON)))
+        {
+            $responseObj = (ConvertFrom-Json $AuditLogsJSON)
+            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($AuditLogsJSON)) -logType $AuditLogTable;
+            Write-Host("$($responseObj.count) new Carbon Black Audit Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+        }
+        else
+        {
+            Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
+        }
+    }
+    else
+    {
+        Write-Host "AuditLogsResult API status failed , Please check."
+    }
+}
 # The function will call the Carbon Black API and retrieve the Audit, Event, and Notifications Logs
 function CarbonBlackAPI()
 {
@@ -208,26 +277,7 @@ function CarbonBlackAPI()
     {
         if($LogTypeArr -contains "audit")
         {
-            $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
-
-            if ($auditLogsResult.success -eq $true)
-            {
-                $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
-                if (-not([string]::IsNullOrWhiteSpace($AuditLogsJSON)))
-                {
-                    $responseObj = (ConvertFrom-Json $AuditLogsJSON)
-                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($AuditLogsJSON)) -logType $AuditLogTable;
-                    Write-Host("$($responseObj.count) new Carbon Black Audit Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-                }
-                else
-                {
-                    Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
-                }
-            }
-            else
-            {
-                Write-Host "AuditLogsResult API status failed , Please check."
-            }
+          CarbobBlackAuditLogs
         }
         else
         {
@@ -269,26 +319,7 @@ function CarbonBlackAPI()
         }
         elseif(-not([string]::IsNullOrWhiteSpace($SIEMapiKey)) -and -not([string]::IsNullOrWhiteSpace($SIEMapiId)))
         {
-            $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
-            $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
-            if ($notifications.success -eq $true)
-            {
-                $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
-                if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
-                {
-                    $responseObj = (ConvertFrom-Json $NotifLogJson)
-                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
-                    Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-                }
-                else
-                {
-                        Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
-                }
-            }
-            else
-            {
-                Write-Host "Notifications API status failed , Please check."
-            }
+            CarbonBlackNotifications
         }
         else
         {
