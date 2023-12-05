@@ -32,23 +32,15 @@ function ProcessBucketFiles ()
     $queueName=$env:queueName
     $carbonBlackStorage=$env:AzureWebJobsStorage
 
-        $totalEvents = GetBucketDetails -s3BucketName $QueueItem["s3BucketName"] -prefixFolder $QueueItem["keyPrefix"] -tableName $QueueItem["tableName"] -logtype $QueueItem["logtype"]
-        if (-not([string]::IsNullOrWhiteSpace($totalEvents)))
-        {
-            try {
-                    ProcessData -alleventobjs $totalEvents -logtype $QueueItem["tableName"] -endTime $([DateTime]::UtcNow)
-                    Write-Host "Pushed events to $($QueueItem["tableName"])"
-                }
-            catch {
-                    $string_err = $_ | Out-String
-                    Write-Host $string_err
-                }
-            Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-            Write-Host "Successfully processed the carbon black files from AWS and FA instance took $(([System.DateTime]::UtcNow - $now).Seconds) seconds to process the data"
-        }
-        else {
-            Write-Host "No new events found in the bucket or events to process the data"
-        }
+    try {
+        
+        GetBucketDetails -s3BucketName $QueueItem["s3BucketName"] -prefixFolder $QueueItem["keyPrefix"] -tableName $QueueItem["tableName"] -logtype $QueueItem["logtype"]
+    }
+    catch {
+        Write-Host "Error, error message: $($Error[0].Exception.Message)"
+    }
+        
+        
     }
 
 
@@ -205,6 +197,47 @@ Function AlertsFieldsMapping {
         }
     }
 }
+<#
+.SYNOPSIS
+This method is extract the GZ file format
+
+.DESCRIPTION
+Long description
+
+.PARAMETER infile
+Parameter description
+
+.PARAMETER outfile
+Parameter description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+Function Expand-GZipFile {
+    Param(
+        $infile,
+        $outfile
+    )
+	Write-Host "Processing Expand-GZipFile for: infile = $infile, outfile = $outfile"
+    $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
+    $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)
+    $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)
+
+    $buffer = New-Object byte[](1024)
+    while ($true) {
+        $read = $gzipstream.Read($buffer, 0, 1024)
+        if ($read -le 0) { break }
+		$output.Write($buffer, 0, $read)
+	}
+
+    $gzipStream.Close()
+    $output.Close()
+    $inputfile.Close()
+}
+
 <#
 .SYNOPSIS
 This method is extract the GZ file format
@@ -382,7 +415,6 @@ function  GetBucketDetails {
         $tableName,
         $logtype
     )
-    $aggregatedEvents = [System.Collections.Generic.List[PSObject]]::new()
     try {
         IF ($Null -ne $s3BucketName) {
             Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
@@ -394,80 +426,68 @@ function  GetBucketDetails {
                     $s3Dict[$key] = $value
                 }
                 $keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
-                $obj = Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix
-                if ($null -eq $obj -or $obj -eq "") {
-                    Write-Host "The folder/file $keyPrefix does not exist in the bucket $s3BucketName"
-                    exit
-                } else {
-                Write-Host "Object $key is $($obj.Size) bytes"
-                $sql = "select * from s3object"
-                $inputSerialization = New-Object Amazon.S3.Model.InputSerialization
-                $inputSerialization.JSON = New-Object Amazon.S3.Model.JSONInput
-                $inputSerialization.JSON.JsonType = 'DOCUMENT'
-                $inputSerialization.CompressionType = 'GZIP'
-                $outSerialization = New-Object Amazon.S3.Model.OutputSerialization
-                $outSerialization.JSON = New-Object Amazon.S3.Model.JSONOutput
-                $obj | % {
-                    try {
-                        if ($_.Size -gt 0) {
-                            $loopItem = $_
-                            $time = [System.DateTime]::UtcNow
-                            Write-Host "Making request to AWS for downloading file startTime: $time, S3Bucket: $($_.BucketName), S3File: $($_.Key) "
-                            $result = Select-S3ObjectContent `
-                            -Expression $sql `
-                            -Bucket $_.BucketName `
-                            -ExpressionType "SQL" `
-                            -InputSerialization $inputSerialization `
-                            -OutputSerialization $outSerialization `
-                            -Key $_.Key
-                            # read the data from $result.Payload which is a memorystream
-                            $data = New-Object System.IO.StreamReader($result.Payload)
-                            $outputStream = $data.ReadToEnd()
-                            Write-Host "Download from AWS completed.  S3File: $($_.Key), S3Bucket: $($_.BucketName), FileSize in mb: $($outputStream.Length/1MB), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
-                            $data.Close()
-                            #clean
-                            $data.Dispose()
-                            $events = DataTransformation -data $outputStream -tableName $tableName -logtype $logtype
-                            $aggregatedEvents.Add($events)
-                            }
+                $TotalSizeinGB = 0
+                foreach ($items in (Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Select-Object Size)) { $TotalSizeinGB += $items.Size/1GB }
+                Write-Host "Bucket files size is $TotalSizeinGB GB under $s3BucketName and Prefix folder $keyPrefix ."
+                Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "C:\tmp"
+                Write-Host "Files under $keyPrefix are downloaded."    
+
+            if (Test-Path -Path "/tmp/$keyPrefix") {
+                Get-ChildItem -Path "/tmp" -Recurse -Include *.gz |
+                Foreach-Object {
+                    $filename = $_.FullName
+                    $infile = $_.FullName
+                    $outfile = $_.FullName -replace ($_.Extension, '')
+                    Expand-GZipFile $infile.Trim() $outfile.Trim()
+                    $null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
+                    $filename = $filename -replace ($_.Extension, '')
+                    $filename = $filename.Trim()
+                    $AllEvents = [System.Collections.ArrayList]::new()
+
+                    foreach ($logEvent in [System.IO.File]::ReadLines($filename))
+                    {
+                        $logs = $logEvent | ConvertFrom-Json
+                        $hash = @{}
+                        $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
+                        $logevents = $hash
+
+                        if($logtype -eq "event")
+                        {
+                            EventsFieldsMapping -events $logevents
+                        }
+                        if($logtype -eq "alert")
+                        {
+                            AlertsFieldsMapping -alerts $logevents
+                        }
+                        $AllEvents.Add($logevents)
                     }
-                    catch {
-                        $err = $_.Exception.Message
-                        Write-Host "Error in downloading file from AWS S3. S3File: $($loopItem.Key), S3Bucket: $($loopItem.BucketName), Error: $err"
+
+                    $EventLogsJSON = $AllEvents
+
+                    if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
+                    {
+                        try {
+                            $responseCode = ProcessData -alleventobjs $EventLogsJSON -logtype $tableName -endTime $now
+                            Write-Host "Pushed events to $($tableName)"
+                        }
+                        catch {
+                            $string_err = $_ | Out-String
+                            Write-Host $string_err
+                        }
+                        Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
                     }
+                    $null = Remove-Variable -Name AllEvents
                 }
+
+                Remove-Item -LiteralPath "/tmp/$keyPrefix" -Force -Recurse
             }
-            }
-        }
+          }
+       }
     }
     catch {
         $string_err = $_ | Out-String
          Write-Host $string_err
     }
-    return $aggregatedEvents
 }
-
-function DataTransformation
-{
-    param (
-        $data,
-        $tableName,
-        $logtype
-    )
-        $logs = $data | ConvertFrom-Json
-        $hash = @{}
-        $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
-        $logevents = $hash
-
-        if($logtype -eq "event")
-        {
-            EventsFieldsMapping -events $logevents
-        }
-        if($logtype -eq "alert")
-        {
-            AlertsFieldsMapping -alerts $logevents
-        }
-        return $logevents
-    }
 
 ProcessBucketFiles
