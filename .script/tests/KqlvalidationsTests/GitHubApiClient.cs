@@ -25,7 +25,6 @@ namespace Kqlvalidations.Tests
         private int? _prNumber;
         private IReadOnlyList<PullRequestFile> _cachedPullRequestFiles;
 
-
         /// <summary>
         /// Initializes a new instance of the <see cref="GitHubApiClient"/> class.
         /// </summary>
@@ -41,7 +40,7 @@ namespace Kqlvalidations.Tests
         /// Creates singleton instance of <see cref="GitHubApiClient"/>
         /// </summary>
         /// <returns>singleton instance of GitHub Client</returns>
-        /// <exception cref="InvalidOperationException">returns the exception in case if there is an issue with app id, installtion id, private key.</exception>
+        /// <exception cref="InvalidOperationException">Throws an exception if there is an issue with app id, installation id, private key.</exception>
         public static GitHubApiClient Create()
         {
             if (_instance == null)
@@ -62,9 +61,16 @@ namespace Kqlvalidations.Tests
                             throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
                         }
 
-                        var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
-                        var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
-                        _instance = new GitHubApiClient(accessToken);
+                        try
+                        {
+                            var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
+                            var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
+                            _instance = new GitHubApiClient(accessToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
+                        }
                     }
                 }
             }

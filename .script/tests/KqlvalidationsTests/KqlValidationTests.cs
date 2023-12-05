@@ -133,13 +133,22 @@ namespace Kqlvalidations.Tests
         /// <param name="filename">KQL file name</param>
         private void ValidateKqlForBestPractices(string queryStr, string filename)
         {
-            var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr,filename);
-            if (!string.IsNullOrEmpty(suggestions))
+            try
             {
-                var gitHubApiClient = GitHubApiClient.Create();
-                gitHubApiClient.AddPRComment(suggestions); 
+                var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr, filename);
+                if (!string.IsNullOrEmpty(suggestions))
+                {
+                    var gitHubApiClient = GitHubApiClient.Create();
+                    gitHubApiClient.AddPRComment(suggestions);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the exception or handle it appropriately
+                Console.WriteLine($"Error occurred while validating KQL for best practices. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
             }
         }
+
 
 
         // We pass File name to test because in the result file we want to show an informative name for the test

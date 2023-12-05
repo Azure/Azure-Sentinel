@@ -10,46 +10,55 @@ namespace Kqlvalidations.Tests
     {
         public static string CheckBestPractices(string queryStr, string fileName)
         {
-            var suggestions = new List<string>();
+            try
+            {
+                var suggestions = new List<string>();
 
-            // Rule 1: Don't use the long data type for datetime columns.
-            CheckDontUseLongForDatetime(queryStr, suggestions);
+                // Rule 1: Don't use the long data type for datetime columns.
+                CheckDontUseLongForDatetime(queryStr, suggestions);
 
-            // Rule 2: Use the has operator instead of contains for string operators.
-            CheckUseHasInsteadOfContains(queryStr, suggestions);
+                // Rule 2: Use the has operator instead of contains for string operators.
+                CheckUseHasInsteadOfContains(queryStr, suggestions);
 
-            // Rule 3: Use == instead of =~ for case-insensitive comparisons.
-            CheckUseEqualsInsteadOfEqualsTilde(queryStr, suggestions);
+                // Rule 3: Use == instead of =~ for case-insensitive comparisons.
+                CheckUseEqualsInsteadOfEqualsTilde(queryStr, suggestions);
 
-            // Rule 4: Use in instead of in~ for case-sensitive comparisons.
-            CheckUseInInsteadOfInTilde(queryStr, suggestions);
+                // Rule 4: Use in instead of in~ for case-sensitive comparisons.
+                CheckUseInInsteadOfInTilde(queryStr, suggestions);
 
-            // Rule 5: Use contains_cs instead of contains for case-sensitive comparisons.
-            CheckUseContainsCSInsteadOfContains(queryStr, suggestions);
+                // Rule 5: Use contains_cs instead of contains for case-sensitive comparisons.
+                CheckUseContainsCSInsteadOfContains(queryStr, suggestions);
 
-            // Rule 6: Don't use * for searching text. Look in a specific column.
-            CheckSearchTextInSpecificColumn(queryStr, suggestions);
+                // Rule 6: Don't use * for searching text. Look in a specific column.
+                CheckSearchTextInSpecificColumn(queryStr, suggestions);
 
-            // Rule 7: Use materialize() for let statements with reused variables
-            CheckLetStatementReuse(queryStr, suggestions);
+                // Rule 7: Use materialize() for let statements with reused variables
+                CheckLetStatementReuse(queryStr, suggestions);
 
-            // Rule 8: Use Col =~ "lowercasestring".
-            CheckCaseInsensitiveComparisons(queryStr, suggestions);
+                // Rule 8: Use Col =~ "lowercasestring".
+                CheckCaseInsensitiveComparisons(queryStr, suggestions);
 
-            // Rule 9: Filter on a table column.
-            CheckFilteringOnCalculatedColumn(queryStr, suggestions);
+                // Rule 9: Filter on a table column.
+                CheckFilteringOnCalculatedColumn(queryStr, suggestions);
 
-            // Rule 10: Usage of the summarize operator.
-            CheckSummarizeOperator(queryStr, suggestions);
+                // Rule 10: Usage of the summarize operator.
+                CheckSummarizeOperator(queryStr, suggestions);
 
-            // Rule 11: Usage of the join operator.
-            CheckJoinOperator(queryStr, suggestions);
+                // Rule 11: Usage of the join operator.
+                CheckJoinOperator(queryStr, suggestions);
 
-            // Rule 12: Usage of the materialize operator.
-            CheckMaterializeFunction(queryStr, suggestions);
+                // Rule 12: Usage of the materialize operator.
+                CheckMaterializeFunction(queryStr, suggestions);
 
-            // Combine suggestions into a single string
-            return FormatSuggestionsWithDisclaimer(suggestions, fileName);
+                // Combine suggestions into a single string
+                return FormatSuggestionsWithDisclaimer(suggestions, fileName);
+            }
+            catch (Exception ex)
+            {
+                // Log the exception or handle it appropriately
+                Console.WriteLine($"Error occurred while checking KQL best practices. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
+                return string.Empty;
+            }
         }
 
         /// <summary>
