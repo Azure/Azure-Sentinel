@@ -1,0 +1,219 @@
+Parser:
+  Title: Web Session ASIM parser for Citrix NetScaler(Web App Firewall)
+  Version: '0.1.0'
+  LastUpdated: Oct 16 2023
+Product:
+  Name: Citrix NetScaler
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Citrix NetScaler WAF Documentation
+  Link: 
+    https://support.citrix.com/article/CTX136146/common-event-format-cef-logging-support-in-the-application-firewall
+    https://docs.netscaler.com/en-us/citrix-adc/current-release/application-firewall/logs
+    https://docs.netscaler.com/en-us/citrix-adc/current-release/application-firewall/xml-protections/xml-cross-site-scripting-check
+Description: |
+  This ASIM parser supports normalizing Citrix NetScaler WAF(Web Application Firewall) logs to the ASIM Web Session normalized schema. Citrix NetScaler WAF(Web Application Firewall) events are captured through Citrix WAF (Web App Firewall) data connector which ingests web attack logs into Microsoft Sentinel in CEF format via Syslog.
+ParserName: vimWebSessionCitrixNetScaler
+EquivalentBuiltInParser: _Im_WebSession_CitrixNetScaler
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (DeviceCustomString4: string, EventSeverity: string)
+  [
+      "EMERGENCY", "High",
+      "ALERT", "High",
+      "CRITICAL", "High",
+      "ERROR", "Medium",
+      "WARNING", "Low",
+      "NOTICE", "Low",
+      "INFORMATIONAL", "Informational",
+      "DEBUG", "Informational",
+      "INFO", "Informationl",
+      "WARN", "Low",
+      "ERR", "Medium"
+  ];
+  let EventFieldsLookup = datatable(
+      DeviceAction: string,
+      DvcAction: string,
+      EventResult: string
+  )
+  [
+      "blocked", "Deny", "Failure",
+      "not blocked", "Allow", "Success",
+      "transformed", "Allow", "Success"
+  ];
+  let parser = (starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      url_has_any: dynamic=dynamic([]),
+      httpuseragent_has_any: dynamic=dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string='*',
+      disabled: bool=false) {
+      let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+      CommonSecurityLog
+      | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and (DeviceVendor == "Citrix" and DeviceProduct == "NetScaler")
+      | where DeviceEventClassID == "APPFW" and Activity has_any ("APPFW_STARTURL", "APPFW_XML_cross-site scripting", "APPFW_SAFECOMMERCE", "APPFW_SAFECOMMERCE_XFORM", "APPFW_SIGNATURE_MATCH", "APPFW_XML_ERR_NOT_WELLFORMED", "APPFW_FIELDCONSISTENCY", "APPFW_SQL", "APPFW_BUFFEROVERFLOW_URL", "APPFW_BUFFEROVERFLOW_COOKIE", "APPFW_cross-site scripting", "APPFW_FIELDFORMAT", "APPFW_REFERER_HEADER", "APPFW_XSS")
+      | where array_length(httpuseragent_has_any) == 0
+      | where array_length(eventresultdetails_in) == 0
+      | where (array_length(url_has_any) == 0 or RequestURL has_any (url_has_any))
+      | parse-kv AdditionalExtensions as (method: string, geolocation: string, script: string) with (pair_delimiter=";", kv_delimiter="=")
+      | parse RequestURL with * "://" host: string "/" *
+      | extend
+          DeviceAction = trim("[*]+", DeviceAction),
+          temp_SrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any),
+          temp_DstMatch = has_any_ipv4_prefix(RequestURL, ipaddr_has_any_prefix)
+      | lookup EventFieldsLookup on DeviceAction
+      | lookup EventSeverityLookup on DeviceCustomString4
+      | where eventresult == '*' or EventResult =~ eventresult
+      | extend ASimMatchingIpAddr = case(
+                                    array_length(src_or_any) == 0,
+                                    "-",
+                                    temp_SrcMatch and temp_DstMatch,
+                                    "Both",
+                                    temp_SrcMatch,
+                                    "SrcIpAddr",
+                                    temp_DstMatch,
+                                    "DstIpAddr",
+                                    "No match"
+                                )
+      | where ASimMatchingIpAddr != "No match"
+      | extend 
+          Ip_host = iff(host matches regex "(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", host, ""),
+          Ip_computer = iff(Computer matches regex "(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", Computer, ""),
+          HttpHost = host
+      | extend
+          host = iff(isempty(Ip_host), host, ""),
+          Computer = iff(isempty(Ip_computer), Computer, ""),
+          AdditionalFields = bag_pack(
+                        "Script", script,
+                        "Event ID", FieldDeviceCustomNumber1,
+                        "HTTP Transaction ID", FieldDeviceCustomNumber2,
+                        "Profile Name", DeviceCustomString1,
+                        "PPE ID", DeviceCustomString2,
+                        "Signature Violation Category", DeviceCustomString6
+                    )
+      | invoke _ASIM_ResolveDvcFQDN('Computer')
+      | invoke _ASIM_ResolveDstFQDN('host')
+      | extend
+          DstIpAddr = tostring(split(Ip_host, ":")[0]),
+          DstPortNumber = toint(split(Ip_host, ":")[1]),
+          DvcIpAddr = tostring(split(Ip_computer, ":")[0])
+      | extend 
+          DstHostname = coalesce(DstIpAddr, DstHostname)
+      | extend
+          EventProduct = "NetScaler",
+          EventVendor = "Citrix",
+          EventCount = int(1),
+          EventStartTime = TimeGenerated,
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "HTTPsession"
+      | project-rename
+          EventUid = _ItemId,
+          SrcIpAddr = SourceIP,
+          DvcOriginalAction = DeviceAction,
+          EventMessage = Message,
+          EventOriginalSeverity = DeviceCustomString4,
+          EventProductVersion = DeviceVersion,
+          HttpRequestMethod = method,
+          NetworkSessionId = DeviceCustomString3,
+          SrcPortNumber = SourcePort,
+          Url = RequestURL,
+          EventOriginalType = DeviceEventClassID,
+          EventOriginalSubType = Activity,
+          SrcGeoCountry = geolocation
+      | extend
+          EventEndTime = EventStartTime,
+          Dvc = coalesce(DvcFQDN, DvcHostname, DvcIpAddr),
+          Src = SrcIpAddr,
+          Dst = DstHostname,
+          Hostname = DstHostname,
+          IpAddr = SrcIpAddr,
+          SessionId = NetworkSessionId
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          Computer,
+          EndTime,
+          EventOutcome,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          Protocol,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          Threat*,
+          ExternalID,
+          ReportReferenceLink,
+          ReceiptTime,
+          Reason,
+          ApplicationProtocol,
+          Indicator*,
+          Ip_*,
+          LogSeverity,
+          _ResourceId,
+          host,
+          script,
+          temp*,
+          ExtID
+  };
+  parser(
+      starttime=starttime, 
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,  
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+      url_has_any=url_has_any,
+      httpuseragent_has_any=httpuseragent_has_any,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled
+  )
