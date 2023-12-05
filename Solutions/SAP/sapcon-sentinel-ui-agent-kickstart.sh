@@ -38,6 +38,8 @@ RESTARTPOLICY="--restart unless-stopped"
 NETWORKSTRING=""
 CLOUD="public"
 UI_AGENT=""
+UPDATEPOLICY='{ "auto_update" : true }'
+
 while [[ $# -gt 0 ]]; do
 	case $1 in
 	--keymode)
@@ -430,7 +432,7 @@ elif [ "$MODE" == "kvsi" ]; then
 	cmdparams+=" -e AZURE_CLIENT_ID=$APPID -e AZURE_CLIENT_SECRET=$APPSECRET -e AZURE_TENANT_ID=$TENANT"
 fi
 if [ $HOSTNETWORK ]; then
-	cmdparams+=" --network host"
+	cmdparams+=" --network host "
 fi
 sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams --name "$containername" $dockerimage$tagver >/dev/null
 
@@ -443,9 +445,8 @@ if [ ! $? -eq 0 ]; then
 	exit 1
 fi
 
-# Commenting out the following lines as they are not required for now
 # #populate settings.json
-# echo $UPDATEPOLICY> "$sysfileloc/$settingsjson"
+echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
 
 log 'System information Has been Updated'
 
