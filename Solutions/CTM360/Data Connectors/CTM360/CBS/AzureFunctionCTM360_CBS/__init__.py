@@ -154,6 +154,7 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
                     "api-key": cbs_api_key
                 }
                 response = requests.get(url, headers=headers)
+                logging.warn(url)
                 message1 = response.json()
                 print(message1)
                 if perform_request(url, headers):
@@ -169,7 +170,7 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
                 }
 
                 response = requests.get(url, headers=headers)
-
+		logging.warn(url)
                 message1 = response.json()
                 print(message1)
                 perform_request(url, headers)
@@ -187,6 +188,7 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
         }
 
         response = requests.get(url, headers=headers)
+        logging.warn(url)
 
         message1 = response.json()
         print(message1)
