@@ -47,7 +47,10 @@ General notes
 function GenerateDate()
 {
     $startTime=getCheckpoint
-    $startTime = Get-Date -Date $startTime
+    if($null -ne $startTime)
+    {
+       $startTime = Get-Date -Date $startTime
+    }
 
     if($null -ne $startTime)
     {
