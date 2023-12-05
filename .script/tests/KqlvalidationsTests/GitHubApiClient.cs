@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections;
+﻿using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
+using Octokit;
+using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using Microsoft.IdentityModel.Tokens;
-using Newtonsoft.Json;
-using Octokit;
 
 namespace Kqlvalidations.Tests
 {
@@ -24,7 +22,7 @@ namespace Kqlvalidations.Tests
         private int? _prNumber;
         private IReadOnlyList<PullRequestFile> _cachedPullRequestFiles;
 
-        
+
 
         private GitHubApiClient(string accessToken)
         {
@@ -35,22 +33,15 @@ namespace Kqlvalidations.Tests
 
         public static GitHubApiClient Create()
         {
-            //write all env variables to console
-            foreach (DictionaryEntry de in Environment.GetEnvironmentVariables(EnvironmentVariableTarget.Process))
-            {
-                Console.WriteLine("  {0} = {1}", de.Key, de.Value);
-            }
-
             if (_instance == null)
             {
                 lock (_lock)
                 {
                     if (_instance == null)
                     {
-                        var appId = Environment.GetEnvironmentVariable("GitHubAppID");
-                        var installationId = Environment.GetEnvironmentVariable("GitHubAppInstallationID");
-                        var privateKey = Environment.GetEnvironmentVariable("GitHubAppPrivateKey");
-
+                        var appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
+                        var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
+                        var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
                         if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
                         {
                             Console.WriteLine($"GitHub App ID: {appId}");
@@ -92,7 +83,7 @@ namespace Kqlvalidations.Tests
 
             return _cachedPullRequestFiles;
         }
-                
+
         public void AddPRComment(string comment)
         {
             try
@@ -144,7 +135,7 @@ namespace Kqlvalidations.Tests
                 {
                 new Claim("iat", now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer),
                 new Claim("exp", expiration.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer),
-                new Claim("iss", appId)
+                new Claim("iss", appId),
             };
 
                 var token = new JwtSecurityToken(claims: claims, signingCredentials: signingCredentials);
@@ -184,7 +175,7 @@ namespace Kqlvalidations.Tests
                 int.TryParse(Environment.GetEnvironmentVariable("PRNUM"), out int prNumber);
                 _prNumber = prNumber;
                 // Uncomment below for debugging with a PR
-                // _prNumber = 9476;
+                //_prNumber = 9476;
             }
 
             return _prNumber.GetValueOrDefault();
