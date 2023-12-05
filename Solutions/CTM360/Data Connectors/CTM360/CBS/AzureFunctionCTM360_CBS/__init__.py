@@ -11,14 +11,14 @@ import datetime
 import traceback
 import time
 from time import time, localtime, strftime, gmtime
-HV_api_key = os.environ.get('api_key')
+cbs_api_key = os.environ.get('api_key')
 customer_id = os.environ.get('WorkspaceID')
 shared_key = os.environ.get('WorkspaceKey')
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 olddate_from = os.environ.get('date_from')
 olddate_to = os.environ.get('date_to')
 backupflag = os.environ.get('backupflag')
-log_type = 'HackerViewLog_Azure_1_CL'
+log_type = 'CBSLog_Azure_1_CL'
 MAX_RETRIES = 3
 RETRY_INTERVAL_SECONDS = 60
 
@@ -66,7 +66,7 @@ def perform_request(url, headers):
             else:
                 message1 = response.json()
                 
-                post_data_to_sentinel(json.dumps(message1["issues"]))
+                post_data_to_sentinel(json.dumps(message1["incident_list"]))
                 return True  # Request successful, break out of the loop
 
         except requests.exceptions.RequestException as e:
@@ -147,11 +147,11 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
             print(input1)
             if input1 == "false":
                 date_from = olddate_from
-                
-                url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
+                date_to = olddate_to
+                url = f"https://cbs.ctm360.com/api/v2/incidents?date_from={date_from}&date_to={date_to}"
                 headers = {
                     "accept": "application/json",
-                    "api-key": HV_api_key
+                    "api-key": cbs_api_key
                 }
                 response = requests.get(url, headers=headers)
                 message1 = response.json()
@@ -160,16 +160,16 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
                     outputblob.set("true")
             else:
                 date_from = five_minutes_ago_str
-                
-                url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
+                date_to = current_time_str
+                url = f"https://cbs.ctm360.com/api/v2/incidents?date_from={date_from}&date_to={date_to}"
                 print(url)
                 headers = {
                     "accept": "application/json",
-                    "api-key": HV_api_key
+                    "api-key": cbs_api_key
                 }
 
                 response = requests.get(url, headers=headers)
-                print(response.json())
+
                 message1 = response.json()
                 print(message1)
                 perform_request(url, headers)
@@ -179,15 +179,16 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
             exit()
     else:
         date_from = five_minutes_ago_str
-        
-        url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
+        date_to = current_time_str
+        url = f"https://cbs.ctm360.com/api/v2/incidents?date_from={date_from}&date_to={date_to}"
         headers = {
             "accept": "application/json",
-            "api-key": HV_api_key
+            "api-key": cbs_api_key
         }
 
         response = requests.get(url, headers=headers)
-        print(response.json())
+
         message1 = response.json()
         print(message1)
         perform_request(url, headers)
+
