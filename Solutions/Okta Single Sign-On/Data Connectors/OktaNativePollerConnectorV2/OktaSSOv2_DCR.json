@@ -1,0 +1,103 @@
+[
+    {
+        "name": "oktassov2-ccp",
+        "apiVersion": "2021-09-01-preview",
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "location": "{{location}}",
+        "kind": null,
+        "properties": {
+            "streamDeclarations": {
+                "Custom-OktaSSO_CL": {
+                    "columns": [
+                        {
+                            "name": "uuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "published",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "eventType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "version",
+                            "type": "string"
+                        },
+                        {
+                            "name": "severity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "legacyEventType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "displayMessage",
+                            "type": "string"
+                        },
+                        {
+                            "name": "actor",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "client",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "outcome",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "target",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "transaction",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "debugContext",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "authenticationContext",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "securityContext",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "request",
+                            "type": "dynamic"
+                        }
+                    ]
+                }
+            },
+            "dataSources": {},
+            "destinations": {
+                "logAnalytics": [
+                    {
+                        "workspaceResourceId": "{{workspaceResourceId}}",
+                        "name": "clv2ws1"
+                    }
+                ]
+            },
+            "dataFlows": [
+                {
+                    "streams": [
+                        "Custom-OktaSSO_CL"
+                    ],
+                    "destinations": [
+                        "clv2ws1"
+                    ],
+                    "transformKql": "let OktaASIMSev = parse_json('{\"DEBUG\": \"Informational\",\"INFO\": \"Informational\",\"WARN\": \"Medium\", \"ERROR\": \"High\"}');\nlet OktaASIMEventResult = parse_json('{\"SUCCESS\": \"Success\",\"ALLOW\": \"Success\",\"DENY\": \"Failure\", \"SKIPPED\": \"Failure\",\"FAILURE\": \"Failure\",\"CHALLENGE\": \"Partial\", \"UNKNOWN\": \"NA\"}');\nlet OktaDvcAction = parse_json('{\"SUCCESS\": \"\",\"ALLOW\": \"Allow\",\"DENY\": \"Deny\", \"SKIPPED\": \"Drop\",\"FAILURE\": \"\",\"CHALLENGE\": \"\", \"UNKNOWN\": \"\"}');\nlet OktaActorUserType = parse_json('{\"SystemPrincipal\": \"System Principal\",\"PublicClientApp\": \"Application\",\"User\": \"Regular\"}');\nsource | extend userId = iff((tostring(actor.id) == \"unknown\"), \"\", tostring(actor.id)),username = iff((tostring(actor.alternateId) contains \"@\"),tostring(actor.alternateId),\"\") | project TimeGenerated = todatetime(published), ActorDetailEntry = actor.detailEntry,ActorDisplayName = tostring(actor.displayName),OriginalUserId = tostring(actor.id),OriginalActorAlternateId = tostring(actor.alternateId),ActorUserId = userId,ActorUserIdType = iff(isempty(userId),\"\", \"OktaId\"),ActorUsername = username,ActorUsernameType = iff(isempty(username), \"\", \"UPN\"),ActorUserType = tostring(OktaActorUserType[tostring(actor.type)]),OriginalUserType = tostring(actor.type),AuthenticationContextAuthenticationProvider = tostring(authenticationContext.authenticationProvider),AuthenticationContextAuthenticationStep = toint(authenticationContext.authenticationStep),AuthenticationContextCredentialProvider = tostring(authenticationContext.credentialProvider),LogonMethod = tostring(authenticationContext.credentialType),ActorSessionId = tostring(authenticationContext.externalSessionId),AuthenticationContextInterface = tostring(authenticationContext.interface),AuthenticationContextIssuerId = tostring(authenticationContext.issuer.id),AuthenticationContextIssuerType = tostring(authenticationContext.issuer.type),OriginalClientDevice = tostring(client.device),SrcDeviceType = iff(tostring(client.device) == \"Computer\", \"Computer\", \"\"),SrcGeoCity = tostring(client.geographicalContext.city),SrcGeoCountry = tostring(client.geographicalContext.country),SrcGeoLatitude = toreal(client.geographicalContext.geolocation.lat), SrcGeoLongtitude = toreal(client.geographicalContext.geolocation.lon),  SrcGeoPostalCode = tostring(client.geographicalContext.postalCode), SrcGeoRegion = tostring(client.geographicalContext.state),  SrcDvcIdType = iff(isempty(client.id),\"\", \"OktaId\"),SrcDvcId = tostring(client.id),SrcIpAddr = tostring(client.ipAddress), ActingAppName = tostring(client.userAgent.browser),ActingAppType = \"Browser\",SrcDvcOs = tostring(client.userAgent.os), HttpUserAgent = tostring(client.userAgent.rawUserAgent),  SrcZone = tostring(client.zone), DebugData = debugContext.debugData, EventMessage = displayMessage,EventOriginalType = eventType,LegacyEventType = legacyEventType,EventOriginalUid = uuid,EventOriginalResultDetails = tostring(outcome.reason), EventResult = tostring(OktaASIMEventResult[tostring(outcome.result)]),  OriginalOutcomeResult = tostring(outcome.result),Request = request,SecurityContextAsNumber = toint(securityContext.asNumber), SecurityContextAsOrg = tostring(securityContext.asOrg),SecurityContextDomain = tostring(securityContext.domain),SrcIsp = tostring(securityContext.isp),  SecurityContextIsProxy = tobool(securityContext.isProxy),EventSeverity = tostring(OktaASIMSev[severity]),OriginalSeverity = severity,OriginalTarget = target,Version = version,TransactionType = tostring(transaction.type), TransactionId = tostring(transaction.id), TransactionDetail = transaction.detail,DvcAction = tostring(OktaDvcAction[tostring(outcome.result)]) \n",
+                    "outputStream": "Custom-OktaV2_CL"
+                }
+            ],
+            "dataCollectionEndpointId": "{{dataCollectionEndpointId}}"
+        }
+    }
+]
