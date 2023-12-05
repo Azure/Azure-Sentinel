@@ -43,9 +43,12 @@ function ProcessBucketFiles ()
                     $string_err = $_ | Out-String
                     Write-Host $string_err
                 }
-            Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")	
+            Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+            Write-Host "Successfully processed the carbon black files from AWS and FA instance took $(([System.DateTime]::UtcNow - $now).Seconds) seconds to process the data"
         }
-        Write-Host "Successfully processed the carbon black files from AWS and FA instance took $(([System.DateTime]::UtcNow - $now).Seconds) seconds to process the data"
+        else {
+            Write-Host "No new events found in the bucket or events to process the data"
+        }
     }
 
 
@@ -306,10 +309,10 @@ An example
 General notes
 #>
  function ProcessData($alleventobjs, $logtype, $endTime) {
-    Write-Host "Process Data function:- EventsLength - $($alleventobjs), Logtype - $($logtype) and Endtime - $($endTime)"
+    Write-Host "Process Data function:- EventsLength - $($alleventobjs.count), Logtype - $($logtype) and Endtime - $($endTime)"
     $customerId = $env:workspaceId
     $sharedKey = $env:workspacekey
-    $responseCode = 200
+    $responseCode = 500
     if ($null -ne $alleventobjs ) {
         $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
         $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)).Count / 1024 / 1024
@@ -318,7 +321,7 @@ General notes
         if (($mbytes -le 30)) {
             $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $logtype
             if($responseCode -eq 200){
-                Write-Host "SUCCESS: $alleventobjs total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
+                Write-Host "SUCCESS: $($alleventobjs.count) total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
                 #DeleteMessageFromQueue
             }
         }
@@ -379,7 +382,7 @@ function  GetBucketDetails {
         $tableName,
         $logtype
     )
-    $aggregatedEvents = [System.Collections.ArrayList]::new()
+    $aggregatedEvents = [System.Collections.Generic.List[PSObject]]::new()
     try {
         IF ($Null -ne $s3BucketName) {
             Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
