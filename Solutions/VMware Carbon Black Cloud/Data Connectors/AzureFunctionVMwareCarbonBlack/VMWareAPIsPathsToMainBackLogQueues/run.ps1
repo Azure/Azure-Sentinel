@@ -25,12 +25,116 @@ $logAnalyticsUri = $env:logAnalyticsUri
 [int]$maxMainQueuemessages=150
 [int]$maxdurationminutes=10
 
+
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
 $script_start_time=([System.DateTime]::UtcNow)
+<#
+.SYNOPSIS
+Short description
 
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function GenerateDate()
+{
+    $startTime=getCheckpoint
+    $startTime = Get-Date -Date $startTime
+
+    #$startTime = [System.DateTime]::UtcNow.AddMinutes(-$(5))
+    if($null -ne $startTime)
+    {
+        Write-Host "The last start time in file share is" $startTime
+    }
+    else {
+        
+        $startTime = [System.DateTime]::UtcNow.AddMinutes(-$(5))
+    }
+    
+    $now = [System.DateTime]::UtcNow
+    $Duration = New-TimeSpan -Start $startTime -End $now
+    #[int]$noofmins = $(($now - $startTime).Minutes)
+    [int]$noofmins = $Duration.Minutes
+    if($noofmins -gt 5)
+    {
+        if($null -ne $startTime)
+        {
+          $now=$startTime.AddMinutes(5)
+        }
+        Write-Host "The no of mins b/w start and end time is greater than 5"
+    }
+    Write-Host "The now time is" $now
+
+    return $startTime, $now
+}
+<#
+.SYNOPSIS
+#
+
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function getCheckpoint()
+{
+$azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
+$Context = New-AzStorageContext -ConnectionString $azstoragestring
+if((Get-AzStorageContainer -Context $Context).Name -contains "lastlog"){
+    #Set Container
+    $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Blob "lastlog.log"
+    $lastlogTime = $blob.ICloudBlob.DownloadText()
+    $startTime = $lastlogTime | Get-Date -Format yyyy-MM-ddTHH:mm:ss
+    return $startTime
+}
+
+}
+<#
+.SYNOPSIS
+#
+
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function postCheckpointLastFailure($message)
+{
+    $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
+    $Context = New-AzStorageContext -ConnectionString $azstoragestring
+    if((Get-AzStorageContainer -Context $Context).Name -contains "lastfailurelog"){
+        #Set Container
+        $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastfailurelog" -Context $Context).Name -Blob "lastlog.log"
+        $lastfailuremessage = $blob.ICloudBlob.DownloadText()
+        $lastmessage = $lastfailuremessage
+        $message | Out-File "$env:TEMP\lastfailurelog.log"
+        Set-AzStorageBlobContent -file "$env:TEMP\lastfailurelog.log" -Container (Get-AzStorageContainer -Name "lastfailurelog" -Context $Context).Name -Context $Context -Force
+    }
+    else {
+        
+    $azStorageContainer = New-AzStorageContainer -Name "lastfailurelog" -Context $Context
+    $message | Out-File "$env:TEMP\lastfailurelog.log"
+    Set-AzStorageBlobContent -file "$env:TEMP\lastfailurelog.log" -Container $azStorageContainer.name -Context $Context -Force
+    }
+    
+   
+}
 
 # The function will call the Carbon Black API and retrieve the Audit, Event, and Notifications Logs
 function CarbonBlackAPI()
@@ -57,8 +161,8 @@ function CarbonBlackAPI()
     $backlogQueue=$env:backlogQueue
     $carbonBlackStorage=$env:AzureWebJobsStorage
 
-    $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time))
-    $now = [System.DateTime]::UtcNow
+    #$startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time))
+    #$now = [System.DateTime]::UtcNow
  
 
     # Remove if addition slash or space added in hostName
@@ -356,7 +460,8 @@ function GetBucketFiles($prefixFolder)
     IF ($Null -ne $s3BucketName) {
         Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
         while ($startTime -le $now) {
-            $prefixFolder="carbon-black-events"
+           try {
+            
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=2/hour=23/minute=30"
             #$path=Get-ChildItem -Path $keyPrefix -Recurse
@@ -375,8 +480,9 @@ function GetBucketFiles($prefixFolder)
 
         foreach($item in $paths)
         {
-            
+         
           $item=$item.Replace($OrgKey,"")
+          Write-Host "Paths from s3" $item "at start time" $startTime "now time" $now
           if($prefixFolder -eq "carbon-black-events")
            {
             $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $EventLogTable -logtype "event"
@@ -386,21 +492,30 @@ function GetBucketFiles($prefixFolder)
            }
             if((GetQueueCount) -gt $maxMainQueuemessages)
             {
+                Write-Host "Backlog queue message has been posted" $json
                 CreateQueuePostMessageToQueue -message $json -queueN $backlogQueue
             }
             else {
-
+                Write-Host "Main queue message has been posted" $json
                 CreateQueuePostMessageToQueue -message $json -queueN $queueName
             }
             if((check_if_script_runs_too_long -percentage 0.8 -script_start_time $script_start_time))
             {
-                break
+                Write-Host "Script is running long"
+                return
             }
 
         }
             $startTime = $startTime.AddMinutes(1)
+            Write-Host "Start time incremented by 1" $startTime
        
         }
+        catch {
+            postCheckpointLastFailure($json)
+            Write-Host "Execption at this message for path" $item "at start time" $startTime "at now" $now
+           }
+    }
+   
 
     }
 }
@@ -419,22 +534,22 @@ An example
 .NOTES
 General methods
 #>
-function CreateQueuePostMessageToQueue($message,$queueN)
+function CreateQueuePostMessageToQueue($message,$queueNameParam)
 {
    
 try
 {
-    if(-not([string]::IsNullOrWhiteSpace($message)) -and -not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueName)))
+    if(-not([string]::IsNullOrWhiteSpace($message)) -and -not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueNameParam)))
     {
         $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
         if ($null -ne $ctx)
         {
             
-            $queue = Get-AzStorageQueue –Name $queueN –Context $ctx
+            $queue = Get-AzStorageQueue –Name $queueNameParam –Context $ctx
             if(-not $queue)
             {
                #Creating the queue
-               $queue = New-AzStorageQueue –Name $queueN -Context $ctx  
+               $queue = New-AzStorageQueue –Name $queueNameParam -Context $ctx  
             }
             else {
                 
@@ -454,15 +569,15 @@ try
         }
         else
         {
-          Write-Host "unable to get queue details"
+          Write-Host "unable to get queue details for" $message
         }
         if($null -ne $status)
         {
-          Write-Host "Queue Message added Successfully"
+          Write-Host "Queue Message added Successfully" $message
         }
         else 
         {  
-           Write-Host "Queue Message not added Successfully"
+           Write-Host "Queue Message not added Successfully" $message 
         }
     }
     else
@@ -476,12 +591,29 @@ catch {
 
 }
 
-
-
+    $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
+    $Context = New-AzStorageContext -ConnectionString $azstoragestring
+    $startTime,$now=GenerateDate
+    
+$startTime
+$now    
+#postCheckpoint
 # Execute the Function to Pull CarbonBlack data and Post to the Log Analytics Workspace
 CarbonBlackAPI
-
+if((Get-AzStorageContainer -Context $Context).Name -contains "lastlog"){
+    #Set Container
+    $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Blob "lastlog.log"
+    $lastlogTime = $blob.ICloudBlob.DownloadText()
+    $startTime = $lastlogTime | Get-Date -Format yyyy-MM-ddTHH:mm:ss
+    $now | Out-File "$env:TEMP\lastlog.log"
+    Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Context $Context -Force
+}
+else {
+    
+$azStorageContainer = New-AzStorageContainer -Name "lastlog" -Context $Context
+$now | Out-File "$env:TEMP\lastlog.log"
+Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container $azStorageContainer.name -Context $Context -Force
+}
 #This method posts the message to queue
-
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"

@@ -29,22 +29,22 @@ An example
 .NOTES
 General methods
 #>
-function CreateQueue($queueN)
+function CreateQueue($queueNameParameter)
 {
    
 try
 {
-    if(-not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueN)))
+    if(-not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueNameParameter)))
     {
         $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
         if ($null -ne $ctx)
         {
             
-            $queue = Get-AzStorageQueue –Name $queueN –Context $ctx
+            $queue = Get-AzStorageQueue –Name $queueNameParameter –Context $ctx
             if(-not $queue)
             {
                #Creating the queue
-               $queue = New-AzStorageQueue –Name $queueN -Context $ctx  
+               $queue = New-AzStorageQueue –Name $queueNameParameter -Context $ctx  
             }
             else {
                 
@@ -104,10 +104,10 @@ An example
 .NOTES
 General notes
 #>
-function GetQCount($queueN)
+function GetQCount($qNameParam)
 {
     $context=GetStrgContext
-    $messageCount = (Get-AzStorageQueue -Context $context | where-object{$_.name -eq $queueN}).ApproximateMessageCount
+    $messageCount = (Get-AzStorageQueue -Context $context | where-object{$_.name -eq $qNameParam}).ApproximateMessageCount
     return $messageCount
 }
 <#
@@ -132,12 +132,12 @@ An example
 .NOTES
 General notes
 #>
-function  DeleteMessageFrmQueue($messageId,$popreceipt,$queueNms)
+function  DeleteMessageFrmQueue($messageId,$popreceipt,$queueNameForMsg)
 {
     $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
     if ($ctx -ne $null)
     {
-      $queue = Get-AzStorageQueue –Name $queueNms –Context $ctx
+      $queue = Get-AzStorageQueue –Name $queueNameForMsg –Context $ctx
     }
     else
     {
@@ -150,6 +150,11 @@ function  DeleteMessageFrmQueue($messageId,$popreceipt,$queueNms)
        if($status -ne $null)
        {
          Write-Host "Message Deleted successfully"
+       }
+       else {
+        
+        Write-Host "Message not Deleted successfully"
+        
        }
 
     }
@@ -174,13 +179,13 @@ An example
 .NOTES
 General notes
 #>
-function GetMessageFromQueue($queueNm)
+function GetMessageFromQueue($getQueueMsg)
 {
     $ctx=GetStrgContext
     $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
     if ($ctx -ne $null)
     {
-      $queue = Get-AzStorageQueue –Name $queueNm –Context $ctx
+      $queue = Get-AzStorageQueue –Name $getQueueMsg –Context $ctx
     }
     else
     {
@@ -192,8 +197,9 @@ function GetMessageFromQueue($queueNm)
         $status= $queue.CloudQueue.GetMessageAsync($invisibleTimeout,$null,$null)
        if($status -ne $null)
        {
+        Write-Host "Message sent from queue" $getQueueMsg $status.Result
         return $status.Result
-        Write-Host "Message Deleted successfully"
+        
        }
 
     }
@@ -248,22 +254,22 @@ An example
 .NOTES
 General notes
 #>
-function CreateQueuePostMsgToQueue($message,$queueN)
+function CreateQueuePostMsgToQueue($message,$queueMsgToBePosted)
 {
    
 try
 {
-    if(-not([string]::IsNullOrWhiteSpace($message)) -and -not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueN)))
+    if(-not([string]::IsNullOrWhiteSpace($message)) -and -not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueMsgToBePosted)))
     {
         $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
         if ($null -ne $ctx)
         {
             
-            $queue = Get-AzStorageQueue –Name $queueN –Context $ctx
+            $queue = Get-AzStorageQueue –Name $queueMsgToBePosted –Context $ctx
             if(-not $queue)
             {
                #Creating the queue
-               $queue = New-AzStorageQueue –Name $queueN -Context $ctx  
+               $queue = New-AzStorageQueue –Name $queueMsgToBePosted -Context $ctx  
             }
             else {
                 
@@ -291,7 +297,7 @@ try
         }
         else 
         {  
-           Write-Host "Queue Message not added Successfully"
+           Write-Host "Queue Message not added Successfully" $message
         }
     }
     else
@@ -327,31 +333,38 @@ function ProcessBacklog()
     ##Creating queue if not present
     CreateQueue($queueName)
     CreateQueue($backlogQueue)
-    $backlogcount=GetQCount -queueN $backlogQueue
+    $backlogcount=GetQCount -qNameParam $backlogQueue
     #Get backlog count
-    while($backlogcount -ge 1)
+    while($backlogcount -gt 0)
     {
-        if((GetQCount -queueN $queueName) -lt $maxMainQueuemessages)
+      try {
+        
+        if((GetQCount -qNameParam $queueName) -lt $maxMainQueuemessages)
         {
             $msg=GetMessageFromQueue($backlogQueue)
             if($null -ne $msg)
             {
-                   CreateQueuePostMsgToQueue -message $msg.AsString -queueN $queueName
-                   DeleteMessageFrmQueue -messageId $msg.Id -popreceipt $msg.PopReceipt -queueNms $backlogQueue
+                   CreateQueuePostMsgToQueue -message $msg.AsString -queueMsgToBePosted $queueName
+                   DeleteMessageFrmQueue -messageId $msg.Id -popreceipt $msg.PopReceipt -queueNameForMsg $backlogQueue
             }
             else {
               Write-Host "There is no message in backlog queue"
             }
         }
-        if((GetQCount -queueN $queueName) -eq $maxMainQueuemessages)
+        if((GetQCount -qNameParam $queueName) -eq $maxMainQueuemessages)
         {
-             break
+             return
         }
         if((check_if_script_run_too_long -percentage 0.8 -script_start_time $script_start_time))
         {
-            break
+            return
         }
-        $backlogcount=GetQCount -queueN $backlogQueue
+        $backlogcount=GetQCount -qNameParam $backlogQueue
+      }
+      catch {
+        postCheckpointLastFailure($msg)
+        Write-Host "There are errors while processing Msg to Main queue" $msg
+      }
     }
   }
   catch {
