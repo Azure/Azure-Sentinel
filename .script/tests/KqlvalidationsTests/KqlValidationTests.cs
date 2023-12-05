@@ -134,8 +134,11 @@ namespace Kqlvalidations.Tests
         private void ValidateKqlForBestPractices(string queryStr, string filename)
         {
             var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr,filename);
-            var gitHubApiClient = GitHubApiClient.Create();
-            gitHubApiClient.AddPRComment(suggestions);
+            if (!string.IsNullOrEmpty(suggestions))
+            {
+                var gitHubApiClient = GitHubApiClient.Create();
+                gitHubApiClient.AddPRComment(suggestions); 
+            }
         }
 
 

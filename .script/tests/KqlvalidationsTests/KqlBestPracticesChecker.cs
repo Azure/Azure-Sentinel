@@ -60,6 +60,10 @@ namespace Kqlvalidations.Tests
         /// <returns>formatted suggestions</returns>
         private static string FormatSuggestionsWithDisclaimer(List<string> suggestions, string fileName)
         {
+            if(suggestions.Count== 0)
+            {
+                return string.Empty;
+            }
             var formattedSuggestions = new List<string>
             {
                 // Suggestions for the file comment
