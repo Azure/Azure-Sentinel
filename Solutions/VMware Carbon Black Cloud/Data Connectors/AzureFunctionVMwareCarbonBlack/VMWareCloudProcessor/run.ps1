@@ -337,6 +337,30 @@ General notes
     }
     return $responseCode
 }
+
+
+Function Expand-GZipFile {
+    Param(
+        $infile,
+        $outfile
+    )
+	Write-Host "Processing Expand-GZipFile for: infile = $infile, outfile = $outfile"
+    $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
+    $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)
+    $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)
+
+    $buffer = New-Object byte[](1024)
+    while ($true) {
+        $read = $gzipstream.Read($buffer, 0, 1024)
+        if ($read -le 0) { break }
+		$output.Write($buffer, 0, $read)
+	}
+
+    $gzipStream.Close()
+    $output.Close()
+    $inputfile.Close()
+}
+
 <#
 .SYNOPSIS
 This method is used to delete message from queue
@@ -382,7 +406,7 @@ function  GetBucketDetails {
         $tableName,
         $logtype
     )
-    $aggregatedEvents = [System.Collections.Generic.List[PSObject]]::new()
+    $aggEvents = [System.Collections.Generic.List[PSObject]]::new()
     try {
         IF ($Null -ne $s3BucketName) {
             Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
@@ -393,48 +417,57 @@ function  GetBucketDetails {
                     $key, $value = $pair -split '='
                     $s3Dict[$key] = $value
                 }
-                $keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
+                $keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=5/hour=11/minute=55/second=01"
+                #$keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
                 $obj = Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix
+                #| Read-S3Object -Folder "C:\tmp"
+                $obj | % {
+                    if ($_.Size -gt 0)
+                    {
+                       $_ | Read-S3Object -Folder "C:\tmp"
+                    }
+                }
+                #| Copy-S3Object -LocalFolder "C:\tmp"
                 if ($null -eq $obj -or $obj -eq "") {
                     Write-Host "The folder/file $keyPrefix does not exist in the bucket $s3BucketName"
                     exit
                 } else {
-                Write-Host "Object $key is $($obj.Size) bytes"
-                $sql = "select * from s3object"
-                $inputSerialization = New-Object Amazon.S3.Model.InputSerialization
-                $inputSerialization.JSON = New-Object Amazon.S3.Model.JSONInput
-                $inputSerialization.JSON.JsonType = 'DOCUMENT'
-                $inputSerialization.CompressionType = 'GZIP'
-                $outSerialization = New-Object Amazon.S3.Model.OutputSerialization
-                $outSerialization.JSON = New-Object Amazon.S3.Model.JSONOutput
-                $obj | % {
+                if (Test-Path -Path "C:/tmp") {
+                $nestedFiles = Get-ChildItem -Path "C:/tmp" -Recurse -File
+                $tmpEvents = [System.Collections.Generic.List[PSObject]]::new()
+                $nestedFiles | % {
+                    if ($_.Length -gt 0) {
                     try {
-                        if ($_.Size -gt 0) {
                             $loopItem = $_
                             $time = [System.DateTime]::UtcNow
                             Write-Host "Making request to AWS for downloading file startTime: $time, S3Bucket: $($_.BucketName), S3File: $($_.Key) "
-                            $result = Select-S3ObjectContent `
-                            -Expression $sql `
-                            -Bucket $_.BucketName `
-                            -ExpressionType "SQL" `
-                            -InputSerialization $inputSerialization `
-                            -OutputSerialization $outSerialization `
-                            -Key $_.Key
-                            # read the data from $result.Payload which is a memorystream
-                            $data = New-Object System.IO.StreamReader($result.Payload)
-                            $outputStream = $data.ReadToEnd()
-                            Write-Host "Download from AWS completed.  S3File: $($_.Key), S3Bucket: $($_.BucketName), FileSize in mb: $($outputStream.Length/1MB), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
-                            $data.Close()
-                            #clean
-                            $data.Dispose()
-                            $events = DataTransformation -data $outputStream -tableName $tableName -logtype $logtype
-                            $aggregatedEvents.Add($events)
+                            $filename = $_.FullName
+                            $infile = $_.FullName
+                            $outfile = $_.FullName -replace ($_.Extension, '')
+                            Expand-GZipFile $infile.Trim() $outfile.Trim()
+                            $null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
+                            $filename =  $filename -replace ($_.Extension, '')
+                            $filename = $filename.Trim()
+                            foreach ($logEvent in [System.IO.File]::ReadLines($filename))
+                            { 
+                                $tmpEvents.Add($logEvent)
                             }
-                    }
-                    catch {
-                        $err = $_.Exception.Message
-                        Write-Host "Error in downloading file from AWS S3. S3File: $($loopItem.Key), S3Bucket: $($loopItem.BucketName), Error: $err"
-                    }
+                            $logEvents = Get-Content -Raw -LiteralPath ($filename) 
+				            $logEvents = $LogEvents.Substring(0, ($LogEvents.length) - 1)
+                            $outputStream = $content #$data.ReadToEnd()
+                            Write-Host "Download from AWS completed.  S3File: $($_.Key), S3Bucket: $($_.BucketName), FileSize in mb: $($outputStream.Length/1MB), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
+                            #$data.Close()
+                            #clean
+                            #$data.Dispose()
+                            $events = DataTransformation -data $outputStream -tableName $tableName -logtype $logtype
+                            $aggEvents.Add($events)
+                        }
+                        catch {
+                            $err = $_.Exception.Message
+                            Write-Host "Error in downloading file from AWS S3. S3File: $($loopItem.Key), S3Bucket: $($loopItem.BucketName), Error: $err"
+                        }
+                        }
+                }
                 }
             }
             }
