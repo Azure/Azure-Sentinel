@@ -205,7 +205,7 @@
                             },
                             "type": "If"
                         },
-                        "Entities_-_Get_Hosts": {
+                        "Get_Hosts_From_Incident": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
@@ -251,7 +251,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Entities_-_Get_Hosts": [
+                                "Get_Hosts_From_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -259,7 +259,7 @@
                                 "and": [
                                     {
                                         "less": [
-                                            "@length(body('Entities_-_Get_Hosts')?['Hosts'])",
+                                            "@length(body('Get_Hosts_From_Incident')?['Hosts'])",
                                             1
                                         ]
                                     }
@@ -278,289 +278,28 @@
                                 "code": "function flD(e, l) {\r\n    v = e.node.compliance.cveFindings.map((f) => {\r\n      return {\r\n        name: e.node.name,\r\n        ipAddress: e.node.ipAddress,\r\n        cveId: f.cveId,\r\n        cvssScoreV3: f.cvssScoreV3,\r\n        severity: f.severity,\r\n        summary:\r\n          f.summary.replace(/[^a-z0-9.-_, ]/gi,'').substr(0, 70)+\r\n          (f.summary.length > 70 ? \"...\" : \"\"),\r\n      };\r\n    });\r\n    return srtD(v).slice(0,l)\r\n  }\r\n\r\nfunction srtD(fld) {\r\n  fld.sort((a, b) => {\r\n    if (a.cvssScoreV3 !== b.cvssScoreV3) {\r\n      return b.cvssScoreV3 - a.cvssScoreV3; // Descending order by cvssScoreV3\r\n    } else {\r\n      // Descending order by CVE ID year\r\n      let yearA = parseInt(a.cveId.split(\"-\")[1]);\r\n      let yearB = parseInt(b.cveId.split(\"-\")[1]);\r\n      return yearB - yearA;\r\n    }\r\n  });\r\n\r\n  return fld;\r\n}\r\n\r\nlet e = workflowContext.actions.Parse_endpoints_array.outputs.body;\r\n\r\nreturn e.map((item) => flD(item, 20))"
                             }
                         },
-                        "For_each_incident_host": {
-                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
-                            "actions": {
-                                "If_ip_address": {
-                                    "actions": {
-                                        "IP_Address_and_FQDN_is_provided_and_contains_\".\"": {
-                                            "actions": {
-                                                "Append_to_endpoint_filters_h+f.ip": {
-                                                    "runAfter": {
-                                                        "Compose_endpoint_filter_for_(host_or_fqdn)_and_ip_address": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "AppendToArrayVariable",
-                                                    "inputs": {
-                                                        "name": "endpoint filters",
-                                                        "value": "@outputs('Compose_endpoint_filter_for_(host_or_fqdn)_and_ip_address')"
-                                                    }
-                                                },
-                                                "Compose_endpoint_filter_for_(host_or_fqdn)_and_ip_address": {
-                                                    "runAfter": {},
-                                                    "type": "Compose",
-                                                    "inputs": {
-                                                        "filters": [
-                                                            {
-                                                                "op": "CONTAINS",
-                                                                "path": "ipAddress",
-                                                                "value": "@{body('Parse_host_json')?['additionalData']?['LastIpAddress']}"
-                                                            },
-                                                            {
-                                                                "any": true,
-                                                                "filters": [
-                                                                    {
-                                                                        "path": "name",
-                                                                        "value": "@{body('Parse_host_json')?['hostName']}"
-                                                                    },
-                                                                    {
-                                                                        "path": "name",
-                                                                        "value": "@{trim(string(body('Parse_host_json')?['additionalData']?['FQDN']))}"
-                                                                    }
-                                                                ],
-                                                                "negated": false
-                                                            }
-                                                        ]
-                                                    }
-                                                }
-                                            },
-                                            "runAfter": {},
-                                            "else": {
-                                                "actions": {
-                                                    "Append_to_endpoint_filters_h.ip": {
-                                                        "runAfter": {
-                                                            "Compose_endpoint_filter_for_host_and_ip_address": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "AppendToArrayVariable",
-                                                        "inputs": {
-                                                            "name": "endpoint filters",
-                                                            "value": "@outputs('Compose_endpoint_filter_for_host_and_ip_address')"
-                                                        }
-                                                    },
-                                                    "Compose_endpoint_filter_for_host_and_ip_address": {
-                                                        "runAfter": {},
-                                                        "type": "Compose",
-                                                        "inputs": {
-                                                            "filters": [
-                                                                {
-                                                                    "op": "CONTAINS",
-                                                                    "path": "ipAddress",
-                                                                    "value": "@{body('Parse_host_json')?['additionalData']?['LastIpAddress']}"
-                                                                },
-                                                                {
-                                                                    "path": "name",
-                                                                    "value": "@{body('Parse_host_json')?['hostName']}"
-                                                                }
-                                                            ]
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            "expression": {
-                                                "and": [
-                                                    {
-                                                        "not": {
-                                                            "equals": [
-                                                                "@body('Parse_host_json')?['additionalData']?['FQDN']",
-                                                                "@null"
-                                                            ]
-                                                        }
-                                                    },
-                                                    {
-                                                        "contains": [
-                                                            "@trim(string(body('Parse_host_json')?['additionalData']?['FQDN']))",
-                                                            "."
-                                                        ]
-                                                    }
-                                                ]
-                                            },
-                                            "type": "If"
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Parse_host_json": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "FQDN_is_provided_and_contains_\".\"": {
-                                                "actions": {
-                                                    "Append_to_endpoint_filters_h+f": {
-                                                        "runAfter": {
-                                                            "Compose_endpoint_filter_for_(fqdn_or_host)_only": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "AppendToArrayVariable",
-                                                        "inputs": {
-                                                            "name": "endpoint filters",
-                                                            "value": "@outputs('Compose_endpoint_filter_for_(fqdn_or_host)_only')"
-                                                        }
-                                                    },
-                                                    "Compose_endpoint_filter_for_(fqdn_or_host)_only": {
-                                                        "runAfter": {},
-                                                        "type": "Compose",
-                                                        "inputs": {
-                                                            "any": true,
-                                                            "filters": [
-                                                                {
-                                                                    "path": "name",
-                                                                    "value": "@{body('Parse_host_json')?['hostName']}"
-                                                                },
-                                                                {
-                                                                    "path": "name",
-                                                                    "value": "@{trim(string(body('Parse_host_json')?['additionalData']?['FQDN']))}"
-                                                                }
-                                                            ],
-                                                            "negated": false
-                                                        }
-                                                    }
-                                                },
-                                                "runAfter": {},
-                                                "else": {
-                                                    "actions": {
-                                                        "Append_to_endpoint_filters_h": {
-                                                            "runAfter": {
-                                                                "Compose_endpoint_filter_for_host_only": [
-                                                                    "Succeeded"
-                                                                ]
-                                                            },
-                                                            "type": "AppendToArrayVariable",
-                                                            "inputs": {
-                                                                "name": "endpoint filters",
-                                                                "value": "@outputs('Compose_endpoint_filter_for_host_only')"
-                                                            }
-                                                        },
-                                                        "Compose_endpoint_filter_for_host_only": {
-                                                            "runAfter": {},
-                                                            "type": "Compose",
-                                                            "inputs": {
-                                                                "filters": [
-                                                                    {
-                                                                        "path": "name",
-                                                                        "value": "@{body('Parse_host_json')?['hostName']}"
-                                                                    }
-                                                                ]
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                "expression": {
-                                                    "and": [
-                                                        {
-                                                            "not": {
-                                                                "equals": [
-                                                                    "@body('Parse_host_json')?['additionalData']?['FQDN']",
-                                                                    "@null"
-                                                                ]
-                                                            }
-                                                        },
-                                                        {
-                                                            "contains": [
-                                                                "@trim(string(body('Parse_host_json')?['additionalData']?['FQDN']))",
-                                                                "."
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                "type": "If"
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "not": {
-                                                    "equals": [
-                                                        "@body('Parse_host_json')?['additionalData']?['LastIpAddress']",
-                                                        "@null"
-                                                    ]
-                                                }
-                                            },
-                                            {
-                                                "equals": [
-                                                    "@parameters('UseIPAddressIfPresent')",
-                                                    "@true"
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type": "If",
-                                    "description": "Added AND false to always go down False line for now = IGNORE IP Address (dynamic environments)"
-                                },
-                                "Parse_host_json": {
-                                    "runAfter": {},
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@items('For_each_incident_host')",
-                                        "schema": {
-                                            "properties": {
-                                                "Type": {
-                                                    "type": "string"
-                                                },
-                                                "additionalData": {
-                                                    "properties": {
-                                                        "AvStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "FQDN": {
-                                                            "type": "string"
-                                                        },
-                                                        "HealthStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastExternalIpAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastIpAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastSeen": {
-                                                            "type": "string"
-                                                        },
-                                                        "LoggedOnUsers": {
-                                                            "type": "string"
-                                                        },
-                                                        "MdatpDeviceId": {
-                                                            "type": "string"
-                                                        },
-                                                        "OnboardingStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "RiskScore": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "friendlyName": {
-                                                    "type": "string"
-                                                },
-                                                "hostName": {
-                                                    "type": "string"
-                                                },
-                                                "osFamily": {
-                                                    "type": "string"
-                                                },
-                                                "osVersion": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "type": "object"
-                                        }
-                                    }
-                                }
+                        "Build_Endpoint_Filter_from_Hosts": {
+                            "inputs": {
+                                "code": "var hosts = workflowContext.actions.Get_Hosts_From_Incident.outputs.body.Hosts;\r\nvar filters=[];for(let i=0;i<hosts.length;i++){var a=hosts[i].hostName,t=hosts[i].additionalData,e=null!=t,s=t&&null!==t.LastIpAddress&&void 0!==t.LastIpAddress,l=t&&null!==t.FQDN&&void 0!==t.FQDN&&t.FQDN.includes(\".\");if(null!=a&&\"\"!==a){if(l&&s){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress},{any:!0,filters:[{path:\"name\",value:hosts[i].hostName},{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1}]});continue}if(l){filters.push({any:!0,filters:[{path:\"name\",value:hosts[i].hostName},{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1});continue}if(s){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress},{path:\"name\",value:hosts[i].hostName}]});continue}filters.push({filters:[{path:\"name\",value:hosts[i].hostName}]})}}\r\nreturn filters;"
                             },
                             "runAfter": {
-                                "Initialize_Endpoint_Filters_array": [
+                                "Initialize_Endpoint_Filter": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Foreach"
+                            "type": "JavaScriptCode"
+                        },
+                        "Set_Endpoint_Filter": {
+                            "inputs": {
+                                "name": "endpoint filters",
+                                "value": "@body('Build_Endpoint_Filter_from_Hosts')"
+                            },
+                            "runAfter": {
+                                "Build_Endpoint_Filter_from_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable"
                         },
                         "Initialize_API_Gateway_Query": {
                             "runAfter": {
@@ -631,7 +370,7 @@
                                 ]
                             }
                         },
-                        "Initialize_Endpoint_Filters_array": {
+                        "Initialize_Endpoint_Filter": {
                             "runAfter": {
                                 "Initialize_API_Gateway_Query": [
                                     "Succeeded"
@@ -649,7 +388,7 @@
                         },
                         "Initialize_Tanium_Endpoint_Source_to_TDS": {
                             "runAfter": {
-                                "For_each_incident_host": [
+                                "Set_Endpoint_Filter": [
                                     "Succeeded"
                                 ]
                             },
