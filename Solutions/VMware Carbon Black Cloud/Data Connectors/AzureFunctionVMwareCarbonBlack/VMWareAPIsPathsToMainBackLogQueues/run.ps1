@@ -496,6 +496,7 @@ function GetBucketFiles($prefixFolder)
         while ($startTime -le $now) {
            try {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
+            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15"
             $paths=@()
             foreach ($items in (Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix) | Select-Object Key ) 
             { 
@@ -504,6 +505,9 @@ function GetBucketFiles($prefixFolder)
                 $path = split-path $items.Key -Parent 
                 $paths += $path   
     
+             }
+             else {
+                Write-Host "Paths doesn't have gz files" $items.Key
              }  
            }
             $paths = $paths | sort -Unique
@@ -514,11 +518,12 @@ function GetBucketFiles($prefixFolder)
          
           $item=$item.Replace($OrgKey,"")
           Write-Host "Paths from s3" $item "at start time" $startTime "now time" $now
-          if($prefixFolder -eq "carbon-black-events")
+          if($LogTypeArr -contains "event")
            {
             $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $EventLogTable -logtype "event"
            }
-           else {
+           if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
+           {
             $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"
            }
             if((GetQueueCount) -gt $maxMainQueuemessages)
@@ -636,13 +641,13 @@ if((Get-AzStorageContainer -Context $Context).Name -contains "lastlog"){
     $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Blob "lastlog.log"
     $lastlogTime = $blob.ICloudBlob.DownloadText()
     $startTime = $lastlogTime | Get-Date -Format yyyy-MM-ddTHH:mm:ss
-    $now | Out-File "$env:TEMP\lastlog.log"
+    $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastlog.log"
     Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Context $Context -Force
 }
 else {
     
 $azStorageContainer = New-AzStorageContainer -Name "lastlog" -Context $Context
-$now | Out-File "$env:TEMP\lastlog.log"
+$now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastlog.log"
 Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container $azStorageContainer.name -Context $Context -Force
 }
 #This method posts the message to queue
