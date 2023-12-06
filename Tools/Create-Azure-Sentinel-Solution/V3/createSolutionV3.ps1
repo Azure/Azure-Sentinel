@@ -68,10 +68,13 @@ Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName"
 $isPipelineRun = $false
 
 $commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
-$catelogAPIFilePath = $repositoryBasePath + ".script/package-automation/catelogAPI.ps1"
+$catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
 
-. $commonFunctionsFilePath # load common functions
-. $catelogAPIFilePath
+#. $commonFunctionsFilePath # load common functions
+. $catalogAPIFilePath
+
+Get-CatalogDetails | Get-Member | Format-List
+exit
 
 try {
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
@@ -98,7 +101,7 @@ try {
         #================START: IDENTIFY PACKAGE VERSION=============
         $solutionOfferId = $baseMetadata.offerId
         $offerId = "$solutionOfferId"
-        $offerDetails = GetCatelogDetails $offerId
+        $offerDetails = Get-CatalogDetails $offerId
         $userInputPackageVersion = $contentToImport.version
         $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
         if ($packageVersion -ne $contentToImport.version) {

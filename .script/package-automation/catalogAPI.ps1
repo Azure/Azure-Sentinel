@@ -1,8 +1,8 @@
-function GetCatelogDetails($offerId) 
+function Get-CatalogDetails($offerId) 
 {
     if ($null -eq $offerId -or $offerId -eq '')
     {
-        Write-Host "Provided OfferId for CatelogAPI details is blank! Please provide valid OfferId!";
+        Write-Host "Provided OfferId for CatalogAPI details is blank! Please provide valid OfferId!";
         return $null;
     }
     else {
@@ -21,16 +21,16 @@ function GetCatelogDetails($offerId)
             if ($null -eq $offerDetails)
             {
                 # DETAILS NOT FOUND
-                Write-Host "CatelogAPI Details not found for offerId $offerId"
+                Write-Host "CatalogAPI Details not found for offerId $offerId"
                 return $null;
             }
             else {
-                Write-Host "CatelogAPI Details found for offerId $offerId"
+                Write-Host "CatalogAPI Details found for offerId $offerId"
                 return $offerDetails;
             }
         }
         catch {
-            Write-Host "Error occured in CatelogAPI. Error Details : $_";
+            Write-Host "Error occured in CatalogAPI. Error Details : $_";
             return $null;
         }
     }
@@ -115,7 +115,7 @@ function GetOfferVersion($offerId, $mainTemplateUrl)
         }
         catch 
         {
-            Write-Host "Error occured in CatelogAPI. Error Details11 : $_";
+            Write-Host "Error occured in CatalogAPI. Error Details11 : $_";
             return $null;
         }
     }
@@ -153,7 +153,7 @@ function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $pac
         }
         else
         {
-            # CHECK IF CATELOG API HAS DETAILS AND IDENTIFY THE VERSION
+            # CHECK IF CATALOG API HAS DETAILS AND IDENTIFY THE VERSION
             $mainTemplateUri = $mainTemplateDetails.uri
 
             if ($null -eq $mainTemplateUri)
@@ -173,10 +173,10 @@ function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $pac
                 else 
                 {
                     $identifiedOfferVersion = $offerMetadataVersion
-                    $catelogMajor,$catelogminor,$catelogbuild,$catelogrevision = $identifiedOfferVersion.split(".")
+                    $catalogMajor,$catalogminor,$catalogbuild,$catalogrevision = $identifiedOfferVersion.split(".")
                     $defaultMajor,$defaultminor,$defaultbuild,$defaultrevision = $defaultPackageVersion.split(".")
 
-                    if ($defaultMajor -gt $catelogMajor)
+                    if ($defaultMajor -gt $catalogMajor)
                     {
                         # eg: 3.0.0 > 2.0.1 ==> 3.0.0
                         Write-Host "Default Package version is greater then the CatalogAPI version so $defaultVersionMessage"

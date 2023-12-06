@@ -4,7 +4,7 @@ $eventName = 'DeployToPartnerCenter'
 Write-Host "Deployement to Partner Center started!"
 
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
-. ./.script/package-automation/catelogAPI.ps1
+. ./.script/package-automation/catalogAPI.ps1
 
 try {
     function GetPartnerCenterPackageUploadStatus {
@@ -103,7 +103,7 @@ try {
 
     $updateSolution = $isNewSolution -eq "true" -or $isNewSolution -eq "True" ? "New" : "Update"
 
-    $offerDetails = GetCatelogDetails $offerId
+    $offerDetails = Get-CatalogDetails $offerId
 
     $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $packageVersionAttribute $userInputPackageVersion
     Write-Host "Package version identified is $packageVersion"
