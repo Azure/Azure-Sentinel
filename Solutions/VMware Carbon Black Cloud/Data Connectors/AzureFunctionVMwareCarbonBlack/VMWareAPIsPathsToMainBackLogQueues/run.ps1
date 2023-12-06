@@ -495,20 +495,17 @@ function GetBucketFiles($prefixFolder)
         Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
         while ($startTime -le $now) {
            try {
-            
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
-            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=2/hour=23/minute=30"
-            #$path=Get-ChildItem -Path $keyPrefix -Recurse
             $paths=@()
-            foreach ($items in (Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Select-Object Key )) 
+            foreach ($items in (Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix) | Select-Object Key ) 
             { 
-                $path = split-path $items.Key
-                if($path.Contains("second="))
-                {
-                    $paths += $path   
-                }
-               
-            }
+             if($items.Key.Contains(".gz"))
+             {       
+                $path = split-path $items.Key -Parent 
+                $paths += $path   
+    
+             }  
+           }
             $paths = $paths | sort -Unique
             Write-Host $paths
 
