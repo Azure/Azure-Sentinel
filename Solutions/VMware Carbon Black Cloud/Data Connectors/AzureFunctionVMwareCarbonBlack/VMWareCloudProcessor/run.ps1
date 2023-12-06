@@ -424,6 +424,7 @@ function  GetBucketDetails {
                 }
                 $keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
                 #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=5/hour=11/minute=55/second=01"
+                #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=6/hour=15/minute=19/second=2"
                 $obj = Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix
                 $obj | % {
                     if ($_.Size -gt 0)
@@ -437,7 +438,7 @@ function  GetBucketDetails {
                     exit
                 } else {
                 if (Test-Path -Path "/tmp/$keyPrefix") {
-                $nestedFiles = Get-ChildItem -Path "/tmp" -Recurse -File
+                $nestedFiles = Get-ChildItem -Path "/tmp/$keyPrefix" -Recurse -File
                 $nestedFiles | % {
                     if ($_.Length -gt 0) {
                     try {
