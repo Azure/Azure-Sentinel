@@ -28,23 +28,36 @@ def lambda_handler(event, context):
     unix_end_time = int(time.mktime(END_TIME_UTC.timetuple()))*1000
     try:
         # List log groups
-        log_groups = logs.describe_log_groups()
-        log_groups_dict = {}
+        try:
+            log_groups = logs.describe_log_groups()
+            # Print the entire log_groups response
+            print(log_groups)
+            log_groups_dict = {}
+        except Exception as e:
+            # Handle exceptions
+            print(f"An error occurred: {e}")
 
         for log_group in log_groups['logGroups']:
-            LOG_GROUP_NAME = log_group['logGroupName']
-            # List log streams for each log group
-            log_streams = logs.describe_log_streams(logGroupName=LOG_GROUP_NAME)
+            log_Group_Name = log_group['logGroupName']
+            print(log_Group_Name)
+            try:
+                # List log streams for each log group
+                log_streams = logs.describe_log_streams(logGroupName=log_Group_Name)
+                print(log_streams)
+            except Exception as e:
+                # Handle exceptions
+                print(f"An error occurred: {e}")
+
             for log_stream in log_streams['logStreams']:
-                LOG_STREAM_NAME = log_stream['logStreamName']
-                log_groups_dict[LOG_GROUP_NAME] = LOG_STREAM_NAME
+                log_Stream_Name = log_stream['logStreamName']
+                log_groups_dict[log_Group_Name] = log_Stream_Name
         
         # Iterate through log_groups_dict
         for key in log_groups_dict:            
             # Gets objects from cloud watch
             response = logs.get_log_events(
-                logGroupName = key.LOG_GROUP_NAME,
-                logStreamName = key.LOG_STREAM_NAME,
+                logGroupName = key.log_Group_Name,
+                logStreamName = key.log_Stream_Name,
                 startTime=unix_start_time,
                 endTime=unix_end_time,
             )
@@ -71,6 +84,6 @@ def lambda_handler(event, context):
             # Upload data to desired folder in bucket
             s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{OUTPUT_FILE_NAME}.gz', f'{BUCKET_PREFIX}{OUTPUT_FILE_NAME}.gz')
     except Exception as e:
-        print("    Error exporting %s: %s" % (LOG_GROUP_NAME, getattr(e, 'message', repr(e))))
+        print("    Error exporting %s: %s" % (log_Group_Name, getattr(e, 'message', repr(e))))
 
 
