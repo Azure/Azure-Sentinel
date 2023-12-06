@@ -32,12 +32,22 @@ function ProcessBucketFiles ()
     $queueName=$env:queueName
     $carbonBlackStorage=$env:AzureWebJobsStorage
 
-        $totalEvents = GetBucketDetails -s3BucketName $QueueItem["s3BucketName"] -prefixFolder $QueueItem["keyPrefix"] -tableName $QueueItem["tableName"] -logtype $QueueItem["logtype"]
+        GetBucketDetails -s3BucketName $QueueItem["s3BucketName"] -prefixFolder $QueueItem["keyPrefix"] -tableName $QueueItem["tableName"] -logtype $QueueItem["logtype"]
+
+    }
+
+    function PushDataToSentinel {
+        Param (
+            $totalEvents,
+            $logtype,
+            $tableName,
+            $fileName
+        )
         if (-not([string]::IsNullOrWhiteSpace($totalEvents)))
         {
             try {
-                    ProcessData -alleventobjs $totalEvents -logtype $QueueItem["tableName"] -endTime $([DateTime]::UtcNow)
-                    Write-Host "Pushed events to $($QueueItem["tableName"])"
+                    ProcessData -alleventobjs $totalEvents -tableName $tableName -logtype $logtype -endTime $([DateTime]::UtcNow)
+                    Write-Host "Pushed total no of events : $($totalEvents.Count)  to $($tableName) for file $($fileName)"
                 }
             catch {
                     $string_err = $_ | Out-String
@@ -308,21 +318,20 @@ An example
 .NOTES
 General notes
 #>
- function ProcessData($alleventobjs, $logtype, $endTime) {
-    Write-Host "Process Data function:- EventsLength - $($alleventobjs.count), Logtype - $($logtype) and Endtime - $($endTime)"
+ function ProcessData($alleventobjs, $tableName, $logtype, $endTime) {
+    Write-Host "Process Data function:- EventsLength - $($alleventobjs.count), TableName - $($tableName)  Logtype - $($logtype) and Endtime - $($endTime)"
     $customerId = $env:workspaceId
     $sharedKey = $env:workspacekey
     $responseCode = 500
     if ($null -ne $alleventobjs ) {
         $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
         $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)).Count / 1024 / 1024
-        Write-Host "Total mbytes :- $($mbytes) for type :- $($logtype)"
+        Write-Host "Total mbytes :- $($mbytes) for table name :- $($tableName) for type :- $($logtype)"
         # Check the payload size, if under 30MB post to Log Analytics.
         if (($mbytes -le 30)) {
-            $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $logtype
+            $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tableName
             if($responseCode -eq 200){
                 Write-Host "SUCCESS: $($alleventobjs.count) total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
-                #DeleteMessageFromQueue
             }
         }
         else {
@@ -406,9 +415,7 @@ function  GetBucketDetails {
         $tableName,
         $logtype
     )
-    $aggEvents = [System.Collections.Generic.List[PSObject]]::new()
-    try {
-        IF ($Null -ne $s3BucketName) {
+        If ($Null -ne $s3BucketName) {
             Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
             if($startTime -le $now) {
                 $keyValuePairs = $prefixFolder -split '\\'
@@ -417,30 +424,27 @@ function  GetBucketDetails {
                     $key, $value = $pair -split '='
                     $s3Dict[$key] = $value
                 }
-                $keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=5/hour=11/minute=55/second=01"
-                #$keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
+                $keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
                 $obj = Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix
-                #| Read-S3Object -Folder "C:\tmp"
                 $obj | % {
                     if ($_.Size -gt 0)
                     {
                        $_ | Read-S3Object -Folder "C:\tmp"
                     }
                 }
-                #| Copy-S3Object -LocalFolder "C:\tmp"
                 if ($null -eq $obj -or $obj -eq "") {
-                    Write-Host "The folder/file $keyPrefix does not exist in the bucket $s3BucketName"
+                    Write-Host "The folder/file $keyPrefix does not exist in the bucket $s3BucketName and exiting from the function"
                     exit
                 } else {
-                if (Test-Path -Path "C:/tmp") {
-                $nestedFiles = Get-ChildItem -Path "C:/tmp" -Recurse -File
-                $tmpEvents = [System.Collections.Generic.List[PSObject]]::new()
+                if (Test-Path -Path "/tmp/$keyPrefix") {
+                $nestedFiles = Get-ChildItem -Path "/tmp" -Recurse -File
                 $nestedFiles | % {
                     if ($_.Length -gt 0) {
                     try {
+                            $fileEvents = [System.Collections.Generic.List[PSObject]]::new()
                             $loopItem = $_
                             $time = [System.DateTime]::UtcNow
-                            Write-Host "Making request to AWS for downloading file startTime: $time, S3Bucket: $($_.BucketName), S3File: $($_.Key) "
+                            Write-Host "Making request to AWS for downloading file startTime: $time, S3Bucket: $($s3BucketName), S3TmpFile: $($_.FullName) "
                             $filename = $_.FullName
                             $infile = $_.FullName
                             $outfile = $_.FullName -replace ($_.Extension, '')
@@ -448,59 +452,52 @@ function  GetBucketDetails {
                             $null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
                             $filename =  $filename -replace ($_.Extension, '')
                             $filename = $filename.Trim()
-                            foreach ($logEvent in [System.IO.File]::ReadLines($filename))
-                            { 
-                                $tmpEvents.Add($logEvent)
+                            try {
+                                $streamReader = [System.IO.File]::OpenText($filename)
+                                while ($streamReader.Peek() -ge 0) {
+                                    $logEvent = $streamReader.ReadLine()
+                                    $logs = $logEvent | ConvertFrom-Json
+                                    $hash = @{}
+                                    $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
+                                    $logevents = $hash
+                                    if($logtype -eq "event")
+                                    {
+                                        EventsFieldsMapping -events $logevents
+                                     }
+                                    if($logtype -eq "alert")
+                                    {
+                                        AlertsFieldsMapping -alerts $logevents
+                                    }
+                                    $fileEvents.Add($logevents)
+                                }
                             }
-                            $logEvents = Get-Content -Raw -LiteralPath ($filename) 
-				            $logEvents = $LogEvents.Substring(0, ($LogEvents.length) - 1)
-                            $outputStream = $content #$data.ReadToEnd()
-                            Write-Host "Download from AWS completed.  S3File: $($_.Key), S3Bucket: $($_.BucketName), FileSize in mb: $($outputStream.Length/1MB), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
-                            #$data.Close()
-                            #clean
-                            #$data.Dispose()
-                            $events = DataTransformation -data $outputStream -tableName $tableName -logtype $logtype
-                            $aggEvents.Add($events)
+                            catch
+                            {
+                                $err = $_.Exception.Message
+                                Write-Host "Error in reading file from tmp folder. S3File: $($loopItem.FullName), Error: $err"
+                            }
+                            finally {
+                                if ($streamReader) {
+                                    $streamReader.Close()
+                                    $streamReader.Dispose()
+                                    Remove-Item -LiteralPath $filename -Force -Recurse
+                                    PushDataToSentinel -totalEvents $fileEvents -logtype $logtype -tableName $tableName -fileName $filename
+                                }
+                            }
+                            Write-Host "Data has been Pushed to Sentinel completed.  S3File: $($filename), S3Bucket: $($_.BucketName), No of Events Sent: $($fileEvents.Length), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
                         }
-                        catch {
+                    catch {
                             $err = $_.Exception.Message
-                            Write-Host "Error in downloading file from AWS S3. S3File: $($loopItem.Key), S3Bucket: $($loopItem.BucketName), Error: $err"
+                            Write-Host "Error in downloading file from Tmp Folder. S3File: $($loopItem.FullName), S3Bucket: $($s3BucketName), Error: $err"
                         }
-                        }
+                    }
                 }
                 }
             }
             }
         }
-    }
-    catch {
-        $string_err = $_ | Out-String
-         Write-Host $string_err
-    }
-    return $aggregatedEvents
+    $keyPrefix = $keyPrefix -split '/'
+    Remove-Item  -LiteralPath "/tmp/$($keyPrefix[0])/" -Recurse -Force
 }
-
-function DataTransformation
-{
-    param (
-        $data,
-        $tableName,
-        $logtype
-    )
-        $logs = $data | ConvertFrom-Json
-        $hash = @{}
-        $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
-        $logevents = $hash
-
-        if($logtype -eq "event")
-        {
-            EventsFieldsMapping -events $logevents
-        }
-        if($logtype -eq "alert")
-        {
-            AlertsFieldsMapping -alerts $logevents
-        }
-        return $logevents
-    }
 
 ProcessBucketFiles
