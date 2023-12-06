@@ -30,7 +30,7 @@ This package includes:
 
 You can choose to deploy the whole package : Connector + all five playbook templates, or each one seperately from it's specific folder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fhttps://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CiscoMeraki/ConsolidatedTemplate.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CiscoMeraki/ConsolidatedTemplate.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CiscoMeraki/ConsolidatedTemplate.json)
 
 
