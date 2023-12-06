@@ -149,7 +149,7 @@ function  DeleteMessageFrmQueue($messageId,$popreceipt,$queueNameForMsg)
 
        if($status -ne $null)
        {
-         Write-Host "Message Deleted successfully"
+         Write-Host "Message Deleted successfully from Quque:" $queueNameForMsg "MessageId is:" $messageId
        }
        else {
         
@@ -293,7 +293,7 @@ try
         }
         if($null -ne $status)
         {
-          Write-Host "Queue Message added Successfully"
+          Write-Host "Queue Message added Successfully to quque:" $queueMsgToBePosted "and message is:" $message
         }
         else 
         {  

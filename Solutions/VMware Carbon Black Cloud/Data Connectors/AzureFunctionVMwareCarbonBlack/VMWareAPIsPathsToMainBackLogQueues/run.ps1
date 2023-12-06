@@ -515,25 +515,26 @@ function GetBucketFiles($prefixFolder)
 
         foreach($item in $paths)
         {
-         
+          [int]$i=0
           $item=$item.Replace($OrgKey,"")
+          Write-Host "Number of files paths is: " $paths "Count: " $paths.Count
           Write-Host "Paths from s3" $item "at start time" $startTime "now time" $now
-          if($LogTypeArr -contains "event")
+          if($item.Contains($EventprefixFolder))
            {
             $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $EventLogTable -logtype "event"
            }
-           if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
-           {
-            $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"
-           }
+           if($item.Contains($AlertprefixFolder))
+            {
+              $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"      
+            }
             if((GetQueueCount) -gt $maxMainQueuemessages)
             {
                 Write-Host "Backlog queue message has been posted" $json
-                CreateQueuePostMessageToQueue -message $json -queueN $backlogQueue
+                CreateQueuePostMessageToQueue -message $json -queueN $backlogQueue -i $i
             }
             else {
                 Write-Host "Main queue message has been posted" $json
-                CreateQueuePostMessageToQueue -message $json -queueN $queueName
+                CreateQueuePostMessageToQueue -message $json -queueN $queueName -i $i
             }
             if((check_if_script_runs_too_long -percentage 0.8 -script_start_time $script_start_time))
             {
@@ -570,7 +571,7 @@ An example
 .NOTES
 General methods
 #>
-function CreateQueuePostMessageToQueue($message,$queueNameParam)
+function CreateQueuePostMessageToQueue($message,$queueNameParam,$i)
 {
    
 try
@@ -609,6 +610,8 @@ try
         }
         if($null -ne $status)
         {
+          $i=$i+1
+          Write-Host "Message count posted to Queue" $queueNameParam "count="$i  
           Write-Host "Queue Message added Successfully" $message
         }
         else 

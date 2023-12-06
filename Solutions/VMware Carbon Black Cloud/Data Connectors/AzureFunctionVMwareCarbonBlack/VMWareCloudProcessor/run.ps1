@@ -110,7 +110,6 @@ Function EventsFieldsMapping {
     Param (
         $events
     )
-    Write-Host "Started Field Mapping for event logs"
 
     $fieldMappings = @{
         'shortDescription' = 'event_description'
@@ -151,7 +150,6 @@ Function AlertsFieldsMapping {
     Param (
         $alerts
     )
-    Write-Host "Started Field Mapping for alert logs"
 
     $fieldMappings = @{
         'threatHunterInfo_summary' = 'reason_code'
@@ -425,10 +423,12 @@ function  GetBucketDetails {
                     $s3Dict[$key] = $value
                 }
                 $keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
+                #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=5/hour=11/minute=55/second=01"
                 $obj = Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix
                 $obj | % {
                     if ($_.Size -gt 0)
                     {
+                        Write-Host "Key prefix path: " $_.Key "File size is: " $_.Size
                        $_ | Read-S3Object -Folder "C:\tmp"
                     }
                 }
@@ -453,9 +453,13 @@ function  GetBucketDetails {
                             $filename =  $filename -replace ($_.Extension, '')
                             $filename = $filename.Trim()
                             try {
-                                $streamReader = [System.IO.File]::OpenText($filename)
-                                while ($streamReader.Peek() -ge 0) {
-                                    $logEvent = $streamReader.ReadLine()
+                              #$streamReader = [System.IO.File]::ReadAllText($filename)
+                              $FileContent =[System.IO.File]::ReadAllLines($filename)
+                               #while ($streamReader.Length -ge 0)
+                                #$x=[System.IO.File]::Ge($filename)
+                                foreach ($logEvent in $FileContent)
+                                {
+                                    #$logEvent = $streamReader.ReadLine()
                                     $logs = $logEvent | ConvertFrom-Json
                                     $hash = @{}
                                     $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
@@ -477,14 +481,14 @@ function  GetBucketDetails {
                                 Write-Host "Error in reading file from tmp folder. S3File: $($loopItem.FullName), Error: $err"
                             }
                             finally {
-                                if ($streamReader) {
-                                    $streamReader.Close()
-                                    $streamReader.Dispose()
+                                #if ($streamReader) {
+                                 #   $streamReader.Close()
+                                 #   $streamReader.Dispose()
                                     Remove-Item -LiteralPath $filename -Force -Recurse
                                     PushDataToSentinel -totalEvents $fileEvents -logtype $logtype -tableName $tableName -fileName $filename
-                                }
+                                #}
                             }
-                            Write-Host "Data has been Pushed to Sentinel completed.  S3File: $($filename), S3Bucket: $($_.BucketName), No of Events Sent: $($fileEvents.Length), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
+                            Write-Host "Data has been Pushed to Sentinel completed.  S3File: $($filename), S3Bucket: $($_.BucketName), No of Events Sent: $($fileEvents.Count), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
                         }
                     catch {
                             $err = $_.Exception.Message
@@ -496,8 +500,8 @@ function  GetBucketDetails {
             }
             }
         }
-    $keyPrefix = $keyPrefix -split '/'
-    Remove-Item  -LiteralPath "/tmp/$($keyPrefix[0])/" -Recurse -Force
+    #$keyPrefix = $keyPrefix -split '/'
+    Remove-Item  -LiteralPath "/tmp/$keyPrefix" -Recurse -Force
 }
 
 ProcessBucketFiles
