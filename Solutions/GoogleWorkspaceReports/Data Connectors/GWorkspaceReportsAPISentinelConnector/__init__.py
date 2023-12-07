@@ -340,7 +340,7 @@ def main(mytimer: func.TimerRequest) -> None:
             latest_timestamp = start_time
             logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
             result_obj, next_page_token = get_result(line,latest_timestamp,end_time)
-            if result_obj is not None:
+            if len(result_obj) > 0:
                 latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line)
                 while next_page_token is not None:
                     result_obj, next_page_token  = get_nextpage_results(line,start_time,end_time,next_page_token)
@@ -348,6 +348,11 @@ def main(mytimer: func.TimerRequest) -> None:
                     if check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         return
+            else:
+                print("No events for {} activity".format(line))
+                postactivity_list[line] = end_time
+                state = StateManager(connection_string)
+                state.post(str(json.dumps(postactivity_list)))
             postactivity_list[line] = latest_timestamp
       except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
