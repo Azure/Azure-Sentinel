@@ -46,7 +46,7 @@ function ProcessBucketFiles ()
         if (-not([string]::IsNullOrWhiteSpace($totalEvents)))
         {
             try {
-                    Split-EventsAndProcess -alleventobjs $totalEvents -logType $logtype
+                    Split-EventsAndProcess -alleventobjs $totalEvents -tableName $tableName -logType $logtype
                     #ProcessData -alleventobjs $totalEvents -tableName $tableName -logtype $logtype -endTime $([DateTime]::UtcNow)
                     Write-Host "Pushed total no of events : $($totalEvents.Count)  to $($tableName) for file $($fileName)"
                 }
@@ -317,7 +317,8 @@ An example
 .NOTES
 General notes
 #>
-function Split-EventsAndProcess($alleventobjs, $logType) {
+function Split-EventsAndProcess($alleventobjs, $tableName, $logType) {
+    Write-Host "Process Data function:- EventsLength - $($alleventobjs.count), TableName - $($tableName)  Logtype - $($logtype)"
     $chunkSize = 5000  # Adjust the chunk size based on your requirements
     $chunks = [System.Collections.ArrayList]@()
     $customerId = $env:workspaceId
@@ -326,18 +327,17 @@ function Split-EventsAndProcess($alleventobjs, $logType) {
         $chunk = $alleventobjs[$i..($i + $chunkSize - 1)]
         $chunks.Add($chunk)
     }
-
     foreach ($chunk in $chunks) {
         try {
             $jsonPayload = $chunk | ConvertTo-Json -Depth 3
             $mbytes = [System.Text.Encoding]::UTF8.GetBytes($jsonPayload).Count / 1024 / 1024
 
             if ($mbytes -le 30) {
-                $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $logType
+                $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tableName
                 Write-Host "SUCCESS: $($chunk.Count) total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
             } else {
                 Write-Host "Warning!: Total data size is > 30MB; splitting and processing."
-                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $chunk -logType $logType
+                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $chunk -logType $tableName
             }
         } catch {
             $err = $_.Exception.Message
