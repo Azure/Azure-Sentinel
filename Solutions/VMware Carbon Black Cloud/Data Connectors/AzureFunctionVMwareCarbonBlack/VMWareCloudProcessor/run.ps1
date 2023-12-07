@@ -46,7 +46,8 @@ function ProcessBucketFiles ()
         if (-not([string]::IsNullOrWhiteSpace($totalEvents)))
         {
             try {
-                    ProcessData -alleventobjs $totalEvents -tableName $tableName -logtype $logtype -endTime $([DateTime]::UtcNow)
+                    Split-EventsAndProcess -alleventobjs $totalEvents -logType $logtype
+                    #ProcessData -alleventobjs $totalEvents -tableName $tableName -logtype $logtype -endTime $([DateTime]::UtcNow)
                     Write-Host "Pushed total no of events : $($totalEvents.Count)  to $($tableName) for file $($fileName)"
                 }
             catch {
@@ -316,12 +317,42 @@ An example
 .NOTES
 General notes
 #>
+function Split-EventsAndProcess($alleventobjs, $logType) {
+    $chunkSize = 5000  # Adjust the chunk size based on your requirements
+    $chunks = [System.Collections.ArrayList]@()
+    $customerId = $env:workspaceId
+    $sharedKey = $env:workspacekey
+    for ($i = 0; $i -lt $alleventobjs.Count; $i += $chunkSize) {
+        $chunk = $alleventobjs[$i..($i + $chunkSize - 1)]
+        $chunks.Add($chunk)
+    }
+
+    foreach ($chunk in $chunks) {
+        try {
+            $jsonPayload = $chunk | ConvertTo-Json -Depth 3
+            $mbytes = [System.Text.Encoding]::UTF8.GetBytes($jsonPayload).Count / 1024 / 1024
+
+            if ($mbytes -le 30) {
+                $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $logType
+                Write-Host "SUCCESS: $($chunk.Count) total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
+            } else {
+                Write-Host "Warning!: Total data size is > 30MB; splitting and processing."
+                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $chunk -logType $logType
+            }
+        } catch {
+            $err = $_.Exception.Message
+            Write-Host "Error in processing chunk. Error: $err"
+        }
+    }
+}
+
  function ProcessData($alleventobjs, $tableName, $logtype, $endTime) {
     Write-Host "Process Data function:- EventsLength - $($alleventobjs.count), TableName - $($tableName)  Logtype - $($logtype) and Endtime - $($endTime)"
     $customerId = $env:workspaceId
     $sharedKey = $env:workspacekey
     $responseCode = 500
     if ($null -ne $alleventobjs ) {
+
         $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
         $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)).Count / 1024 / 1024
         Write-Host "Total mbytes :- $($mbytes) for table name :- $($tableName) for type :- $($logtype)"
@@ -489,7 +520,7 @@ function  GetBucketDetails {
                                     PushDataToSentinel -totalEvents $fileEvents -logtype $logtype -tableName $tableName -fileName $filename
                                 #}
                             }
-                            Write-Host "Data has been Pushed to Sentinel completed.  S3File: $($filename), S3Bucket: $($_.BucketName), No of Events Sent: $($fileEvents.Count), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
+                            #Write-Host "Data has been Pushed to Sentinel completed.  S3File: $($filename), S3Bucket: $($_.BucketName), No of Events Sent: $($fileEvents.Count), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
                         }
                     catch {
                             $err = $_.Exception.Message
