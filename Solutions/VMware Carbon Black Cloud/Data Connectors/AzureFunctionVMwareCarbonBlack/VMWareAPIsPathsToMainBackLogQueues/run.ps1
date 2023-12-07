@@ -22,7 +22,7 @@ param($Timer)
 $currentUTCtime = (Get-Date).ToUniversalTime()
 $logAnalyticsUri = $env:logAnalyticsUri
 ##TODO: need to move params and validations
-[int]$maxMainQueuemessages=150
+[int]$maxMainQueuemessages=[int]$env:maxMainQueuemessages
 [int]$maxdurationminutes=10
 
 
@@ -496,19 +496,30 @@ function GetBucketFiles($prefixFolder)
         while ($startTime -le $now) {
            try {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
-            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15"
+            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15
+            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=7/hour=6/minute=3"
             $paths=@()
-            foreach ($items in (Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix) | Select-Object Key ) 
+            foreach ($items in (Get-S3Object -BucketName $s3BucketName -KeyPrefix $keyPrefix) | Select-Object Key ) 
             { 
-             if($items.Key.Contains(".gz"))
-             {       
-                $path = split-path $items.Key -Parent 
-                $paths += $path   
+           
+                if($items.Key.Contains(".gz"))
+                {       
+                    $path = split-path $items.Key -Parent 
+                    $keyValuePairs = $path -split '\\'
+                $s3Dict = @{}
+                foreach ($pair in $keyValuePairs) {
+                    $key, $value = $pair -split '='
+                    $s3Dict[$key] = $value
+                }
+                if("minute=$($s3Dict["minute"])"-eq "minute=$($startTime.Minute)")
+                {
+                    $paths += $path   
     
-             }
-             else {
+                }
+                else {
                 Write-Host "Paths doesn't have gz files" $items.Key
-             }  
+                }  
+                }
            }
             $paths = $paths | sort -Unique
             Write-Host $paths
