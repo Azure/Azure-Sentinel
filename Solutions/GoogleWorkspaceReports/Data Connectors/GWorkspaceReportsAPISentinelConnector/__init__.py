@@ -46,11 +46,11 @@ activities = [
             "meet", 
             "mobile", 
             "rules", 
-            "saml", 
-            "token", 
             "context_aware_access", 
             "chrome", 
-            "data_studio"
+            "data_studio",
+            "saml", 
+            "token"
             ]
 
 
@@ -328,6 +328,13 @@ def main(mytimer: func.TimerRequest) -> None:
             end_time = datetime.strptime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")
             start_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             end_time = end_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+        # check if differenc between start_time and end_time is more than 10 mins. If yes, then set end_time to start_time + 10 mins
+        # This is to avoid fetching too many events in one go
+        if (convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ") - convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ")).total_seconds() > 900:
+            end_time = (convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") + timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            logging.info ('end_time is more than 15 mins from start_time. Setting end_time to start_time + 15 mins. New end_time: {}'.format(end_time)) 
+        
         if not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
             logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
             latest_timestamp = start_time
