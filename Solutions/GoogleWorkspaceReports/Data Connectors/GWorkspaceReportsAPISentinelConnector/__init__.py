@@ -329,7 +329,7 @@ def main(mytimer: func.TimerRequest) -> None:
             start_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             end_time = end_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-        # check if differenc between start_time and end_time is more than 10 mins. If yes, then set end_time to start_time + 10 mins
+        # check if differenc between start_time and end_time is more than 15 mins. If yes, then set end_time to start_time + 15 mins
         # This is to avoid fetching too many events in one go
         if (convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ") - convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ")).total_seconds() > 900:
             end_time = (convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") + timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -340,7 +340,7 @@ def main(mytimer: func.TimerRequest) -> None:
             latest_timestamp = start_time
             logging.info('Logging the startTime for Activity. Period(UTC): {} - {}' .format(line,start_time))
             result_obj, next_page_token = get_result(line,latest_timestamp,end_time)
-            if result_obj is not None:
+            if (result_obj is not None) and (len(result_obj) > 0):
                 latest_timestamp = process_result(result_obj, latest_timestamp, postactivity_list, line)
                 while next_page_token is not None:
                     result_obj, next_page_token  = get_nextpage_results(line,start_time,end_time,next_page_token)
@@ -348,6 +348,12 @@ def main(mytimer: func.TimerRequest) -> None:
                     if check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         return
+            else:
+                logging.info("No events for {} activity".format(line))
+                latest_timestamp = end_time
+                postactivity_list[line] = latest_timestamp
+                state = StateManager(connection_string)
+                state.post(str(json.dumps(postactivity_list)))
             postactivity_list[line] = latest_timestamp
       except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
