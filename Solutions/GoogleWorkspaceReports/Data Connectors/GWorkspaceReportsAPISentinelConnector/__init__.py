@@ -350,7 +350,8 @@ def main(mytimer: func.TimerRequest) -> None:
                         return
             else:
                 print("No events for {} activity".format(line))
-                postactivity_list[line] = end_time
+                latest_timestamp = end_time
+                postactivity_list[line] = latest_timestamp
                 state = StateManager(connection_string)
                 state.post(str(json.dumps(postactivity_list)))
             postactivity_list[line] = latest_timestamp
