@@ -349,7 +349,7 @@ def main(mytimer: func.TimerRequest) -> None:
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         return
             else:
-                print("No events for {} activity".format(line))
+                logging.info("No events for {} activity".format(line))
                 latest_timestamp = end_time
                 postactivity_list[line] = latest_timestamp
                 state = StateManager(connection_string)
