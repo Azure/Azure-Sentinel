@@ -62,8 +62,8 @@ function GenerateDate()
     }
     
     $now = [System.DateTime]::UtcNow
-    $Duration = New-TimeSpan -Start $startTime -End $now
-    [int]$noofmins = $Duration.Minutes
+    #$Duration = New-TimeSpan -Start $startTime -End $now()
+    [int]$noofmins = $($startTime-$now).Minutes
     if($noofmins -gt 5)
     {
         if($null -ne $startTime)
