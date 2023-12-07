@@ -45,12 +45,12 @@ activities = [
             "login", 
             "meet", 
             "mobile", 
-            "rules", 
-            "saml", 
-            "token", 
+            "rules",
             "context_aware_access", 
             "chrome", 
-            "data_studio"
+            "data_studio",
+            "saml", 
+            "token"
             ]
 
 
