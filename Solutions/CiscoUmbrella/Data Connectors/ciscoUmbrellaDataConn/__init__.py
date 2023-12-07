@@ -77,7 +77,7 @@ def main(mytimer: func.TimerRequest) -> None:
         'dns': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10),
         'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
         'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
-        'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
+        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -89,7 +89,7 @@ def main(mytimer: func.TimerRequest) -> None:
             elif 'iplogs' in key.lower():
                 sentinel = sentinel_dict['ip']
             elif 'firewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
-                sentinel = sentinel_dict['cloudfirewall']
+                sentinel = sentinel_dict['firewall']
             else:
                 # skip files of unknown types
                 continue
