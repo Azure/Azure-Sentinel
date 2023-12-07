@@ -45,7 +45,7 @@ activities = [
             "login", 
             "meet", 
             "mobile", 
-            "rules",
+            "rules", 
             "context_aware_access", 
             "chrome", 
             "data_studio",
@@ -331,9 +331,9 @@ def main(mytimer: func.TimerRequest) -> None:
 
         # check if differenc between start_time and end_time is more than 10 mins. If yes, then set end_time to start_time + 10 mins
         # This is to avoid fetching too many events in one go
-        if (convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ") - convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ")).total_seconds() > 600:
-            end_time = (convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            logging.info ('end_time is more than 10 mins from start_time. Setting end_time to start_time + 10 mins. New end_time: {}'.format(end_time)) 
+        if (convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ") - convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ")).total_seconds() > 900:
+            end_time = (convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") + timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            logging.info ('end_time is more than 15 mins from start_time. Setting end_time to start_time + 15 mins. New end_time: {}'.format(end_time)) 
         
         if not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
             logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
