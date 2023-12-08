@@ -240,7 +240,7 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
     }
 
     $title = $ccpItem.title;
-    $displayName = $title; #  + "-" + $templateContentTypeByCounter[$TemplateCounter]
+    $displayName = $title;
     $randomNumber = Get-Random
     return [PSCustomObject]@{
         type       = "Microsoft.OperationalInsights/workspaces/providers/contentTemplates";
@@ -346,6 +346,46 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateName$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')))]"
                 
                 $templateContent = Get-ContentTemplateResource $contentResourceDetails $TemplateCounter $ccpItem; 
+
+                if ($TemplateCounter -eq 1) {
+                    #========start:dc definition resource===========
+                    $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath.Replace($solutionName + "/", "").Replace($dcFolderName + "/", "")
+                    $ccpDataDefinitionFilePath = $solutionBasePath + "/" + $solutionName + "/" + $dcFolderName + "/" + $dcDefinitionFilteredPath
+                    $ccpDataDefinitionFilePath = $ccpDataDefinitionFilePath.Replace("//", "/")
+                    Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
+                    
+                    $fileContent = Get-Content -Raw "$ccpDataDefinitionFilePath" | Out-String | ConvertFrom-Json
+
+                    if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions")
+                    {
+                        Write-Host "Processing for CCP DataDefinition file path: $dcDefinitionFilteredPath"
+                        $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$($templateKindByCounter[1])$($global:connectorCounter)'))]"
+
+                        $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
+                        $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions"
+
+                        $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
+                        if ($hasLocationProperty) {
+                            $locationProperty = $armResource.location
+                            $placeHoldersMatched = $locationProperty | Select-String $placeHolderPatternMatches -AllMatches
+
+                            if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                                $armResource.location = "[[parameters('$($placeHolderName)')]"
+                                $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $false
+                            }
+                        }
+
+                        $templateContentConnectorDefinition = $templateContent;
+                        $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
+
+                        $activeResource += $armResource
+                        $activeResource += Get-MetaDataResource 1 $dataFileMetadata $solutionFileMetadata
+                    }
+
+                    #========end:dc definition resource===========
+                }
+                
                 $templateContent.properties.mainTemplate.resources += Get-MetaDataResource $TemplateCounter $dataFileMetadata $solutionFileMetadata
                 
                 if($TemplateCounter -eq 2)
@@ -365,42 +405,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
             }
 
-            #========start:dc definition resource===========
-            $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath.Replace($solutionName + "/", "").Replace($dcFolderName + "/", "")
-            $ccpDataDefinitionFilePath = $solutionBasePath + "/" + $solutionName + "/" + $dcFolderName + "/" + $dcDefinitionFilteredPath
-            $ccpDataDefinitionFilePath = $ccpDataDefinitionFilePath.Replace("//", "/")
-            Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
-            
-            $fileContent = Get-Content -Raw "$ccpDataDefinitionFilePath" | Out-String | ConvertFrom-Json
-
-            if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions")
-            {
-                Write-Host "Processing for CCP DataDefinition file path: $dcDefinitionFilteredPath"
-                $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$($templateKindByCounter[1])$($global:connectorCounter)'))]"
-
-                $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
-                $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions"
-
-                $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
-                if ($hasLocationProperty) {
-                    $locationProperty = $armResource.location
-                    $placeHoldersMatched = $locationProperty | Select-String $placeHolderPatternMatches -AllMatches
-
-                    if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                        $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                        $armResource.location = "[[parameters('$($placeHolderName)')]"
-                        $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $false
-                    }
-                }
-
-                $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
-
-                $activeResource += $armResource
-                $activeResource += Get-MetaDataResource 1 $dataFileMetadata $solutionFileMetadata
-            }
-            
-            
-            #========end:dc definition resource===========
             #========start:dc definition resource===========
             $ccpPollerFilePath = $ccpItem.DCPollerFilePath
             Write-Host "CCP Poller File Path : $ccpPollerFilePath"
