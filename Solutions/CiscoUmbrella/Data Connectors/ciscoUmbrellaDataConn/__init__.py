@@ -212,7 +212,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs', 'cloudfirewalllogs', 'cdfwlogs','firewalllogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
