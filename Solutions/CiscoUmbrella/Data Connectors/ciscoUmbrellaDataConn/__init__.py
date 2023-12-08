@@ -88,7 +88,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel = sentinel_dict['proxy']
             elif 'iplogs' in key.lower():
                 sentinel = sentinel_dict['ip']
-            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
+            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower() or 'firewalllogs' in key.lower():
                 sentinel = sentinel_dict['cloudfirewall']
             else:
                 # skip files of unknown types
