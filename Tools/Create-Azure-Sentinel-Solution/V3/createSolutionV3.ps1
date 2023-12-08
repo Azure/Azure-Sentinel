@@ -46,7 +46,7 @@ else {
             $solutionFolderBasePath = $path.Substring(0, $dataFolderIndex)
 
             # GET DATA FOLDER FILE NAME
-            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json")
+            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json", "testParameters.json")
             $dataFileName = Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\" -recurse -exclude $excluded | ForEach-Object -Process { [System.IO.Path]::GetFileName($_) }
 
             if ($dataFileName.Length -le 0) {
