@@ -1,7 +1,7 @@
 Parser:
   Title: Registry Event ASIM Parser
-  Version: '0.1.1'
-  LastUpdated: June 04, 2022
+  Version: '0.1.3'
+  LastUpdated: Nov 19, 2023
 Product:
   Name: Source Agnostic
 Normalization:
@@ -12,14 +12,71 @@ References:
   Link: https://aka.ms/ASimRegistryEventDoc
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
-
 Description: |
   This ASIM parser supports normalizing Registry Event logs from all supported sources to the ASIM Registry Event normalized schema.
 ParserName: imRegistry
+EquivalentBuiltInParser: _Im_RegistryEvent 
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registrykey_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registryvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registrydata_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+Parsers:
+  - _Im_RegistryEvent_Empty
+  - _Im_RegistryEvent_Microsoft365D
+  - _Im_RegistryEvent_MicrosoftSysmon
+  - _Im_RegistryEvent_MicrosoftWindowsEvent
+  - _Im_RegistryEvent_SentinelOne
+  - _Im_RegistryEvent_VMwareCarbonBlackCloud
+  - _Im_RegistryEvent_TrendMicroVisionOne
 ParserQuery: |
+  let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'ExcludevimRegistry') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser | where isnotempty(SourceSpecificParser));
+  let vimBuiltInDisabled=toscalar('ExcludevimRegistryEventBuiltIn' in (DisabledParsers) or 'Any' in (DisabledParsers));
+  let parser = (
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null),
+      eventtype_in: dynamic=dynamic([]),
+      actorusername_has_any: dynamic=dynamic([]),
+      registrykey_has_any: dynamic =dynamic([]),
+      registryvalue_has_any: dynamic =dynamic([]),
+      registrydata_has_any: dynamic =dynamic([]),
+      dvchostname_has_any: dynamic=dynamic([]),
+      pack:bool=false
+      )
+      {
   union isfuzzy=true
     vimRegistryEventEmpty,
-    vimRegistryEventMicrosoft365D,
-    vimRegistryEventMicrosoftSysmon,
-    // vimRegistryEventMicrosoftSecurityEvents, // Deprecated, now included in vimRegistryEventMicrosoftWindowsEvent. 
-    vimRegistryEventMicrosoftWindowsEvent
+    vimRegistryEventMicrosoft365D (starttime = starttime, endtime = endtime, eventtype_in = eventtype_in, actorusername_has_any = actorusername_has_any, registrykey_has_any = registrykey_has_any, registryvalue_has_any = registryvalue_has_any, registrydata_has_any = registrydata_has_any, dvchostname_has_any= dvchostname_has_any, disabled=(vimBuiltInDisabled or('ExcludevimRegistryEventMicrosoft365D'   in (DisabledParsers) ))),
+    vimRegistryEventMicrosoftSysmon(starttime = starttime, endtime = endtime, eventtype_in = eventtype_in, actorusername_has_any = actorusername_has_any, registrykey_has_any = registrykey_has_any, registryvalue_has_any = registryvalue_has_any, registrydata_has_any = registrydata_has_any, dvchostname_has_any= dvchostname_has_any, disabled=(vimBuiltInDisabled or('ExcludevimRegistryEventMicrosoftSysmon'   in (DisabledParsers) ))),
+    vimRegistryEventMicrosoftWindowsEvent (starttime = starttime, endtime = endtime, eventtype_in = eventtype_in, actorusername_has_any = actorusername_has_any, registrykey_has_any = registrykey_has_any, registryvalue_has_any = registryvalue_has_any, registrydata_has_any = registrydata_has_any, dvchostname_has_any= dvchostname_has_any, disabled=(vimBuiltInDisabled or('ExcludevimRegistryEventMicrosoftWindowsEvent'   in (DisabledParsers) ))),
+    vimRegistryEventSentinelOne (starttime = starttime, endtime = endtime, eventtype_in = eventtype_in, actorusername_has_any = actorusername_has_any, registrykey_has_any = registrykey_has_any, registryvalue_has_any = registryvalue_has_any, registrydata_has_any = registrydata_has_any, dvchostname_has_any= dvchostname_has_any, disabled=(vimBuiltInDisabled or('ExcludevimRegistryEventSentinelOne'   in (DisabledParsers) ))),
+    vimRegistryEventVMwareCarbonBlackCloud(starttime = starttime, endtime = endtime, eventtype_in = eventtype_in, actorusername_has_any = actorusername_has_any, registrykey_has_any = registrykey_has_any, registryvalue_has_any = registryvalue_has_any, registryvaluedata_has_any = registrydata_has_any, dvchostname_has_any= dvchostname_has_any, disabled=(vimBuiltInDisabled or('ExcludevimRegistryEventVMwareCarbonBlackCloud'   in (DisabledParsers) ))),
+    vimRegistryEventTrendMicroVisionOne (starttime=starttime, endtime=endtime, eventtype_in=eventtype_in, actorusername_has_any=actorusername_has_any, registrykey_has_any=registrykey_has_any, registryvalue_has_any=registryvalue_has_any, registryvaluedata_has_any=registrydata_has_any, dvchostname_has_any=dvchostname_has_any, disabled= (vimBuiltInDisabled or('ExcludevimRegistryEventTrendMicroVisionOne' in (DisabledParsers) )))
+    };
+    parser(starttime = starttime, endtime = endtime, eventtype_in = eventtype_in, actorusername_has_any = actorusername_has_any, registrykey_has_any = registrykey_has_any, registryvalue_has_any = registryvalue_has_any, registrydata_has_any = registrydata_has_any, dvchostname_has_any= dvchostname_has_any, pack=pack)

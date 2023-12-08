@@ -91,6 +91,7 @@ CONNECTIONMODE="abap"
 CONFIGPATH="/opt"
 TRUSTEDCA=()
 CLOUD='public'
+UPDATEPOLICY='{ "auto_update" : true }'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -117,6 +118,10 @@ while [[ $# -gt 0 ]]; do
 	--sid)
 		SID="$2"
 		shift 2
+		;;
+    --hostnetwork)
+		HOSTNETWORK=1
+		shift 1
 		;;
 	--clientnumber)
 		CLIENTNUMBER="$2"
@@ -265,6 +270,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--abapserver <servername>"
 		echo "--systemnr <system number>"
 		echo "--sid <SID>"
+  		echo "--hostnetwork"
 		echo "--clientnumber <client number>"
 		echo "--messageserverhost <servername>"
 		echo "--messageserverport <servername>"
@@ -431,6 +437,7 @@ pause '[Press enter to agree and proceed as we guide you through the installatio
 #Globals
 containername=sapcon
 sysconf=systemconfig.json
+settingsjson=settings.json
 
 os=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="ID" {print $2}')
 ver_id=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="VERSION_ID" {print $2}' | awk '{print substr($0, 2, length($0) - 2) }')
@@ -787,6 +794,10 @@ cmdparams=" --label Cloud=$CLOUD"
 # Generating SENTINEL_AGENT_GUID
 cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
 
+if [ $HOSTNETWORK ]; then
+	cmdparams+=" --network host "
+fi
+
 if [ "$MODE" == "kvmi" ]; then
 	echo "Creating docker container for use with Azure Key vault and managed VM identity"
 	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
@@ -872,6 +883,9 @@ fi
 jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 ### end of json config creation
+
+# #populate settings.json
+echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
 
 echo 'System information and credentials Has been Updated'
 
