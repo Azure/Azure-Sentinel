@@ -1,0 +1,59 @@
+id: 3db9f99e-a459-41e0-8e02-8b332f5fcb2c
+name: SonicWall - Capture ATP Malicious File Detection
+description: |
+  'This rule identifies malicious file verdicts from the SonicWall Capture ATP service. This analytic rule leverages the SonicWall Firewall ASIM Network Session parser (ASimNetworkSessionSonicWallFirewall).
+    Ref: https://www.sonicwall.com/products/capture-advanced-threat-protection/
+    Ref: https://www.sonicwall.com/support/knowledge-base/how-to-view-threat-reports-capture-atp/170505384715913/'
+severity: Medium
+status: Experimental
+requiredDataConnectors:
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: SonicWallFirewall
+    dataTypes:
+      - ASimNetworkSessionSonicWallFirewall
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  ASimNetworkSessionSonicWallFirewall
+  | where LogMsgID == 1631 and CaptureATPVerdict == "BAD"
+  | project
+      DeviceModel,
+      SerialNumber,
+      SrcIpAddr,
+      SrcUsername,
+      Protocol,
+      RequestURL = coalesce(RequestURL, RequestURL_),
+      File = url_decode(tostring(coalesce(split(RequestURL, '/')[-1], split(RequestURL_, '/')[-1]))),
+      Hash = FileIdentifier,
+      Verdict = CaptureATPVerdict
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: File
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: Hash
+  - entityType: Url
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUsername
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0
+kind: Scheduled
