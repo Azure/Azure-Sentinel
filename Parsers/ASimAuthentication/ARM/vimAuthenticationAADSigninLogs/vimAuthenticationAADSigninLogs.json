@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationSigninLogs",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Authentication ASIM filtering parser for AAD interactive sign-in logs",
+            "category": "ASIM",
+            "FunctionAlias": "vimAuthenticationSigninLogs",
+            "query": "let FailedReason=datatable(ResultType:string, EventResultDetails:string)[\n  '0', 'Success',\n  '53003', 'Logon violates policy',\n  '50034', 'No such user or password',\n  '50059', 'No such user or password',\n  '50053', 'User locked',\n  '50055', 'Password expired',\n  '50056', 'Incorrect password',\n  '50057', 'User disabled',\n  '50058', 'Logon violates policy',\n  '50011', 'Logon violates policy', \n  '50064', 'No such user or password',\n  '50076', 'Logon violates policy',\n  '50079', 'Logon violates policy',\n  '50105', 'Logon violates policy',\n  '50126', 'No such user or password',\n  '50132', 'Password expired',\n  '50133', 'Password expired',\n  '50144', 'Password expired',\n  '50173', 'Password expired',\n  '80012', 'Logon violates policy',\n  '51004', 'No such user or password',\n  '50072', 'Logon violates policy',\n  '50005', 'Logon violates policy',\n  '50020', 'Logon violates policy',\n  '50074', 'Logon violates policy', \n  '70008', 'Password expired',\n  '700016',  'No such user or password', \n  '500011', 'No such user or password' \n  ];\nlet UserTypeLookup = datatable (UserType:string, TargetUserType:string) [\n  'Member', 'Regular',\n  'Guest','Guest', \n  '',''\n];\nlet AADSigninLogs=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string=\"*\", disabled:bool=false){\nSigninLogs | where not(disabled)\n// ************************************************************************* \n//       <Prefilterring>\n// *************************************************************************\n| where \n  (isnull(starttime)   or TimeGenerated >= starttime) \n  and (isnull(endtime)     or TimeGenerated <= endtime) \n  and (targetusername_has=='*' or (UserPrincipalName has targetusername_has ))\n// ************************************************************************* \n//       </Prefilterring>\n// ************************************************************************* \n| extend\n  EventVendor = 'Microsoft'\n  , EventProduct = 'AAD'\n  , EventCount=int(1)\n  , EventSchemaVersion='0.1.0'\n  , EventResult = iff (ResultType ==0, 'Success', 'Failure')\n  , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)\n  , EventStartTime = TimeGenerated\n  , EventEndTime= TimeGenerated\n  , EventType= 'Logon'\n  , SrcDvcId=tostring(DeviceDetail.deviceId)\n  , SrcDvcHostname =tostring(DeviceDetail.displayName)\n  , SrcDvcOs=tostring(DeviceDetail.operatingSystem)\n  // , SrcBrowser= tostring(DeviceDetail.browser)\n  , Location = todynamic(LocationDetails)\n  , TargetUsernameType='Upn'\n  , TargetUserIdType='AADID'\n  , SrcDvcIpAddr=IPAddress\n| extend\n      SrcGeoCity=tostring(Location.city)\n      , SrcGeoCountry=tostring(Location.countryOrRegion)\n      , SrcGeoLatitude=toreal(Location.geoCoordinates.latitude)\n      , SrcGeoLongitude=toreal(Location.geoCoordinates.longitude)\n | lookup FailedReason on ResultType\n | project-rename\n     EventOriginalUid =Id\n     , LogonMethod  = AuthenticationRequirement\n     , HttpUserAgent=UserAgent\n     , TargetSessionId=CorrelationId\n     , TargetUserId = UserId\n     , TargetUsername=UserPrincipalName\n     , TargetAppId = ResourceIdentity\n     , TargetAppName=ResourceDisplayName\n  | lookup UserTypeLookup on UserType\n  | project-away UserType\n  // ** Aliases\n  | extend \n    User=TargetUsername\n  , LogonTarget=TargetAppName\n  , Dvc=EventVendor\n  // -- Entity identifier explicit aliases\n  , TargetUserUpn = TargetUsername\n  , TargetUserAadId = TargetUserId        \n  };\nAADSigninLogs(starttime, endtime, targetusername_has, disabled)\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),targetusername_has:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

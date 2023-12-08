@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationAWSCloudTrail",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Authentication ASIM filtering parser for AWS sign-in logs",
+            "category": "ASIM",
+            "FunctionAlias": "vimAuthenticationAWSCloudTrail",
+            "query": "// -- Refer to https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-user-identity.html for details\nlet usertype_lookup = datatable (TargetOriginalUserType:string, TargetUserType:string) [\n    // -- For console login, only IAMUser, Root and AssumedRole are relevant\n    'Root', 'Admin', \n    'IAMUser', 'Regular', \n    'AssumedRole', 'Service', \n    'Role' ,'Service', \n    'FederatedUser', 'Regular',\n    'Directory','Other',\n    'AWSAccount','Guest',\n    'AWSService',  'Application',\n    'Unknown', 'Other',\n  ];\n  let eventresultdetails_lookup = datatable (EventOriginalResultDetails:string, EventOriginalDetails:string) [\n    'No username found in supplied account', 'No such user',\n    'Failed authentication', ''\n  ];\n  let ASIM_GetUsernameType = (username:string) { \n      case ( \n          username contains \"@\" , \"UPN\"\n          , username contains \"\\\\\", \"Windows\"\n          , (username has \"CN=\" or username has \"OU=\" or username has \"DC=\"), \"DN\"\n          , isempty(username), \"\"\n          , \"Simple\"\n      )\n  };\n  let parser= (\n    starttime:datetime=datetime(null), \n    endtime:datetime=datetime(null),\n    targetusername_has:string=\"*\", \n    disabled:bool=false\n  ) {\n    AWSCloudTrail \n    //  -- Pre filtering\n    | where \n      (isnull(starttime) or TimeGenerated >= starttime) \n      and (isnull(endtime) or TimeGenerated <= endtime) \n      and not(disabled)\n      and EventName == 'ConsoleLogin'\n      and (targetusername_has=='*' or UserIdentityArn has targetusername_has or UserIdentityUserName has targetusername_has)\n    //  -- end pre-filtering\n    | project-rename\n        EventOriginalUid            = AwsEventId,\n        EventOriginalResultDetails  = ErrorMessage,\n        TargetOriginalUserType      = UserIdentityType,\n        EventProductVersion         = EventVersion,\n        SrcIpAddr                   = SourceIpAddress,\n        TargeCloudRegion            = AWSRegion,\n        TargetUserScopeId           = UserIdentityAccountId,\n        HttpUserAgent               = UserAgent,\n        EventUid                    = _ItemId\n    | extend\n        TargetUsername              = case (\n                UserIdentityUserName   == \"HIDDEN_DUE_TO_SECURITY_REASONS\", \"\",\n                TargetOriginalUserType == 'IAMUser'                       , UserIdentityUserName,\n                TargetOriginalUserType == 'Root'                          , 'root',\n                TargetOriginalUserType == 'AssumedRole'                   , tostring(split(UserIdentityArn, '/')[-1]), // -- This is the AssuderRole session name, which typically represents a user.           \n                UserIdentityUserName\n            )\n    | where \n        (targetusername_has=='*' or TargetUsername has targetusername_has)\n    | extend\n        EventVendor                 = 'AWS',\n        Dvc                         = 'AWS',\n        EventProduct                = 'CloudTrail',\n        EventCount                  = int(1),\n        EventSchemaVersion          = '0.1.3',\n        EventSchema                 = 'Authentication',\n        EventStartTime              = TimeGenerated,\n        EventEndTime                = TimeGenerated,\n        EventType                   = 'Logon',\n        EventSubType                = 'Interactive',\n        TargetUserIdType            = 'AWSId',\n        LogonProtocol               = 'HTTPS',\n        TargetUserId                = tostring(split(UserIdentityPrincipalid, ':')[0]),\n        LogonMethod                 = iff (AdditionalEventData has '\"MFAUsed\": \"Yes\"', 'MFA',''),\n        SrcDeviceType               = iff (AdditionalEventData has '\"MobileVersion\":\"Yes\"', 'Mobile Device', 'Computer'),\n        EventResult                 = iff (ResponseElements has 'Success', 'Success', 'Failure')\n    | extend\n        TargetUsernameType          = ASIM_GetUsernameType (TargetUsername)\n    | parse AdditionalEventData with * '\"LoginTo\":\"' TargetUrl:string '\"' *\n    | lookup eventresultdetails_lookup on EventOriginalResultDetails\n    | lookup usertype_lookup on TargetOriginalUserType \n    | extend \n        LogonTarget=tostring(split(TargetUrl,'?')[0]),\n        EventSeverity = iff(EventResult == 'Failure', 'Low','Informational')\n      // -- Specific idetifier aliases\n      | extend \n          TargetUserAWSId = TargetUserId\n      // -- Aliases\n      | extend\n          User   = TargetUsername,\n          Dvc    = EventVendor,\n          Dst    = LogonTarget,\n          IpAddr = SrcIpAddr,\n          Src    = SrcIpAddr\n      | project-away EventSource, EventTypeName, EventName, ResponseElements, AdditionalEventData, Session*, Category, ErrorCode, Aws*, ManagementEvent, OperationName, ReadOnly, RequestParameters, Resources, ServiceEventDetails, SharedEventId, SourceSystem, UserIdentity*, VpcEndpointId, APIVersion, RecipientAccountId, TenantId, EC2RoleDelivery\n    };\n    parser (\n        starttime          = starttime,\n        endtime            = endtime, \n        targetusername_has = targetusername_has,\n        disabled           = disabled\n    )\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),targetusername_has:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
