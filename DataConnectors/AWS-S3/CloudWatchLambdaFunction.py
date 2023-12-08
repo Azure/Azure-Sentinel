@@ -14,7 +14,6 @@ s3 = boto3.resource('s3')
 # Please set the following parameters:
 BUCKET_NAME = os.environ['BUCKET_NAME'] # Please enter bucket name
 BUCKET_PREFIX = os.environ['BUCKET_PREFIX'] # Please enter bucket prefix that ends with '/' , if no such, leave empty
-OUTPUT_FILE_NAME = os.environ['OUTPUT_FILE_NAME'] # Please change to desired name
 START_TIME_UTC = datetime.strptime(os.environ['START_TIME_UTC'], '%m/%d/%Y %H:%M') # Please enter start time for exporting logs in the following format: '%m/%d/%Y %H:%M' for example: '12/31/2022 06:55'  pay attention to time differences, here it should be UTC time
 END_TIME_UTC = datetime.strptime(os.environ['END_TIME_UTC'], '%m/%d/%Y %H:%M') # Please enter end time for exporting logs in the following format: '%m/%d/%Y %H:%M' for example: '12/31/2022 07:10' pay attention to time differences, here it should be UTC time
 
@@ -29,39 +28,46 @@ def lambda_handler(event, context):
     try:
         # List log groups
         try:
-            log_groups = logs.describe_log_groups()
-            # Print the entire log_groups response
-            print(log_groups)
-            log_groups_dict = {}
-        except Exception as e:
-            # Handle exceptions
-            print(f"An error occurred: {e}")
+            log_groups = logs.describe_log_groups()                   
+            log_groups_streams_arry = []
+        except Exception as e:            
+            print(f"An error occurred at logs.describe_log_groups: {e}")
 
         for log_group in log_groups['logGroups']:
-            log_Group_Name = log_group['logGroupName']
-            print(log_Group_Name)
+            log_Group_Name = log_group['logGroupName']            
             try:
                 # List log streams for each log group
-                log_streams = logs.describe_log_streams(logGroupName=log_Group_Name)
-                print(log_streams)
-            except Exception as e:
-                # Handle exceptions
-                print(f"An error occurred: {e}")
+                log_streams = logs.describe_log_streams(logGroupName=log_Group_Name)                
+            except Exception as e:                
+                print(f"An error occurred at logs.describe_log_streams: {e}")
 
             for log_stream in log_streams['logStreams']:
                 log_Stream_Name = log_stream['logStreamName']
-                log_groups_dict[log_Group_Name] = log_Stream_Name
+                logGroup_logStream_entry = {
+                    "logGroupName": log_Group_Name,
+                    "logStreamName": log_Stream_Name
+                }
+                log_groups_streams_arry.append(logGroup_logStream_entry) 
         
         # Iterate through log_groups_dict
-        for key in log_groups_dict:            
+        for key in log_groups_streams_arry:            
             # Gets objects from cloud watch
-            response = logs.get_log_events(
-                logGroupName = key.log_Group_Name,
-                logStreamName = key.log_Stream_Name,
-                startTime=unix_start_time,
-                endTime=unix_end_time,
-            )
+            try:
+                response = logs.get_log_events(
+                    logGroupName = key["logGroupName"],
+                    logStreamName = key["logStreamName"],
+                    startTime=unix_start_time,
+                    endTime=unix_end_time,
+                )
+            except Exception as e:                
+                print(f"An error occurred at get_log_events: {e}")
             
+            fileName = key["logStreamName"]
+            # Find the index of the closing square bracket
+            closing_bracket_index = fileName.find(']')
+            # Extract the substring after the closing square bracket
+            output_File_Name = fileName[closing_bracket_index + 1:]
+
             # Convert events to json object
             json_string = json.dumps(response)
             json_object = json.loads(json_string)
@@ -79,10 +85,10 @@ def lambda_handler(event, context):
             fileToS3 = df.drop(columns=["ingestionTime"])
 
             # Export data to temporary file in the right format, which will be deleted as soon as the session ends
-            fileToS3.to_csv( f'/tmp/{OUTPUT_FILE_NAME}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
+            fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
             
             # Upload data to desired folder in bucket
-            s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{OUTPUT_FILE_NAME}.gz', f'{BUCKET_PREFIX}{OUTPUT_FILE_NAME}.gz')
+            s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')
     except Exception as e:
         print("    Error exporting %s: %s" % (log_Group_Name, getattr(e, 'message', repr(e))))
 
