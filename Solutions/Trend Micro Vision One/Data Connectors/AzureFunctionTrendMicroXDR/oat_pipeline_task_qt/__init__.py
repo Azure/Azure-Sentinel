@@ -1,3 +1,4 @@
+import typing
 from typing import Dict, List
 
 import azure.functions as func
@@ -34,7 +35,7 @@ def _build_oat_file_queue_message(
 
 def main(
     oatTaskMsg: func.QueueMessage,
-    oatFileMsg: func.Out[List[str]],
+    oatFileMsg: func.Out[typing.List[str]],
 ) -> None:
 
     taskMessage = OATTaskMessage.parse_obj(oatTaskMsg.get_json())
@@ -50,6 +51,10 @@ def main(
         token = utils.find_token_by_clp(clp_id, API_TOKENS)
         if not token:
             logger.warning(f'Account token not found, clp: {clp_id}, stop current job.')
+            return
+    
+        if utils.check_token_is_expired(token):
+            logger.error(f"token is expired, clp: {clp_id}")
             return
 
         pipeline_id = oat_service.get_oat_pipeline_id(clp_id)

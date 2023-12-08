@@ -1,6 +1,7 @@
+import typing
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import azure.functions as func
 from shared_code import configurations, utils
@@ -75,7 +76,7 @@ def generate_time(
     return start_time, end_time
 
 
-def main(myTimer: func.TimerRequest, oatTaskMsg: func.Out[List[str]]) -> None:
+def main(myTimer: func.TimerRequest, oatTaskMsg: func.Out[typing.List[str]]) -> None:
 
     log_analytics = LogAnalytics(WORKSPACE_ID, WORKSPACE_KEY, LOG_TYPE)
     error = None
@@ -85,6 +86,10 @@ def main(myTimer: func.TimerRequest, oatTaskMsg: func.Out[List[str]]) -> None:
             health_check_data = {}
             clp_id = utils.get_clp_id(token)
             health_check_data['clpId'] = clp_id
+
+            if utils.check_token_is_expired(token):
+                logger.error(f"token is expired, clp: {clp_id}")
+                continue
 
             start_time, end_time = generate_time(clp_id, token)
             if start_time is None or end_time is None:
