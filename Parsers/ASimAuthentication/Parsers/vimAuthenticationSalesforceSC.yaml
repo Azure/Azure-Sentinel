@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Authentication filtering parser for Salesforce Service Cloud
   Version: "0.1.0"
-  LastUpdated: July 8th, 2023
+  LastUpdated: Dec 12th, 2023
 Product:
   Name: Salesforce Service Cloud
 Normalization:
@@ -35,11 +35,11 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (
-      starttime: datetime=datetime(null), 
-      endtime: datetime=datetime(null), 
-      targetusername_has: string="*",
-      disabled: bool=false
-      ) {
+    starttime: datetime=datetime(null), 
+    endtime: datetime=datetime(null), 
+    targetusername_has: string="*",
+    disabled: bool=false
+    ) {
     let SalesforceSchema = datatable(
     api_version_s: string,
     browser_type_s: string,
@@ -50,9 +50,12 @@ ParserQuery: |
     event_type_s: string,
     login_key_s: string,
     login_status_s: string,
+    login_type_s: string,
+    login_sub_type_s: string,
     organization_id_s: string,
     platform_type_s: string,
     request_id_s: string,
+    request_status_s: string,
     session_key_s: string,
     source_ip_s: string,
     timestamp_s: string,
@@ -60,8 +63,9 @@ ParserQuery: |
     uri_s: string,
     user_id_s: string,
     user_name_s: string,
-    user_type_s: string
-    )[];
+    user_type_s: string,
+    wave_session_id_g: string
+  )[];
       let EventResultLookup = datatable (
       login_status_s: string,
       DvcAction: string,
@@ -209,49 +213,49 @@ ParserQuery: |
       "5200", "Android", "10.0"
   ];
       let LogonMethodLookup = datatable(
-        LoginType_s: string,
-        LogonMethodOriginal: string,
-        LogonMethod: string
-    )[
-        "7", "AppExchange", "Other",
-        "A", "Application", "Other",
-        "s", "Certificate-based login", "PKI",
-        "k", "Chatter Communities External User", "Other",
-        "n", "Chatter Communities External User Third Party SSO", "Other",
-        "r", "Employee Login to Community", "Other",
-        "z", "Lightning Login", "Username & Password",
-        "l", "Networks Portal API Only", "Other",
-        "6", "Remote Access Client", "Other",
-        "i", "Remote Access 2.0", "Other",
-        "I", "Other Apex API", "Other",
-        "R", "Partner Product", "Other",
-        "w", "Passwordless Login", "Passwordless",
-        "3", "Customer Service Portal", "Other",
-        "q", "Partner Portal Third-Party SSO", "Other",
-        "9", "Partner Portal", "Other",
-        "5", "SAML Idp Initiated SSO", "Other",
-        "m", "SAML Chatter Communities External User SSO", "Other",
-        "b", "SAML Customer Service Portal SSO", "Other",
-        "c", "SAML Partner Portal SSO", "Other",
-        "h", "SAML Site SSO", "Other",
-        "8", "SAML Sfdc Initiated SSO", "Other",
-        "E", "SelfService", "Other",
-        "j", "Third Party SSO", "Other"
-    ];
+      LoginType_s: string,
+      LogonMethodOriginal: string,
+      LogonMethod: string
+  )[
+      "7", "AppExchange", "Other",
+      "A", "Application", "Other",
+      "s", "Certificate-based login", "PKI",
+      "k", "Chatter Communities External User", "Other",
+      "n", "Chatter Communities External User Third Party SSO", "Other",
+      "r", "Employee Login to Community", "Other",
+      "z", "Lightning Login", "Username & Password",
+      "l", "Networks Portal API Only", "Other",
+      "6", "Remote Access Client", "Other",
+      "i", "Remote Access 2.0", "Other",
+      "I", "Other Apex API", "Other",
+      "R", "Partner Product", "Other",
+      "w", "Passwordless Login", "Passwordless",
+      "3", "Customer Service Portal", "Other",
+      "q", "Partner Portal Third-Party SSO", "Other",
+      "9", "Partner Portal", "Other",
+      "5", "SAML Idp Initiated SSO", "Other",
+      "m", "SAML Chatter Communities External User SSO", "Other",
+      "b", "SAML Customer Service Portal SSO", "Other",
+      "c", "SAML Partner Portal SSO", "Other",
+      "h", "SAML Site SSO", "Other",
+      "8", "SAML Sfdc Initiated SSO", "Other",
+      "E", "SelfService", "Other",
+      "j", "Third Party SSO", "Other"
+  ];
       let LogonProtocolLookup = datatable(
-        LoginSubType_s: string,
-        LogonProtocolOriginal: string,
-        LogonProtocol: string
-    )[
-        "uiup", "UI Username-Password", "Basic Auth",
-        "oauthpassword", "OAuth Username-Password", "OAuth",
-        "oauthtoken", "OAuth User-Agent", "OAuth",
-        "oauthhybridtoken", "OAuth User-Agent for Hybrid Apps", "OAuth",
-        "oauthtokenidtoken", "OAuth User-Agent with ID Token", "OAuth",
-        "oauthclientcredential", "OAuth Client Credential", "OAuth",
-        "oauthcode", "OAuth Web Server", "OAuth",
-        "oauthhybridauthcode", "OAuth Web Server for Hybrid Apps", "OAuth",
-    ];
+      LoginSubType_s: string,
+      LogonProtocolOriginal: string,
+      LogonProtocol: string
+  )[
+      "uiup", "UI Username-Password", "Basic Auth",
+      "oauthpassword", "OAuth Username-Password", "OAuth",
+      "oauthtoken", "OAuth User-Agent", "OAuth",
+      "oauthhybridtoken", "OAuth User-Agent for Hybrid Apps", "OAuth",
+      "oauthtokenidtoken", "OAuth User-Agent with ID Token", "OAuth",
+      "oauthclientcredential", "OAuth Client Credential", "OAuth",
+      "oauthcode", "OAuth Web Server", "OAuth",
+      "oauthhybridauthcode", "OAuth Web Server for Hybrid Apps", "OAuth",
+  ];
       let TempEventResultLookup = datatable(request_status_s: string, TempEventResult: string)[
       "S", "Success",
       "F", "Failure",
@@ -286,18 +290,18 @@ ParserQuery: |
       "X", "Admin"
   ];
       union isfuzzy=true
-        SalesforceSchema,
-        SalesforceServiceCloud_CL 
+          SalesforceSchema,
+          SalesforceServiceCloud_CL 
       | where not(disabled)
+      | extend TimeGenerated = todatetime(tostring(split(timestamp_s, '.', 0)[0]))
       //  -- Pre filtering
       | where 
-          (isnull(starttime) or todatetime(tostring(split(timestamp_s, '.', 0)[0])) >= starttime) 
-          and (isnull(endtime) or todatetime(tostring(split(timestamp_s, '.', 0)[0])) <= endtime) 
+          (isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)
           and (targetusername_has == '*' or (user_name_s has targetusername_has))
           and event_type_s in~ (SalesforceEventType)
       //  -- end pre-filtering
-      | extend LoginType_s = column_ifexists("login_type_s", "")
-      | extend LoginSubType_s = column_ifexists("login_sub_type_s", "")
+      | extend LoginType_s = login_type_s, LoginSubType_s = login_sub_type_s
       | lookup EventResultLookup on login_status_s
       | lookup EventTypeLookup on event_type_s
       | lookup LogonMethodLookup on LoginType_s
@@ -321,18 +325,17 @@ ParserQuery: |
           ActorUserId = delegated_user_id_s,
           TargetUsername = user_name_s
       | extend
-          TimeGenerated = todatetime(tostring(split(timestamp_s, '.', 0)[0])),
           EventVendor = 'Salesforce',
-          EventProduct='Salesforce Service Cloud',
+          EventProduct='Service Cloud',
           EventCount = int(1),
           EventSchema = 'Authentication',
           EventSchemaVersion = '0.1.3',
           TargetAppName = "Salesforce Dot Com(SFDC)",
           EventUid = _ItemId,
-          EventOriginalType=event_type_s
+          EventOriginalType=event_type_s,
+          SrcIpAddr = coalesce(SrcIpAddr, client_ip_s)
       | extend
           TargetSessionId = coalesce(session_key_s, login_key_s),
-          SrcIpAddr = coalesce(SrcIpAddr, client_ip_s),
           TargetUserScope = "Salesforce Organization",
           TargetUserIdType = iff(isnotempty(TargetUserId), "SaleforceId", ""),
           ActorUserIdType = iff(isnotempty(ActorUserId), "SaleforceId", ""),
@@ -349,6 +352,7 @@ ParserQuery: |
       | project-away
           *_s,
           *_t,
+          *_g,
           TenantId,
           SourceSystem,
           Computer,
@@ -357,8 +361,6 @@ ParserQuery: |
           Message,
           RawData,
           TempEventResult,
-          _ItemId,
-          _ResourceId,
-          wave_session_id_g
+          _ItemId
   };
   parser (starttime=starttime, endtime=endtime, targetusername_has=targetusername_has, disabled=disabled)
