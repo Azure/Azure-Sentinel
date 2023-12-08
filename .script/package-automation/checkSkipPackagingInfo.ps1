@@ -11,7 +11,7 @@ try
         Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
     }
 
-    $filesList = git ls-files | Where-Object { $_ -like "Solutions/$solutionName/data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) } | Where-Object { $_ -notlike '*parameters.json' } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
+    $filesList = git ls-files | Where-Object { $_ -like "Solutions/$solutionName/data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) } | Where-Object { $_ -notlike '*parameters.json' } | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
 
     Write-Host "Files List $filesList"
     if ($null -eq $filesList -or $filesList.Count -le 0)
@@ -44,32 +44,50 @@ try
             # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
             $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
             Write-Host "List of files changed in PR: $diff"
-            $filteredFiles = $diff | Where-Object {$_ -like "Solutions/$solutionName/Package/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) }
 
-            $isPackagingRequired = $false
-            if ($filteredFiles.Count -le 0)
+            $changesInPackageFolder = $diff | Where-Object {$_ -like "Solutions/$solutionName/Package/*" }
+            Write-Host "List of files changed in Package folder:  $changesInPackageFolder"
+
+            if ($changesInPackageFolder.Count -gt 0)
             {
-                # WE NEED PACKAGING
-                $isPackagingRequired = $true
-                $customProperties['isPackagingRequired'] =
-                Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
+                # changes are in Package folder so skip packaging
+                Write-Output "isPackagingRequired=$false" >> $env:GITHUB_OUTPUT
+                Write-Host "Skip packaging as changes are in Package folder!"
             }
-
-            $customProperties['isPackagingRequired'] = $isPackagingRequired
-            Write-Host "isPackagingRequired set to $isPackagingRequired"
-            Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
-
-            if ($instrumentationKey -ne '')
+            else
             {
-                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+                # IDENTIFY EXCLUSIONS AND IF THERE ARE NO FILES AFTER EXCLUSION THEN SKIP WORKFLOW RUN
+                $exclusionList = @(".py$",".png$",".jpg$",".jpeg$",".conf$", ".svg$", ".html$", ".ps1$", ".psd1$", "requirements.txt$", "host.json$", "proxies.json$", "/function.json$", ".xml$", ".zip$", ".md$", "system_generated_metadata.json$", "testParameters.json$")
+
+                $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/$solutionName/Package/*" } | Where-Object {$_ -notlike "Solutions/Images/*"}  
+
+                $changesInSolutionFolder = $filteredFiles | Where-Object { $_ -notmatch ($exclusionList -join '|')  }
+                Write-Host "List of files changed in Solution folder: $changesInSolutionFolder"
+                # there are no changes in package folder but check if changes in pr are valid and not from exclusion list
+                if ($changesInSolutionFolder.Count -gt 0)
+                {
+                    
+                    # has changes in Solution folder and valid files
+                    # WE NEED PACKAGING
+                    $customProperties['isPackagingRequired'] = $true
+                    Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
+
+                    if ($instrumentationKey -ne '')
+                    {
+                        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
+                    }
+                }
+                else {
+                    Write-Output "isPackagingRequired=$false" >> $env:GITHUB_OUTPUT
+                }
             }
         }
     }
 }
 catch
 {
-    Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
-    
+    Write-Output "isPackagingRequired=$false" >> $env:GITHUB_OUTPUT
+    Write-Host "Error in checkSkipPackagingInfo file. Error Details: $_"
     if ($instrumentationKey -ne '')
     {
         Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "CheckPackagingSkipStatus : Error occured in catch block: $_"; 'EventName' = "CheckPackagingSkipStatus"; }

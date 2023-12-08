@@ -19,10 +19,10 @@ This playbook will assign an Incident to an owner based on the Shifts schedule i
 Ensure you have the following details:
 
 
-### 1. User account or Service Principal or Managed Identity with Azure Sentinel Responder role
-- Create or use an existing user account/ Service Principal/ Managed Identity with Azure Sentinel Responder role.
+### 1. User account or Service Principal or Managed Identity with Microsoft Sentinel Responder role
+- Create or use an existing user account/ Service Principal/ Managed Identity with Microsoft Sentinel Responder role.
 
-- This will be used in Azure Sentinel connectors (Incident Trigger, Update incident & Add comment to incident) and a HTTP connector.
+- This will be used in Microsoft Sentinel connectors (Incident Trigger, Update incident & Add comment to incident) and a HTTP connector.
 
 - This example will walk you through using System Managed Identity for the above connectors.
 
@@ -41,7 +41,7 @@ Ensure you have the following details:
 
 
 ### 4. User account or Service Principal with Log Analytics Reader role
-- Create or use an existing user account or Service Principal with Log Analytics Reader role on the Azure Sentinel workspace.
+- Create or use an existing user account or Service Principal with Log Analytics Reader role on the Microsoft Sentinel workspace.
 
 - The user account or Service Principal will be used in Azure Monitor Logs connector (Run query and list results).
 
@@ -65,8 +65,8 @@ Ensure you have the following details:
    <br />  
    
 - Click on **+ Add role assignment**. 
-- Select **Resource group** under Scope and select the **Subscription** and **Resource group** where the Azure Sentinel **Workspace** is located. 
-  Select **Azure Sentinel Responder** under Role and click **Save**.
+- Select **Resource group** under Scope and select the **Subscription** and **Resource group** where the Microsoft Sentinel **Workspace** is located. 
+  Select **Microsoft Sentinel Responder** under Role and click **Save**.
 
 
 ### 2. Configure connections

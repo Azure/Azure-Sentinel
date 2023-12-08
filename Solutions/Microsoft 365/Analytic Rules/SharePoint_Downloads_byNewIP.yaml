@@ -1,8 +1,7 @@
 id: 4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7
 name: SharePointFileOperation via previously unseen IPs
 description: |
-  'Identifies when the volume of documents uploaded to or downloaded from Sharepoint by new IP addresses
-  exceeds a threshold (default is 50).'
+  'Identifies anomalies using user behavior by setting a threshold for significant changes in file upload/download activities from new IP addresses. It establishes a baseline of typical behavior, compares it to recent activity, and flags deviations exceeding a default threshold of 25.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -18,47 +17,53 @@ tactics:
 relevantTechniques:
   - T1030
 query: |
-  let threshold = 50;
+  // Define a threshold for significant deviations
+  let threshold = 25;
+  // Define the name for the SharePoint File Operation record type
   let szSharePointFileOperation = "SharePointFileOperation";
+  // Define an array of SharePoint operations of interest
   let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+  // Define the start and end time for the analysis period
   let starttime = 14d;
   let endtime = 1d;
-  let historicalActivity =
-  OfficeActivity
+  // Define a baseline of normal user behavior
+  let userBaseline = OfficeActivity
   | where TimeGenerated between(ago(starttime)..ago(endtime))
   | where RecordType =~ szSharePointFileOperation
   | where Operation in~ (szOperations)
-  | summarize historicalCount = count() by ClientIP, RecordType, Operation;
-  let recentActivity = OfficeActivity
+  | where isnotempty(UserAgent)
+  | summarize Count = count() by UserId, Operation, Site_Url, ClientIP
+  | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIP;
+  // Get recent user activity
+  let recentUserActivity = OfficeActivity
   | where TimeGenerated > ago(endtime)
   | where RecordType =~ szSharePointFileOperation
   | where Operation in~ (szOperations)
-  | summarize min(Start_Time), max(Start_Time), recentCount = count() by ClientIP, RecordType, Operation;
-  let RareIP = recentActivity | join kind= leftanti ( historicalActivity ) on ClientIP, RecordType, Operation
-  // More than 50 downloads/uploads from a new IP
-  | where recentCount > threshold;
-  OfficeActivity
-  | where TimeGenerated >= ago(endtime)
-  | where RecordType =~ szSharePointFileOperation
-  | where Operation in~ (szOperations)
-  | join kind= inner (RareIP) on ClientIP, RecordType, Operation
-  | where Start_Time between(min_Start_Time .. max_Start_Time)
-  | summarize StartTimeUtc = min(min_Start_Time), EndTimeUtc = max(max_Start_Time) by RecordType, Operation, UserType, UserId, ClientIP, OfficeWorkload, Site_Url, OfficeObjectId, UserAgent, IPSeenCount = recentCount
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP, URLCustomEntity = Site_Url
-  | order by IPSeenCount desc, ClientIP asc, Operation asc, UserId asc
-
+  | where isnotempty(UserAgent)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;
+  // Join the baseline and recent activity, and calculate the deviation
+  let UserBehaviorAnalysis = userBaseline | join kind=inner (recentUserActivity) on UserId, Operation, Site_Url, ClientIP
+  | extend Deviation = abs(RecentCount - AvgCount) / AvgCount;
+  // Filter for significant deviations
+  UserBehaviorAnalysis
+  | where Deviation > threshold
+  | project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count=RecentCount
+  | order by Count desc, ClientIP asc, Operation asc, UserId asc
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: ClientIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 2.0.1
+        columnName: Site_Url
+version: 2.0.3
 kind: Scheduled
