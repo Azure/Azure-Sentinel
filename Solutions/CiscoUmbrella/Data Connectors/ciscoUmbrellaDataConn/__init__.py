@@ -461,7 +461,7 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_proxy
             elif 'iplogs' in key.lower():
                 parser_func = self.parse_csv_ip
-            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
+            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower() or 'firewalllogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
 
             if parser_func:
