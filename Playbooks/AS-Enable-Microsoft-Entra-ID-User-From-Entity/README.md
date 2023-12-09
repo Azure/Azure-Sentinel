@@ -6,7 +6,7 @@ For any technical questions, please contact info@accelerynt.com
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Enable-Microsoft-Entra-ID-User-From-Entity%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Enable-Microsoft-Entra-ID-User-From-Entity%2Fmaster%2Fazuredeploy.json)    
 
-This playbook is intended to be run from a Microsoft Sentinel entity. It will enable the Azure AD user account associated with the Microsoft Sentinel account entity.
+This playbook is intended to be run from a Microsoft Sentinel entity. It will enable the Microsoft Entra ID user account associated with the Microsoft Sentinel account entity.
 
 ![Azure_AD_Enable_User_Demo_1](Images/Azure_AD_Enable_User_Demo_1.png)
 ![Azure_AD_Enable_User_Demo_2](Images/Azure_AD_Enable_User_Demo_2.png)
@@ -20,11 +20,11 @@ This playbook is intended to be run from a Microsoft Sentinel entity. It will en
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* A Microsoft Azure Active Directory [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Enable-Microsoft-Entra-ID-User-From-Entity#create-an-app-registration) with admin consent granted for "**User.ManageIdentities.All**" and "**User.EnableDisableAccount.All**" in the "**Microsoft Graph**" API
+* A Microsoft Entra ID [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Enable-Microsoft-Entra-ID-User-From-Entity#create-an-app-registration) with admin consent granted for "**User.ManageIdentities.All**" and "**User.EnableDisableAccount.All**" in the "**Microsoft Graph**" API
 * An [Azure key vault secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Enable-Microsoft-Entra-ID-User-From-Entity#create-an-azure-key-vault-secret) containing your app registration client secret
 
 > **Note**
-> This playbook uses an HTTPS request rather than the built in Azure AD connector to update users, which is why the app registration is required. A version using the Azure AD connector can be found here: https://github.com/Accelerynt-Security/AS-Microsoft-Entra-ID-Enable-User.
+> This playbook uses an HTTPS request rather than the built in Microsoft Entra ID connector to update users, which is why the app registration is required. A version using the Microsoft Entra ID connector can be found here: https://github.com/Accelerynt-Security/AS-Microsoft-Entra-ID-Enable-User.
 
 
 # 
@@ -32,7 +32,7 @@ The following items are required under the template settings during deployment:
 
 #### Create an App Registration
 
-Navigate to the Microsoft Azure Active Directory app registration page: https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade
+Navigate to the Microsoft Entra ID app registration page: https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade
 
 Click "**New registration**".
 
