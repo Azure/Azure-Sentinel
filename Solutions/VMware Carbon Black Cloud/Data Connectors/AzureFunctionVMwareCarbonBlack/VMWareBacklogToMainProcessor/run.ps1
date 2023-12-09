@@ -4,7 +4,7 @@ param($Timer)
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
 ##TODO: need to move params and validations
-[int]$maxMainQueuemessages=150
+[int]$maxMainQueuemessages=[int]$env:maxMainQueuemessages
 [int]$maxdurationminutes=10
 # The 'IsPastDue' porperty is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
@@ -182,7 +182,6 @@ General notes
 function GetMessageFromQueue($getQueueMsg)
 {
     $ctx=GetStrgContext
-    $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
     if ($ctx -ne $null)
     {
       $queue = Get-AzStorageQueue –Name $getQueueMsg –Context $ctx

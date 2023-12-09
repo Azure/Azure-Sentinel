@@ -382,7 +382,8 @@ Function Expand-GZipFile {
         $infile,
         $outfile
     )
-	Write-Host "Processing Expand-GZipFile for: infile = $infile, outfile = $outfile"
+    try {
+        Write-Host "Processing Expand-GZipFile for: infile = $infile, outfile = $outfile"
     $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
     $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)
     $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)
@@ -397,6 +398,12 @@ Function Expand-GZipFile {
     $gzipStream.Close()
     $output.Close()
     $inputfile.Close()
+    }
+    catch {
+        $err = $_.Exception.Message
+        Write-Host "Processing Expand-GZipFile. Error: $err"
+    }
+	
 }
 
 <#
