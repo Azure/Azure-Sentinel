@@ -46,6 +46,30 @@ $ContentKindDict.Add("AutomationRule", "ar")
 $ContentKindDict.Add("ResourcesDataConnector", "rdc")
 $ContentKindDict.Add("Standalone", "sa")
 
+function ReadFileContent($filePath) {
+    try {
+        if (!(Test-Path -Path "$filePath")) {
+            return $null;
+        }
+
+        $stream = New-Object System.IO.StreamReader -Arg "$filePath";
+        $content = $stream.ReadToEnd();
+        $stream.Close();
+
+        if ($null -eq $content) {
+            Write-Host "Error in reading file $filePath"
+            return $null;
+        } else {
+            $fileContent = $content | ConvertFrom-Json;
+            return $fileContent;
+        }
+    }
+    catch {
+        Write-Host "Error occured in ReadFileContent. Error details : $_"
+        return $null;
+    }
+}
+
 function handleEmptyInstructionProperties ($inputObj) {
     $outputObj = $inputObj |
     Get-Member -MemberType *Property |

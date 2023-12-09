@@ -16,7 +16,12 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
 
             $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
             Write-Host "currentFileDCPath $currentFileDCPath"
-            $fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
+            #$fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
+
+            $fileContent = ReadFileContent -filePath $currentFileDCPath
+            if ($null -eq $fileContent) {
+                exit 1;
+            }
 
             # check if dataconnectorDefinitions type exist in dc array
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions") {
@@ -74,7 +79,11 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                 else {
                     try
                     {
-                        $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+                        #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+                        $fileContent = ReadFileContent -filePath $inputFile.FullName
+                        if ($null -eq $fileContent) {
+                            exit 1;
+                        }
 
                         if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
                             if ($fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId) {
@@ -113,7 +122,11 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     continue;
                 }
                 else {
-                    $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+                    #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+                    $fileContent = ReadFileContent -filePath $inputFile.FullName
+                    if ($null -eq $fileContent) {
+                        exit 1;
+                    }
 
                     try {
                         if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
@@ -140,7 +153,11 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     continue;
                 }
                 else {
-                    $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+                    #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+                    $fileContent = ReadFileContent -filePath $inputFile.FullName
+                    if ($null -eq $fileContent) {
+                        exit 1;
+                    }
 
                     try {
                         if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
@@ -190,7 +207,11 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
             continue;
         }
         else {
-            $fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+            #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
+            $fileContent = ReadFileContent -filePath $inputFile.FullName
+            if ($null -eq $fileContent) {
+                exit 1;
+            }
 
             if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
                 $currentTableFilePath = $inputFile.FullName

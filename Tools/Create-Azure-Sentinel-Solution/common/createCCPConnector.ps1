@@ -354,7 +354,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $ccpDataDefinitionFilePath = $ccpDataDefinitionFilePath.Replace("//", "/")
                     Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
                     
-                    $fileContent = Get-Content -Raw "$ccpDataDefinitionFilePath" | Out-String | ConvertFrom-Json
+                    #$fileContent = Get-Content -Raw "$ccpDataDefinitionFilePath" | Out-String | ConvertFrom-Json
+                    $fileContent = ReadFileContent -filePath $ccpDataDefinitionFilePath
+                    if ($null -eq $fileContent) {
+                        exit 1;
+                    }
 
                     if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions")
                     {
@@ -409,7 +413,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             $ccpPollerFilePath = $ccpItem.DCPollerFilePath
             Write-Host "CCP Poller File Path : $ccpPollerFilePath"
             $ccpPollerFilePath = $ccpPollerFilePath.Replace("//", "/")
-            $fileContent = Get-Content -Raw "$ccpPollerFilePath" | Out-String | ConvertFrom-Json
+            #$fileContent = Get-Content -Raw "$ccpPollerFilePath" | Out-String | ConvertFrom-Json
+
+            $fileContent = ReadFileContent -filePath $ccpPollerFilePath
+            if ($null -eq $fileContent) {
+                exit 1;
+            }
 
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
                 
@@ -629,7 +638,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             $ccpDCRFilePath = $ccpDCRFilePath.Replace("//", "/")
             Write-Host "CCP DCR File Path : $ccpDCRFilePath"
 
-            $fileContent = Get-Content -Raw "$ccpDCRFilePath" | Out-String | ConvertFrom-Json
+            #$fileContent = Get-Content -Raw "$ccpDCRFilePath" | Out-String | ConvertFrom-Json
+            
+            $fileContent = ReadFileContent -filePath $ccpDCRFilePath
+            if ($null -eq $fileContent) {
+                exit 1;
+            }
 
             if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules")
             {
@@ -722,8 +736,13 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             Write-Host "CCP Table File Path : $ccpTablesFilePath"
 
             if ($null -ne $ccpTablesFilePath -and $ccpTablesFilePath -ne '') {
-                $fileContent = Get-Content -Raw "$ccpTablesFilePath" | Out-String | ConvertFrom-Json
-
+                #$fileContent = Get-Content -Raw "$ccpTablesFilePath" | Out-String | ConvertFrom-Json
+                
+                $fileContent = ReadFileContent -filePath $ccpTablesFilePath
+                if ($null -eq $fileContent) {
+                    exit 1;
+                }
+                
                 if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables")
                 {
                     $resourceName = $fileContent.name
@@ -749,7 +768,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 # add additional tables if any and run this code only once
 
                 foreach ($tableFilePath in $ccpTables) {
-                    $fileContent = Get-Content -Raw "$tableFilePath" | Out-String | ConvertFrom-Json
+                    #$fileContent = Get-Content -Raw "$tableFilePath" | Out-String | ConvertFrom-Json
+                    $fileContent = ReadFileContent -filePath $tableFilePath
+                    if ($null -eq $fileContent) {
+                        exit 1;
+                    }
 
                     if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables")
                     {
