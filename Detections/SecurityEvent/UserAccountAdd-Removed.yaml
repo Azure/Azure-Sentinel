@@ -1,7 +1,7 @@
 id: 7efc75ce-e2a4-400f-a8b1-283d3b0f2c60
 name: Account added and removed from privileged groups
 description: |
-  'Identifies accounts that are added to privileged group and then quickly removed, which could be a sign of compromise.'
+  'Identifies accounts that are added to a privileged group and then quickly removed, which could be a sign of compromise.'
 severity: Low
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -62,8 +62,8 @@ query: |
   | where isnotempty(AccountRemoved)
   | extend GroupRemovedFrom = TargetUserName, RemovingAccount = Account
   | extend AccountRemoved_GroupRemovedFrom_RemovingAccount = strcat(AccountRemoved, "||", GroupRemovedFrom, "||", RemovingAccount)
-  | project AccountRemoved_GroupRemovedFrom_RemovingAccount, AccountRemovedTime = TimeGenerated, Computer, RemovedAccountId = tolower(AccountRemoved),
-  RemovedByUser = SubjectUserName, RemovedByUserLogonId = SubjectLogonId,  GroupRemovedFrom = TargetUserName, TargetDomainName
+  | project AccountRemoved_GroupRemovedFrom_RemovingAccount, AccountRemovedTime = TimeGenerated, Computer, AccountRemoved = tolower(AccountRemoved),
+  RemovingAccount, RemovingAccountLogonId = SubjectLogonId, GroupRemovedFrom = TargetUserName, TargetDomainName
   ),
   (WindowsEvent
   // Event IDs related to member removal.
@@ -76,28 +76,34 @@ query: |
   | extend RemovingAccount =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | extend GroupRemovedFrom = TargetUserName
   | extend AccountRemoved_GroupRemovedFrom_RemovingAccount = strcat(AccountRemoved, "||", GroupRemovedFrom, "||", RemovingAccount)
-  | extend SubjectUserName = tostring(EventData.SubjectUserName)
-  | extend SubjectLogonId = tostring(EventData.SubjectLogonId)
+  | extend RemovedAccountLogonId= tostring(EventData.SubjectLogonId)
   | extend TargetDomainName = tostring(EventData.TargetDomainName)
-  | project AccountRemoved_GroupRemovedFrom_RemovingAccount, AccountRemovedTime = TimeGenerated, Computer, RemovedAccountId = tolower(AccountRemoved),
-  RemovedByUser = SubjectUserName, RemovedByUserLogonId = SubjectLogonId,  GroupRemovedFrom = TargetUserName, TargetDomainName
+  | project AccountRemoved_GroupRemovedFrom_RemovingAccount, AccountRemovedTime = TimeGenerated, Computer, AccountRemoved = tolower(AccountRemoved),
+  RemovingAccount, RemovedAccountLogonId, GroupRemovedFrom = TargetUserName, TargetDomainName
   ));
   AC_Add
-  | join kind= inner AC_Remove on $left.AccountAdded_GroupAddedTo_AddingAccount == $right.AccountRemoved_GroupRemovedFrom_RemovingAccount
+  | join kind = inner AC_Remove 
+  on $left.AccountAdded_GroupAddedTo_AddingAccount == $right.AccountRemoved_GroupRemovedFrom_RemovingAccount
   | extend DurationinSecondAfter_Removed = datetime_diff ('second', AccountRemovedTime, AccountAddedTime)
   | where DurationinSecondAfter_Removed > 0
-  | project-away AccountRemoved_GroupRemovedFrom_RemovingAccount
-  | extend timestamp = AccountAddedTime
   | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
   | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
-  | extend AccountName = tostring(split(RemovedAccountId, "@")[0]), AccountUPNSuffix = tostring(split(RemovedAccountId, "@")[1])
+  | extend RemovedAccountName = tostring(split(AccountRemoved, @"\")[1]), RemovedAccountNTDomain = tostring(split(AccountRemoved, @"\")[0])
+  | extend RemovingAccountName = tostring(split(RemovingAccount, @"\")[1]), RemovingAccountNTDomain = tostring(split(RemovingAccount, @"\")[0])
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: AccountName
-      - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
+        columnName: RemovedAccountName
+      - identifier: NTDomain
+        columnName: RemovedAccountNTDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: RemovingAccountName
+      - identifier: NTDomain
+        columnName: RemovingAccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: HostName
