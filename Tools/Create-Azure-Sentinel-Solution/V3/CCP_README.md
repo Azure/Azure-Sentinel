@@ -5,7 +5,7 @@ To create a package using V3 packaging tool refer [Link to V3](https://github.co
 ## CCP connector Building Blocks:
 Every CCP connector will have 4 building blocks and should be specified in sequence given below:
 1. Data Connector Definition - Consider this an a UI page shown after deployment to users and contains instruction steps and connectorUiConfig section.
-2. Data Connectors - This will contain details to connect to your REST API and has a poller details.
+2. Data Connectors (Poller) - This will contain details to connect to your REST API and has a poller details.
 3. Data Collection Rule - Specify which data column should be collected
 4. Tables (Optional) - Stores your data logs.
 
@@ -14,10 +14,13 @@ Every CCP connector will have 4 building blocks and should be specified in seque
 ## How to Use ?
 1. In Data input file under Azure-Sentinel/Solutions, open the solution you want to add a CCP connector.
 2. Open data input file and under "Data Connectors" array object add a path to new dataConnectorDefinition file.
-3. File name to dataConnectorDefinition should be meaningful and recommended to have a suffix "Definition" attached to the name at the end e.g. OktaDataConnectorDefinition.json or OktaDefinition.json.
-4. Navigate to your "Solutions/<yourSolutionName>/Data Connectors" folder and create a new folder for ccp suffix at the end e.g: "<NameOf_DataConnectorDefinition_ID_Field_Value>_ccp".
-5. Once a folder for CCP is created then add/create 4 files dataConnectorDefinition.json, dataPoller.json, DCR.json and table.json. Here table.json file is optional. Also, you can specific a different naming to the files but having a suffix of "Definition", "Poller", "DCR", "Table" in the file name at the end will be easy to correlate.
-6. There can be only 1 data definition file per CCP connector. If you have multiple CCP connectors then create multiple data definition files and specify the file paths in the data folder input file. There is no need to specify other file paths. 
+3. File name to dataConnectorDefinition should be meaningful and recommended to have a suffix "Definition" attached to the name at the end e.g. OktaDefinition.json.
+4. Navigate to your "Solutions/<yourSolutionName>/Data Connectors" folder and create a new folder for ccp suffix at the end e.g: DataConnectorDefinitionName_ccp".
+5. Once a folder for CCP is created then add/create 4 files dataConnectorDefinition.json, dataPoller.json, DCR.json and table.json. Here table.json file is optional. Also, you can specific a different naming to the files but having a suffix of "Definition", "Poller", "DCR", "Table" in the file name at the end will be easy to correlate. Below is an example folder file structure for CCP.
+
+![Alt text](ccp-folder-structure.png)
+
+6. There can be only 1 data definition file per CCP connector. If you have multiple CCP connectors then create multiple data connector definition files and specify the file paths in the data folder input file under "Data Connectors" array. There is no need to specify other file paths for poller, dcr or tables. 
 7. dataConnectorDefinition file is the starting point for any CCP connector and this file path should only be specified in data folder input file under "Data Connectors" array.
 8. Mapping between dataConnectorDefinition and Poller file should present. Poller file mapping with DCR should be present. If mapping is not present and if present but mapping values are not correct then packaging will fail.
 9. Details for each of the file information is specified below:</br>
