@@ -1,7 +1,7 @@
 Parser:
   Title: Process Create ASIM parser for VMware Carbon Black Cloud
-  Version: '0.1.0'
-  LastUpdated: Oct 25, 2023
+  Version: '0.1.1'
+  LastUpdated: Dec 11, 2023
 Product:
   Name: VMware Carbon Black Cloud
 Normalization:
@@ -26,9 +26,9 @@ ParserParams:
     Default: false
 ParserQuery: |
   let EventFieldsLookup = datatable(
-      sensor_action_s: string,
-      DvcAction: string,
-      EventResult: string
+    sensor_action_s: string,
+    DvcAction: string,
+    EventResult: string
   )[
       "ACTION_ALLOW", "Allow", "Success",
       "ACTION_BLOCK", "Block", "Failure",
@@ -51,7 +51,67 @@ ParserQuery: |
       "10", 100
   ];
   let parser = (disabled: bool=false) {
-      let processdata = CarbonBlackEvents_CL
+      let CarbonBlackEventsSchema = datatable (
+      eventType_s: string,
+      childproc_pid_d: real,
+      process_hash_s: string,
+      parent_hash_s: string,
+      childproc_hash_s: string,
+      sensor_action_s: string,
+      alert_id_g: string,
+      event_id_g: string,
+      createTime_s: string,
+      process_pid_d: real,
+      parent_pid_d: real,
+      org_key_s: string,
+      parent_cmdline_s: string,
+      process_reputation_s: string,
+      childproc_reputation_s: string,
+      parent_reputation_s: string,
+      process_guid_s: string,
+      childproc_guid_s: string,
+      parent_guid_s: string,
+      process_username_s: string,
+      target_cmdline_s: string,
+      childproc_name_s: string,
+      childproc_username_s: string,
+      device_external_ip_s: string,
+      device_group_s: string,
+      process_cmdline_s: string,
+      process_path_s: string,
+      device_id_s: string,
+      device_os_s: string,
+      event_description_s: string,
+      action_s: string,
+      event_origin_s: string,
+      parent_path_s: string,
+      _ItemId: string, // remove here
+      _ResourceId: string,
+      Computer: string,
+      MG: string,
+      ManagementGroupName: string,
+      RawData: string,
+      SourceSystem: string,
+      TenantId: string
+  )[];
+      let CarbonBlackNotificationsSchema = datatable (
+      type_s: string,
+      threatInfo_incidentId_g: string,
+      threatInfo_score_d: real,
+      threatInfo_summary_s: string,
+      threatInfo_time_d: real,
+      threatInfo_threatCause_threatCategory_s: string,
+      threatInfo_threatCause_causeEventId_g: string,
+      ruleName_s: string,
+      deviceInfo_deviceVersion_s: string,
+      threatInfo_threatCause_originSourceType_s: string,
+      threatInfo_threatCause_reputation_s: string,
+      threatInfo_threatCause_reason_s: string,
+      id_g: string,
+      primary_event_id_g: string,
+      threat_id_g: string
+  )[];
+      let processdata = union (CarbonBlackEvents_CL), (CarbonBlackEventsSchema)
           | where not(disabled)
           | where eventType_s == "endpoint.event.procstart" and isnotempty(childproc_pid_d)
           | parse process_hash_s with * '["' ActingProcessMD5: string '","' ActingProcessSHA256: string '"]'
@@ -60,7 +120,7 @@ ParserQuery: |
           | lookup EventFieldsLookup on sensor_action_s;
       let processdatawiththreat = processdata
           | where isnotempty(alert_id_g) and isnotempty(event_id_g)
-          | join kind=leftouter(CarbonBlackNotifications_CL
+          | join kind=leftouter(union (CarbonBlackNotifications_CL), (CarbonBlackNotificationsSchema)
               | where type_s == "THREAT"
               | project
                   threatInfo_incidentId_g,
@@ -77,7 +137,7 @@ ParserQuery: |
               on
               $left.alert_id_g == $right.threatInfo_incidentId_g,
               $left.event_id_g == $right.threatInfo_threatCause_causeEventId_g
-          | join kind=leftouter (CarbonBlackNotifications_CL
+          | join kind=leftouter (union (CarbonBlackNotifications_CL), (CarbonBlackNotificationsSchema)
               | where type_s == "CB_ANALYTICS"
               | project
                   id_g,
@@ -115,16 +175,25 @@ ParserQuery: |
           ActingProcessId = tostring(toint(process_pid_d)),
           ParentProcessId = tostring(toint(parent_pid_d)),
           AdditionalFields_Common = bag_pack(
-                      "org_key", org_key_s,
-                      "alert_id", alert_id_g,
-                      "parent_cmdline", parent_cmdline_s,
-                      "process_reputation", process_reputation_s,
-                      "childproc_reputation", childproc_reputation_s,
-                      "parent_reputation", parent_reputation_s,
-                      "process_guid", process_guid_s,
-                      "childproc_guid", childproc_guid_s,
-                      "parent_guid", parent_guid_s
-                  )
+                                "org_key",
+                                org_key_s,
+                                "alert_id",
+                                alert_id_g,
+                                "parent_cmdline",
+                                parent_cmdline_s,
+                                "process_reputation",
+                                process_reputation_s,
+                                "childproc_reputation",
+                                childproc_reputation_s,
+                                "parent_reputation",
+                                parent_reputation_s,
+                                "process_guid",
+                                process_guid_s,
+                                "childproc_guid",
+                                childproc_guid_s,
+                                "parent_guid",
+                                parent_guid_s
+                            )
       | invoke _ASIM_ResolveDvcFQDN('device_name_s')
       | project-rename 
           ActorUsername = process_username_s,
@@ -185,6 +254,9 @@ ParserQuery: |
           TenantId,
           AdditionalFields_*,
           *_d1,
-          *_s1
+          *_d2
+          *_s1,
+          *_s2,
+          *_g1
   };
   parser(disabled=disabled)
