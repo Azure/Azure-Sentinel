@@ -62,7 +62,7 @@ try
     }
 }
 catch {
-  Write-Error "Failed at CreateQueue with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
+  Write-Error "Failed at CreateQueue with error message: $($_.Exception.Message)" -ErrorAction Stop
 }
 
 }
@@ -362,7 +362,7 @@ function ProcessBacklog()
       }
       catch {
         postCheckpointLastFailure($msg)
-        Write-Error "Failed at ProcessBacklog with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
+        Write-Error "Failed at ProcessBacklog with error message: $($_.Exception.Message)" -ErrorAction Stop
       }
     }
   }

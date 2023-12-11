@@ -529,7 +529,7 @@ function  GetBucketDetails {
                     catch {
                             $err = $_.Exception.Message
                             Write-Host "Error in downloading file from Tmp Folder. S3File: $($loopItem.FullName), S3Bucket: $($s3BucketName), Error: $err"
-                            Write-Error "Failed at processing GetBucketDetails with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
+                            Write-Error "Failed at processing GetBucketDetails with error message: $($_.Exception.Message)" -ErrorAction Stop
                         }
                     }
                 }
