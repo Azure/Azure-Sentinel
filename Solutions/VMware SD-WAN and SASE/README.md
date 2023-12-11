@@ -25,7 +25,18 @@ Via API (Function App):
 7. VMware SD-WAN NSD/CSS Events
 
 # Deployment Guide
-A detailed implementation plan will be provided as soon as the solution is published. This readme will contain a link.
+A detailed implementation plan will be provided as soon as the solution is published. This readme will be updated with a link to the documentation as soon as its published.
+
+## VECO API Authorization
+The solution contains a function app that deploys in Microsoft Azure. It is worth testing the ARM template in a test RG/subscription so that created tables, rules, incidents do not collide with your existing integration or other data streams.
+
+The solution is using API Token-based authorization in a VECO enterprise. Partner/Operator-level integrations are not supported by the Function App. All API calls require an enterprise-level admin user accunt. Please follow the instructions to create an API token:
+https://docs.vmware.com/en/VMware-SD-WAN/5.2/VMware-SD-WAN-Administration-Guide/GUID-2FA3763F-835C-4D10-A32B-450FEB5397D8.html
+
+## Function App Authorization:
+
+The Function App requires authentication to be able to call the Log Ingestion API. The ARM template does not contain these settings, so please ensure that you authorize access for each DCR (Data Collection Rule) by following the steps "Create Microsoft Entra application" and "Assign permissions to the DCR" from the following guide: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal#assign-permissions-to-the-dcr.
+
 
 # Solution support
 All components of the solution are provided as-is. If you find a bug or if you have an idea, please share it with us on: sase-siem-integration@vmware.com Thank you!
